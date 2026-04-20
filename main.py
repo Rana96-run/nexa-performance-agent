@@ -17,6 +17,7 @@ Flow:
          - channel mutations -> Slack approval -> execute
          - everything else  -> Slack summary
 """
+import bootstrap  # noqa: F401  -- materializes GOOGLE creds from env if needed
 import sys
 from datetime import date
 from collectors.google_ads import get_campaign_performance, get_keyword_performance

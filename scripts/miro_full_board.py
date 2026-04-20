@@ -45,7 +45,7 @@ ORCH_BLUE   = "#659df2"
 INK         = "#1a1a1a"
 
 
-def sh_style(fill, color=INK, size="22", align="center", opacity="0.85"):
+def sh_style(fill, color=INK, size="32", align="center", opacity="0.85"):
     return {"borderColor": INK, "borderOpacity": "1.0",
             "borderStyle": "normal", "borderWidth": "2.0",
             "fontFamily": "noto_sans", "fillColor": fill,
@@ -53,7 +53,7 @@ def sh_style(fill, color=INK, size="22", align="center", opacity="0.85"):
             "fontSize": size, "textAlign": align, "textAlignVertical": "middle"}
 
 
-def tx_style(size="24", align="center"):
+def tx_style(size="36", align="center"):
     return {"fillColor": "#ffffff", "fillOpacity": "0.0",
             "fontFamily": "noto_sans", "fontSize": size,
             "textAlign": align, "color": INK}
@@ -139,56 +139,55 @@ ROLES_SYS = [
 def build_system_view(y0):
     # title
     mk_text("<p><strong>System Map — Qoyod Performance Agent</strong></p>",
-            x=0, y=y0 - 400, w=3600, st=tx_style("64"))
+            x=0, y=y0 - 400, w=4200, st=tx_style("88"))
 
     COL_T, COL_E, COL_R = -2400, 0, 2400
     # column headers
-    mk_text("<p><strong>Tools (via MCP)</strong></p>", COL_T, y0 - 120, 1600, tx_style("30"))
-    mk_text("<p><strong>Execution</strong></p>",       COL_E, y0 - 120, 1600, tx_style("30"))
-    mk_text("<p><strong>Roles</strong></p>",           COL_R, y0 - 120, 1600, tx_style("30"))
+    mk_text("<p><strong>Tools (via MCP)</strong></p>", COL_T, y0 - 140, 1800, tx_style("46"))
+    mk_text("<p><strong>Execution</strong></p>",       COL_E, y0 - 140, 1800, tx_style("46"))
+    mk_text("<p><strong>Roles</strong></p>",           COL_R, y0 - 140, 1800, tx_style("46"))
 
     # Orchestrator at center
     orch_y = y0 + 900
     orch = mk_shape("round_rectangle",
                     "<p><strong>Orchestrator</strong></p><p>CLAUDE.manager.md</p>",
-                    COL_E, orch_y, 800, 240, sh_style(ORCH_BLUE, size="28"))
+                    COL_E, orch_y, 900, 260, sh_style(ORCH_BLUE, size="40"))
 
     # Tools column (green)
     tool_ids = []
     for i, t in enumerate(TOOLS_SYS):
-        ty = y0 + 40 + i * 120
-        tid = mk_shape("round_rectangle", f"<p>{t}</p>", COL_T, ty, 1700, 95,
-                       sh_style(ROLE_GREEN, color="#ffffff", size="22"))
+        ty = y0 + 40 + i * 130
+        tid = mk_shape("round_rectangle", f"<p>{t}</p>", COL_T, ty, 1800, 110,
+                       sh_style(ROLE_GREEN, color="#ffffff", size="34"))
         tool_ids.append(tid)
         time.sleep(0.06)
 
-    # Execution triggers (top of center column) — each connects down to orchestrator
+    # Execution triggers
     for i, (label, fill) in enumerate(TRIGGERS_SYS):
-        ey = y0 + 40 + i * 160
-        eid = mk_shape("round_rectangle", f"<p>{label}</p>", COL_E, ey, 1500, 120,
-                       sh_style(fill, size="22"))
+        ey = y0 + 40 + i * 170
+        eid = mk_shape("round_rectangle", f"<p>{label}</p>", COL_E, ey, 1600, 140,
+                       sh_style(fill, size="34"))
         mk_line(eid, orch, ("50%","100%"), ("50%","0%"), shape="straight")
         time.sleep(0.06)
 
-    # Roles — orchestrator dispatches out
+    # Roles
     for i, (label, fill) in enumerate(ROLES_SYS):
-        ry = y0 + 40 + i * 220
-        rid = mk_shape("round_rectangle", f"<p>{label}</p>", COL_R, ry, 1700, 160,
-                       sh_style(fill, size="22"))
+        ry = y0 + 40 + i * 230
+        rid = mk_shape("round_rectangle", f"<p>{label}</p>", COL_R, ry, 1800, 180,
+                       sh_style(fill, size="34"))
         mk_line(orch, rid, ("100%","50%"), ("0%","50%"))
         time.sleep(0.06)
 
-    # Single consolidated tools -> orchestrator edge
     if tool_ids:
         mk_line(tool_ids[len(tool_ids) // 2], orch)
 
-    # Bottom identity bars
-    agent_y = y0 + 40 + max(len(TOOLS_SYS), len(ROLES_SYS) * 2) * 110 + 600
+    agent_y = y0 + 40 + max(len(TOOLS_SYS), len(ROLES_SYS) * 2) * 115 + 650
     mk_shape("round_rectangle",
              "<p><strong>== The Qoyod Performance Agent ==</strong></p><p>v.1</p>",
-             COL_E, agent_y, 2200, 200, sh_style(ORCH_BLUE, size="28"))
+             COL_E, agent_y, 2400, 220, sh_style(ORCH_BLUE, size="42"))
     mk_shape("round_rectangle", "<p><strong>Skills</strong></p>",
-             COL_E, agent_y + 320, 2200, 200, sh_style(GRAY, size="26"))
+             COL_E, agent_y + 340, 2400, 220, sh_style(GRAY, size="40"))
+    return agent_y + 460  # bottom y of this view
 
 
 # =============================================================
@@ -225,45 +224,40 @@ ROLE_FRAMES = [
 
 def build_role_frame(x0, y0, frame_data):
     title, tools, execs, role_name, md = frame_data
-    FW, FH = 5000, 4200
+    FW, FH = 5400, 4600
     mk_frame(title, x=x0 + FW/2, y=y0 + FH/2, w=FW, h=FH)
 
-    # inner columns
-    COL_T = x0 + 900
-    COL_E = x0 + 2500
-    COL_R = x0 + 4200
+    COL_T = x0 + 950
+    COL_E = x0 + 2700
+    COL_R = x0 + 4450
 
-    # column headers inside frame
-    mk_text("<p><strong>Tools (via MCP)</strong></p>", COL_T, y0 + 200, 1400, tx_style("26"))
-    mk_text("<p><strong>Execution</strong></p>",       COL_E, y0 + 200, 1400, tx_style("26"))
-    mk_text("<p><strong>Role</strong></p>",            COL_R, y0 + 200, 1400, tx_style("26"))
+    mk_text("<p><strong>Tools (via MCP)</strong></p>", COL_T, y0 + 220, 1500, tx_style("38"))
+    mk_text("<p><strong>Execution</strong></p>",       COL_E, y0 + 220, 1500, tx_style("38"))
+    mk_text("<p><strong>Role</strong></p>",            COL_R, y0 + 220, 1500, tx_style("38"))
 
-    # tools
     tool_ids = []
     for i, t in enumerate(tools):
-        ty = y0 + 450 + i * 130
-        tid = mk_shape("round_rectangle", f"<p>{t}</p>", COL_T, ty, 1400, 100,
-                       sh_style(TOOL_BLUE, size="20"))
+        ty = y0 + 500 + i * 150
+        tid = mk_shape("round_rectangle", f"<p>{t}</p>", COL_T, ty, 1500, 120,
+                       sh_style(TOOL_BLUE, size="30"))
         tool_ids.append(tid)
         time.sleep(0.05)
 
-    # execution chain
     exec_ids = []
     for i, s in enumerate(execs):
-        ey = y0 + 450 + i * 170
+        ey = y0 + 500 + i * 190
         fill = ORANGE if s.startswith("⚡") else GRAY
-        eid = mk_shape("round_rectangle", f"<p>{s}</p>", COL_E, ey, 1500, 130,
-                       sh_style(fill, size="20"))
+        eid = mk_shape("round_rectangle", f"<p>{s}</p>", COL_E, ey, 1600, 150,
+                       sh_style(fill, size="30"))
         exec_ids.append(eid)
         if i > 0:
             mk_line(exec_ids[i-1], eid, ("50%","100%"), ("50%","0%"), shape="straight")
         time.sleep(0.05)
 
-    # role green box (centered vertically on frame)
     role_id = mk_shape("round_rectangle",
                        f"<p><strong>{role_name}</strong></p><p>{md}</p>",
-                       COL_R, y0 + FH/2, 1500, 240,
-                       sh_style(ROLE_GREEN, color="#ffffff", size="24"))
+                       COL_R, y0 + FH/2, 1600, 280,
+                       sh_style(ROLE_GREEN, color="#ffffff", size="34"))
 
     # cross-column arrows
     if tool_ids and exec_ids:
@@ -274,10 +268,9 @@ def build_role_frame(x0, y0, frame_data):
 
 def build_roles_view(y0):
     mk_text("<p><strong>Role Frames — Specialist Agents</strong></p>",
-            x=0, y=y0 - 400, w=4000, st=tx_style("64"))
-    # 2 columns x 3 rows grid
-    FW, FH = 5000, 4200
-    GAP_X, GAP_Y = 800, 800
+            x=0, y=y0 - 300, w=4600, st=tx_style("88"))
+    FW, FH = 5400, 4600
+    GAP_X, GAP_Y = 400, 400
     origin_x = -(FW + GAP_X) / 2
     origin_y = y0
 
@@ -295,10 +288,11 @@ def main():
     wipe()
 
     print("\nBuilding VIEW 1 — System Map...")
-    build_system_view(y0=0)
+    view1_bottom = build_system_view(y0=0)
 
     print("\nBuilding VIEW 2 — Role Frames...")
-    build_roles_view(y0=5000)
+    # Start Role Frames just below the System Map (close, not 5000px away)
+    build_roles_view(y0=view1_bottom + 600)
 
     print(f"\nDone. Open: https://miro.com/app/board/{BOARD}/")
 
