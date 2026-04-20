@@ -1,0 +1,117 @@
+name: Qoyod Performance Agent
+
+# Runs the agent on four cadences, all converted to UTC from Riyadh (08:00 AST = 05:00 UTC).
+on:
+  schedule:
+    - cron: "0 5 * * *"        # daily     08:00 Riyadh
+    - cron: "5 5 * * 1"        # weekly    Mon 08:05 Riyadh
+    - cron: "10 5 1 * *"       # monthly   1st 08:10 Riyadh
+    - cron: "15 5 1 1,4,7,10 *"  # quarterly Jan/Apr/Jul/Oct 1st 08:15 Riyadh
+  workflow_dispatch:
+    inputs:
+      cadence:
+        description: "Run manually: daily | weekly | monthly | quarterly | on_demand"
+        required: true
+        default: "daily"
+        type: choice
+        options: [daily, weekly, monthly, quarterly, on_demand]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pick cadence from cron or manual trigger
+        id: pick
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "cadence=${{ inputs.cadence }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.event.schedule }}" in
+              "0 5 * * *")           echo "cadence=daily"     >> "$GITHUB_OUTPUT" ;;
+              "5 5 * * 1")           echo "cadence=weekly"    >> "$GITHUB_OUTPUT" ;;
+              "10 5 1 * *")          echo "cadence=monthly"   >> "$GITHUB_OUTPUT" ;;
+              "15 5 1 1,4,7,10 *")   echo "cadence=quarterly" >> "$GITHUB_OUTPUT" ;;
+              *)                     echo "cadence=daily"     >> "$GITHUB_OUTPUT" ;;
+            esac
+          fi
+
+      - name: Write Google service-account key
+        run: |
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+
+      - name: Run agent (${{ steps.pick.outputs.cadence }})
+        env:
+          # Anthropic / LLM
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Google Ads
+          GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          # Meta
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_AD_ACCOUNT_1: ${{ secrets.META_AD_ACCOUNT_1 }}
+          META_AD_ACCOUNT_2: ${{ secrets.META_AD_ACCOUNT_2 }}
+          # HubSpot
+          HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
+          # Slack (dual channel)
+          SLACK_ACCESS_TOKEN: ${{ secrets.SLACK_ACCESS_TOKEN }}
+          SLACK_CHANNEL_NOTIFY: ${{ secrets.SLACK_CHANNEL_NOTIFY }}
+          SLACK_CHANNEL_APPROVAL: ${{ secrets.SLACK_CHANNEL_APPROVAL }}
+          # Asana
+          ASANA_ACCESS_TOKEN: ${{ secrets.ASANA_ACCESS_TOKEN }}
+          ASANA_PROJECT_DAILY_ACTIVITY: ${{ secrets.ASANA_PROJECT_DAILY_ACTIVITY }}
+          ASANA_PROJECT_OPTIMIZATION: ${{ secrets.ASANA_PROJECT_OPTIMIZATION }}
+          ASANA_PROJECT_CAMPAIGNS_HUB: ${{ secrets.ASANA_PROJECT_CAMPAIGNS_HUB }}
+          ASANA_PROJECT_SEASONAL: ${{ secrets.ASANA_PROJECT_SEASONAL }}
+          # Email (SMTP)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+          EMAIL_ALL: ${{ secrets.EMAIL_ALL }}
+          EMAIL_TEAM_LEAD: ${{ secrets.EMAIL_TEAM_LEAD }}
+          EMAIL_TEAM_MANAGER: ${{ secrets.EMAIL_TEAM_MANAGER }}
+          EMAIL_PERFORMANCE: ${{ secrets.EMAIL_PERFORMANCE }}
+          # BigQuery
+          BQ_PROJECT_ID: ${{ secrets.BQ_PROJECT_ID }}
+          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_LOCATION: ${{ secrets.BQ_LOCATION }}
+          # Behavior
+          NOTIFY_VIA: ${{ vars.NOTIFY_VIA || 'email' }}
+        run: python main.py ${{ steps.pick.outputs.cadence }}
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TEAM_LEAD: ${{ secrets.EMAIL_TEAM_LEAD }}
+        run: |
+          python -c "
+          import os, smtplib
+          from email.mime.text import MIMEText
+          msg = MIMEText('Agent run failed. See GitHub Actions log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')
+          msg['Subject'] = '[Qoyod Agent] FAILED - ${{ steps.pick.outputs.cadence }}'
+          msg['From'] = os.environ['SMTP_USER']
+          msg['To'] = os.environ['EMAIL_TEAM_LEAD']
+          with smtplib.SMTP(os.environ['SMTP_HOST'], int(os.environ['SMTP_PORT'])) as s:
+              s.starttls(); s.login(os.environ['SMTP_USER'], os.environ['SMTP_PASS'])
+              s.sendmail(os.environ['SMTP_USER'], [os.environ['EMAIL_TEAM_LEAD']], msg.as_string())
+          "

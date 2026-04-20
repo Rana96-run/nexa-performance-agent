@@ -1,0 +1,97 @@
+"""
+6-hour reporting refresh scheduler.
+
+ONLY refreshes the BigQuery reporting layer that backs the dashboard.
+Runs every 6h (00:00, 06:00, 12:00, 18:00 UTC = 03:00, 09:00, 15:00, 21:00 Riyadh).
+
+NOTE: This is separate from the operational agent loop (Slack approvals,
+threshold watchers, optimization decisions) which run always-on.
+
+All collectors run in incremental mode (last 2 days lookback). A full YTD
+backfill can be forced via `python reporting_scheduler.py backfill`.
+"""
+import sys
+import time
+import traceback
+from datetime import datetime, timezone
+
+from collectors import google_ads_bq, meta_bq, snap_bq
+from collectors import meta_organic_bq, youtube_bq, linkedin_bq
+from collectors import hubspot_leads_bq, hubspot_deals_bq
+from collectors.views import refresh_all_views
+
+
+COLLECTORS = [
+    # Paid
+    ("google_ads",      google_ads_bq.collect_and_write),
+    ("meta",            meta_bq.collect_and_write),
+    ("snapchat",        snap_bq.collect_and_write),
+    # Organic (skip gracefully if creds missing)
+    ("meta_organic",    meta_organic_bq.collect_and_write),
+    ("youtube",         youtube_bq.collect_and_write),
+    ("linkedin",        linkedin_bq.collect_and_write),
+    # CRM
+    ("hubspot_leads",   hubspot_leads_bq.collect_and_write),
+    ("hubspot_deals",   hubspot_deals_bq.collect_and_write),
+]
+
+
+def run_refresh(incremental: bool = True):
+    """One pass: run all collectors, then refresh all views."""
+    started = datetime.now(timezone.utc)
+    print(f"\n{'='*60}\n[scheduler] Refresh start @ {started.isoformat()}"
+          f"  (mode={'incremental' if incremental else 'backfill'})\n{'='*60}")
+
+    results = {}
+    for name, fn in COLLECTORS:
+        t0 = time.time()
+        try:
+            n = fn(incremental=incremental)
+            dt = time.time() - t0
+            results[name] = (True, n, dt)
+            print(f"[scheduler] {name}: {n} rows in {dt:.1f}s")
+        except Exception as e:
+            dt = time.time() - t0
+            results[name] = (False, str(e), dt)
+            print(f"[scheduler] {name} FAILED after {dt:.1f}s: {e}")
+            traceback.print_exc()
+
+    try:
+        refresh_all_views()
+        results["views"] = (True, "ok", 0)
+    except Exception as e:
+        results["views"] = (False, str(e), 0)
+        print(f"[scheduler] view refresh FAILED: {e}")
+
+    ended = datetime.now(timezone.utc)
+    elapsed = (ended - started).total_seconds()
+    print(f"\n[scheduler] Done in {elapsed:.0f}s")
+    for name, (ok, val, dt) in results.items():
+        flag = "OK " if ok else "ERR"
+        print(f"  [{flag}] {name}: {val}")
+    return results
+
+
+def run_loop():
+    """Run every 6h forever. Exits on Ctrl+C."""
+    interval = 6 * 60 * 60
+    while True:
+        try:
+            run_refresh(incremental=True)
+        except Exception as e:
+            print(f"[scheduler] loop error: {e}")
+            traceback.print_exc()
+        print(f"[scheduler] sleeping {interval}s until next run...")
+        time.sleep(interval)
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "once"
+    if cmd == "once":
+        run_refresh(incremental=True)
+    elif cmd == "backfill":
+        run_refresh(incremental=False)
+    elif cmd == "loop":
+        run_loop()
+    else:
+        print("Usage: python reporting_scheduler.py [once|backfill|loop]")

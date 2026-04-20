@@ -1,0 +1,765 @@
+                                                          Select date range               arow_drop_down
+
+                                                                       See details                                     See details
+
+               See details                                See details               See details                        See details                     See details
+
+                                     See details                       See details                        See details               See details
+
+                                                                       See details                        See details
+
+                                  See details                          See details                        See details                   See details
+                                  See details                          See details                        See details                   See details
+
+      Source by Leads Generated                              Source by Disqualified Leads- ALl Pi...                   Source by Qualified Leads- ALl Pipeli...
+
+          Data Set Configuration Error                               Data Set Configuration Error                             Data Set Configuration Error
+
+      Data Studio cannot connect to your data set.               Data Studio cannot connect to your data set.             Data Studio cannot connect to your data set.
+                         See details                                                See details                                              See details
+
+                Source by Cost                                                      Source by CPQL ALL Pipelines
+
+                   Data Set Configuration Error                                               Data Set Configuration Error
+
+               Data Studio cannot connect to your data set.                               Data Studio cannot connect to your data set.
+                                  See details                                                                See details
+
+                                                                     Data Set Configuration Error
+
+                                                                 Data Studio cannot connect to your data set.
+                                                                                    See details
+
+Ad Group Name  Cost               Numb... CPL Qualified                CPQL         Disuqalifi... Deals Am... Deals                     Deal... Leads Bookk... Leads Bo...
+
+null           $29,660.01         99                null  null         null         null                  $124,485.60 64                $10,3... 4                      5
+                                                                       null
+null           $1,614.83          8                 null  null         null         null                  $2,928.27    5                $319.... null                   null
+                                                                       null
+Snapchat_LeadGen_Life... $497.04  11                45.19 null         null         10                    null         0                null  1                         null
+                                                                       null
+Meta_Lookalike_Website... $62.03  null              null  null         null         null                  null         null             null  null                      null
+                                                                       null
+Meta_Lookalike_SQL_Ins... $12.90  null              null  null         22.84        null                  null         null             null  null                      null
+
+Meta_Lookalike_Custom... $100.38  1                 100.38 null                     1                     $133.22      1                null  null                      null
+
+Meta_LeadGen_E-Invoic... $16.19   2                 8.10  null                      2                     null         0                null  null                      null
+
+Meta_LeadGen_E-Invoic... $75.64   6                 12.61 null                      6                     null         0                null  null                      null
+
+Meta_LeadGen_Retarget... $68.52   3                 22.84 3                         null                  $2,283.20    2                null  null                      null
+
+                                                                                                                                                       < > 1 - 47 / 47
+
+                                                                           Data Set Configuration Error
+
+                                                                       Data Studio cannot connect to your data set.
+                                                                                          See details
+
+                                                                     Data Set Configuration Error
+
+                                                                 Data Studio cannot connect to your data set.
+                                                                                    See details
+
+                                                                           Data Set Configuration Error
+
+                                                                       Data Studio cannot connect to your data set.
+                                                                                          See details
+                                                                                 Apr 1, 2026 - Apr 19, 202 arow_drop_down                                    See details
+                                                                                                  See details
+
+                                  Total Leads                  See details                                       See details                    See details                     See details
+                                                               See details                                                                      See details
+                                   387                         See details                                       CPQL
+
+                                      -17.0%                                                                    $75
+
+                                     See details                                                                 -55.8%
+
+                                     See details
+
+                                        CPL Lead Pipeline                     See details                             CPL Bookkeeping Pipeline            CPQL BookKeeping
+                                                                              See details
+                                           $25                                                                             $40                              $97.04
+
+                                                 -31.9%                                                                           -21.7%                           -69.4%
+
+                                               See details                                                                    See details                    See details
+
+Campagin Name by Qualified Leads                               Campagin Name by Disqualified Leads                                                 Campagin Name by Qualified Leads
+
+              Data Set Configuration Error                                          5.3%3.051.%4.3%%     24.1%                Meta_Leadgen...                    Data Set Configuration Error
+                                                                              9.6%                                            Meta_LeadGen...
+           Data Studio cannot connect to your data set.                                                                       Meta_LeadGen...                 Data Studio cannot connect to your data set.
+                              See details                         10.5%                                                       Meta_LeadGen...                                    See details
+                                                                                                                              Meta_LeadGen...
+                                                                              11%                        21.9%                Meta_LeadGen...
+                                                                                        12.3%                                 Meta_Conversi...
+                                                                                                                              Meta_LeadGen...
+
+Campagin Name                                     Cost      Leads CPL Qualifi...                         CPQL  Disquali...          Deals BK Quali... BK Disqual... CPQL BookKe... Campaign...
+
+Meta_Leadgen_Prospecting_Lookalike_Instantf... $175....        1 175...          null                           null             1         1       null                   null               null           null
+
+Meta_Leadgen_Prospecting_Lookalike_CRMPix... $2,15...          96 22....         32                      67.25                55       33          null                   null               null           0.02
+
+Meta_LeadGen_Prospecting_Lookalike_Brandin... $1,87...         61 30....         24                      78.24                24       26          null                   null               null           null
+
+Meta_LeadGen_Prospecting_Retargeting_Bran... $1,57...          31 50....         20                      78.94                   8     20          null                   null               null           null
+
+Meta_LeadGen_Prospecting_Interest_UGC_Mai... $419....          32 13....         4                       104.93               28           4       null                   null               null           null
+
+Meta_Conversion_Prospecting_Lookalike_Invoi... $1,05...        23 45....         10                      105.53               12       10          null                   null               null           0.05
+
+Meta_LeadGen_Bookkeeping_Prospecting_Inter... $1,94...         61 31....         13                      149.29                  1     25          19                     24                 102.15         null
+
+Meta_LeadGen_Prospecting_Lookalike_Whatsa... $160....          2 80....          1                       160.23                  1         1       null                   null               null           null
+
+Meta_LeadGen_E-Invoice_Phase2_Retargeting_... $492....         52 9.47           2                       246.21               50           2       null                   null               null           null
+
+Grand total                                   $10,1...         384 26....        107                     95.26                202   126            20                     24                 97.04          0.05
+
+                                                                                                                                                                                             < > 1 - 10 / 10
+
+                                                                                  Data Set Configuration Error
+
+                                                                              Data Studio cannot connect to your data set.
+                                                                                                 See details
+
+                                                                                  Data Set Configuration Error
+
+                                                                              Data Studio cannot connect to your data set.
+                                                                                                 See details
+
+                                                                                  Data Set Configuration Error
+
+                                                                              Data Studio cannot connect to your data set.
+                                                                                                 See details
+
+ Campagin Name                                                                                                        Ad set Effective Status                                            Campaign Effective St...
+
+ Meta_Leadgen_Prospecting_Lookalike_CRMPixel_Instantform                                                              ACTIVE                                                             ACTIVE
+ Meta_LeadGen_Bookkeeping_Prospecting_Intersts_MaxmizeLeads_Instantform                                               ACTIVE                                                             ACTIVE
+ Meta_LeadGen_Prospecting_Lookalike_BrandingEquity_Instantform_                                                       ACTIVE                                                             ACTIVE
+ Meta_LeadGen_Prospecting_Retargeting_BrandingEquity_Instantform                                                      ACTIVE                                                             ACTIVE
+ Meta_Conversion_Prospecting_Lookalike_Invoice_Websiteform                                                            ACTIVE                                                             PAUSED
+ Meta_LeadGen_E-Invoice_Phase2_Retargeting_Instantform                                                                CAMPAIGN_PAUSED                                                    PAUSED
+ Meta_LeadGen_Prospecting_Interest_UGC_MainProduct_Instantform                                                        PAUSED                                                             PAUSED
+ Meta_LeadGen_E-Invoice_Phase2_Prospepecting_Interst_Instantform                                                      ACTIVE                                                             PAUSED
+ Meta_Leadgen_Prospecting_Lookalike_Instantform_Invoice                                                               ACTIVE                                                             PAUSED
+ Meta_LeadGen_Prospecting_Lookalike_Whatsapp                                                                          CAMPAIGN_PAUSED                                                    PAUSED
+ Meta_Awareness_Broad_VideoViews_BrandEquity_Website                                                                  CAMPAIGN_PAUSED                                                    PAUSED
+ Meta_LeadGen_Bookkeeping_Prospectin_Lookalike_Instantform_HigherIntent                                               CAMPAIGN_PAUSED                                                    PAUSED
+
+Ad Group Name                                                                                                                                                                              < > 1 - 21 / 21
+
+Meta_LeadGen_Bookkeeping_JobTitles_Arabic_Instantform                                                                                                                                     < > 1 - 44 / 44
+Meta_Lookalike_SQL_AreaTargeting_Instantform
+Meta_Lookalike_WebsiteVisits_BrandingEquity_Instantform
+Meta_LeadGen_Retargeting_VideoViews_BrandingEquity_Instantform
+Meta_Lookalike_Customer_AreaTargeting_Instantform
+Meta_Conv_Lookalike_SQL4%_Invoice_Websiteform
+Meta_LeadGen_Bookkeeping_Intersts_Arabic_Instantform
+Meta_LeadGen_Retargeting_PageEngagement_BrandingEquity_Instantform
+Meta_Lookalike_Customer_BrandingEquity_Instantform
+Meta_LeadGen_E-Invoice_VideoViews_Instantform
+Meta_LeadGen_UGC_Interest_Instantform
+Meta_Conv_Lookalike_Customer2%_Invoice_Websiteform
+
+                                                                                  Data Set Configuration Error
+
+                                                                              Data Studio cannot connect to your data set.
+                                                                                                 See details
+
+                                                                                 Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                  null                      No lead response                                                                       Not a Buyer ­ Personal Use / Non-Business Lead denies... Out
+
+Campagin Name                     null After 8+ sal... Number fail... No Register... Browsing/ T...                              Training Existing cu...     Urdu speak...               Student            null
+Meta_Leadgen_Prosp...
+Meta_LeadGen_Bookk...             40              16           1                               6                      9             3                     -               1                  1              9
+Meta_LeadGen_Prosp...
+Meta_LeadGen_E-Invo...            60                     -     -                                      -               -             -                     -               -                  -              -
+Meta_LeadGen_Prosp...
+Meta_LeadGen_Prosp...             37                     7     -                               5                      2             -              2                      1                  -              2
+Meta_LeadGen_E-Invo...
+Meta_Conversion_Pro...            2               13           1                 11                                   9             2                     -               -                  -              10
+null
+                                  4                      9     2                               1                      3             -              2                      -                  -              10
+
+                                  23                     5     -                                      -               -             -                     -               -                  -              1
+
+                                  2                      4     -                               1                      1             -                     -               -                  -              14
+
+                                  11                     7     -                               1                      -             1                     -               -                  -              1
+
+                                  2                      -     -                                      -               -             -                     -               -                  -              -
+
+                                                                                  Data Set Configuration Error
+
+                                                                              Data Studio cannot connect to your data set.
+                                                                                                 See details
+
+                                                                                 Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                        null                   No lead response                                                                              Not a Buyer ­ Personal Use / Non-Business Lead d...
+
+Ad Name                                 null After 8+ sal... Number fail... No Register... Browsing/ T...                              Training Existing cu...            Urdu speak...           Student          nu
+Meta_AR_Branding_CutDown7_...
+M eta_AR_Feature_Carousel_IN_...        46                  9                 -                          4                    2                 -            1                  1                    -
+Meta_AR_Feature_BK_Image_...
+Meta_AR_UGC_Charlie                     1                   9                 1                          7                    6                 1               -               -                    -             1
+Meta_AR_Feature_Image_...
+M eta_AR_Feature_Image_IN_...           38                  -                 -                          -                    -                 -               -               -                    -
+M eta_AR_Feature_BK_Image_...
+Meta_AR_Feature_Image_IN_...            19                  7                 -                          2                    3                 -               -               1                    -
+Meta_AR_UGC_Ahmed
+                                        1                   5                 -                          1                    1                 3               -               -                    1
+
+                                        1                   4                 -                          2                    2                 1               -               -                    -
+
+                                        12                  -                 -                          -                    -                 -               -               -                    -
+
+                                        -                   2                 -                          2                    1                 -               -               -                    -
+
+                                        1                   2                 2                          1                    -                 -            1                  -                    -
+                                                                          Apr 1, 2026 - Apr 19, 202 arow_drop_down                   See details
+                                                                                           See details
+
+                                  See details                See details               See details                      See details               See details
+                                  See details                                          See details                      See details
+                                  See details              CPL Total
+
+                                                           $23
+
+                                                              -19.4%
+
+                                                             See details
+
+                                  See details                             See details               See details                      See details
+                                  See details                             See details               See details                      See details
+
+Campagin Name by Qualified Leads                           Campagin Name by Disqualified Leads                          Campagin Name by Qualified Leads
+
+       43%.42%.131.%7.1%%  26.6%  Snapchat_Lea...                       Data Set Configuration Error                                 Data Set Configuration Error
+  5.6%                            Snapchat_Lea...
+                                  Snapchat_Lea...                     Data Studio cannot connect to your data set.                 Data Studio cannot connect to your data set.
+7.9%                              Snapchat_Lea...                                        See details                                                  See details
+                                  Snapchat_Lea...
+22.6%                      24.9%  Snapchat_Lea...
+                                  Snapchat_Lea...
+                                  Snapchat_Lea...
+
+                                                               Data Set Configuration Error
+
+                                                           Data Studio cannot connect to your data set.
+                                                                              See details
+
+                                                                              Data Set Configuration Error
+
+                                                                          Data Studio cannot connect to your data set.
+                                                                                             See details
+
+                                                                              Data Set Configuration Error
+
+                                                                          Data Studio cannot connect to your data set.
+                                                                                             See details
+
+                                                                              Data Set Configuration Error
+
+                                                                          Data Studio cannot connect to your data set.
+                                                                                             See details
+
+                                                               Data Set Configuration Error
+
+                                                           Data Studio cannot connect to your data set.
+                                                                              See details
+
+Ad Group Name                                                                          Squad Status                                                            < > 1 - 23 / 23
+                                                                                                                                                               < > 1 - 71 / 71
+Snapchat_Retargeting_ClosedLostDeal_Instantform                                        ACTIVE
+Snapchat_Retargeting_WebsiteVisits_Instantform                                         ACTIVE
+Snapchat_Behavior_iPhone_Instantform                                                   ACTIVE
+Snapchat_Behavior_iOS_Instantform                                                      ACTIVE
+Snapchat_LifeStyle_iPhone_Instantform                                                  ACTIVE
+Snapchat_LifeStyle_iOS_Instantform                                                     ACTIVE
+Snapchat_LeadGen_Broad_UGC_Instantform                                                 ACTIVE
+Snapchat_LeadGen_LifeStyle_E-Invoice_Instantform                                       ACTIVE
+Snapchat_LeadGen_Visitors_E-Invoice_Instantform                                        ACTIVE
+Snapchat_Bookkeeping_Broad_iPohne_Instantform                                          ACTIVE
+Snapchat_LeadGen_Bookkeeping_Trial1_LifeStyle_Instantform                              ACTIVE
+Snapchat_LeadGen_Bookkeeping_Trial1_iOS_Instantform                                    ACTIVE
+
+Ad Name                                                                                Social Ads status
+
+Snapchat_AR_Feature_Image_                                                             Active
+Snapchat_AR_Feature_Image_                                                             Active
+Snapchat_AR_Feature_Image_                                                             Active
+Snapchat_AR_Feature_Image_                                                             Active
+Snapchat_AR_Feature_Image_                                                             Active
+Snapchat_AR_UGC_Charli                                                                 Active
+Snapchat_AR_Feature_Image_                                                             Paused
+Snapchat_AR_CT_Ahmed1                                                                  Active
+Snapchat_AR_Feature_Image_                                                             Paused
+Snapchat_AR_Feature_Image_IN_                                                          Active
+Snapchat_AR_Feature_BK_Image_Trial1_                                                   Active
+Snapchat_AR_UGC_Turki                                                                  Active
+
+                                                                              Data Set Configuration Error
+
+                                                                          Data Studio cannot connect to your data set.
+                                                                                             See details
+
+                                                                Data Set Configuration Error
+
+                                                           Data Studio cannot connect to your data set.
+                                                                               See details
+
+                                                               Data Set Configuration Error
+
+                                                           Data Studio cannot connect to your data set.
+                                                                              See details
+                                                                                               Apr 1, 2026 - Apr 19, 20 arow_drop_down                     Campagin Name                       
+
+                              Total Leads                           Qualified                                  Disqualified                                See details                            See details
+
+                               141                                   73                                          55
+
+                                  -42.4%                              0.0%                                         -68.0%
+
+                                                       See details                           CPQL                               CPL Total                               ROI - All Pipelines
+
+                                                                                            $66                                 $34                                        0.09
+
+                                                                                             -46.7%                                 -7.3%                                       -40.9%
+
+                                                                                      Won Amount                                Deals Amount
+
+                                                                                       $453                                     $16,448
+
+                                                                                           -68.5%                                      -25.1%
+
+                                 CPL Lead Pipeline                             CPQL Lead Pipeline                               CPL Bookkeeping Pipeline                             CPQL BookKeeping
+
+                                    $34                                            $60                                                $82                                             $206.03
+
+                                          -13.4%                                         -30.9%                                               46.8%                                           -32.6%
+
+                                     Impressions                                      See details                                              CTR                                           See details
+
+                                 2,233,982                                                                                          0.13%
+
+                                          -43.0%                                                                                              -75.4%
+
+Campagin Name by Qualified Leads                                              Campagin Name by Disqualified Leads                                                   Campagin Name by Qualified Leads
+
+     5.5%4.1%.04%%                               Tiktok_LeadGe...                                5.50%%                             Tiktok_LeadGe...                                     6%0%                            Tiktok_LeadGe...
+9.6%                                             Tiktok_LeadGe...                          7.3%                                     Tiktok_LeadGe...                            8.5%                                     Tiktok_LeadGe...
+                                                 Tiktok_LeadGe...                     7.3%                                          Tiktok_LeadGe...                                                                     Tiktok_LeadGe...
+                        41.1%                    Tiktok_LeadGe...                                                                   Tiktok_LeadGe...                       8.9%                   43.7%                  Tiktok_LeadGe...
+                                                 Tiktok_LeadGe...                     30.9%                                         Tiktok_LeadGe...                                                                     Tiktok_LeadGe...
+                                                 auto-tagged                                                   49.1%                auto-tagged                                                                          Tiktok_LeadGe...
+                                                 Tiktok_Conver...                                                                   Tiktok_Conver...                                                                     Tiktok_Conver...
+38.4%                                            Tiktok_Conver...                                                                   Tiktok_Conver...                       32.9%                                         Tiktok_Conver...
+
+                 Campagin Name                            Cost Le...                  CPL Quali... CP...  Disq...                             Deals Deals R... BK Qu... BK Disqual... CPQL Bo... Campaign...
+
+Tiktok_LeadGen_Prospecting_Broad_OldSetup_Br... $1,590...                 59      26.97               25       63.64            17            29              null         null                   null         null                null
+
+Tiktok_LeadGen_Prospecting_Broad_OldSetup_U... $429.90 11                         39.08                     6  71.65            3             7               null             1                  null         null                null
+
+Tiktok_LeadGen_Prospecting_Broad_SmartAds+... $2,109...                   55      38.36               27       78.14            27            28              null         null                   null         null                null
+
+Tiktok_LeadGen_Prospecting_Broad_Smart+_Inst... $289.50                   7       41.36                     3     96.5          4             3               null         null                   null         null                null
+
+Tiktok_LeadGen_Bookkeeping_Broad_ManualSet... $412.05                     8       51.51                     3 137.35            1             3 $133.22                        1                     3         412.05              0.32
+
+                 Grand total                           $4,832... 141              34.27               65       74.34            52            71 $452.96                       2                     3         206.03              0.09
+
+                                                                                                                                                                                                               < > 1 - 5 / 5
+
+                 Ad Group Name                                     Cost Le...                  CPL Qualifi... CPQL  Disq...                                Deals Deals Re... BK Qua... BK Disquali... CPQL Boo...
+
+Tiktok_LeadGen_Broad_OldSetup_BrandEquity_Instan... $1,590....                    59           26.97              25            63.64         17              29               null            null                   null         null
+
+Tiktok_LeadGen_Broad_OldSetup_UGC_Instantform             $429.90                 11           39.08                 6          71.65         3                  7             null               1                   null         null
+
+Tiktok_LeadGen_Broad_Smart_Instantform                    $2,109....              56           37.67              28            75.35         27              29           $319.74             null                   null         null
+
+Tiktok_LeadGen_Broad_Smart+_Instantform                   $289.50                 7            41.36                 3          96.5          4                  3             null            null                   null         null
+
+Tiktok_LeadGen_BK_Broad_Targeting_Instantform             $412.05                 8            51.51                 3       137.35           1                  3         $133.22                1                      3         412.05
+
+                        Grand total                       $4,832.... 141                       34.27              65            74.34         52              71           $452.96                2                      3           206.03
+                                                                                                                                                                                                                      1-5/5
+                                                                                                                                                                                                                                   <>
+
+                                                                                          Data Set Configuration Error
+
+                                                                                      Data Studio cannot connect to your data set.
+                                                                                                         See details
+
+Creative Type                               Cost                   Leads                   CPL                  CPQL                    Qualified          Disqualified Leads Bookkeeping Quali... Leads Bookke...
+
+UGC                                        $2,218.14                     61              $36.36                 $65.24                             34                      26                                         1                     null
+Video                                      $1,883.19                     65              $28.97                 $55.39                             34
+Image                                                                                    $58.86                $103.01                                                     20                                  null                         null
+TGC                                          $412.05                       7             $43.58                $130.74                               4
+null                                         $261.48                       6             $28.67                                                      2                     3                                          1                      3
+                                                                           2                                         null                            0
+Grand total                                    $57.34                                    $34.27                                                                            4                                   null                         null
+                                                                       141                                        $65.3                            74
+                                            $4,832.2                                                                                                                       2                                   null                         null
+
+                                                                                                                                                                           55                                         2                      3
+
+                                                                                                                                                                                                                         < > 1 - 5 / 5
+
+                                                                                          Data Set Configuration Error
+
+                                                                                      Data Studio cannot connect to your data set.
+                                                                                                         See details
+
+Ad Group Name                                                                                                           Adgroup status
+
+Tiktok_LeadGen_Broad_Smart_Instantform                                                                                  ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_LeadGen_Broad_OldSetup_BrandEquity_Instantform                                                                   ADGROUP_STATUS_DELIVERY_OK
+Tiktok_LeadGen_Broad_OldSetup_UGC_Instantform                                                                           ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_LeadGen_BK_Broad_Targeting_Instantform                                                                           ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_LeadGen_Broad_Smart+_Instantform                                                                                 ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_VideoViews_BroadTargeting_Website                                                                                ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_Conv_Broad_Targeting_Websiteform                                                                                 ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_Conv_Broad_AreaTargeting_Websiteform                                                                             ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_Conv_Broad_HighSpending_Websiteform                                                                              ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_Conv_Prospecting_Broad_Sectors_Websiteform                                                                       ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_Conv_Intersts_NewFeatures_Websiteform                                                                            ADGROUP_STATUS_CAMPAIGN_DISABLE
+Tiktok_Conversion_Invoice_Videos&ImagesMix                                                                              ADGROUP_STATUS_CAMPAIGN_DISABLE
+
+                                                                                                                                                                                                               < > 1 - 22 / 22
+
+                                                                                          Data Set Configuration Error
+
+                                                                                      Data Studio cannot connect to your data set.
+                                                                                                         See details
+
+                                                                                                 Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                     null                                                      Not a Buyer ­ Personal Use / Non-Business No lead res...                                                           Out of supported region
+
+Campagin Name                        null Browsing/ T... No Register... Existing cu...                               Training Urdu speak... After 8+ sal...                             Sudan                  Other               Morocco
+Tiktok_LeadGen_Pros...
+Tiktok_LeadGen_Pros...               42                4                       4                         -                   -                          -               4                      1               1                   -
+Tiktok_LeadGen_Pros...
+Tiktok_LeadGen_Book...               28                2                       3                         -                   2                    1                     8                      6               -                   1
+Tiktok_LeadGen_Pros...
+auto-tagged                          8                 1                       -                      1                      -                          -               1                      -               -                   -
+
+                                     7                 -                       -                      1                      -                          -               -                      -               -                   -
+
+                                     3                 1                       1                         -                   -                          -               -                      -               -                   -
+
+                                     1                 -                       -                         -                   -                          -               -                      -               -                   -
+
+                                                                                               Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                        null                                                          Not a Buyer ­ Personal Use / Non-Business No lead res...                                                                 Out of supported region
+
+Ad Group Na...          null Browsing/ T... No Register... Existing cu...                                   Training Urdu speak... After 8+ sal...                         Sudan                     Other            Morocco               Pakista
+Tiktok_LeadG...
+Tiktok_LeadG...         42                 4                        4                       -                     -                        -               4                         1                  1                       -
+Tiktok_LeadG...
+Tiktok_LeadG...         29                 2                        3                       -                  2                        1                  8                         6                     -                1
+Tiktok_LeadG...
+                        8                  1                           -                 1                        -                        -               1                         -                     -                    -
+
+                        7                        -                     -                 1                        -                        -                  -                      -                     -                    -
+
+                        3                  1                        1                       -                     -                        -                  -                      -                     -                    -
+
+                                                                                               Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                           null                                                                Not a Buyer ­ Personal Use / Non-Business No lead res...                                        Out of supported region
+
+Ad Name                                    null Browsing/ T... No Register... Existing cu...                                    Training Urdu speak... After 8+ sal...                            Sudan                  Other              Morocc
+Tiktok_AR_Video_Branding_Cut...
+Tiktok_AR_UGC_Charlie                      41                      4                  4                        -                        -                  -                      4                     1                   1
+Tiktok_AR_Feature_BK_Image_C...
+Tiktok_AR_UGC_Mohamed                      25                       -                 3                        -                        2                  -                      5                     5                   -
+Tiktok_AR_UGC_Muzaker
+Tiktok_AR_TGC_Mix                          7                        -                    -                     -                        -                  -                      -                     -                   -
+Tiktok_AR_UGC_Ahmed
+Tiktok_AR_Feature_Video_...                4                        -                    -                     1                        -                  -                      -                     -                   -
+Tiktok_AR_TGC_Talal_MixVideos
+                                           2                        -                    -                     -                        -                  -                      2                     1                   -
+
+                                           1                       2                     -                     -                        -                  -                      1                     -                   -
+
+                                           2                       1                     -                     -                        -                  -                      -                     -                   -
+
+                                           2                        -                 1                        -                        -                  -                      -                     -                   -
+
+                                           1                       1                     -                     -                        -                  -                      -                     -                   -
+                                                                                   Apr 1, 2026 - Apr 19, 2 arow_drop_down               See details
+
+                                  See details                        See details            See details                                 See details                            See details
+
+                                               See details                 See details                                     See details  Closed Won Deals
+                                                                                                                           See details
+                                                                       Total Spent                                                      $39,195
+
+                                                                     $29,660                                                                     -25.5%
+
+                                                                            -24.3%
+
+    Campagin Name by Qualified leads                         Campagin Name by Disqualified leads                                        Lead stage by Number Of Leads
+
+             Data Set Configuration Error                                Data Set Configuration Error                                       Data Set Configuration Error
+
+         Data Studio cannot connect to your data set.                Data Studio cannot connect to your data set.                       Data Studio cannot connect to your data set.
+                             See details                                                See details                                                        See details
+
+    Campagin Name by CPQL
+
+        Data Set Configuration Error
+
+    Data Studio cannot connect to your data set.
+                       See details
+
+            Campagin Name         Cost Number O... Campaign... Qualified le... Campaign CPQL                                            Disqualified leads            Amount Campaig... CPQL Boo...
+
+    1. ImpressionShare_Search...  $703.34              1             703.34             1                                  null                                    0  null     null         null
+
+    2. Search_AR_Qflavours_Fe...  $53.41               null          null          null                                    null                      null             null     null         null
+
+    3. Search_AR_Qflavours_Co...  $52.53               1             52.53              0                                  null                      0                null     null         null
+
+    4. Google_Reach_AR_Displa...  $40.24               3             13.41              0                                  null                      3                null     null         null
+
+    5. Search_AR_Qflavours_Co...  $384.39              null          null          null                                    null                      null             null     null         null
+
+    6. Search_AR_Qflavours_Fe...  $476.34              1             476.34             1                                  null                      0                null     null         null
+
+    7. DemandGen_Conversion...    $6.04                null          null          null                                    null                      null             null     null         null
+
+    8. Search_AR_Competitor_D...  $51.64               3             17.21              1                                  51.64                     2                $479.61  9.29         null
+
+    9. Search_AR_Brand            $827.02              32            25.84              16                       59.07                                13 $15,887....             4.93             null
+                                                                                                                101.23                               364 $221,31...              1.29             null
+    Grand total                   $29,660....          828           39.44         343                                                                                         1 - 19 / 19
+                                                                                                                                                                                            <>
+
+Qoyod Ad Group Report
+
+                                                                                    System Error
+
+                                                                     Data Studio has encountered a system error.
+                                                                                        See details
+
+Auto Cloud Ad Group Report
+
+    Ad Group Name                                                     Cost                  Number Of Leads                             Disqualified leads                           Qualified leads
+
+1.  null                                                             $4,253.02                                    100                                            43                                        52
+                                                                           $417                                       9                                            2                                         4
+2.                                                                           null                                                                                  2                                         6
+                                                                             null                                   10
+3.  Bing_AR_Brand_Keywords                                                   null                                   80                                           47                                        13
+                                                                             null                                                                                  1                                         4
+4.  Google_Pmax_Accounting_Generic                                           null                                     5
+                                                                             null                                 117                                            44                                        66
+5.  Google_Pmax_Services                                                     null                                                                                24                                        35
+                                                                                                                    65
+6.  Google_Pmax_E-Invoice_Pahse2                                                                                    12                                             6                                         6
+                                                                                                                                                                   0                                         0
+7.                                                                                                                    1
+                                                                                                                                                                               < > 1 - 37 / 37
+8.  -
+
+9.  
+
+Qoyod Keywords Performance                                  Cost                   Number Of Leads                                      Disqualified leads                           Qualified leads
+
+        Search Keyword                                 $1,940.68                                         704                                                   322                                       283
+                                                       $1,911.12                                           19                                                      7                                         9
+ 1. null                                                                                                     9                                                     0                                         8
+ 2.                                                      $558.27                                             4                                                     0                                         4
+ 3.                                                          $280                                            1                                                     1                                         0
+ 4.                                                                                                          2                                                     0                                         2
+ 5.                                                      $196.51                                             2                                                     0                                         2
+ 6.                                                      $112.32                                             2                                                     0                                         2
+ 7.                                                                                                          1                                                     0                                         0
+ 8.                                                        $28.36
+ 9.                                                         $4.78                                                                                                              < > 1 - 39 / 39
+                                                                 $0
+
+Auto Cloud Keywords Performance
+
+    Search Keyword                                                    Cost                  Number Of Leads                             Disqualified leads                           Qualified leads
+
+1.  null                                                             $4,253.02                                    704                                          322                                       283
+                                                                         $211.9                                       3                                            0                                         3
+2.                                                                                                                    3                                            2                                         0
+                                                                       $102.75                                        1                                            0                                         0
+3.                                                                           $54                                      1                                            0                                         1
+                                                                                                                      9                                            0                                         8
+4.                                                                       $48.35                                       5                                            4                                         1
+                                                                             null                                     1                                            1                                         0
+5.                                                                           null                                     5                                            2                                         3
+                                                                             null
+6.                                                                           null                                                                                              < > 1 - 39 / 39
+
+7.     
+
+8.    
+
+9.   
+
+                                                                         Data Set Configuration Error
+
+                                                                     Data Studio cannot connect to your data set.
+                                                                                        See details
+                                                                                    Apr 1, 2026 - Apr 19, 202 arow_drop_down
+
+                                                                                             See details                            Campagin Name                          
+
+                                   See details                     See details               See details                            See details               See details
+                                   See details                     See details               See details                            See details
+                                   See details                     See details
+
+                                         See details                            See details                  See details                                      See details
+                                         See details                            See details                                                                   See details
+                                                                                                               CTR
+
+                                                                                                          0.47%
+
+                                                                                                              -14.7%
+
+Campagin Name by Qualified Leads                                   Campagin Name by Disqualified Leads                              Campagin Name by Qualified Leads
+
+             Data Set Configuration Error                                       Data Set Configuration Error                                           24.3%
+
+           Data Studio cannot connect to your data set.                       Data Studio cannot connect to your data set.                                                 39.6%            Bing_Search_...
+                              See details                                                        See details                                                                                Bing_Search_...
+                                                                                                                                                                                            Bing_Search_...
+
+                                                                                                                                                       36.1%
+
+                                                                       Data Set Configuration Error
+
+                                                                   Data Studio cannot connect to your data set.
+                                                                                      See details
+
+                                                                       Data Set Configuration Error
+
+                                                                   Data Studio cannot connect to your data set.
+                                                                                      See details
+
+                                                                       Data Set Configuration Error
+
+                                                                   Data Studio cannot connect to your data set.
+                                                                                      See details
+
+                                                                                       Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                   null Multiple signu...                       No lead response                                                 Not a Buyer ­ Personal Use / Non-Business Lead denies re...
+
+Campagin Name                      null                  null After 8+ sales ... Number failed... Existing custo... Browsing/ Tes... No Registered ...                            Training                   null
+Bing_Search_AR_Brand
+Bing_Search_AR_Gene...             34                    11        8                         1                                2                  -            -                   -                                -
+Bing_Search_AR_Gene...
+Bing_Search_AR_E-Inv...            7                     2         4                         -                                1                  3            -                   1                          1
+
+                                   7                     2         2                         -                                -                  -            2                   -                                -
+
+                                   1                     -         -                         -                                -                  -            -                   -                                -
+
+                                                                       Data Set Configuration Error
+
+                                                                   Data Studio cannot connect to your data set.
+                                                                                      See details
+
+                                                                                       Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                         null Multiple sign...                         No lead response                                          Not a Buyer ­ Personal Use / Non-Business Lead denies r...
+
+Ad Name                                  null                null After 8+ sale...     Number faile...    Existing cust...          Browsing/ Te...    No Registere...            Training                   null
+Bing_AR_Brand_HubSpot
+Bing_AR_Feature_AccountingSo...          34                  11                 8                 1                              2                  -                   -         -                          -
+Bing_AR_Feature_Competitros_...
+Bing_AR_Feature_Invoice_HubS...          8                   2                  4                 -                              -                  3                   -         1                          1
+Bing_AR_Feature_Competitor_H...
+Bing_Dynamic                             3                   1                      -             -                              -                  -         1                   -                          -
+Bing_AR_Feature_InvoiceIntegra...
+null                                     1                      -               2                 -                              -                  -                   -         -                          -
+
+                                         1                      -                   -             -                              -                  -         1                   -                          -
+
+                                         1                   1                      -             -                              -                  -                   -         -                          -
+
+                                         1                      -                   -             -                              -                  -                   -         -                          -
+
+                                         -                      -                   -             -                              1                  -                   -         -                          -
+                                                       Apr 1, 2026 - Apr 19, 2026  arow_drop_down     Previous Page               Next Page
+
+                                                       Ad Name                                                       See details
+
+         See details                                   See details               See details          See details    Disqualified (Q+UnQ) %
+         See details                                   See details               See details
+         See details                                   See details                                                    No data
+
+                                                                                                                            No data
+
+                                                                                                      See details
+
+         See details                                                See details    CPL Bookkeeping Pipeline                       See details
+
+                                                                                      No data
+
+                                                                                               No data
+
+Campagin Name by Qualified Leads                       Campagin Name by Disqualified Leads                   Campagin Name by Qualified Leads
+
+             Data Set Configuration Error                  Data Set Configuration Error                                  Data Set Configuration Error
+
+         Data Studio cannot connect to your data set.  Data Studio cannot connect to your data set.                  Data Studio cannot connect to your data set.
+                            See details                                   See details                                                   See details
+
+                                                           Data Set Configuration Error
+
+                                                       Data Studio cannot connect to your data set.
+                                                                          See details
+
+                                                           Data Set Configuration Error
+
+                                                       Data Studio cannot connect to your data set.
+                                                                          See details
+
+Ad Name                                                    Data Set Configuration Error
+
+                                                       Data Studio cannot connect to your data set.
+                                                                          See details
+
+                                                            Data Set Configuration Error
+
+                                                        Data Studio cannot connect to your data set.
+                                                                            See details
+
+                                                                                   Social Ads status
+
+                                                                               No data
+
+                                                             Data Set Configuration Error
+
+                                                        Data Studio cannot connect to your data set.
+                                                                            See details
+
+                                                                   Leads Disqualification Reason - Ops / Leads Disqualification Reason - Sub reasons / Number Of Leads
+
+                                                                                 No data
+
+                                                           Data Set Configuration Error
+
+                                                       Data Studio cannot connect to your data set.
+                                                                          See details
+

@@ -1,0 +1,42 @@
+# secrets / credentials - NEVER commit
+.env
+.env.*
+!.env.example
+bigquery-key.json
+*.json.key
+*service-account*.json
+*credentials*.json
+*.pem
+.snap_cert.pem
+.snap_key.pem
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# editors / OS
+.vscode/
+.idea/
+.claude/
+*.swp
+.DS_Store
+Thumbs.db
+
+# build artifacts
+dist/
+build/
+*.log
+
+# local data dumps
+data/
+scripts/miro_dump.json
+
+# misc
+*.bak
+*~

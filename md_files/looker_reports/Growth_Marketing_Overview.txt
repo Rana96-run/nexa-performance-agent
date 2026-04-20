@@ -1,0 +1,451 @@
+                                                                                                                                       Apr 1, 2026 - Apr 18, 2026  arow_drop_down
+
+Overview                                      Qualified Leads                Qualified % (Q+UnQ)     Leads Disqualified                ROI (Organic + Paid)
+
+                  Total Leads                  1,178                           46.05%                   781                                2.93
+
+         2,784                                        8.8%                              43.2%                 -45.5%                              77.5%
+
+                      -17.3%                         CPL                               CPQL             Deals Amount                     Deal Won Amount
+
+                Total Ad Spent                  $18                            $43.61                $646,153                          $150,416
+
+       $51,419                                       -36.5%                            -51.8%                  -9.8%                              -6.8%
+
+                      -47.5%
+
+    Number Of Leads                    Qualified leads  Cost
+
+6K                                                                                                                                                                                     250
+
+                                                                                                                                                                                                                                                                              200
+
+4K
+                                                                                                                                                                                                                                                                              150
+
+                                                                                                                                                                                                                                                                              100
+2K
+
+                                                                                                                                                                                                                                                                              50
+
+0              Apr 2            Apr 3  Apr 4  Apr 5     Apr 6  Apr 7  Apr 8                                                                                                                                                                         0
+        Apr 1                                                                                        Apr 9 Apr 10 Apr 11 Apr 12 Apr 13 Apr 14 Apr 15 Apr 16 Apr 17 Apr 18
+
+    Source by Number Of Leads                           Source by Qualified Leads                    Open Leads Stages                 Closed Won Deal Amount
+
+             15.3%                                                          12%                                          0.5%                               7.7%
+    16.9%                                                         15%                                           13.6%                         26.2%
+
+                                67.8%                                                           73%                             85.9%                                           66.2%
+                                                              Paid Organic Direct Traffic            Attempting Connected New
+    Paid Organic Direct Traffic                                                                                                              Paid Organic Direct Traffic
+
+Organic /Total                                Qualified Leads                Disqualified Leads      Qualified %                       Deal Won Amount
+
+               Total Leads                      277                             488                  33%                               $30,720
+
+         827                                         48.9%                             5.2%              17.1%                                  -0.6%
+
+                    27.2%
+
+Paid /Total                                   Qualified Leads                Disqualified Leads      Qualified % (Q+UnQ)               Deals Won Amount
+
+                   Leads                        746                             840                        0                           $65,270
+
+        1,744                                         -2.5%                           -52.3%                    55.3%                           -15.6%
+
+                    -31.0%
+                                                                                                                                                         Mar 22, 2026 - Apr 18, 2026 arow_drop_down
+
+Organic Overview
+
+             Total Leads                               Qualified Leads                            Disqualified Leads                   Qualified %                Deal Won Amount
+
+             1,256                                       418                                         776                               33%                        $50,636
+
+                 32.2%                                        56.0%                                        13.8%                           18.0%                            6.7%
+
+                                                                                                 Invalid metric
+
+                                                                                         This chart has an invalid metric
+                                                                                                    See details
+
+    Source                Leads                        Qualified                         Disqualified      Qualification %                               Disqualificatio...  Won Amount
+    Direct Traffic        611                          184                               396               30.11%                                        64.81%                   $6,626.76
+    Organic Search        607                          210                               366               34.6%                                         60.3%
+    Organic Social        31                           19                                12                61.29%                                        38.71%                 $29,524.19
+    Email Marketing       5                            4                                 1                 80%                                           20%                      $1,616.01
+    Google Ads            2                            1                                 1                 50%                                           50%                      $1,812.76
+                                                                                                                                                                                    $768.45
+
+Organic Monthly Trend
+
+                   Number Of Leads
+
+     10K
+
+                                                                                                  6,814                    6,500       6,969             6,653    6,758
+
+                                                                                         5,951                                                  6,180
+
+      4,907     4,379     4,699              4,974         4,998       4,485                               7,818                                                             4,970
+
+     5K                                                                                                                                                                               3,155
+
+      0
+     Jan 2025 Feb 2025 Mar 2025 Apr 2025 May 2025 Jun 2025 Jul 2025 Aug 2025 Sep 2025 Oct 2025 Nov 2025 Dec 2025 Jan 2026 Feb 2026 Mar 2026 Apr 2...
+
+                                                                                                 Invalid metric
+
+                                                                                         This chart has an invalid metric
+                                                                                                    See details
+
+                Organic Sessions
+
+     2M
+
+     1,229,387                            1,285,184 1,235,244
+
+                1,043,431 1,010,419
+
+                                                                                774,324  722,209                           825,929
+
+     1M                                                                                           628,769  653,707                     548,413  554,973  551,584  574,924    613,450  605,997
+
+      0
+     Jan 2025 Feb 2025 Mar 2025 Apr 2025 May 2025 Jun 2025 Jul 2025 Aug 2025 Sep 2025 Oct 2025 Nov 2025 Dec 2025 Jan 2026 Feb 2026 Mar 2026 Apr 2...
+
+             Lead - First Page Seen                                                                                        Leads                Qualified Leads              Disqualified Leads
+
+1.           https://www.qoyod.com/                                                                                            273                        120                             149
+                                                                                                                                                           17                             19
+2.           https://www.qoyod.com/en/                                                                                     39                              11                              7
+                                                                                                                                                            9                              5
+3.           https://app.qoyod.com/users                                                                                   19                               1                              8
+                                                                                                                                                          null                             7
+4.           https://campaigns.qoyod.com/ar/social?utm_source=tiktok.com&utm_medium=social&utm_campai...                   14                             null                             6
+                                                                                                                                                          null                             8
+5.           https://www.qoyod.com/blog/business-management/%D9%81%D9%83%D8%B1%D8%A9-%D9%...                               10                               3                              3
+                                                                                                                                                          null                             5
+6.           https://www.qoyod.com/templates/%D9%86%D9%85%D9%88%D8%B0%D8%AC-%D8%B3%D9...                                          9                         1                              4
+                                                                                                                                                            4                              1
+7.           https://www.qoyod.com/blog/companies-management/%D8%AA%D8%A3%D9%85%D9%8A%D9...                                       9
+                                                                                                                                                 Qualified Leads             < > 1 - 100 / 191
+8.           https://www.qoyod.com/blog/online-stores/%D8%A7%D8%B4%D8%AA%D8%B1-%D8%A7%D9%...                                      8
+                                                                                                                                                            20                Disqualified Leads
+9.           https://app.qoyod.com/home/free_trial_sign_up                                                                        7                         10
+                                                                                                                                                            10                              28
+10.          https://www.qoyod.com/templates/%D9%86%D9%85%D9%88%D8%B0%D8%AC-%D8%AD%D8...                                          6                          6                              19
+                                                                                                                                                             7                              19
+11.          https://www.qoyod.com/accounting-software/                                                                           6                          9                              18
+                                                                                                                                                             9                              11
+12.          https://www.qoyod.com/#                                                                                              5                          4                               9
+                                                                                                                                                             6                               7
+                Lead - Last Page Seen                                                                                      Leads                            null                            11
+                                                                                                                                                             2                               2
+1.              https://www.qoyod.com/                                                                                          48                           2                               7
+                                                                                                                                                                                             6
+2.              https://app.qoyod.com/users/sign_in                                                                               33                                                         5
+                                                                                                                                                                              1 - 100 / 284
+3.              https://app.qoyod.com/tenant/invoices                                                                             30
+
+4.              https://app.qoyod.com/home/free_trial_sign_up                                                                     24
+
+5.              https://app.qoyod.com/tenant/tenant_settings/general_settings                                                     18
+
+6.              https://app.qoyod.com/users                                                                                       18
+
+7.              https://app.qoyod.com/tenant/dashboards/organizations                                                             16
+
+8.              https://app.qoyod.com/home/free_trial_sign_up_ar                                                                  15
+
+9.              https://campaigns.qoyod.com/ar/social?utm_source=tiktok.com&utm_medium=social&utm_campai...                         8
+
+10.             https://app.qoyod.com/tenant/products                                                                               8
+
+11.             https://app.qoyod.com/tenant/invoices/new                                                                           8
+
+12.             https://app.qoyod.com/tenant/onboarding/step1 org                                                                   7
+                                                                                                                                                                     Mar 22, 2026 - Apr 18, 2026 arow_drop_down
+
+Paid /Total                                         Qualified Leads                       Disqualified Leads                    Qualified % (Q+UnQ)                                     Deals Won Amount
+
+                       Leads                          962                                   1,111                                   46%                                                 $110,819
+
+          2,231                                            -17.4%                                  -58.3%                                  52.7%                                                  -9.0%
+
+                        -41.7%
+
+           Number Of Leads               Qualified leads     Cost
+
+6K                                                                                                                                                                                                               150
+
+4K                                                                                                                                                                                                               100
+
+2K                                                                                                                                                                                                               50
+
+0                                                                                                                                                                                                                0
+
+    Mar 22  Mar 24              Mar 26   Mar 28           Mar 30     Apr 1         Apr 3          Apr 5         Apr 7    Apr 9          Apr 11                     Apr 13       Apr 15   Apr 17
+
+Paid /Performance
+
+               Leads                                Qualified Leads                  Disqualified Leads                  Qualified % (Q+UnQ)                                    Disqualified (Q+UnQ) %
+
+            2,204                                     952                              1,099                                 46%                                                     54%
+
+                -42.2%                                     -17.7%                             -58.6%                                52.9%                                                   -23.1%
+
+               Ad Spent                                   CPL                                  CPQL                              ROAS                                           Deal Won Amount
+
+           $57,620                                  $26.14                                $60.53                                1.89                                            $108,861
+
+                  -63.0%                                 -36.1%                                -55.1%                             144.2%                                                  -9.8%
+
+Source                          Cost                      Leads      Qualified       Disq.               Quali. %        Disq. %                          CPL                   CPQL ROI
+Google Ads                      $28.1K                    991        436             463                 44%             46.72%                           $28.35                $64.45 3.4
+Meta Ads                        $10.92K                   471        169             284                 35.88%          60.3%                            $23.18                $64.61 0.2
+Snapchat Ads                    $10.59K                   450        204             214                 45.33%          47.56%                           $23.52                $51.89 0.6
+Tiktok Ads                      $6.15K                    184        95              84                  51.63%          45.65%                           $33.43                $64.07 0.3
+Microsoft Ads                   $1.87K                    108        48              54                  44.44%          50%                              $17.28                $38.88 1.9
+
+Paid / Branding Only
+
+            Leads                                   Qualified Leads                       Disqualified Leads                    Qualified % (Q+UnQ)                             Disqualified (Q+UnQ) %
+
+            27                                         10                                     12                                    45%                                              55%
+
+             50.0%                                         42.9%                                    9.1%                                   16.9%                                            -10.7%
+
+               Ad Spent                                 CPC                                  CTR                                        Clicks                                            Impressions
+
+            $1,423                                  $1.56                                 0.7%                                         913                                              127,315
+
+                 -69.5%                                481.3%                                 53.3%                                     -94.8%                                                 -96.6%
+
+Source                  Cost             Leads               Qualified      Disq.                Quali. %              Disq. %          Impressions                             Clicks   CPC
+Google Ads              $1.36K           27                  10             12                   37.04%                44.44%           18,817                                  867      $1.56
+Meta Ads                $0               null                null           null                 null                  null             0                                       0        null
+Snapchat Ads            $66.89           null                null           null                 null                  null             108,498                                 46       $1.45
+Tiktok Ads              $0               null                null           null                 null                  null             0                                       0        null
+
+Paid / Monthly Trend
+
+              Number Of Leads
+
+10K
+
+                                                                                                         5,324
+
+                                                                                          4,528                 4,017           4,616                                4,173      4,579
+
+5K                                                                          3,772                                                                         3,824
+
+ 2,727                                   2,732      2,997         2,732                                                                                                                  3,136
+
+            2,078               2,450                                                                                                                                                                            1,832
+
+ 0
+Jan 2025 Feb 2025 Mar 2025 Apr 2025 May 2025 Jun 2025 Jul 2025 Aug 2025 Sep 2025 Oct 2025 Nov 2025 Dec 2025 Jan 2026 Feb 2026 Mar 2026 Apr 2...
+
+             Average CPL
+
+60
+
+                                                                  $44.69    $43.68                                                                                              $45.51
+
+                                                    $41.76                                        $42.21
+
+                                $38.08   $36.91                                                                 $36.48          $36.77                               $36.52
+
+40          $33.9
+
+$24.64                                                                                                                                                    $30.74                         $29.94                  $30.01
+
+                                                                                          $27.81
+
+20
+Jan 2025 Feb 2025 Mar 2025 Apr 2025 May 2025 Jun 2025 Jul 2025 Aug 2025 Sep 2025 Oct 2025 Nov 2025 Dec 2025 Jan 2026 Feb 2026 Mar 2026 Apr 2...
+
+            Qualified % (Q+UnQ)
+
+2,000%                                              1,540.61% 1,393.3% 1,531.15% 1,485.14% 1,370.7% 1,390.67%
+                                                                                                                                               1,224.47%
+1,380.03% 1,290.53% 1,223.65%                                                                                                                                        1,331.66%
+
+                                         1,699.88%                                                                                                        1,578.73%             925.6%   1,049.42%
+                                                                                                                                                                                                         939.03%
+
+1,000%
+
+0%
+Jan 2025 Feb 2025 Mar 2025 Apr 2025 May 2025 Jun 2025 Jul 2025 Aug 2025 Sep 2025 Oct 2025 Nov 2025 Dec 2025 Jan 2026 Feb 2026 Mar 2026 Apr 2...
+
+             Paid Sessions
+
+1M
+
+                                504,538                                                                         564,998
+
+                                         481,239                                     436,335      490,500
+
+  398,588   374,741                                 411,058                                                              350,197                          375,210
+
+500K                                                                        339,604                                                                                  338,875
+
+                                                                 271,642                                                                                                        214,723
+
+                                                                                                                                                                                         125,255
+
+ 0                                                                                                                                                                                                               37,000
+Jan 2025 Feb 2025 Mar 2025 Apr 2025 May 2025 Jun 2025 Jul 2025 Aug 2025 Sep 2025 Oct 2025 Nov 2025 Dec 2025 Jan 2026 Feb 2026 Mar 2026
+                                                                                                                                                                                                                 Apr 2...
+                                                                                                                                    Mar 22, 2026 - Apr 18, 2026 arow_drop_down
+
+Lead Pipline                                       See details            See details                         Qualified % (Q+UnQ)               Disqualified (Q+UnQ) %
+
+                     See details                                                                                  44%                                56%
+
+                                                                                                                         32.8%                              -16.3%
+
+Lead Bookkeeping Pipline
+
+See details                                Qualified Leads            Disqualified Leads                      Qualified % (Q+UnQ)               Disqualified (Q+UnQ) %
+
+                                              74                          73                                      50%                                50%
+
+                                                  -49.3%                       -82.3%                                    92.7%                              -32.8%
+
+Lead Qoyod Flavours Pipline
+
+Leads                                      Qualified Leads            Disqualified Leads                      Qualified % (Q+UnQ)               Disqualified (Q+UnQ) %
+
+336                                          102                         220                                      32%                                68%
+
+   0.6%                                            4.1%                        -6.8%                                      8.0%                               -3.3%
+
+Deals Sales Pipline
+
+Number Of Deals                              Won Deals                       Deals Amount                             Won Amount                      Closing Won Ratio
+
+  1,707                                       494                     $461,593.40                                  $213,764                              29%
+
+         5.0%                                    -10.3%                             0.3%                                     -4.6%                             -14.6%
+
+                                                                     Data Set Configuration Error
+
+                                                                Data Studio cannot connect to your data set.
+                                                                                    See details
+
+Deals Bookkeeping Pipline
+
+Number Of Deals                              Won Deals                       Deals Amount                          See details                        Closing Won Ratio
+
+   266                                         26                     $303,515.98                                                                        10%
+
+         4.3%                                    36.8%                             24.4%                                                                       31.2%
+
+                                  Number Of Deals       Deals Amount
+
+                                      105
+
+Closed Lost
+
+                                    86                                                                                           $71,097.7
+                                                                                                                                                 $207,371.83
+Quotation Sent
+
+                        49
+
+         New
+
+           26
+
+Closed Won
+
+                                                                                                              $25,046.45
+
+                                  50    100                     500   1K                   5K                 10K                   50K         100K                     500K
+
+Digital Marketing / Bookkeeping Pipline
+
+Number Of Deals                              Won Deals                     Deals Amount                            Won Amount                         Closing Won Ratio
+
+    96                                         9                      $69,721.15                                   $8,066                                 9%
+
+        -25.6%                                   50.0%                           -33.8%                                  15.3%                                101.6%
+
+Deals Qoyod Flavours Pipline
+
+Number Of Deals                                    See details            Deals Amount                              Won Amount                        See details
+
+   200                                                                    $0.00                                    No data
+
+        98.0%                                                                  -100.0%                                  No data
+
+Other piplines / Paid Source
+
+Number Of Deals                              Won Deals                       Deals Amount                     Deals Won Amount - All Pipelines        Closing Won Ratio
+
+  1,420                                        51                     $160,471.62                                $25,722                                  4%
+
+        -11.8%                                   -5.6%                             -28.8%                                    99.9%                              7.1%
+                                                                                      Apr 1, 2026 - Apr 18, 2026  arow_drop_down
+
+                                             Data Set Configuration Error
+
+                                        Data Studio cannot connect to your data set.
+                                                            See details
+
+                                             Data Set Configuration Error
+
+                                        Data Studio cannot connect to your data set.
+                                                            See details
+
+Ad Name                                 Number Of Deals                               Deals Amount
+null                                             550                                    $64,086.48
+Google_AR_Feature_Invoice_Pmax_Hub...              2                                         null
+124459733                                          4                                      $754.05
+Snapchat_AR_Feature_Image_BK_...                   1                                         null
+Bing_AR_Feature_Accounting_Generic_...             1                                         null
+Bing_AR_Brand_HubSpot                             17                                       $607.5
+Google_AR_Branding_Qoyod_HubSpot                   7                                     $1,064.94
+Meta_AR_UGC_Mazen                                  1                                      $479.61
+Meta_AR_Branding_CutDown7_POS                      1                                       $47.96
+Meta_AR_TGC_Talal1                                 2                                         null
+Meta_AR_UGC_Charlie                                1                                       $47.96
+M eta_AR_Feature_                                  1                                      $151.88
+qoyod_brand                                        4                                      $271.78
+Google_Pmax_AR_Feature_E-Invoice_H...              2                                       $95.92
+PM_AR_Feature_Invoice_HubSpot                      2                                      $637.08
+G l P AR F t G i H                                10                                     $1 883 52
+            Number Of Leads  Qualified leads          Cost
+
+6K                                                                                                                     250
+
+                                                                                                                       200
+
+4K
+
+                                                                                                                       150
+
+                                                                                                                       100
+
+2K
+
+                                                                                                                       50
+
+ 0      Mar 24     Mar 26      Mar 28         Mar 30        Apr 1  Apr 3  Apr 5  Apr 7  Apr 9  Apr 11  Apr 13  Apr 15                0
+Mar 22                                                                                                                 Apr 17
+
+        CPL Total  CPQL total          Cost
+
+6K                                                                                                                     150
+
+4K                                                                                                                     100
+
+2K                                                                                                                     50
+
+ 0      Mar 24     Mar 26      Mar 28         Mar 30        Apr 1  Apr 3  Apr 5  Apr 7  Apr 9  Apr 11  Apr 13  Apr 15                0
+Mar 22                                                                                                                 Apr 17
+
