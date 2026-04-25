@@ -4,25 +4,35 @@ Pulls per-day per-campaign stats from all Snap ad accounts -> campaigns_daily.
 
 Uses OAuth refresh token flow. Refreshes access token each run so we never
 trip the 30-min access-token expiry on scheduled runs.
+
+API constraints (learned the hard way):
+  - DAY granularity queries are capped at 31 days per call
+    → we chunk longer windows into 30-day pieces.
+  - start_time / end_time MUST be midnight in the ad account's timezone,
+    not UTC midnight. For a USD account in America/Los_Angeles, "T00:00:00Z"
+    is 4–5 PM local — Snap rejects it.
+    → we fetch the account's `timezone` field and convert local midnight → UTC.
 """
 import os
 from datetime import date, timedelta, datetime, timezone
+from zoneinfo import ZoneInfo
 import requests
 from dotenv import load_dotenv
 from collectors.bq_writer import upsert_rows
+from collectors.currency import to_usd, normalize_currency
 
-load_dotenv()
+load_dotenv(override=True)
 
-BASE = "https://adsapi.snapchat.com/v1"
+BASE      = "https://adsapi.snapchat.com/v1"
 TOKEN_URL = "https://accounts.snapchat.com/login/oauth2/access_token"
 
 
 def _refresh_access_token():
     r = requests.post(TOKEN_URL, data={
         "refresh_token": os.getenv("SNAPCHAT_REFRESH_TOKEN"),
-        "client_id": os.getenv("SNAPCHAT_CLIENT_ID"),
+        "client_id":     os.getenv("SNAPCHAT_CLIENT_ID"),
         "client_secret": os.getenv("SNAPCHAT_CLIENT_SECRET"),
-        "grant_type": "refresh_token",
+        "grant_type":    "refresh_token",
     })
     r.raise_for_status()
     return r.json()["access_token"]
@@ -39,6 +49,49 @@ def _headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+# Broader Snap conversion set. DON'T add conversion_lead / total_conversions — rejected.
+SNAP_STATS_FIELDS = (
+    "impressions,swipes,spend,"
+    "conversion_sign_ups,conversion_purchases,conversion_add_cart,"
+    "conversion_page_views,conversion_save,conversion_start_checkout,"
+    "conversion_subscribe,conversion_app_installs"
+)
+SNAP_STATS_FIELDS_SAFE = "impressions,swipes,spend,conversion_sign_ups"
+
+
+def _day_start_iso(d: date, tz_name: str) -> str:
+    """
+    Midnight of `d` in timezone `tz_name`, expressed as a UTC ISO-8601 string
+    that Snap accepts (e.g. '2026-01-01T08:00:00Z' for an LA-tz day).
+    """
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC")
+    except Exception:
+        tz = ZoneInfo("UTC")
+    local = datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=tz)
+    utc   = local.astimezone(timezone.utc)
+    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _date_chunks(start: date, end: date, max_days: int = 30):
+    """Yield (chunk_start, chunk_end) inclusive tuples of up to max_days each."""
+    cur = start
+    while cur <= end:
+        chunk_end = min(cur + timedelta(days=max_days - 1), end)
+        yield cur, chunk_end
+        cur = chunk_end + timedelta(days=1)
+
+
+def _get_account(token, ad_account_id):
+    """Fetch one ad account to get currency + timezone."""
+    r = requests.get(f"{BASE}/adaccounts/{ad_account_id}",
+                     headers=_headers(token))
+    if r.status_code >= 400:
+        return {}
+    elts = r.json().get("adaccounts", [])
+    return elts[0].get("adaccount", {}) if elts else {}
+
+
 def _list_campaigns(token, ad_account_id):
     r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/campaigns",
                      headers=_headers(token))
@@ -50,24 +103,50 @@ def _list_campaigns(token, ad_account_id):
     return out
 
 
-def _campaign_stats(token, campaign_id, start, end):
-    """Daily breakdown stats for a single campaign."""
+def _stats_single_call(token, campaign_id, start, end, tz_name, fields):
+    """One Snap stats request for a ≤30-day window. Returns list of timeseries points."""
+    end_exclusive = end + timedelta(days=1)
     params = {
         "granularity": "DAY",
-        "start_time": f"{start}T00:00:00Z",
-        "end_time": f"{end}T00:00:00Z",
-        "fields": "impressions,swipes,spend,conversion_purchases,conversion_sign_ups,conversion_lead",
+        "start_time":  _day_start_iso(start, tz_name),
+        "end_time":    _day_start_iso(end_exclusive, tz_name),
+        "fields":      fields,
     }
     r = requests.get(f"{BASE}/campaigns/{campaign_id}/stats",
-                     headers=_headers(token), params=params)
+                     headers=_headers(token), params=params, timeout=30)
+
+    # If the error looks like a field-support problem (not a time/window problem),
+    # retry with minimal safe fields.
+    if r.status_code >= 400 and fields != SNAP_STATS_FIELDS_SAFE:
+        body = r.text.lower()
+        looks_like_field_issue = (
+            "field" in body or "unsupported" in body and "granularity" not in body
+        )
+        if looks_like_field_issue:
+            params["fields"] = SNAP_STATS_FIELDS_SAFE
+            r = requests.get(f"{BASE}/campaigns/{campaign_id}/stats",
+                             headers=_headers(token), params=params, timeout=30)
+
     if r.status_code >= 400:
-        print(f"[snap]   stats error {r.status_code} for campaign {campaign_id}: {r.text[:200]}")
+        print(f"[snap]   stats error {r.status_code} for campaign {campaign_id} "
+              f"({start}..{end}): {r.text[:160]}")
         return []
     data = r.json()
     series = data.get("timeseries_stats", [])
     if not series:
         return []
     return series[0].get("timeseries_stat", {}).get("timeseries", [])
+
+
+def _campaign_stats(token, campaign_id, start, end, tz_name,
+                    fields=SNAP_STATS_FIELDS):
+    """Full-window stats — chunks into ≤30-day pieces to stay under Snap's cap."""
+    all_points = []
+    for cs, ce in _date_chunks(start, end, max_days=30):
+        all_points.extend(
+            _stats_single_call(token, campaign_id, cs, ce, tz_name, fields)
+        )
+    return all_points
 
 
 def collect_and_write(days: int = None, incremental: bool = False):
@@ -92,37 +171,56 @@ def collect_and_write(days: int = None, incremental: bool = False):
     print(f"[snap] Window {start} -> {end} across {len(accounts)} account(s)")
 
     for acct in accounts:
+        meta = _get_account(token, acct)
+        cur  = normalize_currency(meta.get("currency"))
+        tz   = meta.get("timezone") or "UTC"
+        print(f"[snap]   account {acct} tz={tz} native={cur} → converting to USD")
+
         campaigns = _list_campaigns(token, acct)
         acct_count = 0
         for cid, c in campaigns.items():
-            series = _campaign_stats(token, cid, start, end)
+            series = _campaign_stats(token, cid, start, end, tz)
             for pt in series:
-                stats = pt.get("stats", {})
-                spend_micro = float(stats.get("spend", 0) or 0)
-                spend = spend_micro / 1_000_000  # Snap spend is in micro-currency
-                leads = int(stats.get("conversion_lead", 0) or 0)
+                stats        = pt.get("stats", {})
+                spend_micro  = float(stats.get("spend", 0) or 0)
+                spend_native = spend_micro / 1_000_000   # micro-currency → native currency
+                spend        = to_usd(spend_native, cur)  # → USD
+                sign_ups     = int(stats.get("conversion_sign_ups", 0) or 0)
+                purchases   = int(stats.get("conversion_purchases", 0) or 0)
+                leads       = sign_ups
+                conversions_total = (
+                    sign_ups + purchases
+                    + int(stats.get("conversion_add_cart", 0) or 0)
+                    + int(stats.get("conversion_save", 0) or 0)
+                    + int(stats.get("conversion_start_checkout", 0) or 0)
+                    + int(stats.get("conversion_subscribe", 0) or 0)
+                    + int(stats.get("conversion_app_installs", 0) or 0)
+                )
                 impressions = int(stats.get("impressions", 0) or 0)
-                clicks = int(stats.get("swipes", 0) or 0)
-                ctr = (clicks / impressions * 100) if impressions else 0.0
-                d = (pt.get("start_time") or "")[:10]
+                clicks      = int(stats.get("swipes", 0) or 0)
+                ctr         = (clicks / impressions * 100) if impressions else 0.0
+                d           = (pt.get("start_time") or "")[:10]
                 if not d:
                     continue
                 rows.append({
-                    "date": d,
-                    "channel": "snapchat",
-                    "account_id": acct,
-                    "campaign_id": cid,
+                    "date":          d,
+                    "channel":       "snapchat",
+                    "account_id":    acct,
+                    "campaign_id":   cid,
                     "campaign_name": c.get("name"),
-                    "status": c.get("status"),
-                    "objective": c.get("objective"),
-                    "spend": round(spend, 2),
-                    "impressions": impressions,
-                    "clicks": clicks,
-                    "ctr": round(ctr, 4),
-                    "leads": leads,
-                    "conversions": float(leads),
-                    "cpl": round(spend / leads, 2) if leads > 0 else None,
-                    "updated_at": now,
+                    "status":        c.get("status"),
+                    "objective":     c.get("objective"),
+                    "spend":         round(spend, 2),
+                    "impressions":   impressions,
+                    "clicks":        clicks,
+                    "ctr":           round(ctr, 4),
+                    "leads":         leads,
+                    "conversions":   float(conversions_total),
+                    "cpl":           round(spend / leads, 2) if leads > 0 else None,
+                    "currency":      "USD",
+                    "spend_native":  round(spend_native, 2),
+                    "currency_native": cur,
+                    "updated_at":    now,
                 })
                 acct_count += 1
         print(f"[snap]   account {acct}: {acct_count} rows across {len(campaigns)} campaigns")

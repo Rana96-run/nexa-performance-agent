@@ -13,7 +13,7 @@ SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
-FROM_NAME = os.getenv("SMTP_FROM_NAME", "Qoyod Performance Agent")
+FROM_NAME = os.getenv("SMTP_FROM_NAME", "Nexa — Qoyod Performance Agent")
 
 TEAM_LEAD = os.getenv("EMAIL_TEAM_LEAD")         # rana.khalid@qoyod.com
 TEAM_MANAGER = os.getenv("EMAIL_TEAM_MANAGER")   # yelfiky@qoyod.com
@@ -62,7 +62,7 @@ def _wrap_html(title: str, body_html: str, meta: dict | None = None) -> str:
     <div style="font-size:14px;line-height:1.6;color:#3a4356">{body_html}</div>
     {meta_rows}
     <hr style="border:none;border-top:1px solid #e4e8ef;margin:24px 0 12px">
-    <p style="font-size:11px;color:#7a8599;margin:0">Qoyod Performance Agent · automated · do not reply</p>
+    <p style="font-size:11px;color:#7a8599;margin:0">Nexa — Qoyod Performance Agent · automated · do not reply</p>
   </div>
 </body></html>
 """

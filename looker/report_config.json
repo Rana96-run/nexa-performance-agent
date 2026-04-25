@@ -1,0 +1,401 @@
+{
+  "report_name": "Qoyod Performance Dashboard",
+  "theme": {
+    "background": "#FFFFFF",
+    "primary": "#1A1A2E",
+    "accent": "#6C63FF",
+    "positive": "#00C48C",
+    "warning": "#FFB800",
+    "negative": "#FF4D4F",
+    "text": "#2D2D2D",
+    "text_light": "#8C8C8C",
+    "channels": {
+      "google_ads": "#4285F4",
+      "meta": "#1877F2",
+      "snapchat": "#FFFC00",
+      "tiktok": "#010101",
+      "microsoft": "#00A4EF"
+    }
+  },
+  "pages": [
+    {
+      "name": "1 — Executive Overview",
+      "layout": "full_width",
+      "components": [
+        {
+          "type": "scorecard_row",
+          "source": "v_kpi_scorecard",
+          "cards": [
+            {
+              "metric": "total_spend",
+              "label": "Total Spend",
+              "format": "SAR #,###",
+              "comparison": null
+            },
+            {
+              "metric": "total_leads",
+              "label": "Total Leads",
+              "format": "#,###",
+              "comparison": null
+            },
+            {
+              "metric": "total_sqls",
+              "label": "Total SQLs",
+              "format": "#,###",
+              "comparison": null
+            },
+            {
+              "metric": "blended_cpl",
+              "label": "Blended CPL",
+              "format": "SAR #.##",
+              "color_rules": [
+                {
+                  "max": 20,
+                  "color": "positive"
+                },
+                {
+                  "max": 28,
+                  "color": "warning"
+                },
+                {
+                  "min": 30,
+                  "color": "negative"
+                }
+              ]
+            },
+            {
+              "metric": "blended_cpql",
+              "label": "Blended CPQL",
+              "format": "SAR #.##",
+              "color_rules": [
+                {
+                  "max": 40,
+                  "color": "positive"
+                },
+                {
+                  "max": 65,
+                  "color": "warning"
+                },
+                {
+                  "min": 80,
+                  "color": "negative"
+                }
+              ]
+            },
+            {
+              "metric": "qual_rate_pct",
+              "label": "Qual Rate",
+              "format": "#.#%"
+            },
+            {
+              "metric": "blended_roas",
+              "label": "Blended ROAS",
+              "format": "#.##x"
+            },
+            {
+              "metric": "revenue_won",
+              "label": "Revenue Won",
+              "format": "SAR #,###"
+            }
+          ]
+        },
+        {
+          "type": "time_series",
+          "source": "v_daily_trend",
+          "title": "CPL & CPQL Trend (7-day rolling)",
+          "x": "date",
+          "series": [
+            {
+              "metric": "cpl_7d_avg",
+              "label": "CPL (7d avg)",
+              "color": "#6C63FF",
+              "line_style": "solid"
+            },
+            {
+              "metric": "cpql_7d_avg",
+              "label": "CPQL (7d avg)",
+              "color": "#FF4D4F",
+              "line_style": "dashed"
+            }
+          ],
+          "reference_lines": [
+            {
+              "value": 30,
+              "label": "CPL Pause Zone",
+              "color": "#FF4D4F"
+            },
+            {
+              "value": 80,
+              "label": "CPQL Pause Zone",
+              "color": "#FF4D4F"
+            }
+          ],
+          "filters": [
+            "channel"
+          ],
+          "date_range_control": true
+        },
+        {
+          "type": "bar_chart_grouped",
+          "source": "v_channel_scorecard",
+          "title": "Channel Performance — This Week",
+          "dimension": "channel",
+          "metrics": [
+            "spend_7d",
+            "leads_7d",
+            "sqls_7d"
+          ],
+          "colors": "channel_map",
+          "show_data_labels": true
+        },
+        {
+          "type": "table_with_heatmap",
+          "source": "v_channel_scorecard",
+          "title": "Channel KPIs + WoW",
+          "columns": [
+            "channel",
+            "spend_7d",
+            "leads_7d",
+            "sqls_7d",
+            "cpl_7d",
+            "cpql_7d",
+            "qual_rate_pct",
+            "roas_7d",
+            "cpl_wow_delta",
+            "cpql_wow_delta",
+            "cpl_status"
+          ],
+          "heatmap_cols": [
+            "cpl_7d",
+            "cpql_7d"
+          ],
+          "color_rules": {
+            "cpl_status": {
+              "Scale 🚀": "#00C48C",
+              "On Target ✅": "#52C41A",
+              "Warning ⚠️": "#FFB800",
+              "Pause Zone 🔴": "#FF4D4F"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 — CPL & CPQL Deep Dive",
+      "components": [
+        {
+          "type": "time_series",
+          "source": "v_daily_trend",
+          "title": "Daily CPL by Channel (90 days)",
+          "x": "date",
+          "breakdown": "channel",
+          "metric": "cpl",
+          "reference_lines": [
+            {
+              "value": 28,
+              "label": "Warning",
+              "color": "#FFB800"
+            },
+            {
+              "value": 30,
+              "label": "Pause",
+              "color": "#FF4D4F"
+            }
+          ],
+          "color_map": "channel_colors"
+        },
+        {
+          "type": "time_series",
+          "source": "v_daily_trend",
+          "title": "Daily CPQL by Channel (90 days)",
+          "x": "date",
+          "breakdown": "channel",
+          "metric": "cpql",
+          "reference_lines": [
+            {
+              "value": 65,
+              "label": "Warning",
+              "color": "#FFB800"
+            },
+            {
+              "value": 80,
+              "label": "Pause",
+              "color": "#FF4D4F"
+            }
+          ]
+        },
+        {
+          "type": "scatter_plot",
+          "source": "v_channel_scorecard",
+          "title": "CPL vs Qualification Rate",
+          "x": "cpl_7d",
+          "y": "qual_rate_pct",
+          "size": "spend_7d",
+          "color": "channel",
+          "tooltip": [
+            "channel",
+            "spend_7d",
+            "leads_7d"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 — Campaign Leaderboard",
+      "components": [
+        {
+          "type": "table_sortable",
+          "source": "v_campaign_leaderboard",
+          "title": "Top Campaigns — Last 14 Days",
+          "columns": [
+            "campaign_name",
+            "channel",
+            "format_tag",
+            "seasonal_tag",
+            "spend",
+            "leads",
+            "cpl",
+            "avg_ctr",
+            "status"
+          ],
+          "default_sort": "spend DESC",
+          "row_color_by": "status",
+          "filters": [
+            "channel",
+            "format_tag",
+            "seasonal_tag"
+          ],
+          "search": true
+        },
+        {
+          "type": "bar_chart_horizontal",
+          "source": "v_campaign_leaderboard",
+          "title": "CPL by Campaign (Top 15)",
+          "dimension": "campaign_name",
+          "metric": "cpl",
+          "color_by": "status",
+          "limit": 15,
+          "reference_line": {
+            "value": 30,
+            "label": "Pause threshold"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 — Budget & Pacing",
+      "components": [
+        {
+          "type": "bullet_chart",
+          "source": "v_budget_pacing",
+          "title": "Month-to-Date Budget Pacing by Channel",
+          "dimension": "channel",
+          "metric": "actual_spend",
+          "target": "projected_month_spend",
+          "color_by": "pacing_status"
+        },
+        {
+          "type": "time_series",
+          "source": "channel_roas_daily",
+          "title": "Daily Spend by Channel (this month)",
+          "x": "date",
+          "breakdown": "channel",
+          "metric": "spend",
+          "chart_type": "area_stacked",
+          "date_filter": "current_month"
+        }
+      ]
+    },
+    {
+      "name": "5 — Pipeline & Funnel",
+      "components": [
+        {
+          "type": "funnel_chart",
+          "source": "pipeline_funnel",
+          "title": "Lead-to-Deal Funnel by Channel",
+          "stages": [
+            "leads_total",
+            "leads_qualified",
+            "leads_open",
+            "leads_disqualified"
+          ],
+          "breakdown": "qoyod_source",
+          "filters": [
+            "month",
+            "pipeline"
+          ]
+        },
+        {
+          "type": "table_sortable",
+          "source": "disqualification_matrix",
+          "title": "Disqualification Reasons",
+          "columns": [
+            "date",
+            "qoyod_source",
+            "pipeline",
+            "top_disqual_reason",
+            "disqualified_count"
+          ],
+          "default_sort": "disqualified_count DESC"
+        },
+        {
+          "type": "bar_chart",
+          "source": "channel_roas_monthly",
+          "title": "Monthly ROAS by Channel",
+          "x": "month",
+          "breakdown": "channel",
+          "metric": "roas",
+          "reference_line": {
+            "value": 1,
+            "label": "Break-even"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 — Channel Deep Dive",
+      "components": [
+        {
+          "type": "filter_control",
+          "dimension": "channel",
+          "style": "tab_selector"
+        },
+        {
+          "type": "scorecard_row",
+          "source": "v_channel_scorecard",
+          "filter_by": "channel",
+          "cards": [
+            "spend_7d",
+            "leads_7d",
+            "sqls_7d",
+            "cpl_7d",
+            "cpql_7d",
+            "roas_7d"
+          ]
+        },
+        {
+          "type": "time_series",
+          "source": "v_daily_trend",
+          "title": "CPL Trend — Selected Channel",
+          "filter_by": "channel",
+          "x": "date",
+          "metric": "cpl"
+        },
+        {
+          "type": "table_sortable",
+          "source": "campaign_performance_daily",
+          "title": "Campaign Breakdown",
+          "filter_by": "channel",
+          "columns": [
+            "campaign_name",
+            "spend",
+            "platform_leads",
+            "platform_cpl",
+            "format_tag",
+            "status"
+          ]
+        }
+      ]
+    }
+  ]
+}

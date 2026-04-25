@@ -45,12 +45,30 @@ WITH spend AS (
   GROUP BY 1,2
 ),
 leads AS (
+  -- All pipelines combined
   SELECT l.date,
          m.paid_channel AS channel,
          SUM(l.leads_total)        AS hs_leads,
          SUM(l.leads_qualified)    AS hs_qualified,
          SUM(l.leads_disqualified) AS hs_disqualified,
-         SUM(l.leads_open)         AS hs_open
+         SUM(l.leads_open)         AS hs_open,
+         -- Lead Pipeline (accounting / e-invoice — main product)
+         SUM(CASE WHEN LOWER(l.pipeline) LIKE '%lead%' OR LOWER(l.pipeline) LIKE '%account%'
+                       OR LOWER(l.pipeline) NOT LIKE '%book%'
+                  THEN l.leads_total        ELSE 0 END) AS leads_accounting,
+         SUM(CASE WHEN LOWER(l.pipeline) LIKE '%lead%' OR LOWER(l.pipeline) LIKE '%account%'
+                       OR LOWER(l.pipeline) NOT LIKE '%book%'
+                  THEN l.leads_qualified    ELSE 0 END) AS qualified_accounting,
+         SUM(CASE WHEN LOWER(l.pipeline) LIKE '%lead%' OR LOWER(l.pipeline) LIKE '%account%'
+                       OR LOWER(l.pipeline) NOT LIKE '%book%'
+                  THEN l.leads_disqualified ELSE 0 END) AS disqualified_accounting,
+         -- Bookkeeping Pipeline
+         SUM(CASE WHEN LOWER(l.pipeline) LIKE '%book%'
+                  THEN l.leads_total        ELSE 0 END) AS leads_bookkeeping,
+         SUM(CASE WHEN LOWER(l.pipeline) LIKE '%book%'
+                  THEN l.leads_qualified    ELSE 0 END) AS qualified_bookkeeping,
+         SUM(CASE WHEN LOWER(l.pipeline) LIKE '%book%'
+                  THEN l.leads_disqualified ELSE 0 END) AS disqualified_bookkeeping
   FROM `{P}.{D}.hubspot_leads_module_daily` l
   JOIN `{P}.{D}.v_channel_key_map` m ON l.qoyod_source = m.qoyod_source
   GROUP BY 1,2
@@ -81,6 +99,18 @@ SELECT
   COALESCE(l.hs_qualified, 0)    AS hs_qualified,
   COALESCE(l.hs_disqualified, 0) AS hs_disqualified,
   COALESCE(l.hs_open, 0)         AS hs_open,
+  -- Per-pipeline lead breakdowns (Lead Pipeline = accounting/e-invoice)
+  COALESCE(l.leads_accounting, 0)        AS leads_accounting,
+  COALESCE(l.qualified_accounting, 0)    AS qualified_accounting,
+  COALESCE(l.disqualified_accounting, 0) AS disqualified_accounting,
+  COALESCE(l.leads_bookkeeping, 0)       AS leads_bookkeeping,
+  COALESCE(l.qualified_bookkeeping, 0)   AS qualified_bookkeeping,
+  COALESCE(l.disqualified_bookkeeping, 0) AS disqualified_bookkeeping,
+  -- Per-pipeline CPL/CPQL
+  SAFE_DIVIDE(s.spend, l.leads_accounting)     AS cpl_accounting,
+  SAFE_DIVIDE(s.spend, l.qualified_accounting) AS cpql_accounting,
+  SAFE_DIVIDE(s.spend, l.leads_bookkeeping)    AS cpl_bookkeeping,
+  SAFE_DIVIDE(s.spend, l.qualified_bookkeeping) AS cpql_bookkeeping,
   COALESCE(d.deals_total, 0)     AS deals_total,
   COALESCE(d.deals_won, 0)       AS deals_won,
   COALESCE(d.deals_lost, 0)      AS deals_lost,
@@ -175,7 +205,15 @@ SELECT
     WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'reel|story|stories') THEN 'Reels/Stories'
     WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'feed') THEN 'Feed'
     ELSE 'Other'
-  END AS format_tag
+  END AS format_tag,
+  -- Creative type dimension (UGC / TGC / Video / Image)
+  CASE
+    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'\bugc\b') THEN 'UGC'
+    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'\btgc\b') THEN 'TGC'
+    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'video|reel|youtube') THEN 'Video'
+    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'image|static|photo|banner') THEN 'Image'
+    ELSE 'Other'
+  END AS creative_type
 FROM `{P}.{D}.campaigns_daily` c
 """
 
@@ -190,8 +228,9 @@ SELECT
   ANY_VALUE(campaign_name) AS campaign_name,
   ANY_VALUE(status)        AS status,
   ANY_VALUE(objective)     AS objective,
-  ANY_VALUE(seasonal_tag)  AS seasonal_tag,
-  ANY_VALUE(format_tag)    AS format_tag,
+  ANY_VALUE(seasonal_tag)    AS seasonal_tag,
+  ANY_VALUE(format_tag)      AS format_tag,
+  ANY_VALUE(creative_type)   AS creative_type,
   SUM(spend)               AS spend,
   SUM(impressions)         AS impressions,
   SUM(clicks)              AS clicks,
@@ -205,31 +244,64 @@ GROUP BY 1,2,3,4
 
 DISQUAL_MATRIX_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.disqualification_matrix` AS
+-- Cross-tab of disqualification reasons matching the PDF matrix layout:
+-- rows = main reason, columns drillable by pipeline / channel / month
 SELECT
+  DATE_TRUNC(date, MONTH)   AS month,
   date,
   qoyod_source,
   pipeline,
-  top_disq_reason,
+  top_disq_reason           AS disqual_reason,
+  -- Map verbose reasons to cleaner labels for the report
+  CASE top_disq_reason
+    WHEN 'No lead response'             THEN 'No Lead Response'
+    WHEN 'After 8+ sales attempts'      THEN 'After 8+ Attempts'
+    WHEN 'Number failed'                THEN 'Number Failed'
+    WHEN 'Not a Buyer'                  THEN 'Not a Buyer'
+    WHEN 'No Registered business'       THEN 'No Registered Business'
+    WHEN 'Browsing/Testing'             THEN 'Browsing / Testing'
+    WHEN 'Training'                     THEN 'Training'
+    WHEN 'Existing customer'            THEN 'Existing Customer'
+    WHEN 'Urdu speaker'                 THEN 'Urdu Speaker'
+    WHEN 'Student'                      THEN 'Student'
+    WHEN 'Lead denies'                  THEN 'Lead Denies'
+    WHEN 'Out of region'                THEN 'Out of Region'
+    ELSE COALESCE(top_disq_reason, 'Other')
+  END AS disqual_reason_label,
   SUM(leads_disqualified) AS disqualified_count
 FROM `{P}.{D}.hubspot_leads_module_daily`
-WHERE leads_disqualified > 0 AND top_disq_reason IS NOT NULL
-GROUP BY 1,2,3,4
+WHERE leads_disqualified > 0
+GROUP BY 1,2,3,4,5,6
 """
 
 
 PIPELINE_FUNNEL_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.pipeline_funnel` AS
+-- Funnel by month x channel x pipeline.
+-- Stages: Total -> Qualified -> Disqualified -> Open
+-- Matches the PDF funnel chart + disqualification cross-tab
 SELECT
-  DATE_TRUNC(date, MONTH) AS month,
+  DATE_TRUNC(date, MONTH)  AS month,
+  date,
   qoyod_source,
   pipeline,
+  -- Friendly pipeline label for Looker display
+  CASE
+    WHEN LOWER(pipeline) LIKE '%book%'    THEN 'Bookkeeping Pipeline'
+    WHEN LOWER(pipeline) LIKE '%lead%'    THEN 'Lead Pipeline'
+    WHEN LOWER(pipeline) LIKE '%account%' THEN 'Lead Pipeline'
+    ELSE COALESCE(pipeline, 'Lead Pipeline')
+  END AS pipeline_label,
   stage,
   SUM(leads_total)        AS leads_total,
   SUM(leads_qualified)    AS leads_qualified,
   SUM(leads_disqualified) AS leads_disqualified,
-  SUM(leads_open)         AS leads_open
+  SUM(leads_open)         AS leads_open,
+  -- Conversion rates
+  ROUND(SAFE_DIVIDE(SUM(leads_qualified), SUM(leads_total)) * 100, 1) AS qual_rate_pct,
+  ROUND(SAFE_DIVIDE(SUM(leads_disqualified), SUM(leads_total)) * 100, 1) AS disqual_rate_pct
 FROM `{P}.{D}.hubspot_leads_module_daily`
-GROUP BY 1,2,3,4
+GROUP BY 1,2,3,4,5,6
 """
 
 

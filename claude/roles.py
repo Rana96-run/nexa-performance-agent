@@ -1,5 +1,5 @@
 """
-Role-based prompt router for the Qoyod Performance Agent.
+Role-based prompt router for Nexa — Qoyod Performance Agent.
 
 Each role loads its own MD file + the shared manager OS, rather than
 concatenating all MD files into one monolithic prompt.
@@ -11,21 +11,26 @@ MD_DIR = Path(__file__).parent.parent / "md_files"
 # Shared context loaded for every role
 SHARED = ["qoyod-manager-os.md", "qoyod-brand-identity.md"]
 
+# Roles available to Nexa — modelled on the actual paid-media team seats.
+# Each role is a teammate the agent stands in for. Display names render
+# automatically from these keys (`media_buyer` -> "Media Buyer").
 ROLE_FILES = {
-    "paid_media":  ["qoyod-paid-media-agent.md"],
-    "hubspot_cro": ["qoyod-hubspot-cro-agent.md"],
-    "task_flow":   ["qoyod-task-flow.md"],
-    "creative":    ["qoyod-creative-agent.md"],
-    "reporter":    ["qoyod-reporter-agent.md"],
+    "media_buyer":           ["qoyod-paid-media-agent.md"],   # Hands-on optimizer: daily pauses, quick fixes, scale
+    "paid_media_analyst":    ["qoyod-analyst-agent.md"],       # Trend analysis, anomaly attribution, week-over-week
+    "paid_media_strategist": ["nexa-strategist.md"],           # Briefs, scale plans, channel mix, quarterly bets
+    "marketing_assistant":   ["qoyod-task-flow.md"],           # PM/junior: turns decisions into Asana tasks, owns runbooks
+    # Daily-report writer is invoked separately AFTER the team roles run, by
+    # claude/reporter.py — not part of TRIGGER_ROUTES.
+    "daily_report":          ["qoyod-daily-report.md"],
 }
 
-# Which roles the manager invokes per trigger cadence
+# Which roles Nexa invokes per trigger cadence
 TRIGGER_ROUTES = {
-    "daily":     ["paid_media", "hubspot_cro", "task_flow"],
-    "weekly":    ["reporter", "creative", "hubspot_cro"],
-    "monthly":   ["reporter"],
-    "quarterly": ["reporter"],
-    "on_demand": ["paid_media", "creative"],
+    "daily":     ["media_buyer", "paid_media_analyst", "marketing_assistant"],
+    "weekly":    ["media_buyer", "paid_media_analyst", "paid_media_strategist", "marketing_assistant"],
+    "monthly":   ["paid_media_analyst", "paid_media_strategist", "marketing_assistant"],
+    "quarterly": ["paid_media_analyst", "paid_media_strategist"],
+    "on_demand": ["media_buyer", "paid_media_strategist", "marketing_assistant"],
 }
 
 

@@ -1,16 +1,15 @@
-# secrets / credentials - NEVER commit
+# ── Secrets / credentials — NEVER commit ──────────────────────────────────
 .env
 .env.*
 !.env.example
+certs/
 bigquery-key.json
 *.json.key
 *service-account*.json
 *credentials*.json
 *.pem
-.snap_cert.pem
-.snap_key.pem
 
-# python
+# ── Python ────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -20,7 +19,7 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# editors / OS
+# ── Editors / OS ─────────────────────────────────────────────────────────
 .vscode/
 .idea/
 .claude/
@@ -28,15 +27,20 @@ venv/
 .DS_Store
 Thumbs.db
 
-# build artifacts
-dist/
-build/
+# ── Runtime output ────────────────────────────────────────────────────────
+logs/
 *.log
 
-# local data dumps
+# ── Local data / cache ────────────────────────────────────────────────────
 data/
+cache/
+.cache/
 scripts/miro_dump.json
 
-# misc
+# ── Build artifacts ───────────────────────────────────────────────────────
+dist/
+build/
+
+# ── Misc ──────────────────────────────────────────────────────────────────
 *.bak
 *~

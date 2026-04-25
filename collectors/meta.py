@@ -4,6 +4,7 @@ from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.adset import AdSet
 from config import META_ACCESS_TOKEN, META_AD_ACCOUNTS
 from datetime import date, timedelta
+from collectors.currency import to_usd, normalize_currency
 
 
 def init():
@@ -19,6 +20,11 @@ def get_ad_performance(days=4):
     all_results = []
     for account_id in META_AD_ACCOUNTS:
         account = AdAccount(account_id)
+        try:
+            acct_meta  = account.api_get(fields=["currency"])
+            native_cur = normalize_currency(acct_meta.get("currency"))
+        except Exception:
+            native_cur = "SAR"
         ads = account.get_insights(
             params={
                 "level": "ad",
@@ -36,10 +42,11 @@ def get_ad_performance(days=4):
             }
         )
         for ad in ads:
-            spend = float(ad.get("spend", 0))
-            actions = ad.get("actions", [])
+            spend_native = float(ad.get("spend", 0) or 0)
+            spend        = to_usd(spend_native, native_cur)
+            actions = ad.get("actions", []) or []
             leads = next(
-                (int(a["value"]) for a in actions if a["action_type"] == "lead"),
+                (int(float(a["value"])) for a in actions if a.get("action_type") == "lead"),
                 0
             )
             cpl = round(spend / leads, 2) if leads > 0 else None
@@ -50,12 +57,15 @@ def get_ad_performance(days=4):
                 "adset_id": ad.get("adset_id"),
                 "adset_name": ad.get("adset_name"),
                 "campaign_name": ad.get("campaign_name"),
-                "spend": spend,
+                "spend": round(spend, 2),
                 "leads": leads,
                 "cpl": cpl,
-                "ctr": float(ad.get("ctr", 0)),
-                "frequency": float(ad.get("frequency", 0)),
-                "impressions": int(ad.get("impressions", 0)),
+                "ctr": float(ad.get("ctr", 0) or 0),
+                "frequency": float(ad.get("frequency", 0) or 0),
+                "impressions": int(ad.get("impressions", 0) or 0),
+                "currency": "USD",
+                "spend_native": round(spend_native, 2),
+                "currency_native": native_cur,
             })
     return all_results
 

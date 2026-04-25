@@ -106,7 +106,8 @@ def collect_and_write(days: int = None, start_date: date = None,
                                      "disq_reasons": defaultdict(int)})
 
     # HubSpot Search caps at 10k results — walk 7-day windows.
-    total_fetched, pages = 0, 0
+    # pages counter resets each window so one large period can't exhaust the cap.
+    total_fetched = 0
     window = timedelta(days=7)
     win_start = start
     end_dt = end + timedelta(days=1)
@@ -116,8 +117,13 @@ def collect_and_write(days: int = None, start_date: date = None,
         w_until = int(datetime(win_end.year, win_end.month, win_end.day).timestamp() * 1000)
         after = None
         win_count = 0
+        pages = 0  # reset per window
         while True:
-            data = _search_leads(w_since, until_ms=w_until, after=after)
+            try:
+                data = _search_leads(w_since, until_ms=w_until, after=after)
+            except Exception as e:
+                print(f"[leads] search error: {e}")
+                break
             for row in data.get("results", []):
                 p = row.get("properties", {})
                 created = (p.get("hs_createdate") or "")[:10]
@@ -133,7 +139,7 @@ def collect_and_write(days: int = None, start_date: date = None,
                     p.get("lead_qoyod_source") or "Unknown",
                     plabel or "Unknown",
                     slabel or "Unknown",
-                    (p.get("lead_utm_campaign") or "").strip() or None,
+                    (p.get("lead_utm_campaign") or "").strip() or "__none__",
                     (p.get("lead_utm_audience") or "").strip() or None,
                     (p.get("lead_utm_content") or "").strip() or None,
                     (p.get("lead_utm_source") or "").strip() or None,
@@ -158,7 +164,7 @@ def collect_and_write(days: int = None, start_date: date = None,
             pages += 1
             paging = data.get("paging", {}).get("next", {})
             after = paging.get("after")
-            if not after or pages >= 500:
+            if not after or pages >= 100:   # 100 pages × 100 rows = 10k cap per window
                 break
         print(f"[leads] {win_start}..{win_end}: {win_count} leads")
         win_start = win_end
@@ -189,9 +195,6 @@ def collect_and_write(days: int = None, start_date: date = None,
 
     print(f"Processed {total_fetched} leads -> {len(rows)} daily buckets")
     _ensure_table_exists()
-    for r in rows:  # normalize None utm_campaign for idempotent key
-        if r["lead_utm_campaign"] is None:
-            r["lead_utm_campaign"] = "__none__"
     return upsert_rows("hubspot_leads_module_daily", rows,
                        key_fields=["date", "qoyod_source", "pipeline", "stage", "lead_utm_campaign"])
 

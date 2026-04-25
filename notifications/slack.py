@@ -12,11 +12,12 @@ def post_approval_request(analysis: dict) -> str:
     Post Claude's decisions to Slack for approval.
     Returns the message timestamp (ts) to track approval reaction.
     """
-    decision = analysis.get("decision", {})
+    decision = analysis.get("decision", {}) or {}
     raw = analysis.get("raw_response", "")
 
-    # Extract the Slack draft from Claude's raw response
-    slack_section = extract_slack_draft(raw)
+    # Prefer the structured slack_draft field from the role's JSON.
+    # Fall back to the legacy regex extractor only if the role didn't provide it.
+    slack_section = decision.get("slack_draft") or extract_slack_draft(raw)
 
     blocks = [
         {

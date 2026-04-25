@@ -12,14 +12,21 @@ from collections import defaultdict
 import requests
 from dotenv import load_dotenv
 from collectors.bq_writer import upsert_rows, get_client
+from collectors.currency import to_usd, normalize_currency
 
 load_dotenv()
 TOKEN = os.getenv("HUBSPOT_ACCESS_TOKEN")
 BASE = "https://api.hubapi.com"
 
+# Qoyod is a Saudi company — deals are booked in SAR unless the deal record
+# explicitly overrides via deal_currency_code. All amounts in BQ are stored
+# in USD (currency="USD"); native SAR values are kept in *_native columns.
+DEFAULT_DEAL_CURRENCY = "SAR"
+
 PROPERTIES = [
     "createdate", "closedate", "dealstage", "pipeline", "dealname",
     "amount", "hs_acv", "hs_tcv",
+    "deal_currency_code",
     "deal_qoyod_source",
     "deal_utm_campaign", "deal_utm_audience", "deal_utm_content",
     "deal_utm_term", "deal_utm_source", "deal_utm_medium",
@@ -133,14 +140,19 @@ def collect_and_write(days: int = None, start_date: date = None,
     since_ms = int(datetime(start.year, start.month, start.day).timestamp() * 1000)
 
     # bucket by (date, channel, pipeline, stage_status, utm_*)
+    # Amounts are accumulated twice: once in USD (primary), once in native currency.
     buckets = defaultdict(lambda: {
         "n": 0, "won": 0, "lost": 0, "open": 0,
         "amount": 0.0, "won_amount": 0.0, "lost_amount": 0.0, "open_amount": 0.0,
+        "amount_native": 0.0, "won_amount_native": 0.0,
+        "lost_amount_native": 0.0, "open_amount_native": 0.0,
         "time_in_stage_sum": 0.0, "time_in_stage_n": 0,
+        "native_currencies": set(),
     })
 
     # HubSpot Search is capped at 10,000 results per query. Walk 7-day windows.
-    total_fetched, pages = 0, 0
+    # pages counter resets per window so long backfills never exhaust the cap.
+    total_fetched = 0
     window = timedelta(days=7)
     win_start = start
     end_dt = end + timedelta(days=1)  # inclusive today
@@ -151,15 +163,24 @@ def collect_and_write(days: int = None, start_date: date = None,
         w_until = int(datetime(win_end.year, win_end.month, win_end.day).timestamp() * 1000)
         after = None
         win_count = 0
+        pages = 0  # reset per window
         while True:
-            data = _search_deals(w_since, until_ms=w_until, after=after)
+            try:
+                data = _search_deals(w_since, until_ms=w_until, after=after)
+            except Exception as e:
+                print(f"[deals] search error: {e}")
+                break
             for row in data.get("results", []):
                 p = row.get("properties", {})
                 created = (p.get("createdate") or "")[:10]
                 if not created:
                     continue
                 plabel, slabel, status = _classify_stage(p.get("dealstage"))
-                amount = _to_float(p.get("amount"))
+                amount_native = _to_float(p.get("amount"))
+                native_cur = normalize_currency(
+                    p.get("deal_currency_code") or DEFAULT_DEAL_CURRENCY
+                )
+                amount = to_usd(amount_native, native_cur)
                 tis = _to_float(p.get("hs_v2_time_in_current_stage"))
 
                 key = (
@@ -167,7 +188,7 @@ def collect_and_write(days: int = None, start_date: date = None,
                     p.get("deal_qoyod_source") or "Unknown",
                     plabel or "Unknown",
                     status,
-                    (p.get("deal_utm_campaign") or "").strip() or None,
+                    (p.get("deal_utm_campaign") or "").strip() or "__none__",
                     (p.get("deal_utm_audience") or "").strip() or None,
                     (p.get("deal_utm_content") or "").strip() or None,
                     (p.get("deal_utm_source") or "").strip() or None,
@@ -177,15 +198,20 @@ def collect_and_write(days: int = None, start_date: date = None,
                 b = buckets[key]
                 b["n"] += 1
                 b["amount"] += amount
+                b["amount_native"] += amount_native
+                b["native_currencies"].add(native_cur)
                 if status == "won":
                     b["won"] += 1
                     b["won_amount"] += amount
+                    b["won_amount_native"] += amount_native
                 elif status == "lost":
                     b["lost"] += 1
                     b["lost_amount"] += amount
+                    b["lost_amount_native"] += amount_native
                 else:
                     b["open"] += 1
                     b["open_amount"] += amount
+                    b["open_amount_native"] += amount_native
                 if tis:
                     b["time_in_stage_sum"] += tis
                     b["time_in_stage_n"] += 1
@@ -195,7 +221,7 @@ def collect_and_write(days: int = None, start_date: date = None,
             pages += 1
             paging = data.get("paging", {}).get("next", {})
             after = paging.get("after")
-            if not after or pages >= 500:
+            if not after or pages >= 100:   # 100 pages × 100 rows = 10k cap per window
                 break
         print(f"[deals] {win_start}..{win_end}: {win_count} deals")
         win_start = win_end
@@ -207,6 +233,11 @@ def collect_and_write(days: int = None, start_date: date = None,
          utm_c, utm_a, utm_co, utm_s, utm_m, utm_t) = key
         avg_time = (b["time_in_stage_sum"] / b["time_in_stage_n"]
                     if b["time_in_stage_n"] else None)
+        # If a bucket contains multiple native currencies (e.g. SAR + USD mixed),
+        # collapse to "MIXED" so downstream readers don't treat the native sum as
+        # a single-currency value.
+        currencies = b["native_currencies"]
+        native_label = next(iter(currencies)) if len(currencies) == 1 else "MIXED"
         rows.append({
             "date": d,
             "qoyod_source": src,
@@ -222,10 +253,18 @@ def collect_and_write(days: int = None, start_date: date = None,
             "deals_won": b["won"],
             "deals_lost": b["lost"],
             "deals_open": b["open"],
+            # USD (primary — use these in all reports)
             "amount_total": round(b["amount"], 2),
             "amount_won": round(b["won_amount"], 2),
             "amount_lost": round(b["lost_amount"], 2),
             "amount_open": round(b["open_amount"], 2),
+            "currency": "USD",
+            # Native (audit only)
+            "amount_total_native": round(b["amount_native"], 2),
+            "amount_won_native": round(b["won_amount_native"], 2),
+            "amount_lost_native": round(b["lost_amount_native"], 2),
+            "amount_open_native": round(b["open_amount_native"], 2),
+            "currency_native": native_label,
             "avg_time_in_current_stage_ms": avg_time,
             "updated_at": now,
         })
@@ -260,6 +299,12 @@ def _ensure_table_exists():
         bigquery.SchemaField("amount_won", "FLOAT64"),
         bigquery.SchemaField("amount_lost", "FLOAT64"),
         bigquery.SchemaField("amount_open", "FLOAT64"),
+        bigquery.SchemaField("currency", "STRING"),
+        bigquery.SchemaField("amount_total_native", "FLOAT64"),
+        bigquery.SchemaField("amount_won_native", "FLOAT64"),
+        bigquery.SchemaField("amount_lost_native", "FLOAT64"),
+        bigquery.SchemaField("amount_open_native", "FLOAT64"),
+        bigquery.SchemaField("currency_native", "STRING"),
         bigquery.SchemaField("avg_time_in_current_stage_ms", "FLOAT64"),
         bigquery.SchemaField("updated_at", "TIMESTAMP"),
     ]
@@ -267,6 +312,17 @@ def _ensure_table_exists():
     table.time_partitioning = bigquery.TimePartitioning(field="date")
     table.clustering_fields = ["qoyod_source", "pipeline", "stage_status"]
     client.create_table(table, exists_ok=True)
+
+    # Patch schema on existing table: add any columns missing from the live
+    # table (e.g. after we added USD `currency` + `*_native` fields).
+    existing   = client.get_table(table_id)
+    have       = {f.name for f in existing.schema}
+    new_fields = [f for f in schema if f.name not in have]
+    if new_fields:
+        existing.schema = list(existing.schema) + new_fields
+        client.update_table(existing, ["schema"])
+        print(f"[deals] Added {len(new_fields)} new columns to "
+              f"hubspot_deals_daily: {[f.name for f in new_fields]}")
 
 
 if __name__ == "__main__":

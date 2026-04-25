@@ -1,7 +1,16 @@
+"""
+Google Ads — keyword-grain reader + executors.
+
+Campaign-level data has moved to BigQuery (read via
+`collectors.from_bq.read_campaigns("google_ads", days=N)`). BQ does not
+yet store per-keyword rows, so `get_keyword_performance()` still hits the
+live API. Pause executors stay here too — they need a live API client.
+"""
 from google.ads.googleads.client import GoogleAdsClient
-from google.ads.googleads.errors import GoogleAdsException
+from google.ads.googleads.errors import GoogleAdsException  # noqa: F401 — re-exported for callers
 from config import GOOGLE_ADS_CONFIG
 from datetime import date, timedelta
+from collectors.currency import to_usd, normalize_currency
 
 
 def get_client():
@@ -13,52 +22,6 @@ def get_client():
         "login_customer_id": GOOGLE_ADS_CONFIG["login_customer_id"],
         "use_proto_plus": True,
     })
-
-
-def get_campaign_performance(days=4):
-    """Pull last N days of campaign-level performance."""
-    client = get_client()
-    ga_service = client.get_service("GoogleAdsService")
-    customer_id = GOOGLE_ADS_CONFIG["customer_id"]
-
-    end_date = date.today() - timedelta(days=1)
-    start_date = end_date - timedelta(days=days - 1)
-
-    query = f"""
-        SELECT
-            campaign.id,
-            campaign.name,
-            campaign.status,
-            metrics.cost_micros,
-            metrics.conversions,
-            metrics.clicks,
-            metrics.impressions,
-            metrics.ctr,
-            segments.date
-        FROM campaign
-        WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
-            AND campaign.status = 'ENABLED'
-        ORDER BY metrics.cost_micros DESC
-    """
-
-    results = []
-    response = ga_service.search(customer_id=customer_id, query=query)
-    for row in response:
-        spend = row.metrics.cost_micros / 1_000_000
-        conversions = row.metrics.conversions
-        cpl = round(spend / conversions, 2) if conversions > 0 else None
-        results.append({
-            "campaign_id": row.campaign.id,
-            "campaign_name": row.campaign.name,
-            "date": row.segments.date,
-            "spend": round(spend, 2),
-            "conversions": conversions,
-            "clicks": row.metrics.clicks,
-            "impressions": row.metrics.impressions,
-            "ctr": round(row.metrics.ctr * 100, 2),
-            "cpl": cpl,
-        })
-    return results
 
 
 def get_keyword_performance(days=14):
@@ -77,6 +40,7 @@ def get_keyword_performance(days=14):
             ad_group_criterion.resource_name,
             ad_group.name,
             campaign.name,
+            customer.currency_code,
             metrics.cost_micros,
             metrics.conversions,
             metrics.clicks
@@ -89,7 +53,9 @@ def get_keyword_performance(days=14):
     results = []
     response = ga_service.search(customer_id=customer_id, query=query)
     for row in response:
-        spend = row.metrics.cost_micros / 1_000_000
+        native_cur   = normalize_currency(getattr(row.customer, "currency_code", None))
+        spend_native = row.metrics.cost_micros / 1_000_000
+        spend        = to_usd(spend_native, native_cur)
         results.append({
             "keyword": row.ad_group_criterion.keyword.text,
             "match_type": row.ad_group_criterion.keyword.match_type.name,
@@ -99,6 +65,9 @@ def get_keyword_performance(days=14):
             "spend": round(spend, 2),
             "conversions": row.metrics.conversions,
             "clicks": row.metrics.clicks,
+            "currency": "USD",
+            "spend_native": round(spend_native, 2),
+            "currency_native": native_cur,
         })
     return results
 

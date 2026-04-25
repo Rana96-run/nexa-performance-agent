@@ -39,9 +39,13 @@ FB_PAGE_METRICS = [
     "page_views_total",            # page profile views
 ]
 
-# IG `impressions` was deprecated; surviving day-level metrics (v21):
-IG_METRICS_DAY = ["reach", "profile_views", "website_clicks",
-                  "accounts_engaged", "total_interactions"]
+# IG v21: `reach` is the only true daily time-series metric left.
+# Others (profile_views, website_clicks, accounts_engaged, total_interactions)
+# require metric_type=total_value (period aggregate, not daily) and are fetched
+# as a period snapshot written to the end_date row.
+IG_METRICS_DAY = ["reach"]
+IG_METRICS_TOTAL = ["profile_views", "website_clicks",
+                    "accounts_engaged", "total_interactions"]
 
 
 def _fetch_fb_page_daily(start, end):
@@ -66,13 +70,18 @@ def _fetch_fb_page_daily(start, end):
 def _fetch_ig_daily(start, end):
     if not IG_BIZ:
         return {}
+    since_ts = int(datetime(start.year, start.month, start.day).timestamp())
+    until_ts = int(datetime(end.year, end.month, end.day).timestamp()) + 86400
+
+    by_day = {}
+
+    # 1. True daily time-series (reach)
     data = _get(f"{IG_BIZ}/insights", {
         "metric": ",".join(IG_METRICS_DAY),
-        "since": int(datetime(start.year, start.month, start.day).timestamp()),
-        "until": int(datetime(end.year, end.month, end.day).timestamp()) + 86400,
+        "since": since_ts,
+        "until": until_ts,
         "period": "day",
     })
-    by_day = {}
     for m in data.get("data", []):
         name = m["name"]
         for v in m.get("values", []):
@@ -80,7 +89,28 @@ def _fetch_ig_daily(start, end):
             if not d:
                 continue
             by_day.setdefault(d, {})[name] = v.get("value") or 0
-    # follower_count is lifetime snapshot — get today's value only
+
+    # 2. Total-value period aggregates (profile_views, website_clicks, etc.)
+    #    Returned as a single number for the whole window. Attribute to the end date.
+    try:
+        data = _get(f"{IG_BIZ}/insights", {
+            "metric": ",".join(IG_METRICS_TOTAL),
+            "metric_type": "total_value",
+            "since": since_ts,
+            "until": until_ts,
+            "period": "day",
+        })
+        end_d = str(end)
+        for m in data.get("data", []):
+            name = m["name"]
+            val = m.get("total_value", {}).get("value")
+            if val is None and m.get("values"):
+                val = m["values"][0].get("value")
+            by_day.setdefault(end_d, {})[name] = val or 0
+    except Exception as e:
+        print(f"[meta_organic] ig total_value fetch skipped: {e}")
+
+    # 3. Lifetime snapshot: followers + media count — today only
     try:
         snap = _get(f"{IG_BIZ}", {"fields": "followers_count,media_count"})
         today = str(date.today())

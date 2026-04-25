@@ -8,6 +8,7 @@ from datetime import date, timedelta, datetime, timezone
 from google.ads.googleads.client import GoogleAdsClient
 from config import GOOGLE_ADS_CONFIG
 from collectors.bq_writer import upsert_rows
+from collectors.currency import to_usd, normalize_currency
 
 
 def _client():
@@ -47,6 +48,7 @@ def collect_and_write(days: int = None, incremental: bool = False):
         SELECT
             customer.id,
             customer.descriptive_name,
+            customer.currency_code,
             campaign.id,
             campaign.name,
             campaign.status,
@@ -67,27 +69,36 @@ def collect_and_write(days: int = None, incremental: bool = False):
     print(f"[google_ads] Window {start} -> {end} across {len(accounts)} account(s)")
     for cid in accounts:
         count = 0
-        for r in ga.search(customer_id=cid, query=query):
-            spend = r.metrics.cost_micros / 1_000_000
-            conv = r.metrics.conversions
-            rows.append({
-                "date": str(r.segments.date),
-                "channel": "google_ads",
-                "account_id": cid,
-                "campaign_id": str(r.campaign.id),
-                "campaign_name": r.campaign.name,
-                "status": r.campaign.status.name,
-                "objective": r.campaign.advertising_channel_type.name,
-                "spend": round(spend, 2),
-                "impressions": int(r.metrics.impressions),
-                "clicks": int(r.metrics.clicks),
-                "ctr": round(r.metrics.ctr * 100, 4),
-                "leads": int(conv),
-                "conversions": float(conv),
-                "cpl": round(spend / conv, 2) if conv > 0 else None,
-                "updated_at": now,
-            })
-            count += 1
+        try:
+            search_results = ga.search(customer_id=cid, query=query)
+            for r in search_results:
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
+                conv         = r.metrics.conversions
+                rows.append({
+                    "date":           str(r.segments.date),
+                    "channel":        "google_ads",
+                    "account_id":     cid,
+                    "campaign_id":    str(r.campaign.id),
+                    "campaign_name":  r.campaign.name,
+                    "status":         r.campaign.status.name,
+                    "objective":      r.campaign.advertising_channel_type.name,
+                    "spend":          round(spend, 2),
+                    "impressions":    int(r.metrics.impressions),
+                    "clicks":         int(r.metrics.clicks),
+                    "ctr":            round(r.metrics.ctr * 100, 4),
+                    "leads":          int(conv),
+                    "conversions":    float(conv),
+                    "cpl":            round(spend / conv, 2) if conv > 0 else None,
+                    "currency":       "USD",
+                    "spend_native":   round(spend_native, 2),
+                    "currency_native": native_cur,
+                    "updated_at":     now,
+                })
+                count += 1
+        except Exception as e:
+            print(f"[google_ads]   account {cid} error: {e}")
         print(f"[google_ads]   account {cid}: {count} rows")
 
     return upsert_rows("campaigns_daily", rows,

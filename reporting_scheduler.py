@@ -18,14 +18,22 @@ from datetime import datetime, timezone
 from collectors import google_ads_bq, meta_bq, snap_bq
 from collectors import meta_organic_bq, youtube_bq, linkedin_bq
 from collectors import hubspot_leads_bq, hubspot_deals_bq
+from collectors import tiktok_bq, microsoft_ads_bq
 from collectors.views import refresh_all_views
+from notifications.notify import send_heartbeat
+from logs.logger import get_logger, setup_global_logging
+
+setup_global_logging("bq-refresh")  # captures every print() into logs/
+log = get_logger("bq-refresh")
 
 
 COLLECTORS = [
-    # Paid
+    # Paid — social
     ("google_ads",      google_ads_bq.collect_and_write),
     ("meta",            meta_bq.collect_and_write),
     ("snapchat",        snap_bq.collect_and_write),
+    ("tiktok",          tiktok_bq.collect_and_write),
+    ("microsoft_ads",   microsoft_ads_bq.collect_and_write),
     # Organic (skip gracefully if creds missing)
     ("meta_organic",    meta_organic_bq.collect_and_write),
     ("youtube",         youtube_bq.collect_and_write),
@@ -49,11 +57,11 @@ def run_refresh(incremental: bool = True):
             n = fn(incremental=incremental)
             dt = time.time() - t0
             results[name] = (True, n, dt)
-            print(f"[scheduler] {name}: {n} rows in {dt:.1f}s")
+            log.info(f"{name}: {n} rows in {dt:.1f}s")
         except Exception as e:
             dt = time.time() - t0
             results[name] = (False, str(e), dt)
-            print(f"[scheduler] {name} FAILED after {dt:.1f}s: {e}")
+            log.error(f"{name} FAILED after {dt:.1f}s: {e}")
             traceback.print_exc()
 
     try:
@@ -69,12 +77,26 @@ def run_refresh(incremental: bool = True):
     for name, (ok, val, dt) in results.items():
         flag = "OK " if ok else "ERR"
         print(f"  [{flag}] {name}: {val}")
+
+    # Heartbeat: one-line beacon so the team notices if the refresh stops.
+    ok_items  = [n for n, (o, _, _) in results.items() if o]
+    bad_items = [n for n, (o, _, _) in results.items() if not o]
+    total_rows = sum(v for _, (o, v, _) in results.items()
+                     if o and isinstance(v, int))
+    status = "ok" if not bad_items else "failed"
+    detail = (f"{total_rows:,} rows across {len(ok_items)} collectors"
+              + (f" | FAILED: {', '.join(bad_items)}" if bad_items else ""))
+    try:
+        send_heartbeat("bq-refresh", status=status,
+                       detail=detail, duration_s=elapsed)
+    except Exception as e:
+        log.warning(f"heartbeat emit failed: {e}")
     return results
 
 
 def run_loop():
-    """Run every 6h forever. Exits on Ctrl+C."""
-    interval = 6 * 60 * 60
+    """Run every 24h forever. Exits on Ctrl+C."""
+    interval = 24 * 60 * 60
     while True:
         try:
             run_refresh(incremental=True)
@@ -86,7 +108,7 @@ def run_loop():
 
 
 if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "once"
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "loop"
     if cmd == "once":
         run_refresh(incremental=True)
     elif cmd == "backfill":

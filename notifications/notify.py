@@ -16,7 +16,11 @@ Approval polling uses 'slack_ts'. When Slack is disabled, approvals are
 emailed instead and auto-execution is skipped (approve via Asana task).
 """
 from typing import Optional
-from config import NOTIFY_VIA, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL
+from datetime import datetime, timezone, timedelta
+from config import (
+    NOTIFY_VIA, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL,
+    SLACK_CHANNEL_HEALTH,
+)
 from notifications import email as email_mod
 
 try:
@@ -102,3 +106,43 @@ def _label(ts, mailed):
     if ts: return "slack"
     if mailed: return "email"
     return "none"
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat — one-liner beacon posted at the end of every scheduler run.
+# If you stop seeing heartbeats, something broke. Silent failures are the
+# enemy; this turns them into visible ones.
+# ---------------------------------------------------------------------------
+
+# Riyadh time for the beacon — matches the team's working hours.
+_RIYADH = timezone(timedelta(hours=3))
+
+
+def send_heartbeat(source: str, status: str = "ok",
+                   detail: str = "", duration_s: float | None = None) -> bool:
+    """Post a single-line health beacon to SLACK_CHANNEL_HEALTH.
+
+    Args:
+        source     — e.g. "bq-refresh", "operational-scheduler", "slack-listener"
+        status     — "ok" | "failed" | "started"
+        detail     — free-form tail, e.g. "4,312 rows across 6 channels"
+        duration_s — how long the run took, seconds (optional)
+
+    Returns True if the beacon landed somewhere. Never raises — a heartbeat
+    failing must not take down the scheduler itself.
+    """
+    if not (SLACK_OK and slack_client and SLACK_CHANNEL_HEALTH):
+        return False
+    emoji = {"ok": ":white_check_mark:", "failed": ":x:",
+             "started": ":hourglass_flowing_sand:"}.get(status, ":grey_question:")
+    when  = datetime.now(_RIYADH).strftime("%Y-%m-%d %H:%M")
+    dur   = f" ({duration_s:.1f}s)" if duration_s is not None else ""
+    body  = f"{emoji} *{source}* `{status}`{dur} — {when} Riyadh"
+    if detail:
+        body += f"\n> {detail}"
+    try:
+        slack_client.chat_postMessage(channel=SLACK_CHANNEL_HEALTH, text=body)
+        return True
+    except Exception as e:
+        print(f"[heartbeat] post failed: {e}")
+        return False

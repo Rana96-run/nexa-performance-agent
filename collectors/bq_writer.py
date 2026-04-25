@@ -16,12 +16,33 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)   # always prefer .env over stale system env vars
 
 PROJECT_ID = os.getenv("BQ_PROJECT_ID")
-DATASET = os.getenv("BQ_DATASET", "qoyod_marketing")
-LOCATION = os.getenv("BQ_LOCATION", "europe-west1")
-KEY_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "./bigquery-key.json")
+DATASET    = os.getenv("BQ_DATASET", "qoyod_marketing")
+LOCATION   = os.getenv("BQ_LOCATION", "europe-west1")
+
+# Thresholds pulled from the central config — see config.py
+try:
+    from config import (
+        CPL_SCALE, CPL_ACCEPTABLE, CPL_WARNING,
+        CPQL_SCALE, CPQL_ACCEPTABLE, CPQL_WARNING,
+    )
+except Exception:
+    # Hard defaults so this module still works if config import fails
+    CPL_SCALE, CPL_ACCEPTABLE, CPL_WARNING = 5.50, 7.50, 8.00
+    CPQL_SCALE, CPQL_ACCEPTABLE, CPQL_WARNING = 11.00, 17.00, 21.33
+
+# Resolve the key path: honour absolute paths in .env; fall back to the file
+# sitting next to this repo if nothing is set.
+_raw_key = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+if _raw_key and os.path.isabs(_raw_key):
+    KEY_PATH = _raw_key
+elif _raw_key:
+    # Relative path in env — resolve relative to repo root (one level up from collectors/)
+    KEY_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), _raw_key.lstrip("./\\"))
+else:
+    KEY_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bigquery-key.json")
 
 
 def get_client():
@@ -214,17 +235,18 @@ SELECT
   h.customers_count AS hs_customers,
   SAFE_DIVIDE(c.spend, h.sqls_count)                       AS cpql,
   SAFE_DIVIDE(h.sqls_count + h.customers_count, h.leads_count) AS qual_rate,
+  -- Thresholds in USD — values injected from config.py at view-creation time
   CASE
-    WHEN c.cpl < 20 THEN 'scale'
-    WHEN c.cpl <= 28 THEN 'acceptable'
-    WHEN c.cpl <= 30 THEN 'warning'
+    WHEN c.cpl < {CPL_SCALE} THEN 'scale'
+    WHEN c.cpl <= {CPL_ACCEPTABLE} THEN 'acceptable'
+    WHEN c.cpl <= {CPL_WARNING} THEN 'warning'
     ELSE 'pause_zone'
   END AS cpl_zone,
   CASE
     WHEN SAFE_DIVIDE(c.spend, h.sqls_count) IS NULL THEN 'no_data'
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) < 40 THEN 'scale'
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) <= 65 THEN 'acceptable'
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) <= 80 THEN 'warning'
+    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) < {CPQL_SCALE} THEN 'scale'
+    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) <= {CPQL_ACCEPTABLE} THEN 'acceptable'
+    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) <= {CPQL_WARNING} THEN 'warning'
     ELSE 'pause_zone'
   END AS cpql_zone
 FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
