@@ -33,6 +33,11 @@ app.register_blueprint(zapier_bp)
 
 # ─── Static report pages ──────────────────────────────────────────────────────
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route("/")
 def root():
     return redirect("/reports/latest")
