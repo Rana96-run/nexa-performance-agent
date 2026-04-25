@@ -57,15 +57,29 @@ def _handle_error(payload: dict) -> None:
     error_msg = (payload.get("error_message") or "No detail")[:300]
     run_url   = payload.get("run_url", "")
     zap_url   = payload.get("zap_url", "")
+    run_id    = payload.get("run_id") or payload.get("id") or ""
 
     link = f"<{run_url}|View run>" if run_url else (f"<{zap_url}|Open Zap>" if zap_url else "")
+
+    # Auto-replay the errored run immediately
+    replayed = False
+    if run_id:
+        try:
+            from collectors.zapier import resume_held_run
+            replayed = resume_held_run(run_id)
+            if replayed:
+                print(f"[zapier-webhook] Auto-replayed error run {run_id} for {zap_name}")
+        except Exception as e:
+            print(f"[zapier-webhook] Auto-replay failed: {e}")
+
+    replay_note = " :recycle: _Auto-replayed_" if replayed else (" _(no run_id — manual replay needed)_" if not run_id else " :warning: _Replay failed_")
 
     blocks = [{
         "type": "section",
         "text": {
             "type": "mrkdwn",
             "text": (
-                f":zap: :red_circle: *Zapier Error — {zap_name}*\n"
+                f":zap: :red_circle: *Zapier Error — {zap_name}*{replay_note}\n"
                 f"```{error_msg}```\n"
                 f"{link}"
             ),
@@ -74,52 +88,57 @@ def _handle_error(payload: dict) -> None:
     _slack_post(blocks, f"Zapier error in {zap_name}")
     print(f"[zapier-webhook] Error alert: {zap_name} — {error_msg[:80]}")
 
-    # Create Asana task for the error
-    try:
-        from executors.asana import create_task
-        create_task(
-            title=f"Zapier error — {zap_name[:70]}",
-            description=(
-                f"Zap: {zap_name}\n"
-                f"Error: {error_msg}\n"
-                f"Run: {run_url}\n"
-                f"Action: Fix the failing step in Zapier."
-            ),
-            project_key="daily_activity",
-            task_type="Zapier Error",
-        )
-    except Exception as e:
-        print(f"[zapier-webhook] Asana task skipped: {e}")
+    # Only create an Asana task if the replay failed (needs manual fix)
+    if not replayed:
+        try:
+            from executors.asana import create_task
+            create_task(
+                title=f"Zapier error — {zap_name[:70]}",
+                description=(
+                    f"Zap: {zap_name}\n"
+                    f"Error: {error_msg}\n"
+                    f"Run: {run_url}\n"
+                    f"Auto-replay: {'succeeded' if replayed else 'FAILED — manual action required'}\n"
+                    f"Action: Open Zapier Task History and fix the failing step."
+                ),
+                project_key="daily_activity",
+                task_type="Zapier Error",
+            )
+        except Exception as e:
+            print(f"[zapier-webhook] Asana task skipped: {e}")
 
 
 def _handle_held(payload: dict) -> None:
     zap_name = payload.get("zap_name", "Unknown Zap")
     run_url  = payload.get("run_url", "")
+    run_id   = payload.get("run_id") or payload.get("id") or ""
     link     = f"<{run_url}|View held task>" if run_url else ""
+
+    # Auto-resume held task immediately (always on)
+    resumed = False
+    if run_id and os.getenv("ZAPIER_AUTO_FIX", "true").lower() != "false":
+        try:
+            from collectors.zapier import resume_held_run
+            resumed = resume_held_run(run_id)
+            if resumed:
+                print(f"[zapier-webhook] Auto-resumed held run {run_id} for {zap_name}")
+        except Exception as e:
+            print(f"[zapier-webhook] Auto-resume failed: {e}")
+
+    resume_note = " :white_check_mark: _Auto-resumed_" if resumed else " :pause_button: _Awaiting manual resume_"
 
     blocks = [{
         "type": "section",
         "text": {
             "type": "mrkdwn",
             "text": (
-                f":zap: :large_yellow_circle: *Zapier Task On Hold — {zap_name}*\n"
-                f"A task is waiting for review before it can continue.\n"
+                f":zap: :large_yellow_circle: *Zapier Task Held — {zap_name}*{resume_note}\n"
                 f"{link}"
             ),
         },
     }]
     _slack_post(blocks, f"Zapier task held in {zap_name}")
-    print(f"[zapier-webhook] Held task: {zap_name}")
-
-    # Auto-resume if configured
-    run_id = payload.get("run_id")
-    if run_id and os.getenv("ZAPIER_AUTO_RESUME", "false").lower() == "true":
-        try:
-            from collectors.zapier import resume_held_run
-            if resume_held_run(run_id):
-                print(f"[zapier-webhook] Auto-resumed held run {run_id}")
-        except Exception as e:
-            print(f"[zapier-webhook] Auto-resume failed: {e}")
+    print(f"[zapier-webhook] Held task: {zap_name} — resumed={resumed}")
 
 
 @zapier_bp.route("/webhooks/zapier", methods=["POST"])

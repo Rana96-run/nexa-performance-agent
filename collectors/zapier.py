@@ -1,11 +1,11 @@
 """
 collectors/zapier.py
 ====================
-Monitors the Qoyod Zapier account for:
-  - Errored zap runs (fires Slack alert + Asana task)
-  - On-hold / held tasks (fires Slack alert)
-  - Paused/disabled zaps that should be running (daily summary)
-  - Auto-resumes held tasks where safe (configurable)
+Monitors the Qoyod Zapier account and FIXES problems automatically:
+  - Errored zap runs  → auto-replayed immediately + Slack alert + Asana task
+  - On-hold tasks     → auto-resumed immediately + Slack alert
+  - Paused/disabled zaps that should be running → daily summary alert
+  - Persistent errors (failed >MAX_REPLAY_ATTEMPTS) → escalate to Asana
 
 Two modes
 ---------
@@ -47,8 +47,12 @@ _TOKEN   = os.getenv("ZAPIER_API_TOKEN", "")
 _BASE    = "https://api.zapier.com/v1"
 _SLACK   = WebClient(token=SLACK_BOT_TOKEN)
 
-# Auto-resume held tasks? Set False if you want human approval first.
-AUTO_RESUME_HELD = os.getenv("ZAPIER_AUTO_RESUME", "false").lower() == "true"
+# Auto-fix is ALWAYS ON — replay errors, resume held tasks automatically.
+# Set ZAPIER_AUTO_FIX=false in .env only if you need a manual-approval window.
+AUTO_FIX = os.getenv("ZAPIER_AUTO_FIX", "true").lower() != "false"
+
+# Max times we'll replay the same run before giving up and escalating.
+MAX_REPLAY_ATTEMPTS = int(os.getenv("ZAPIER_MAX_REPLAY_ATTEMPTS", "3"))
 
 # Zap run statuses we care about
 Status = Literal["success", "error", "held", "filtered", "throttled"]
@@ -232,16 +236,26 @@ def post_slack_summary(summary: dict) -> None:
         print("[zapier] No runs and no disabled zaps — nothing to post")
         return
 
-    # Colour indicator
-    if rate > 0.15 or len(errors) > 10:
+    # Colour indicator — after auto-fix, persistent errors are what matter
+    persistent = summary.get("auto_replay", {}).get("persistent", [])
+    replay_ct  = summary.get("auto_replay", {}).get("replayed", 0)
+    resume_ct  = summary.get("auto_resume", {}).get("resumed", 0)
+
+    if persistent or (rate > 0.15 and not replay_ct):
         icon = ":red_circle:"
-        status_line = f"*{len(errors)} errors* in {total} runs ({rate*100:.1f}% error rate)"
+        status_line = f"*{len(persistent)} zap(s) still broken* after auto-retry — manual fix needed"
     elif errors or held:
+        fixed_note = ""
+        if replay_ct or resume_ct:
+            parts = []
+            if replay_ct: parts.append(f"{replay_ct} error(s) replayed")
+            if resume_ct: parts.append(f"{resume_ct} held task(s) resumed")
+            fixed_note = f" — :white_check_mark: {' & '.join(parts)}"
         icon = ":large_yellow_circle:"
-        status_line = f"*{len(errors)} errors, {len(held)} held* in {total} runs"
+        status_line = f"*{len(errors)} errors, {len(held)} held* in {total} runs{fixed_note}"
     else:
         icon = ":large_green_circle:"
-        status_line = f"All {total} runs successful"
+        status_line = f"All {total} runs successful — no issues"
 
     blocks = [
         {
@@ -258,19 +272,33 @@ def post_slack_summary(summary: dict) -> None:
     ]
 
     if errors:
-        top = errors[:5]  # show at most 5
+        top   = errors[:5]  # show at most 5
         lines = "\n".join(_fmt_run_line(r) for r in top)
         more  = f"\n_…and {len(errors)-5} more_" if len(errors) > 5 else ""
+        # Show fix status if available
+        ar = summary.get("auto_replay", {})
+        if ar.get("replayed"):
+            fix_note = f" :recycle: _{ar['replayed']} replayed automatically_"
+        elif ar.get("persistent"):
+            fix_note = f" :fire: _{len(ar['persistent'])} zap(s) still failing after {MAX_REPLAY_ATTEMPTS} retries — escalated_"
+        elif AUTO_FIX:
+            fix_note = " _(replay attempted)_"
+        else:
+            fix_note = " _(AUTO_FIX disabled — manual action needed)_"
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*Errored runs:*\n{lines}{more}"},
+            "text": {"type": "mrkdwn", "text": f"*Errored runs:*{fix_note}\n{lines}{more}"},
         })
 
     if held:
-        top = held[:3]
+        top   = held[:3]
         lines = "\n".join(f"• {r.get('zap_name','?')[:50]}" for r in top)
         more  = f"\n_…and {len(held)-3} more_" if len(held) > 3 else ""
-        resume_note = " _(auto-resuming…)_" if AUTO_RESUME_HELD else " _(manual review needed)_"
+        rs = summary.get("auto_resume", {})
+        resume_note = (
+            f" :white_check_mark: _{rs.get('resumed', 0)} resumed automatically_"
+            if AUTO_FIX else " _(AUTO_FIX disabled — manual review needed)_"
+        )
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn",
@@ -332,51 +360,157 @@ def _create_asana_tasks(errors: list[dict], held: list[dict]) -> None:
         )
 
 
-# ─── Auto-resume ──────────────────────────────────────────────────────────────
+# ─── Auto-fix (replay errors + resume held) ───────────────────────────────────
 
-def _auto_resume(held: list[dict]) -> int:
-    """Resume all held tasks. Returns count resumed."""
+def _auto_replay_errors(errors: list[dict]) -> dict:
+    """
+    Replay every errored run.
+    Returns {"replayed": int, "failed": int, "skipped": int}.
+    Skips runs that have already been replayed MAX_REPLAY_ATTEMPTS times
+    (detected by checking if the same zap has > MAX_REPLAY_ATTEMPTS errors
+    in the window — an approximation; Zapier doesn't expose attempt count).
+    """
+    # Group by zap to detect persistent failures
+    by_zap: dict[str, list] = {}
+    for r in errors:
+        by_zap.setdefault(r["zap_name"], []).append(r)
+
+    replayed = 0
+    failed   = 0
+    skipped  = 0
+    persistent: list[str] = []  # zaps we've given up on
+
+    for zap_name, runs in by_zap.items():
+        if len(runs) > MAX_REPLAY_ATTEMPTS:
+            # Too many failures for this zap — it needs human investigation
+            persistent.append(zap_name)
+            skipped += len(runs)
+            print(f"[zapier] PERSISTENT error in '{zap_name}' ({len(runs)} runs) — escalating")
+            continue
+
+        for r in runs:
+            run_id = r.get("id")
+            if not run_id:
+                skipped += 1
+                continue
+            if resume_held_run(run_id):  # same endpoint works for error replay
+                replayed += 1
+                print(f"[zapier] Replayed error run {run_id} ({zap_name})")
+            else:
+                failed += 1
+
+    return {"replayed": replayed, "failed": failed, "skipped": skipped,
+            "persistent": persistent}
+
+
+def _auto_resume_held(held: list[dict]) -> dict:
+    """
+    Resume ALL held tasks immediately.
+    Returns {"resumed": int, "failed": int}.
+    """
     resumed = 0
+    failed  = 0
     for r in held:
-        if resume_held_run(r["id"]):
+        run_id = r.get("id")
+        if not run_id:
+            continue
+        if resume_held_run(run_id):
             resumed += 1
-    return resumed
+            print(f"[zapier] Resumed held task {run_id} ({r.get('zap_name','?')})")
+        else:
+            failed += 1
+    return {"resumed": resumed, "failed": failed}
+
+
+def _escalate_persistent(persistent_zaps: list[str]) -> None:
+    """Create an Asana task and Slack alert for zaps that keep failing."""
+    if not persistent_zaps:
+        return
+    names = "\n".join(f"• {z}" for z in persistent_zaps)
+    msg = (
+        f":zap: :fire: *Zapier — Persistent Errors (need manual fix)*\n"
+        f"These zaps have failed more than {MAX_REPLAY_ATTEMPTS} times "
+        f"and require investigation:\n{names}"
+    )
+    _slack_post([{"type": "section", "text": {"type": "mrkdwn", "text": msg}}],
+               f"Zapier persistent errors: {', '.join(persistent_zaps[:3])}")
+    try:
+        from executors.asana import create_task
+        create_task(
+            title=f"Zapier persistent error — {persistent_zaps[0][:60]} (+{len(persistent_zaps)-1} more)",
+            description=(
+                f"These Zaps have failed more than {MAX_REPLAY_ATTEMPTS} times "
+                f"and were NOT auto-replayed:\n\n{names}\n\n"
+                f"Action: Open Zapier Task History, check the failing step, and fix the root cause."
+            ),
+            project_key="daily_activity",
+            task_type="Zapier Error",
+        )
+    except Exception as e:
+        print(f"[zapier] Asana escalation task failed: {e}")
 
 
 # ─── Main entry (called by scheduler / agent) ────────────────────────────────
 
 def run_check(since_hours: int = 24, create_tasks: bool = True) -> dict:
     """
-    Full Zapier health check. Called by the daily agent cadence or scheduler.
-    Returns the summary dict.
+    Full Zapier health check + auto-fix.
+    - Replays ALL errored runs (unless persistent: >MAX_REPLAY_ATTEMPTS failures)
+    - Resumes ALL held tasks immediately
+    - Posts Slack summary
+    - Creates Asana tasks for persistent errors only
+    Returns the summary dict with fix stats appended.
     """
-    print(f"[zapier] Running health check (last {since_hours}h)...")
+    print(f"[zapier] Running health check + auto-fix (last {since_hours}h)...")
     summary = analyse(since_hours=since_hours)
 
-    errors  = summary["errors"]
-    held    = summary["held"]
+    errors   = summary["errors"]
+    held     = summary["held"]
+    disabled = summary["disabled_zaps"]
 
     print(
         f"[zapier] {summary['total_runs']} runs | "
         f"{len(errors)} errors | {len(held)} held | "
-        f"{len(summary['disabled_zaps'])} disabled"
+        f"{len(disabled)} disabled"
     )
 
-    # Auto-resume held tasks if configured
-    if AUTO_RESUME_HELD and held:
-        resumed = _auto_resume(held)
-        summary["auto_resumed"] = resumed
-        print(f"[zapier] Auto-resumed {resumed} held tasks")
-    else:
-        summary["auto_resumed"] = 0
+    replay_stats = {"replayed": 0, "failed": 0, "skipped": 0, "persistent": []}
+    resume_stats = {"resumed": 0, "failed": 0}
 
-    # Post Slack summary if there's anything to report
-    if errors or held or summary["disabled_zaps"]:
+    if AUTO_FIX:
+        # Fix errors — replay every errored run immediately
+        if errors:
+            replay_stats = _auto_replay_errors(errors)
+            print(
+                f"[zapier] Errors: replayed={replay_stats['replayed']} "
+                f"failed={replay_stats['failed']} "
+                f"skipped={replay_stats['skipped']} "
+                f"persistent={len(replay_stats['persistent'])}"
+            )
+            # Escalate zaps that keep failing despite replays
+            if replay_stats["persistent"]:
+                _escalate_persistent(replay_stats["persistent"])
+
+        # Fix held tasks — resume every one immediately
+        if held:
+            resume_stats = _auto_resume_held(held)
+            print(f"[zapier] Held: resumed={resume_stats['resumed']} failed={resume_stats['failed']}")
+    else:
+        print("[zapier] AUTO_FIX=false — monitoring only, no replays/resumes")
+
+    summary["auto_replay"]  = replay_stats
+    summary["auto_resume"]  = resume_stats
+
+    # Post Slack summary (includes what was fixed)
+    if errors or held or disabled:
         post_slack_summary(summary)
 
-    # Create Asana tasks for errors and held items
-    if create_tasks and (errors or held):
-        _create_asana_tasks(errors, held)
+    # Create Asana tasks only for errors that persisted after replay attempts
+    if create_tasks:
+        persistent = replay_stats.get("persistent", [])
+        persistent_runs = [r for r in errors if r.get("zap_name") in persistent]
+        if persistent_runs or held:
+            _create_asana_tasks(persistent_runs, [])  # held already resumed, just log errors
 
     return summary
 
@@ -387,11 +521,15 @@ if __name__ == "__main__":
     import sys
     hours = int(sys.argv[1]) if len(sys.argv) > 1 else 24
     result = run_check(since_hours=hours)
+    ar = result.get("auto_replay", {})
+    rs = result.get("auto_resume", {})
     print(f"\nSummary:")
     print(f"  Total runs:    {result['total_runs']}")
     print(f"  Errors:        {len(result['errors'])}")
     print(f"  Held:          {len(result['held'])}")
     print(f"  Disabled zaps: {len(result['disabled_zaps'])}")
     print(f"  Error rate:    {result['error_rate']*100:.1f}%")
-    if result.get("auto_resumed"):
-        print(f"  Auto-resumed:  {result['auto_resumed']}")
+    print(f"  Replayed:      {ar.get('replayed', 0)}")
+    print(f"  Replay failed: {ar.get('failed', 0)}")
+    print(f"  Persistent:    {len(ar.get('persistent', []))}")
+    print(f"  Resumed held:  {rs.get('resumed', 0)}")
