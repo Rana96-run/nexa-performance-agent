@@ -89,6 +89,25 @@ _EXCL_KEYWORDS  = {"dis"}   # exclude "disqualified" from "qualified" match
 _WON_STAGE  = "closedwon"
 _LOST_STAGE = "closedlost"
 
+# Paid channel sources — only these trigger Slack alerts.
+# Matched case-insensitively against lead_qoyod_source / deal_qoyod_source.
+_PAID_SOURCES = {
+    "google", "google_ads", "google ads",
+    "meta", "facebook", "instagram",
+    "snapchat", "snap",
+    "linkedin",
+    "microsoft", "bing", "microsoft_ads",
+    "tiktok",
+}
+
+
+def _is_paid(source: str) -> bool:
+    """Return True if the source is a paid channel we care about."""
+    if not source:
+        return False
+    s = source.lower().strip()
+    return any(p in s for p in _PAID_SOURCES)
+
 
 # ─── Signature verification ───────────────────────────────────────────────────
 
@@ -246,47 +265,24 @@ def _disq_reason(props: dict) -> str:
 # ─── Lead module handlers ─────────────────────────────────────────────────────
 
 def _handle_lead_created(lead_id: str) -> None:
-    """New Lead object created — quick Slack ping with source/UTM."""
-    props, assoc = _get_lead(lead_id)
-    contact      = _get_associated_contact(assoc)
-
-    name = (
-        f"{contact.get('firstname','')} {contact.get('lastname','')}".strip()
-        or f"Lead {lead_id}"
-    )
-    src  = props.get("lead_qoyod_source") or "Unknown"
-    cmp  = props.get("lead_utm_campaign") or "—"
-    ctn  = props.get("lead_utm_content")  or "—"
-    aud  = props.get("lead_utm_audience") or "—"
-    pl_label, st_label = _stage_label(props.get("hs_pipeline_stage", ""))
-
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":inbox_tray: *New Lead — {name}*\n"
-                f"*Source:* {src}  |  *Stage:* {st_label or 'New'}\n"
-                f"*Campaign:* `{cmp}`  |  *Audience:* `{aud}`  |  *Content:* `{ctn}`\n"
-                f"_Created {_now_riyadh()}_"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"New Lead: {name} ({src})")
-    print(f"[webhook] New lead {lead_id} ({name}) — {src} / {cmp}")
+    """New Lead object created — only logged, not alerted (too noisy)."""
+    print(f"[webhook] New lead {lead_id} — no Slack alert (creation events are noise)")
 
 
 def _handle_lead_qualified(lead_id: str, stage_label: str) -> None:
-    """Lead moved to a Qualified stage — Slack alert + Asana SQL task."""
+    """Lead moved to a Qualified stage — Slack alert only for paid channels."""
     props, assoc = _get_lead(lead_id)
-    contact      = _get_associated_contact(assoc)
+    src = props.get("lead_qoyod_source") or ""
+    if not _is_paid(src):
+        print(f"[webhook] Lead {lead_id} qualified but source='{src}' is not paid — skipping")
+        return
 
+    contact = _get_associated_contact(assoc)
     name = (
         f"{contact.get('firstname','')} {contact.get('lastname','')}".strip()
         or f"Lead {lead_id}"
     )
     company = contact.get("company") or "—"
-    src     = props.get("lead_qoyod_source") or "Unknown"
     cmp     = props.get("lead_utm_campaign") or "—"
     ctn     = props.get("lead_utm_content")  or "—"
 
@@ -322,15 +318,18 @@ def _handle_lead_qualified(lead_id: str, stage_label: str) -> None:
 
 
 def _handle_lead_disqualified(lead_id: str, stage_label: str) -> None:
-    """Lead moved to a Disqualified stage — Slack alert with reason."""
+    """Lead moved to a Disqualified stage — Slack alert only for paid channels."""
     props, assoc = _get_lead(lead_id)
-    contact      = _get_associated_contact(assoc)
+    src = props.get("lead_qoyod_source") or ""
+    if not _is_paid(src):
+        print(f"[webhook] Lead {lead_id} disqualified but source='{src}' is not paid — skipping")
+        return
 
+    contact = _get_associated_contact(assoc)
     name   = (
         f"{contact.get('firstname','')} {contact.get('lastname','')}".strip()
         or f"Lead {lead_id}"
     )
-    src    = props.get("lead_qoyod_source") or "Unknown"
     cmp    = props.get("lead_utm_campaign") or "—"
     reason = _disq_reason(props)
 
@@ -369,10 +368,14 @@ def _handle_lead_stage_change(lead_id: str, new_stage_id: str) -> None:
 # ─── Deal handlers ────────────────────────────────────────────────────────────
 
 def _handle_deal_won(deal_id: str) -> None:
-    p       = _get_deal(deal_id)
+    p   = _get_deal(deal_id)
+    src = p.get("deal_qoyod_source") or ""
+    if not _is_paid(src):
+        print(f"[webhook] Deal {deal_id} won but source='{src}' is not paid — skipping")
+        return
+
     name    = p.get("dealname") or f"Deal {deal_id}"
     amount  = _deal_amount_usd(p)
-    src     = p.get("deal_qoyod_source") or "Unknown"
     cmp     = p.get("deal_utm_campaign") or "—"
     ctn     = p.get("deal_utm_content")  or "—"
     amt_str = f"${amount:,.2f}" if amount else "—"
@@ -394,10 +397,14 @@ def _handle_deal_won(deal_id: str) -> None:
 
 
 def _handle_deal_lost(deal_id: str) -> None:
-    p      = _get_deal(deal_id)
+    p   = _get_deal(deal_id)
+    src = p.get("deal_qoyod_source") or ""
+    if not _is_paid(src):
+        print(f"[webhook] Deal {deal_id} lost but source='{src}' is not paid — skipping")
+        return
+
     name   = p.get("dealname") or f"Deal {deal_id}"
     amount = _deal_amount_usd(p)
-    src    = p.get("deal_qoyod_source") or "Unknown"
     cmp    = p.get("deal_utm_campaign") or "—"
     ctn    = p.get("deal_utm_content")  or "—"
     reason = (
