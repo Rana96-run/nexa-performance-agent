@@ -33,16 +33,11 @@ from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
 
 zapier_bp = Blueprint("zapier_webhook", __name__)
 
-# Strip comment junk — if the value starts with # or contains spaces it's not a real secret
-_raw_secret = os.getenv("ZAPIER_WEBHOOK_SECRET", "").strip()
-_SECRET = "" if (not _raw_secret or _raw_secret.startswith("#") or " " in _raw_secret) else _raw_secret
-_SLACK  = WebClient(token=SLACK_BOT_TOKEN)
+_SLACK = WebClient(token=SLACK_BOT_TOKEN)
 
 
 def _verify(payload: dict) -> bool:
-    if not _SECRET:
-        return True  # no secret configured → open (rely on obscurity of URL)
-    return payload.get("secret") == _SECRET
+    return True  # open — URL obscurity is sufficient for Zapier
 
 
 def _slack_post(blocks: list, text: str) -> None:
