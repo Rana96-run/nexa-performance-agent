@@ -69,8 +69,9 @@ _LEAD_PROPS = [
 
 # Deal properties
 _DEAL_PROPS = [
-    "dealname", "dealstage", "amount", "currency",
+    "dealname", "dealstage", "amount", "currency", "pipeline",
     "deal_utm_campaign", "deal_utm_content", "deal_qoyod_source",
+    "hs_closed_lost_reason", "closed_lost_reason",
 ]
 
 # Contact properties (fallback path only)
@@ -393,9 +394,33 @@ def _handle_deal_won(deal_id: str) -> None:
 
 
 def _handle_deal_lost(deal_id: str) -> None:
-    p    = _get_deal(deal_id)
-    name = p.get("dealname") or f"Deal {deal_id}"
-    print(f"[webhook] Deal lost: {name} — logged, no alert")
+    p      = _get_deal(deal_id)
+    name   = p.get("dealname") or f"Deal {deal_id}"
+    amount = _deal_amount_usd(p)
+    src    = p.get("deal_qoyod_source") or "Unknown"
+    cmp    = p.get("deal_utm_campaign") or "—"
+    ctn    = p.get("deal_utm_content")  or "—"
+    reason = (
+        p.get("hs_closed_lost_reason")
+        or p.get("closed_lost_reason")
+        or "—"
+    )
+    amt_str = f"${amount:,.2f}" if amount else "—"
+
+    blocks = [{
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": (
+                f":x: *Deal Closed Lost — {name}*\n"
+                f"*Amount:* {amt_str}  |  *Reason:* {reason}\n"
+                f"*Source:* {src}  |  *Campaign:* `{cmp}`  |  *Content:* `{ctn}`\n"
+                f"_Lost {_now_riyadh()}_"
+            ),
+        },
+    }]
+    _slack_post(blocks, f"Deal Lost: {name} — {reason}")
+    print(f"[webhook] Deal lost: {name} ({amt_str}) reason={reason}")
 
 
 # ─── Contact handlers (fallback — lower priority than Lead module) ────────────
