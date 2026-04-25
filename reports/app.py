@@ -23,10 +23,12 @@ from pathlib import Path
 
 from flask import Flask, jsonify, redirect, request, send_file, abort
 from collectors.hubspot_webhook import hubspot_bp
+from collectors.zapier_webhook import zapier_bp
 
 REPORTS_DIR = Path(__file__).parent
 app = Flask(__name__)
 app.register_blueprint(hubspot_bp)
+app.register_blueprint(zapier_bp)
 
 
 # ─── Static report pages ──────────────────────────────────────────────────────

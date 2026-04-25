@@ -346,7 +346,14 @@ def run_cadence(cadence: str, force: bool = False):
         else:
             print(f"[approval] No Slack ts — manual approval via Asana task.")
 
-    # 7. Mark cadence complete
+    # 8. Zapier health check — runs alongside daily cadence
+    try:
+        from collectors.zapier import run_check as zapier_check
+        zapier_check(since_hours=26, create_tasks=True)  # 26h covers any drift
+    except Exception as e:
+        log.warning(f"Zapier check failed (non-fatal): {e}")
+
+    # 9. Mark cadence complete
     if cadence != "on_demand":
         mark_analysis_done(cadence)
 
