@@ -33,7 +33,9 @@ from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
 
 zapier_bp = Blueprint("zapier_webhook", __name__)
 
-_SECRET = os.getenv("ZAPIER_WEBHOOK_SECRET", "")
+# Strip comment junk — if the value starts with # or contains spaces it's not a real secret
+_raw_secret = os.getenv("ZAPIER_WEBHOOK_SECRET", "").strip()
+_SECRET = "" if (not _raw_secret or _raw_secret.startswith("#") or " " in _raw_secret) else _raw_secret
 _SLACK  = WebClient(token=SLACK_BOT_TOKEN)
 
 
