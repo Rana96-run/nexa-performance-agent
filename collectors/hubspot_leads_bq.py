@@ -20,10 +20,19 @@ PROPERTIES = [
     "lead_qoyod_source",
     "lead_utm_campaign", "lead_utm_audience", "lead_utm_content",
     "lead_utm_term", "lead_utm_source", "lead_utm_medium",
-    # Fallback signals when qoyod_source is missing/None — campaign name lookup
-    # is run by analysers.channel_inference.resolve_channel().
+    # Fallback chain — see analysers/channel_inference.py.
+    # The two *_traffic_source enums hold high-level source type
+    # (PAID_SEARCH / PAID_SOCIAL / ORGANIC_SEARCH / ...).
+    # The two *_drilldown_1 properties usually hold the campaign name —
+    # that's where we disambiguate Google vs Bing, Meta vs TikTok, etc.
+    # The two *_drilldown_2 properties may hold utm_audience or another
+    # campaign-name hint.
     "lead_original_traffic_source",
     "lead_latest_traffic_source",
+    "lead_original_traffic_source_drilldown_1",
+    "lead_latest_traffic_source_drilldown_1",
+    "lead_original_traffic_source_drilldown_2",
+    "lead_latest_traffic_source_drilldown_2",
     "leads_disqualification_reason__ops",
     "leads_disqualification_reason__sub_reasons",
     "leads_disqualification_reason__ops_qflavour",
@@ -138,30 +147,40 @@ def collect_and_write(days: int = None, start_date: date = None,
                 qual = _is_qualified(slabel)
                 disq = _is_disqualified(slabel)
 
-                # Resolve channel through the full fallback chain:
-                #   1. lead_qoyod_source explicit label
-                #   2. lead_original_traffic_source HubSpot enum
-                #   3. lead_latest_traffic_source HubSpot enum
-                #   4. lead_utm_campaign keyword pattern (google/meta/snapchat/...)
-                # If none match, the source is recorded as 'Unknown' so it can
-                # be triaged by Amar — never silently dropped.
+                # Resolve channel through the full fallback chain (see
+                # analysers/channel_inference.py for the full order).  Pass
+                # every signal we have — the resolver decides which to use.
                 from analysers.channel_inference import (
                     resolve_channel, CHANNEL_TO_QOYOD_SOURCE,
                 )
                 explicit_src = (p.get("lead_qoyod_source") or "").strip()
                 inferred_slug = resolve_channel(
                     qoyod_source=explicit_src,
-                    campaign_name=p.get("lead_utm_campaign") or "",
+                    lead_utm_campaign=p.get("lead_utm_campaign") or "",
                     lead_original_traffic_source=p.get("lead_original_traffic_source") or "",
                     lead_latest_traffic_source=p.get("lead_latest_traffic_source") or "",
+                    lead_original_traffic_source_drilldown_1=
+                        p.get("lead_original_traffic_source_drilldown_1") or "",
+                    lead_latest_traffic_source_drilldown_1=
+                        p.get("lead_latest_traffic_source_drilldown_1") or "",
+                    lead_original_traffic_source_drilldown_2=
+                        p.get("lead_original_traffic_source_drilldown_2") or "",
+                    lead_latest_traffic_source_drilldown_2=
+                        p.get("lead_latest_traffic_source_drilldown_2") or "",
+                    lead_utm_audience=p.get("lead_utm_audience") or "",
+                    lead_utm_content=p.get("lead_utm_content") or "",
+                    lead_utm_medium=p.get("lead_utm_medium") or "",
                 )
-                # Prefer the original explicit label; otherwise back-translate
-                # the inferred slug to a HubSpot-style source label.
-                src_label = (
-                    explicit_src
-                    or CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug or "")
-                    or "Unknown"
-                )
+                # Prefer the original explicit label (when not 'Other');
+                # otherwise back-translate the inferred slug.  Fall back to
+                # 'Other' (HubSpot's own classification for "no rule met")
+                # when nothing resolves.
+                if explicit_src and explicit_src != "Other":
+                    src_label = explicit_src
+                elif inferred_slug:
+                    src_label = CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug, inferred_slug)
+                else:
+                    src_label = explicit_src or "Other"
 
                 key = (
                     created,

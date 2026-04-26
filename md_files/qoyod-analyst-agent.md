@@ -49,18 +49,20 @@ On weekly+ cadences add:
 
 ---
 
-## Attribution Rules (read these before any analysis)
+## Attribution Rules (read before any analysis)
 
-When a lead or deal has an empty `lead_utm_campaign` or `qoyod_source` is missing, **do not record it as 'Unknown' without checking the fallback chain first**:
+The full rule set lives in `qoyod-manager-os.md` § Channel Attribution Rules. Quick summary:
 
-1. Look at the HubSpot property `lead_original_traffic_source` — paid search, paid social, organic, etc.
-2. Look at `lead_latest_traffic_source` — what they came back through
-3. Look at the campaign name itself (which equals `lead_utm_campaign` when present) and apply the channel-name rules in `qoyod-manager-os.md` § Channel Attribution Rules
+- **The campaign name lives in `lead_*_traffic_source_drilldown_1`** (synced from `hs_*_source_data_1` on the Contact module), NOT in `lead_*_traffic_source` itself. The traffic_source enums hold the high-level type (PAID_SEARCH/PAID_SOCIAL/etc).
+- **`utm_audience` may live in `lead_*_traffic_source_drilldown_2`** (synced from `hs_*_source_data_2`).
+- **`Unknown keywords (SSL)`** in any drilldown_1 → organic search (SSL referrer stripping).
+- **`Other`** in `qoyod_source` means no workflow criteria met — *not* the same as missing.
+- **`campaign_name` ≡ `utm_campaign` ≡ `lead_utm_campaign` ≡ `deal_utm_campaign`** — they are all synced from the same original platform property.
+- **You can also infer the channel from `utm_audience`, `utm_content`, `utm_medium`** if the campaign name is empty — the channel keyword (meta / tiktok / snap / bing / google / linkedin / youtube) often appears there too.
 
-These four properties are synonyms — synced from the original platform property:
-`campaign_name` ≡ `utm_campaign` ≡ `lead_utm_campaign` ≡ `deal_utm_campaign`
+**Paid ads attribution is the priority.** When you see a non-trivial `Other` bucket in any window, it's a tracking-gap signal — flag it as a Conversion Tracking & CRM Sync task in `daily_activity`. Do not silently ignore it.
 
-The collector applies this resolution at write time, but if you see "Unknown" or empty source in the BQ data anyway, that means even the fallback chain failed — flag it as a tracking gap (Asana → `daily_activity` / Conversion Tracking & CRM Sync), don't silently ignore it.
+The HubSpot leads + deals collectors apply this resolver at write time. If you still see `Other` in the BQ data, the fallback chain genuinely couldn't attribute it — those leads need a HubSpot workflow fix.
 
 ---
 

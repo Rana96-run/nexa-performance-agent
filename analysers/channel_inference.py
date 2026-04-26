@@ -2,120 +2,153 @@
 analysers/channel_inference.py
 ==============================
 Single source of truth for "what channel does this lead/deal belong to?"
-when the explicit qoyod_source field is missing or set to 'none'.
+when the explicit qoyod_source field is missing or set to 'Other'.
 
-Used as a fallback chain by the reporter, the spike detector, and the
-attribution joins so we never lose a lead just because a UTM was dropped.
+Used by the HubSpot leads + deals collectors at write time, by the reporter,
+and by the spike detector.
 
-Lookup priority (first hit wins):
-    1. Explicit qoyod_source from HubSpot Lead module        ('Google Ads', 'Meta Ads', ...)
-    2. Property: lead_original_traffic_source                 (HubSpot original source)
-    3. Property: lead_latest_traffic_source                   (HubSpot latest source)
-    4. Pattern match on lead_utm_campaign (= deal_utm_campaign = campaign_name)
-        → see CAMPAIGN_NAME_PATTERNS below
+────────────────────────────────────────────────────────────────────────────
+HubSpot Lead-module → Contact-module property sync (verified by Amar):
 
-Confirmed by Amar (2026-04-26):
-    campaign_name == utm_campaign == lead_utm_campaign == deal_utm_campaign
-    (HubSpot syncs all four from the original platform property)
+| Lead module property                          | Synced from Contact module |
+|-----------------------------------------------|----------------------------|
+| lead_original_traffic_source                  | hs_analytics_source        |
+| lead_latest_traffic_source                    | hs_latest_source           |
+| lead_original_traffic_source_drilldown_1      | hs_analytics_source_data_1 |
+| lead_latest_traffic_source_drilldown_1        | hs_latest_source_data_1    |
+| lead_original_traffic_source_drilldown_2      | hs_analytics_source_data_2 |
+| lead_latest_traffic_source_drilldown_2        | hs_latest_source_data_2    |
+| lead_utm_campaign  ≡ deal_utm_campaign ≡ campaign_name |              |
+
+The two `*_traffic_source` properties hold HubSpot's high-level enum
+(PAID_SEARCH / PAID_SOCIAL / ORGANIC_SEARCH / ...).  They give the *source
+type*, NOT the campaign name.
+
+The two `*_drilldown_1` properties usually hold the CAMPAIGN NAME — that's
+where the keyword-pattern matching runs to disambiguate Google vs Microsoft,
+Meta vs TikTok vs Snapchat vs LinkedIn.
+
+The two `*_drilldown_2` properties may hold the utm_audience or another
+campaign-name reference.
+
+────────────────────────────────────────────────────────────────────────────
+Resolver order (first hit wins):
+
+  1. Explicit `qoyod_source` (HubSpot label like 'Google Ads')
+
+  2. `lead_*_traffic_source` enum + drilldown disambiguation:
+     - If PAID_SEARCH and drilldown_1 contains "bing" → microsoft_ads
+       else → google_ads
+     - If PAID_SOCIAL → check drilldown_1 keywords
+       (meta / tiktok / snapchat / linkedin)
+     - If ORGANIC_SEARCH or drilldown_1 == "Unknown keywords (SSL)"
+       → organic_search
+     - If ORGANIC_SOCIAL → organic_social
+     - If DIRECT_TRAFFIC → direct
+     - etc.
+
+  3. Keyword pattern match against `lead_utm_campaign`
+
+  4. Keyword pattern match against `lead_utm_audience`,
+     `lead_utm_content`, `lead_utm_medium` (last-resort signals)
+
+  5. Keyword pattern match against `*_drilldown_1` and `*_drilldown_2`
+     in case the campaign name lives there
+
+  6. None of the above → returns None.  Collector buckets it as 'Other'
+     (HubSpot's own classification) — NEVER silently as another channel.
+────────────────────────────────────────────────────────────────────────────
 """
 from __future__ import annotations
 
-import re
 from typing import Optional
 
-# ─── Campaign-name → channel rules ────────────────────────────────────────────
-# Order matters: more specific keywords first (e.g. "bing_search_*" must match
-# 'microsoft_ads' before the generic 'search' keyword bumps it to 'google_ads').
+# ─── Channel keyword rules ────────────────────────────────────────────────────
+# Order matters: more specific keywords first (e.g. 'bing' must beat 'search').
 CAMPAIGN_NAME_PATTERNS: list[tuple[str, list[str]]] = [
-    # auto_* prefixes are Qoyod's own naming for non-paid sources
+    # Qoyod-specific organic naming conventions (highest priority)
     ("organic_social",  ["auto_social"]),
     ("organic_search",  ["auto_organic"]),
 
-    # Microsoft (Bing) — same naming structure as Google but with bing prefix.
-    # Example: 'search_ar_brand' = Google Ads, 'bing_search_ar_brand' = Bing.
+    # Microsoft (Bing) — same naming structure as Google but with bing prefix
+    # Example: 'search_ar_brand' = Google Ads,
+    #          'bing_search_ar_brand' = Microsoft Ads
     ("microsoft_ads",   ["bing"]),
 
-    # Meta / TikTok / Snapchat / LinkedIn — single-word match
+    # Other paid platforms (single-word match)
     ("meta",            ["meta", "facebook", "instagram"]),
     ("tiktok",          ["tiktok"]),
     ("snapchat",        ["snapchat", "snap"]),
     ("linkedin",        ["linkedin"]),
-
-    # YouTube is owned by Google but tracked separately when the campaign
-    # name explicitly says youtube
     ("youtube",         ["youtube"]),
 
-    # Google Ads — the broadest set goes last so more specific rules above win.
-    # These keywords appear in Qoyod's Google Ads campaign naming convention.
+    # Google Ads — broadest match goes last
     ("google_ads",      ["google", "search", "impressionshare",
                          "demandgen", "websitetraffic"]),
 ]
 
 
 def _norm(s: str) -> str:
-    """Lowercase and strip; preserves underscores for prefix matching."""
     return (s or "").strip().lower()
 
 
-def channel_from_campaign_name(campaign_name: str) -> Optional[str]:
+def channel_from_keywords(*candidates: str) -> Optional[str]:
     """
-    Return our channel slug ('google_ads', 'meta', ...) inferred from the
-    campaign name. Returns None if no rule matches.
+    Return the first channel slug whose keyword appears in any candidate
+    string.  Used to scan multiple text fields (campaign name, audience,
+    content, drilldowns) in one pass.
     """
-    name = _norm(campaign_name)
-    if not name:
+    blob = " ".join(_norm(c) for c in candidates if c)
+    if not blob:
         return None
     for channel_slug, keywords in CAMPAIGN_NAME_PATTERNS:
         for kw in keywords:
-            # Match as a whole word OR substring — Qoyod's naming uses
-            # underscores so we match 'bing_search' as 'bing'.
-            if kw in name:
+            if kw in blob:
                 return channel_slug
     return None
 
 
-# ─── Mapping from HubSpot's qoyod_source label → our channel slug ────────────
-# Verified live HubSpot values (Apr 2026).  These are the labels HubSpot
-# writes for the qoyod_source property.
+# Back-compat alias (older code calls channel_from_campaign_name)
+def channel_from_campaign_name(campaign_name: str) -> Optional[str]:
+    return channel_from_keywords(campaign_name)
+
+
+# ─── HubSpot qoyod_source label ↔ channel slug ────────────────────────────────
 QOYOD_SOURCE_TO_CHANNEL: dict[str, str] = {
     # paid
     "Google Ads":    "google_ads",
     "Meta Ads":      "meta",
     "Snapchat Ads":  "snapchat",
     "Tiktok Ads":    "tiktok",
-    "TikTok Ads":    "tiktok",     # capitalisation tolerant
+    "TikTok Ads":    "tiktok",
     "LinkedIn Ads":  "linkedin",
     "Microsoft Ads": "microsoft_ads",
-
     # organic / direct / other
     "Direct Traffic":  "direct",
     "Organic Search":  "organic_search",
+    "Organic Social":  "organic_social",
     "Email Marketing": "email",
     "Offline":         "offline",
     "Other":           "other",
+    "Referrals":       "referral",
 }
 
-# Inverse mapping for cross-table joins (channel slug → HubSpot label)
 CHANNEL_TO_QOYOD_SOURCE: dict[str, str] = {
     v: k for k, v in QOYOD_SOURCE_TO_CHANNEL.items()
 }
 
 
 def channel_from_qoyod_source(qoyod_source: str) -> Optional[str]:
-    """Map a HubSpot qoyod_source label to our channel slug."""
-    if not qoyod_source:
-        return None
-    return QOYOD_SOURCE_TO_CHANNEL.get(qoyod_source)
+    return QOYOD_SOURCE_TO_CHANNEL.get(qoyod_source) if qoyod_source else None
 
 
-# ─── HubSpot traffic-source property helpers ─────────────────────────────────
-# When qoyod_source is missing/None, HubSpot keeps the raw traffic-source
-# values in two enum properties.  They use HubSpot's internal labels.
-HUBSPOT_TRAFFIC_SOURCE_TO_CHANNEL: dict[str, str] = {
-    # Paid search → Google Ads (Microsoft Ads must be detected from the
-    # campaign name, not from this property).
-    "PAID_SEARCH":              "google_ads",
-    "PAID_SOCIAL":              "meta",   # default; overridden by name match
+# ─── HubSpot traffic-source enum (lead_*_traffic_source) ──────────────────────
+# These are the high-level SOURCE TYPE values, not channels.  We need to
+# disambiguate paid_* with the drilldown.
+HUBSPOT_TRAFFIC_SOURCE_ENUMS = {
+    # The actual API values — uppercased
+    "PAID_SEARCH":              "paid_search",      # Google or Microsoft
+    "PAID_SOCIAL":              "paid_social",      # Meta, TikTok, Snap, LinkedIn
     "ORGANIC_SEARCH":           "organic_search",
     "ORGANIC_SOCIAL":           "organic_social",
     "DIRECT_TRAFFIC":           "direct",
@@ -123,59 +156,101 @@ HUBSPOT_TRAFFIC_SOURCE_TO_CHANNEL: dict[str, str] = {
     "EMAIL_MARKETING":          "email",
     "OTHER_CAMPAIGNS":          "other",
     "OFFLINE":                  "offline",
-    # Some accounts use lowercase / dashed variants — normalise on read
 }
 
 
-def channel_from_hubspot_traffic_source(value: str) -> Optional[str]:
-    """Map HubSpot's enum value (e.g. 'PAID_SEARCH') to our channel slug."""
-    if not value:
-        return None
-    key = value.strip().upper().replace("-", "_").replace(" ", "_")
-    return HUBSPOT_TRAFFIC_SOURCE_TO_CHANNEL.get(key)
+def _normalise_enum(value: str) -> str:
+    return (value or "").strip().upper().replace("-", "_").replace(" ", "_")
+
+
+# Specific magic value HubSpot writes when a search keyword is hidden by
+# SSL referrer stripping.  Means organic search (per Amar).
+SSL_UNKNOWN_KEYWORDS = "Unknown keywords (SSL)"
 
 
 # ─── The full fallback chain ─────────────────────────────────────────────────
 
 def resolve_channel(
+    *,
     qoyod_source: str = "",
     campaign_name: str = "",
+    lead_utm_campaign: str = "",
     lead_original_traffic_source: str = "",
     lead_latest_traffic_source: str = "",
+    lead_original_traffic_source_drilldown_1: str = "",
+    lead_latest_traffic_source_drilldown_1: str = "",
+    lead_original_traffic_source_drilldown_2: str = "",
+    lead_latest_traffic_source_drilldown_2: str = "",
+    lead_utm_audience: str = "",
+    lead_utm_content: str = "",
+    lead_utm_medium: str = "",
 ) -> Optional[str]:
     """
-    Return our channel slug using the full fallback chain.  Returns None
-    only if every signal is empty / unknown.
-
-    Use this from the reporter, spike detector, and any join code that
-    needs to attribute a lead/deal to a channel.
+    Return our channel slug using the full fallback chain documented above.
+    Returns None only if every signal is empty / unknown — caller should
+    bucket as 'Other'.
     """
-    # 1. Explicit qoyod_source label (the most authoritative signal)
+    # campaign_name and lead_utm_campaign are synonyms — accept either kwarg
+    campaign_name = campaign_name or lead_utm_campaign
+
+    # 1. Explicit qoyod_source label
     ch = channel_from_qoyod_source(qoyod_source)
-    if ch:
+    if ch and ch != "other":
         return ch
 
-    # 2. HubSpot original traffic-source property
-    ch = channel_from_hubspot_traffic_source(lead_original_traffic_source)
-    # If it's a paid social value, the campaign name disambiguates the platform.
-    if ch == "meta":
-        ch_name = channel_from_campaign_name(campaign_name)
-        if ch_name in ("meta", "tiktok", "snapchat", "linkedin"):
-            return ch_name
-        return "meta"
-    if ch:
-        # If paid search but campaign name says bing, override to Microsoft.
-        if ch == "google_ads":
-            ch_name = channel_from_campaign_name(campaign_name)
-            if ch_name == "microsoft_ads":
+    # Pre-compute drilldown-blob for keyword detection
+    drilldowns = (
+        lead_original_traffic_source_drilldown_1,
+        lead_latest_traffic_source_drilldown_1,
+        lead_original_traffic_source_drilldown_2,
+        lead_latest_traffic_source_drilldown_2,
+    )
+
+    # 2. HubSpot traffic-source enum + drilldown disambiguation
+    for src_value in (lead_original_traffic_source, lead_latest_traffic_source):
+        norm = _normalise_enum(src_value)
+        bucket = HUBSPOT_TRAFFIC_SOURCE_ENUMS.get(norm)
+        if not bucket:
+            continue
+
+        if bucket == "paid_search":
+            # 'bing' in any drilldown → Microsoft Ads, otherwise Google Ads
+            if any("bing" in _norm(d) for d in drilldowns):
                 return "microsoft_ads"
-        return ch
+            return "google_ads"
 
-    # 3. HubSpot latest traffic-source property
-    ch = channel_from_hubspot_traffic_source(lead_latest_traffic_source)
-    if ch:
-        return ch
+        if bucket == "paid_social":
+            ch_kw = channel_from_keywords(*drilldowns, campaign_name,
+                                           lead_utm_audience, lead_utm_content,
+                                           lead_utm_medium)
+            if ch_kw in ("meta", "tiktok", "snapchat", "linkedin"):
+                return ch_kw
+            return "meta"  # Most paid_social is Meta in this account
 
-    # 4. Pattern match on the campaign name itself
-    ch = channel_from_campaign_name(campaign_name)
+        if bucket == "organic_search":
+            return "organic_search"
+        if bucket == "organic_social":
+            return "organic_social"
+        if bucket == "direct":
+            return "direct"
+        if bucket == "referral":
+            return "referral"
+        if bucket == "email":
+            return "email"
+        if bucket == "offline":
+            return "offline"
+
+    # 2b. Special: drilldown_1 == "Unknown keywords (SSL)" → organic search
+    for d in drilldowns[:2]:  # only the _data_1 drilldowns carry this signal
+        if d and d.strip() == SSL_UNKNOWN_KEYWORDS:
+            return "organic_search"
+
+    # 3-5. Keyword pattern match across every text signal we have.
+    # Order: campaign name first (most authoritative), then audience/content/
+    # medium, then drilldowns as last resort.
+    ch = channel_from_keywords(
+        campaign_name,
+        lead_utm_audience, lead_utm_content, lead_utm_medium,
+        *drilldowns,
+    )
     return ch

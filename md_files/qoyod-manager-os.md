@@ -76,17 +76,48 @@ When data arrives, you diagnose, decide, act at the level you can reach, and cre
 
 These rules are encoded in `analysers/channel_inference.py` and applied at write time by the HubSpot leads + deals collectors. Reference them when reasoning about a lead/deal whose source field is empty.
 
-**The four campaign-name properties are synonyms — they are synced from the same original platform property:**
-`campaign_name` ≡ `utm_campaign` ≡ `lead_utm_campaign` ≡ `deal_utm_campaign`
+### Property sync map (Lead module ← Contact module)
 
-**Fallback chain when `qoyod_source` is empty / null / "Unknown":**
-1. Read HubSpot property `lead_original_traffic_source` (or `deal_original_traffic_source`)
-2. Read HubSpot property `lead_latest_traffic_source` (or `deal_latest_traffic_source`)
-3. Pattern-match on the campaign name using the rules below
+| Lead-module property                         | Synced from Contact-module |
+|----------------------------------------------|----------------------------|
+| `lead_original_traffic_source`               | `hs_analytics_source`        |
+| `lead_latest_traffic_source`                 | `hs_latest_source`           |
+| `lead_original_traffic_source_drilldown_1`   | `hs_analytics_source_data_1` |
+| `lead_latest_traffic_source_drilldown_1`     | `hs_latest_source_data_1`    |
+| `lead_original_traffic_source_drilldown_2`   | `hs_analytics_source_data_2` |
+| `lead_latest_traffic_source_drilldown_2`     | `hs_latest_source_data_2`    |
+| `lead_utm_campaign` ≡ `deal_utm_campaign` ≡ `campaign_name` | (synced from the original platform property) |
 
-**Channel keyword rules (applied to lower-cased campaign name; first hit wins):**
+### What each property holds
 
-| Channel slug | Keywords in campaign name |
+- The two **`*_traffic_source`** properties hold the **source TYPE** (HubSpot enum: `PAID_SEARCH`, `PAID_SOCIAL`, `ORGANIC_SEARCH`, `ORGANIC_SOCIAL`, `DIRECT_TRAFFIC`, `REFERRALS`, `EMAIL_MARKETING`, `OFFLINE`, `OTHER_CAMPAIGNS`). They do NOT contain the campaign name.
+
+- The two **`*_drilldown_1`** properties usually hold the **CAMPAIGN NAME**. This is where you disambiguate Google vs Bing, Meta vs TikTok vs Snapchat vs LinkedIn.
+
+- The two **`*_drilldown_2`** properties may hold the **utm_audience** or another campaign-name reference.
+
+### Special values
+
+- **`Unknown keywords (SSL)`** in `*_drilldown_1` → organic search (search keyword was hidden by SSL referrer stripping).
+- **`Other`** in `lead_qoyod_source` → none of the workflow criteria met. Try the fallback chain below before treating as unattributed.
+
+### Resolver order (first hit wins)
+
+1. Explicit `qoyod_source` label (e.g. `Google Ads`) — unless it's `Other`.
+2. `lead_original_traffic_source` enum, then `lead_latest_traffic_source` enum:
+   - `PAID_SEARCH` + drilldown contains `bing` → **Microsoft Ads**, else **Google Ads**
+   - `PAID_SOCIAL` + drilldown/utm keyword (`meta`/`tiktok`/`snapchat`/`linkedin`) → that channel; default **Meta**
+   - `ORGANIC_SEARCH` → organic search
+   - `ORGANIC_SOCIAL` → organic social
+   - `DIRECT_TRAFFIC`, `REFERRALS`, `EMAIL_MARKETING`, `OFFLINE` → mapped 1:1
+3. Drilldown_1 == `Unknown keywords (SSL)` → organic search
+4. Pattern match on `lead_utm_campaign` (= `deal_utm_campaign` = `campaign_name`)
+5. Pattern match on `lead_utm_audience` / `lead_utm_content` / `lead_utm_medium`
+6. Pattern match on the drilldowns themselves (last resort)
+
+### Channel keyword rules (applied to all candidate strings)
+
+| Channel slug | Keywords |
 |---|---|
 | `microsoft_ads` | `bing` (overrides Google — e.g. `bing_search_ar_brand` is Bing, while plain `search_ar_brand` is Google) |
 | `meta` | `meta`, `facebook`, `instagram` |
@@ -98,7 +129,10 @@ These rules are encoded in `analysers/channel_inference.py` and applied at write
 | `organic_social` | `auto_social` (Qoyod's own naming for organic social) |
 | `organic_search` | `auto_organic` (Qoyod's own naming for organic search) |
 
-**LinkedIn note:** Always show the LinkedIn channel section in the report even if there's no current spend — we have the integration set up and want to track it.
+### Notes
+
+- **Paid ads channels are the priority** for attribution analysis — focus there. Organic / direct / offline are tracked but secondary.
+- **LinkedIn** always shows in the report sidebar even with zero current spend — the integration is set up and we want to track it.
 
 ---
 
