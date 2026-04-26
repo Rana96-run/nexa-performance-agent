@@ -890,7 +890,9 @@ def render_html(report: dict) -> str:
 
 
 def save_report(report: dict, report_date: date | None = None) -> Path:
-    """Render and write reports/<date>.html + reports/latest.html."""
+    """Render and write reports/<date>.html + reports/latest.html.
+    Also uploads to Google Drive so the report survives Railway restarts.
+    """
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     d    = report_date or date.fromisoformat(report.get("report_date") or str(date.today()))
     html = render_html(report)
@@ -898,5 +900,17 @@ def save_report(report: dict, report_date: date | None = None) -> Path:
     latest = REPORTS_DIR / "latest.html"
     dated.write_text(html, encoding="utf-8")
     latest.write_text(html, encoding="utf-8")
-    print(f"[render] Report saved -> {dated}")
+    print(f"[render] Report saved locally -> {dated}")
+
+    # Upload to Google Drive for persistence across Railway container restarts.
+    try:
+        from collectors.drive_writer import save_report_to_drive
+        drive_id = save_report_to_drive(dated)
+        if drive_id:
+            print(f"[render] Report uploaded to Drive (id={drive_id})")
+        else:
+            print("[render] Drive upload skipped (Drive not configured or unavailable)")
+    except Exception as e:
+        print(f"[render] Drive upload failed (non-fatal): {e}")
+
     return dated

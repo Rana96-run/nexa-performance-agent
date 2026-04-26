@@ -217,9 +217,8 @@ def collect_and_write(days: int = None, incremental: bool = False):
                     "leads":         leads,
                     "conversions":   float(conversions_total),
                     "cpl":           round(spend / leads, 2) if leads > 0 else None,
-                    "currency":      "USD",
-                    "spend_native":  round(spend_native, 2),
-                    "currency_native": cur,
+                    # Note: currency/spend_native are not in campaigns_daily schema.
+                    # Snap always converts to USD before writing (see to_usd() call above).
                     "updated_at":    now,
                 })
                 acct_count += 1

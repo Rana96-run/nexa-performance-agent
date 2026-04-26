@@ -46,9 +46,18 @@ def root():
 @app.route("/reports/latest")
 def latest():
     f = REPORTS_DIR / "latest.html"
-    if not f.exists():
-        abort(404, "No report generated yet. Run: python main.py daily")
-    return send_file(f, mimetype="text/html")
+    if f.exists():
+        return send_file(f, mimetype="text/html")
+    # Fall back to Google Drive — persists across Railway restarts
+    try:
+        from collectors.drive_writer import load_report_from_drive
+        html = load_report_from_drive()
+        if html:
+            from flask import Response
+            return Response(html, mimetype="text/html")
+    except Exception as e:
+        print(f"[app] Drive fallback failed: {e}")
+    abort(404, "No report available. Run: python main.py daily")
 
 
 @app.route("/reports/<report_date>")
@@ -56,9 +65,19 @@ def dated(report_date: str):
     # Accept both "2026-04-25" and "2026-04-25.html"
     name = report_date if report_date.endswith(".html") else f"{report_date}.html"
     f = REPORTS_DIR / name
-    if not f.exists():
-        abort(404, f"No report for {report_date}")
-    return send_file(f, mimetype="text/html")
+    if f.exists():
+        return send_file(f, mimetype="text/html")
+    # Fall back to Drive
+    date_key = name.replace(".html", "")
+    try:
+        from collectors.drive_writer import load_report_from_drive
+        html = load_report_from_drive(date_key)
+        if html:
+            from flask import Response
+            return Response(html, mimetype="text/html")
+    except Exception as e:
+        print(f"[app] Drive fallback failed for {date_key}: {e}")
+    abort(404, f"No report for {report_date}")
 
 
 # ─── Custom date-range API ────────────────────────────────────────────────────
