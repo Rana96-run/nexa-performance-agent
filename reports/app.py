@@ -42,15 +42,23 @@ def health():
 def refresh_bq():
     """
     Run a BigQuery refresh + view rebuild + regenerate report. One-shot.
-    Optional ?backfill=1 to run full historical (slow, ~10 minutes).
+    Query params:
+      ?days=N       Backfill last N days for every collector (e.g. 14, 30).
+      ?backfill=1   Full historical backfill (very slow, no day cap).
+      Without args  Incremental refresh — last 2 days only.
     """
     expected = os.getenv("REGEN_TOKEN")
     if expected and request.args.get("token") != expected:
         return jsonify({"error": "unauthorized"}), 401
     backfill = request.args.get("backfill") == "1"
+    days_arg = request.args.get("days")
+    days = int(days_arg) if days_arg and days_arg.isdigit() else None
     try:
         from reporting_scheduler import run_refresh
-        results = run_refresh(incremental=not backfill)
+        if days:
+            results = run_refresh(days=days)
+        else:
+            results = run_refresh(incremental=not backfill)
         # Then regen the report on top of fresh data
         from claude.reporter import assemble_report_data
         from reports.render import save_report

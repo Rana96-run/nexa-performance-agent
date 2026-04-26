@@ -44,17 +44,27 @@ COLLECTORS = [
 ]
 
 
-def run_refresh(incremental: bool = True):
-    """One pass: run all collectors, then refresh all views."""
+def run_refresh(incremental: bool = True, days: int | None = None):
+    """One pass: run all collectors, then refresh all views.
+
+    Args:
+        incremental: True = last 2 days only (fast). False = full historical.
+        days:        If set, overrides incremental — pulls last N days for each
+                     collector that supports it. e.g. days=30 → 30-day backfill.
+    """
     started = datetime.now(timezone.utc)
+    mode = "backfill" if days else ("incremental" if incremental else "full")
     print(f"\n{'='*60}\n[scheduler] Refresh start @ {started.isoformat()}"
-          f"  (mode={'incremental' if incremental else 'backfill'})\n{'='*60}")
+          f"  (mode={mode}{f' days={days}' if days else ''})\n{'='*60}")
 
     results = {}
     for name, fn in COLLECTORS:
         t0 = time.time()
         try:
-            n = fn(incremental=incremental)
+            if days is not None:
+                n = fn(days=days)
+            else:
+                n = fn(incremental=incremental)
             dt = time.time() - t0
             results[name] = (True, n, dt)
             log.info(f"{name}: {n} rows in {dt:.1f}s")
