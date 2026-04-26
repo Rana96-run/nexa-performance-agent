@@ -91,27 +91,39 @@ def upload_html(
         io.BytesIO(html_content), mimetype="text/html", resumable=False
     )
 
-    # Check if file already exists in folder
+    # Check if file already exists in folder.
+    # supportsAllDrives + includeItemsFromAllDrives are required when the
+    # folder lives in a Google Workspace Shared Drive (vs personal "My Drive").
     q = (
         f"name = '{filename}' and '{folder_id}' in parents "
         "and trashed = false"
     )
     existing = (
         svc.files()
-        .list(q=q, fields="files(id,name)", spaces="drive")
+        .list(
+            q=q,
+            fields="files(id,name)",
+            spaces="drive",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
         .execute()
         .get("files", [])
     )
 
     if existing:
         file_id = existing[0]["id"]
-        svc.files().update(fileId=file_id, media_body=media).execute()
+        svc.files().update(
+            fileId=file_id, media_body=media, supportsAllDrives=True
+        ).execute()
         print(f"[drive] Updated {filename} (id={file_id})")
     else:
         meta = {"name": filename, "parents": [folder_id], "mimeType": "text/html"}
         result = (
             svc.files()
-            .create(body=meta, media_body=media, fields="id")
+            .create(
+                body=meta, media_body=media, fields="id", supportsAllDrives=True
+            )
             .execute()
         )
         file_id = result["id"]
@@ -132,14 +144,20 @@ def download_html(filename: str, folder_id: str = REPORTS_FOLDER_ID) -> Optional
     )
     files = (
         svc.files()
-        .list(q=q, fields="files(id,name)", spaces="drive")
+        .list(
+            q=q,
+            fields="files(id,name)",
+            spaces="drive",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
         .execute()
         .get("files", [])
     )
     if not files:
         return None
     file_id = files[0]["id"]
-    req = svc.files().get_media(fileId=file_id)
+    req = svc.files().get_media(fileId=file_id, supportsAllDrives=True)
     buf = io.BytesIO()
     dl = MediaIoBaseDownload(buf, req)
     done = False
