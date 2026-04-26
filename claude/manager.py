@@ -15,6 +15,17 @@ def run_role(role: str, trigger: str, data: dict) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     system_prompt = load_prompt(role)
 
+    # Append a short summary of role-relevant Drive assets so Claude can
+    # reference them by name (creative briefs, brand guidelines, campaign
+    # asset folders, etc.).  Indexed nightly by analysers.drive_knowledge.
+    try:
+        from analysers.drive_knowledge import summarise_for_role
+        drive_section = summarise_for_role(role)
+        if drive_section:
+            system_prompt = system_prompt + "\n\n---\n\n" + drive_section
+    except Exception as e:
+        print(f"[manager] drive context skipped for {role}: {e}")
+
     user_message = (
         f"Trigger: {trigger}\n"
         f"Date: {data.get('date')}\n\n"

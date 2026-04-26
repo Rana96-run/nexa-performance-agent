@@ -36,6 +36,7 @@ data/
 .cache/
 cache/*.json
 scripts/miro_dump.json
+memory/_drive_index.json
 
 # ── Build artifacts ───────────────────────────────────────────────────────
 dist/

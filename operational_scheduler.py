@@ -77,6 +77,15 @@ def _refresh_bigquery():
         print(f"[ops-scheduler] BQ refresh failed: {e}")
 
 
+def _refresh_drive_index():
+    """Re-index Drive assets so role prompts reference the latest files."""
+    try:
+        from analysers.drive_knowledge import index_shared_drive
+        index_shared_drive()
+    except Exception as e:
+        print(f"[ops-scheduler] Drive index refresh failed (non-fatal): {e}")
+
+
 def _run_spike_detector():
     """Detect daily anomalies in spend/leads/qualification rate. Silent if none."""
     try:
@@ -92,6 +101,9 @@ def _nightly():
     """One combined nightly run — chains weekly/monthly/quarterly where applicable."""
     # 1. Refresh BigQuery once so the dashboard + report read fresh data.
     _refresh_bigquery()
+
+    # 1b. Re-index Drive so role prompts pick up newly shared files.
+    _refresh_drive_index()
 
     # 2. Run the daily Claude cadence (collectors, role analysis, Asana tasks,
     #    Slack summary, HTML report rendering with Drive upload).
