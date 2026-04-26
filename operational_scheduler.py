@@ -35,9 +35,41 @@ def _run_with_heartbeat(cadence: str):
                        duration_s=time.time() - t0)
 
 
+def _post_report_ready():
+    """One Slack message saying the daily report is ready, with the URL.
+    Called once per nightly run after the daily cadence completes successfully.
+    """
+    import os
+    try:
+        from slack_sdk import WebClient
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
+        from datetime import datetime, timezone, timedelta
+
+        riyadh = timezone(timedelta(hours=3))
+        when   = datetime.now(riyadh).strftime("%d %b %Y")
+
+        domain = (
+            os.getenv("RAILWAY_PUBLIC_DOMAIN")
+            or "nexa-web-production-c859.up.railway.app"
+        )
+        url = f"https://{domain}/reports/latest"
+
+        text = (
+            f":bar_chart: *Daily Report Ready — {when}*\n"
+            f"<{url}|Open dashboard>"
+        )
+        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+            channel=SLACK_CHANNEL_NOTIFY, text=text
+        )
+        print(f"[ops-scheduler] Posted 'Report ready' to Slack ({when})")
+    except Exception as e:
+        print(f"[ops-scheduler] Report-ready post failed (non-fatal): {e}")
+
+
 def _nightly():
     """One combined nightly run — chains weekly/monthly/quarterly where applicable."""
     _run_with_heartbeat("daily")
+    _post_report_ready()  # one Slack ping with the dashboard URL
 
     today = date.today()
     if today.weekday() == 0:                              # Monday → weekly
