@@ -164,6 +164,39 @@ def resume_held_run(run_id: str) -> bool:
     return False
 
 
+def disable_zap(zap_id: str) -> bool:
+    """
+    Turn off a Zap so it stops running (and stops failing repeatedly).
+    Used by the remediation flow when a Zap is in a broken state that auto-replay
+    can't fix (e.g. expired auth). Returns True on success.
+    """
+    if not _TOKEN or not zap_id:
+        return False
+    try:
+        r = requests.patch(
+            f"{_BASE}/zaps/{zap_id}",
+            headers={**_headers(), "Content-Type": "application/json"},
+            json={"is_enabled": False},
+            timeout=15,
+        )
+        r.raise_for_status()
+        print(f"[zapier] Disabled Zap {zap_id}")
+        return True
+    except Exception as e:
+        print(f"[zapier] Failed to disable {zap_id}: {e}")
+        return False
+
+
+def find_zap_by_name(zap_name: str) -> dict | None:
+    """Look up a Zap by exact name match — needed when the webhook doesn't include zap_id."""
+    if not zap_name:
+        return None
+    for z in get_all_zaps():
+        if z["name"] == zap_name:
+            return z
+    return None
+
+
 # ─── Analysis ─────────────────────────────────────────────────────────────────
 
 def analyse(since_hours: int = 24) -> dict:

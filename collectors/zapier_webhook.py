@@ -53,9 +53,10 @@ def _handle_error(payload: dict) -> None:
     zap_name  = payload.get("zap_name", "Unknown Zap")
     error_msg = (payload.get("error_message") or "No detail")[:1500]
     run_url   = payload.get("run_url", "")
+    zap_id    = payload.get("zap_id") or ""
     run_id    = payload.get("run_id") or payload.get("id") or ""
 
-    # 1. Try to auto-replay the errored run (fixes transient failures)
+    # ── 1. Auto-replay (handles transient failures) ──────────────────────────
     replayed = False
     if run_id:
         try:
@@ -65,36 +66,92 @@ def _handle_error(payload: dict) -> None:
             print(f"[zapier-webhook] Auto-replay failed: {e}")
 
     if replayed:
-        print(f"[zapier-webhook] Auto-replayed {run_id} for {zap_name} — silent (only escalates if it fails again)")
-        return  # transient fix worked, no Slack noise
+        print(f"[zapier-webhook] Auto-replayed {run_id} ({zap_name}) — silent")
+        return  # success, no noise
 
-    # 2. Auto-replay didn't help (or no run_id) → run a Claude-powered diagnosis
-    #    and post ONE actionable message with specific fix steps.
+    # ── 2. Diagnose with Claude — what kind of error is this? ────────────────
     print(f"[zapier-webhook] Diagnosing persistent failure: {zap_name}")
     try:
-        from claude.zap_diagnostician import diagnose, format_for_slack
+        from claude.zap_diagnostician import diagnose
         diag = diagnose(
             zap_name=zap_name,
             error_message=error_msg,
             run_url=run_url,
             replay_attempts=1,
         )
-        blocks, fallback_text = format_for_slack(diag, zap_name, run_url)
-        _slack_post(blocks, fallback_text)
+    except Exception as e:
+        print(f"[zapier-webhook] Diagnosis failed: {e}")
+        diag = {
+            "category": "unknown", "severity": "warning",
+            "root_cause": error_msg[:200], "broken_step": "unknown",
+            "fix_steps": [], "auto_action": None,
+        }
 
-        # Asana task with the EXACT fix steps Claude generated — not generic
+    # ── 3. Take direct action based on diagnosis ─────────────────────────────
+    actions_taken: list[str] = []
+    category = diag.get("category", "unknown")
+
+    # Look up Zap by name if no zap_id was sent
+    if not zap_id:
+        try:
+            from collectors.zapier import find_zap_by_name
+            z = find_zap_by_name(zap_name)
+            if z:
+                zap_id = z["id"]
+        except Exception as e:
+            print(f"[zapier-webhook] Zap lookup failed: {e}")
+
+    # Decide what to do based on category
+    should_disable = category in ("auth", "config", "logic") or diag.get("auto_action") == "turn_off"
+
+    if should_disable and zap_id:
+        try:
+            from collectors.zapier import disable_zap
+            if disable_zap(zap_id):
+                actions_taken.append(f"Disabled Zap to stop further failures ({category} error)")
+        except Exception as e:
+            print(f"[zapier-webhook] Disable failed: {e}")
+
+    if category == "api_rate":
+        actions_taken.append("Will retry automatically — upstream API is throttled")
+
+    # ── 4. Post ONE Slack message about what the AGENT did ───────────────────
+    sev_emoji = {"critical": ":rotating_light:", "warning": ":warning:", "info": ":information_source:"}.get(
+        diag.get("severity", "warning"), ":warning:"
+    )
+    actions_md = "\n".join(f"  • {a}" for a in actions_taken) or "  • Could not auto-fix — needs your eyes"
+
+    # Only the things the user actually has to do (not generic 'check the Zap')
+    user_action = ""
+    if category == "auth":
+        user_action = "\n*You need to:* Reconnect the disconnected app in Zapier → My Apps, then re-enable the Zap."
+    elif category in ("data_format", "logic", "config"):
+        user_action = f"\n*You need to:* Open the Zap, fix step `{diag.get('broken_step', '?')}`, then re-enable it."
+
+    text = (
+        f"{sev_emoji} *Zap broken — {zap_name}*\n"
+        f"*Why:* {diag.get('root_cause', '?')}\n"
+        f"*What I did:*\n{actions_md}"
+        f"{user_action}\n"
+        f"<{run_url}|Open the failed run>"
+    )
+    _slack_post([{"type": "section", "text": {"type": "mrkdwn", "text": text}}],
+                f"Zap broken — {zap_name}")
+
+    # Asana task — only if there's something only the user can do
+    if user_action:
         try:
             from executors.asana import create_task
-            steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(diag.get("fix_steps", [])))
             create_task(
-                title=f"Zap broken — {zap_name[:60]} ({diag.get('category', 'unknown')})",
+                title=f"Zap fix — {zap_name[:60]} ({category})",
                 description=(
                     f"Zap: {zap_name}\n"
                     f"Run: {run_url}\n"
-                    f"Category: {diag.get('category')}  |  Severity: {diag.get('severity')}\n"
+                    f"Root cause: {diag.get('root_cause')}\n"
                     f"Broken step: {diag.get('broken_step')}\n\n"
-                    f"Root cause: {diag.get('root_cause')}\n\n"
-                    f"Fix steps:\n{steps_text}\n\n"
+                    f"What the agent did:\n" +
+                    "\n".join(f"  - {a}" for a in actions_taken) + "\n\n"
+                    f"What you need to do:{user_action}\n\n"
                     f"Original error:\n{error_msg}"
                 ),
                 project_key="daily_activity",
@@ -102,17 +159,6 @@ def _handle_error(payload: dict) -> None:
             )
         except Exception as e:
             print(f"[zapier-webhook] Asana task skipped: {e}")
-    except Exception as e:
-        print(f"[zapier-webhook] Diagnosis failed: {e}")
-        # Fallback so we never silently swallow a persistent failure
-        _slack_post([{
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": (
-                f":warning: *Zap broken — {zap_name}*\n"
-                f"```{error_msg[:300]}```\n"
-                f"<{run_url}|Open run>"
-            )},
-        }], f"Zap broken — {zap_name}")
 
 
 def _handle_held(payload: dict) -> None:
