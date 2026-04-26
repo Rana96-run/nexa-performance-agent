@@ -38,46 +38,80 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
-@app.route("/api/refresh", methods=["POST", "GET"])
-def refresh_bq():
-    """
-    Run a BigQuery refresh + view rebuild + regenerate report. One-shot.
-    Query params:
-      ?days=N       Backfill last N days for every collector (e.g. 14, 30).
-      ?backfill=1   Full historical backfill (very slow, no day cap).
-      Without args  Incremental refresh — last 2 days only.
-    """
-    expected = os.getenv("REGEN_TOKEN")
-    if expected and request.args.get("token") != expected:
-        return jsonify({"error": "unauthorized"}), 401
-    backfill = request.args.get("backfill") == "1"
-    days_arg = request.args.get("days")
-    days = int(days_arg) if days_arg and days_arg.isdigit() else None
+_REFRESH_STATUS: dict = {"running": False, "started_at": None,
+                          "finished_at": None, "result": None, "error": None}
+
+
+def _do_refresh(days: int | None, backfill: bool):
+    """Run refresh + regen, recording status to _REFRESH_STATUS for polling."""
+    import threading
+    from datetime import datetime as _dt
+    from reporting_scheduler import run_refresh
+    from claude.reporter import assemble_report_data
+    from reports.render import save_report
+
+    _REFRESH_STATUS.update({
+        "running": True, "started_at": _dt.utcnow().isoformat() + "Z",
+        "finished_at": None, "result": None, "error": None,
+    })
     try:
-        from reporting_scheduler import run_refresh
         if days:
             results = run_refresh(days=days)
         else:
             results = run_refresh(incremental=not backfill)
-        # Then regen the report on top of fresh data
-        from claude.reporter import assemble_report_data
-        from reports.render import save_report
         report = assemble_report_data(
             cadence="on_demand", role_results=[], tasks_created=[],
             approvals_pending=[], permalink="/reports/latest",
         )
-        path = save_report(report)
-        return jsonify({
-            "ok": True,
-            "mode": "backfill" if backfill else "incremental",
-            "report_saved": str(path),
+        save_report(report)
+        _REFRESH_STATUS["result"] = {
+            "collectors": {k: ("ok" if v[0] else "fail") for k, v in results.items()},
             "channels": [c.get("channel") for c in report.get("channels", [])],
             "trends_rows": len(report.get("trends_30d", [])),
-            "collectors": {k: ("ok" if v[0] else "fail") for k, v in results.items()},
-        })
+        }
     except Exception as e:
         import traceback; traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        _REFRESH_STATUS["error"] = str(e)
+    finally:
+        from datetime import datetime as _dt
+        _REFRESH_STATUS["finished_at"] = _dt.utcnow().isoformat() + "Z"
+        _REFRESH_STATUS["running"] = False
+
+
+@app.route("/api/refresh", methods=["POST", "GET"])
+def refresh_bq():
+    """
+    Kick off a BigQuery refresh + view rebuild + report regen.
+    Runs in the background so the HTTP response returns immediately.
+    Poll /api/refresh/status to check progress.
+
+    Query params:
+      ?days=N       Backfill last N days for every collector (e.g. 14, 30).
+      ?backfill=1   Full historical backfill (very slow).
+      Without args  Incremental refresh — last 2 days only.
+    """
+    import threading
+    expected = os.getenv("REGEN_TOKEN")
+    if expected and request.args.get("token") != expected:
+        return jsonify({"error": "unauthorized"}), 401
+    if _REFRESH_STATUS.get("running"):
+        return jsonify({"queued": False, "reason": "another refresh is already running",
+                        "status": _REFRESH_STATUS}), 409
+
+    backfill = request.args.get("backfill") == "1"
+    days_arg = request.args.get("days")
+    days = int(days_arg) if days_arg and days_arg.isdigit() else None
+    threading.Thread(target=_do_refresh, args=(days, backfill), daemon=True).start()
+    return jsonify({
+        "queued": True,
+        "mode": "backfill" if backfill else (f"days={days}" if days else "incremental"),
+        "poll": "/api/refresh/status",
+    })
+
+
+@app.route("/api/refresh/status")
+def refresh_status():
+    return jsonify(_REFRESH_STATUS)
 
 
 @app.route("/api/regenerate", methods=["POST", "GET"])
