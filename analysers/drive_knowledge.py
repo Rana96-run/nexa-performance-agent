@@ -56,13 +56,12 @@ MAX_TEXT_CHARS = 6000
 ALLOWED_TOP_FOLDERS = [
     "Media Planning",
     "Social Media Analysis",       # Amar's "media analysis"
-    "129. E-invoice Paid Ads",
 ]
 
 # Folders categorised by which role they help most.  Each role keyword set
 # must be a SUBSET of the ALLOWED_TOP_FOLDERS above.
 ROLE_FOLDER_HINTS: dict[str, list[str]] = {
-    "media_buyer":           ["e-invoice", "media planning"],
+    "media_buyer":           ["media planning"],
     "paid_media_analyst":    ["social media analysis", "media planning"],
     "paid_media_strategist": ["media planning", "social media analysis"],
 }
