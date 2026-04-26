@@ -509,28 +509,34 @@ def build_channel_section(channel_key: str, days: int = 7) -> dict:
 
 
 def _channel_from_qoyod_source(qoyod_src: str) -> str:
-    """Inverse of _channel_to_qoyod_source for cross-table joins."""
+    """Inverse of _channel_to_qoyod_source for cross-table joins.
+    Verified live HubSpot qoyod_source values:
+      'Google Ads', 'Meta Ads', 'Snapchat Ads', 'Tiktok Ads',
+      'LinkedIn Ads', 'Microsoft Ads', 'Direct Traffic', 'Email Marketing',
+      'Offline', 'Other'
+    """
     return {
-        "google":    "google_ads",
-        "facebook":  "meta",
-        "snapchat":  "snapchat",
-        "tiktok":    "tiktok",
-        "linkedin":  "linkedin",
-        "microsoft": "microsoft_ads",
+        "Google Ads":    "google_ads",
+        "Meta Ads":      "meta",
+        "Snapchat Ads":  "snapchat",
+        "Tiktok Ads":    "tiktok",
+        "TikTok Ads":    "tiktok",
+        "LinkedIn Ads":  "linkedin",
+        "Microsoft Ads": "microsoft_ads",
     }.get(qoyod_src, qoyod_src)
 
 
 def _channel_to_qoyod_source(channel_key: str) -> str:
-    """Map our channel keys to HubSpot's qoyod_source label.
-    Adjust this map if HubSpot uses different source values for your account.
+    """Map our channel keys → HubSpot's actual qoyod_source label.
+    HubSpot writes 'Google Ads', 'Meta Ads', etc. — NOT 'google' / 'facebook'.
     """
     return {
-        "google_ads":    "google",
-        "meta":          "facebook",
-        "snapchat":      "snapchat",
-        "tiktok":        "tiktok",
-        "linkedin":      "linkedin",
-        "microsoft_ads": "microsoft",
+        "google_ads":    "Google Ads",
+        "meta":          "Meta Ads",
+        "snapchat":      "Snapchat Ads",
+        "tiktok":        "Tiktok Ads",
+        "linkedin":      "LinkedIn Ads",
+        "microsoft_ads": "Microsoft Ads",
     }.get(channel_key, channel_key)
 
 

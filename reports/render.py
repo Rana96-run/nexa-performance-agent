@@ -456,29 +456,32 @@ function initSubTabs(sectionEl) {
 }
 
 // ── Render one channel section ─────────────────────────────────────────────
+// Panels use data-panel attributes (campaign / utm-campaign / utm-audience /
+// utm-content / disq / adgroups / ads) — match the scaffold in render.py.
+function setPanel(el, panelKey, html) {
+  const p = el.querySelector(`.sub-panel[data-panel="${panelKey}"]`);
+  if (p) p.innerHTML = html;
+}
+
 function renderChannel(ch) {
   const el = document.getElementById('ch-' + ch.channel);
   if (!el) return;
 
-  el.querySelector('.ch-narrative').textContent = ch.narrative || '';
-  el.querySelector('.ch-kpi-strip').innerHTML   = channelKpiHtml(ch.kpis);
+  const narrative = el.querySelector('.ch-narrative');
+  if (narrative) narrative.textContent = ch.narrative || '';
+  const kpiStrip = el.querySelector('.ch-kpi-strip');
+  if (kpiStrip) kpiStrip.innerHTML = channelKpiHtml(ch.kpis);
 
-  el.querySelector('.panel-campaign').innerHTML =
-    buildTable(ch.campaigns, CAMP_COLS, 'No campaign data.');
-  el.querySelector('.panel-utm-campaign').innerHTML =
-    buildTable(ch.utm_campaign, utmCols('UTM Campaign'), 'No utm_campaign data.');
-  el.querySelector('.panel-utm-audience').innerHTML =
-    buildTable(ch.utm_audience, utmCols('UTM Audience'), 'No utm_audience data.');
-  el.querySelector('.panel-utm-content').innerHTML =
-    buildTable(ch.utm_content, utmCols('UTM Content'), 'No utm_content data.');
-  el.querySelector('.panel-disq').innerHTML = disqTable(ch.disq_reasons);
+  setPanel(el, 'campaign',     buildTable(ch.campaigns,    CAMP_COLS, 'No campaign data for this period.'));
+  setPanel(el, 'utm-campaign', buildTable(ch.utm_campaign, utmCols('UTM Campaign'),  'No UTM campaign data.'));
+  setPanel(el, 'utm-audience', buildTable(ch.utm_audience, utmCols('UTM Audience'),  'No UTM audience data.'));
+  setPanel(el, 'utm-content',  buildTable(ch.utm_content,  utmCols('UTM Content'),   'No UTM content data.'));
+  setPanel(el, 'disq',         disqTable(ch.disq_reasons));
 
-  const agNote = ((ch.ad_groups || {}).note) || 'Ad group grain — adgroups_daily collector pending';
-  const adNote = ((ch.ads       || {}).note) || 'Ad grain — ads_daily collector pending';
-  el.querySelector('.panel-adgroups').innerHTML =
-    `<span class="pending-badge">⏳ ${agNote}</span>`;
-  el.querySelector('.panel-ads').innerHTML =
-    `<span class="pending-badge">⏳ ${adNote}</span>`;
+  const agNote = ((ch.ad_groups || {}).note) || 'Ad-group grain — collector pending';
+  const adNote = ((ch.ads       || {}).note) || 'Ad-creative grain — collector pending';
+  setPanel(el, 'adgroups', `<span class="pending-badge">⏳ ${agNote}</span>`);
+  setPanel(el, 'ads',      `<span class="pending-badge">⏳ ${adNote}</span>`);
 }
 
 function renderAllChannels() {
