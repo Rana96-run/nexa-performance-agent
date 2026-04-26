@@ -209,25 +209,35 @@ def run_all() -> dict:
     return results
 
 
-def post_to_slack(results: dict) -> None:
-    """Post a single summarised status block to SLACK_CHANNEL_HEALTH."""
+def post_to_slack(results: dict, failures_only: bool = True) -> None:
+    """Post health status to Slack.
+
+    Args:
+        results:       {name: (ok, msg)} from run_all()
+        failures_only: If True (default), only post when there are failures.
+                       Silence when all green — no noise.
+    """
+    ok_count   = sum(1 for ok, _ in results.values() if ok)
+    fail_count = len(results) - ok_count
+
+    if failures_only and fail_count == 0:
+        print("[health_check] All checks passed — no Slack post (failures_only=True)")
+        return
+
     try:
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_HEALTH
 
-        ok_count   = sum(1 for ok, _ in results.values() if ok)
-        fail_count = len(results) - ok_count
-        overall    = ":white_check_mark:" if fail_count == 0 else ":warning:"
-
-        lines = []
-        for name, (ok, msg) in results.items():
-            icon = ":white_check_mark:" if ok else ":x:"
-            lines.append(f"{icon}  *{name}*  — {msg}")
-
+        # Only include failed checks in the Slack message to keep it short
+        failed_lines = [
+            f":x:  *{name}*  — {msg}"
+            for name, (ok, msg) in results.items()
+            if not ok
+        ]
+        overall = ":warning:" if fail_count else ":white_check_mark:"
         header = (
-            f"{overall} *Nexa System Health — {_now()}*\n"
-            f"{'All systems operational' if fail_count == 0 else f'{fail_count} issue(s) detected'}"
-            f"  ({ok_count}/{len(results)} passing)"
+            f"{overall} *Nexa Health — {_now()}*\n"
+            f"{fail_count} issue(s) detected  ({ok_count}/{len(results)} passing)"
         )
 
         WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
@@ -235,17 +245,22 @@ def post_to_slack(results: dict) -> None:
             text=header,
             blocks=[
                 {"type": "section", "text": {"type": "mrkdwn", "text": header}},
-                {"type": "divider"},
-                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(failed_lines)}},
             ],
         )
-        print(f"[health_check] Posted to Slack: {ok_count}/{len(results)} passing")
+        print(f"[health_check] Posted {fail_count} failure(s) to Slack")
     except Exception as e:
         print(f"[health_check] Slack post failed: {e}")
 
 
-def main(post_slack: bool = True) -> bool:
-    """Return True if all checks pass."""
+def main(post_slack: bool = True, failures_only: bool = True) -> bool:
+    """Return True if all checks pass.
+
+    Args:
+        post_slack:    Whether to post results to Slack (default True).
+        failures_only: Only post to Slack when failures are found (default True).
+                       Set False to force a full status post (e.g. manual runs).
+    """
     print("=" * 60)
     print(f"  Nexa Health Check — {_now()}")
     print(f"  Base URL: {BASE_URL}")
@@ -254,7 +269,7 @@ def main(post_slack: bool = True) -> bool:
     print("=" * 60)
 
     if post_slack:
-        post_to_slack(results)
+        post_to_slack(results, failures_only=failures_only)
 
     all_ok = all(ok for ok, _ in results.values())
     print(f"\n  Overall: {'ALL PASS ✅' if all_ok else 'FAILURES DETECTED ❌'}")

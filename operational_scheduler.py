@@ -73,10 +73,11 @@ def run():
     print("  Manual:  python main.py on_demand")
     print("=" * 52)
 
-    # Run a startup health check immediately (once, in background) so we get
-    # a status post every time the service restarts — no waiting until 07:00.
+    # Startup health check — logs to console only; no Slack post.
+    # Only the 07:00 scheduled run posts to Slack (and only on failures).
     try:
-        _run_health_check()
+        from scripts.health_check import main as hc_main
+        hc_main(post_slack=False)  # console-only on startup
     except Exception as e:
         print(f"[ops-scheduler] Startup health check error: {e}")
 
