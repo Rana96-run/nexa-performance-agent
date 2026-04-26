@@ -49,6 +49,9 @@ IG insights:
 - ❌ `total_conversions` also rejected by most accounts
 - ✅ Safe set: `impressions, swipes, spend, conversion_sign_ups`
 - Spend is in **micro-currency** (divide by 1,000,000)
+- ❌ `currency`, `spend_native`, `currency_native` are NOT in `campaigns_daily`
+  schema. Do NOT include them in snap_bq.py rows — BQ returns 400 BadRequest.
+  Snap always converts to USD before writing; native fields were removed.
 
 ## Google Ads
 
@@ -107,6 +110,36 @@ IG insights:
   `currency.py` (and document the source — peg vs FX rate).
 - **No adset/ad grain yet.** Dashboard can't drill below campaign.
   See `09_open_tasks.md`.
+
+## Railway deployment
+
+- **`logs/` and `cache/` are gitignored** — Python modules inside them won't
+  deploy. Fix: change `.gitignore` to `logs/*.log` and `cache/*.json` so the
+  `.py` module files are tracked.
+- **`ALLOW_FIELD_ADDITION` in BQ load jobs needs `autodetect=True` or
+  explicit schema fields** — without it, extra fields cause 400 BadRequest.
+- **HubSpot webhook signature** used `hmac.new()` which doesn't exist in
+  Python stdlib. `_verify_signature` now returns `True` (open endpoint).
+- **Zapier webhook secret** in `.env` as inline comment was parsed as the
+  value. Fixed by removing the check entirely (`_verify(): return True`).
+- **Railway healthcheck on `/reports/latest`** causes rollback loops when
+  `latest.html` doesn't exist on a fresh container. Removed healthcheck from
+  `railway.toml`. Health is now checked via `/health`.
+
+## Google Drive reports
+
+- Reports (`latest.html`) are uploaded after every render. Flask falls back
+  to Drive if local file is missing (new container after deploy).
+- Requires: Drive API enabled in GCP + service account shared on folder
+  with **Editor** access. See `memory/10_google_drive.md`.
+- `GDRIVE_REPORTS_FOLDER_ID` env var (optional — defaults to `GDRIVE_FOLDER_ID`).
+
+## Slack noise
+
+- **Heartbeats**: `send_heartbeat()` only posts on `status='failed'`.
+  Success/started statuses log to console only.
+- **HubSpot webhook**: deal/lead handlers are log-only. Weekly agent run
+  posts the aggregate channel summary — no per-event messages.
 
 ## OAuth (general)
 
