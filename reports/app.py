@@ -38,6 +38,40 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
+@app.route("/api/refresh", methods=["POST", "GET"])
+def refresh_bq():
+    """
+    Run a BigQuery refresh + view rebuild + regenerate report. One-shot.
+    Optional ?backfill=1 to run full historical (slow, ~10 minutes).
+    """
+    expected = os.getenv("REGEN_TOKEN")
+    if expected and request.args.get("token") != expected:
+        return jsonify({"error": "unauthorized"}), 401
+    backfill = request.args.get("backfill") == "1"
+    try:
+        from reporting_scheduler import run_refresh
+        results = run_refresh(incremental=not backfill)
+        # Then regen the report on top of fresh data
+        from claude.reporter import assemble_report_data
+        from reports.render import save_report
+        report = assemble_report_data(
+            cadence="on_demand", role_results=[], tasks_created=[],
+            approvals_pending=[], permalink="/reports/latest",
+        )
+        path = save_report(report)
+        return jsonify({
+            "ok": True,
+            "mode": "backfill" if backfill else "incremental",
+            "report_saved": str(path),
+            "channels": [c.get("channel") for c in report.get("channels", [])],
+            "trends_rows": len(report.get("trends_30d", [])),
+            "collectors": {k: ("ok" if v[0] else "fail") for k, v in results.items()},
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/regenerate", methods=["POST", "GET"])
 def regenerate():
     """
