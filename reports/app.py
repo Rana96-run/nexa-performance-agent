@@ -38,6 +38,41 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
+@app.route("/api/regenerate", methods=["POST", "GET"])
+def regenerate():
+    """
+    Regenerate the daily HTML report on demand using current BigQuery data.
+    Light-weight (no Claude calls — just data fetch + render).
+    Auth: pass ?token=<REGEN_TOKEN> matching the env var, OR if not set, allow.
+    """
+    expected = os.getenv("REGEN_TOKEN")
+    if expected and request.args.get("token") != expected:
+        return jsonify({"error": "unauthorized"}), 401
+
+    try:
+        from claude.reporter import assemble_report_data
+        from reports.render import save_report
+
+        report = assemble_report_data(
+            cadence="on_demand",
+            role_results=[],
+            tasks_created=[],
+            approvals_pending=[],
+            permalink="/reports/latest",
+        )
+        path = save_report(report)
+        return jsonify({
+            "ok": True,
+            "saved_to": str(path),
+            "channels": [c.get("channel") for c in report.get("channels", [])],
+            "windows": list((report.get("windows") or {}).keys()),
+            "trends_rows": len(report.get("trends_30d", [])),
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/")
 def root():
     return redirect("/reports/latest")
