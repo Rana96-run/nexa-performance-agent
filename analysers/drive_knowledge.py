@@ -49,24 +49,22 @@ TEXT_LIKE_MIMES = {
 # Maximum text we'll inline per file before truncating (token budget)
 MAX_TEXT_CHARS = 6000
 
-# Folders categorised by which role they help most.  Folder names matched
-# loosely (case-insensitive substring).  Update as the team adds new folders.
+# ── Top-level folders the agent learns from ──────────────────────────────────
+# Only files whose path starts with one of these folder names are indexed.
+# Anything else in Drive is ignored even if visible to the service account.
+# To add or remove a folder, edit this list.
+ALLOWED_TOP_FOLDERS = [
+    "Media Planning",
+    "Social Media Analysis",       # Amar's "media analysis"
+    "129. E-invoice Paid Ads",
+]
+
+# Folders categorised by which role they help most.  Each role keyword set
+# must be a SUBSET of the ALLOWED_TOP_FOLDERS above.
 ROLE_FOLDER_HINTS: dict[str, list[str]] = {
-    "media_buyer": [
-        "campaign", "ad spend", "budget", "performance",
-        "qflavours", "qbookkeeping", "e-invoice",
-    ],
-    "paid_media_analyst": [
-        "analysis", "benchmark", "competitor", "looker", "report",
-        "social media analysis",
-    ],
-    "paid_media_strategist": [
-        "media planning", "brand", "branding", "playbook", "voice",
-        "logo", "qoyod banding", "creative",
-    ],
-    "creative_brief_writer": [
-        "ai creative", "ready to publish", "under review", "logos",
-    ],
+    "media_buyer":           ["e-invoice", "media planning"],
+    "paid_media_analyst":    ["social media analysis", "media planning"],
+    "paid_media_strategist": ["media planning", "social media analysis"],
 }
 
 
@@ -74,35 +72,87 @@ def _flatten(parents_chain: list[str], name: str) -> str:
     return "/".join(parents_chain + [name])
 
 
+def _find_folder_ids_by_name(svc, names: list[str]) -> dict[str, str]:
+    """Find Drive folder IDs by exact name match. Returns {name: id}."""
+    out: dict[str, str] = {}
+    for name in names:
+        # Escape single quotes for the q query
+        safe = name.replace("'", "\\'")
+        q = (f"name = '{safe}' "
+             "and mimeType = 'application/vnd.google-apps.folder' "
+             "and trashed = false")
+        resp = svc.files().list(
+            q=q, fields="files(id,name)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute()
+        files = resp.get("files", [])
+        if files:
+            out[name] = files[0]["id"]
+        else:
+            print(f"[drive-knowledge] Folder '{name}' not found — skipped.")
+    return out
+
+
+def _walk_folder(svc, folder_id: str, max_depth: int = 6) -> list[dict]:
+    """Recursively list every item under folder_id (Shared Drive aware)."""
+    items: list[dict] = []
+    stack = [(folder_id, 0)]
+    seen = set()
+    while stack:
+        fid, depth = stack.pop()
+        if depth > max_depth or fid in seen:
+            continue
+        seen.add(fid)
+        cursor = None
+        while True:
+            kwargs = dict(
+                q=f"'{fid}' in parents and trashed = false",
+                fields=("nextPageToken, "
+                        "files(id,name,mimeType,modifiedTime,size,parents)"),
+                pageSize=200,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+            if cursor:
+                kwargs["pageToken"] = cursor
+            resp = svc.files().list(**kwargs).execute()
+            for f in resp.get("files", []):
+                items.append(f)
+                if f["mimeType"] == "application/vnd.google-apps.folder":
+                    stack.append((f["id"], depth + 1))
+            cursor = resp.get("nextPageToken")
+            if not cursor:
+                break
+    return items
+
+
 def index_shared_drive(root_folder_id: str = DEFAULT_FOLDER_ID,
                        max_items: int = 5000) -> dict:
     """
-    Walk every folder visible to the service account and write an index file
-    so role prompts can cheaply reference Drive assets without re-querying
-    the API on every run.
+    Walk only the folders listed in ALLOWED_TOP_FOLDERS and write an index
+    file role prompts can reference. Anything else in Drive is ignored.
     """
-    items: list[dict] = []
-    folders_seen = 0
-
-    # Walk top-level visible items rather than only one folder, so files
-    # shared individually with the service account are included.
     from collectors.drive_reader import _client
     svc = _client()
 
-    cursor = None
-    while True:
-        kwargs = dict(
-            q="trashed = false",
-            fields="nextPageToken, files(id,name,mimeType,modifiedTime,size,parents)",
-            pageSize=200,
-            orderBy="modifiedTime desc",
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True,
-        )
-        if cursor:
-            kwargs["pageToken"] = cursor
-        resp = svc.files().list(**kwargs).execute()
-        for f in resp.get("files", []):
+    # 1. Resolve top-folder names → IDs
+    folder_ids = _find_folder_ids_by_name(svc, ALLOWED_TOP_FOLDERS)
+
+    # 2. Walk each one (and write the top folder itself as a marker entry)
+    items: list[dict] = []
+    folders_seen = 0
+    for top_name, top_id in folder_ids.items():
+        items.append({
+            "id":       top_id,
+            "name":     top_name,
+            "mime":     "application/vnd.google-apps.folder",
+            "modified": "",
+            "size":     None,
+            "parents":  [],
+            "path":     top_name,    # absolute path = its own name
+        })
+        folders_seen += 1
+        for f in _walk_folder(svc, top_id):
             if f["mimeType"] == "application/vnd.google-apps.folder":
                 folders_seen += 1
             items.append({
@@ -115,13 +165,13 @@ def index_shared_drive(root_folder_id: str = DEFAULT_FOLDER_ID,
             })
             if len(items) >= max_items:
                 break
-        cursor = resp.get("nextPageToken")
-        if not cursor or len(items) >= max_items:
-            break
 
-    # Build a parent→children map so we can resolve breadcrumb paths
+    # 3. Resolve breadcrumb paths
     by_id = {it["id"]: it for it in items}
+
     def path_for(it: dict, depth: int = 0) -> str:
+        if it.get("path"):
+            return it["path"]
         if depth > 8 or not it.get("parents"):
             return it["name"]
         parent_id = it["parents"][0]
@@ -129,12 +179,14 @@ def index_shared_drive(root_folder_id: str = DEFAULT_FOLDER_ID,
         if not parent:
             return it["name"]
         return path_for(parent, depth + 1) + "/" + it["name"]
+
     for it in items:
         it["path"] = path_for(it)
 
     index = {
         "indexed_at": datetime.now(timezone.utc).isoformat(),
         "root":       root_folder_id,
+        "allowed":    ALLOWED_TOP_FOLDERS,
         "items":      items,
         "totals":     {
             "items":   len(items),
