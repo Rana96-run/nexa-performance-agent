@@ -67,6 +67,7 @@ CAMPAIGNS_DAILY_SCHEMA = [
     bigquery.SchemaField("leads", "INT64"),                            # platform-reported leads
     bigquery.SchemaField("conversions", "FLOAT64"),
     bigquery.SchemaField("cpl", "FLOAT64"),
+    bigquery.SchemaField("currency", "STRING"),                        # always "USD" — collectors convert before writing
     bigquery.SchemaField("updated_at", "TIMESTAMP"),
 ]
 

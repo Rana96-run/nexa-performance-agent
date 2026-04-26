@@ -99,7 +99,8 @@ def check_google_ads() -> tuple[bool, str]:
     try:
         from google.ads.googleads.client import GoogleAdsClient
         from config import GOOGLE_ADS_CONFIG
-        client = GoogleAdsClient.load_from_dict(GOOGLE_ADS_CONFIG, version="v18")
+        cfg = {**GOOGLE_ADS_CONFIG, "use_proto_plus": True}
+        client = GoogleAdsClient.load_from_dict(cfg, version="v18")
         svc = client.get_service("CustomerService")
         r = svc.list_accessible_customers()
         count = len(r.resource_names)
