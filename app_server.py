@@ -61,17 +61,15 @@ def _start_background_threads():
         from operational_scheduler import run
         run()
 
-    def _rep():
-        from reporting_scheduler import run_loop
-        run_loop()
-
     def _slack():
         from slack_listener import run
         run()
 
+    # Note: reporting-scheduler thread removed.  BQ refresh now runs once,
+    # inline, immediately before the daily report is generated (see
+    # operational_scheduler._nightly).
     for name, fn, delay in [
         ("operational-scheduler", _op, 30),
-        ("reporting-scheduler", _rep, 60),
         ("slack-listener", _slack, 15),
     ]:
         t = threading.Thread(

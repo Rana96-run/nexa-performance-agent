@@ -66,6 +66,17 @@ def _post_report_ready():
         print(f"[ops-scheduler] Report-ready post failed (non-fatal): {e}")
 
 
+def _refresh_bigquery():
+    """Run all BQ collectors + view refresh once before report generation."""
+    print("[ops-scheduler] Refreshing BigQuery before report generation…")
+    try:
+        from reporting_scheduler import run_refresh
+        run_refresh(incremental=True)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] BQ refresh failed: {e}")
+
+
 def _run_spike_detector():
     """Detect daily anomalies in spend/leads/qualification rate. Silent if none."""
     try:
@@ -79,9 +90,18 @@ def _run_spike_detector():
 
 def _nightly():
     """One combined nightly run — chains weekly/monthly/quarterly where applicable."""
+    # 1. Refresh BigQuery once so the dashboard + report read fresh data.
+    _refresh_bigquery()
+
+    # 2. Run the daily Claude cadence (collectors, role analysis, Asana tasks,
+    #    Slack summary, HTML report rendering with Drive upload).
     _run_with_heartbeat("daily")
-    _run_spike_detector()  # silent unless real anomalies vs 7-day baseline
-    _post_report_ready()   # one Slack ping with the dashboard URL
+
+    # 3. Spike detector reads from the BQ data we just refreshed.
+    _run_spike_detector()
+
+    # 4. One Slack ping with the dashboard URL.
+    _post_report_ready()
 
     today = date.today()
     if today.weekday() == 0:                              # Monday → weekly
