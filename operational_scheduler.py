@@ -66,10 +66,22 @@ def _post_report_ready():
         print(f"[ops-scheduler] Report-ready post failed (non-fatal): {e}")
 
 
+def _run_spike_detector():
+    """Detect daily anomalies in spend/leads/qualification rate. Silent if none."""
+    try:
+        from analysers.spike_detector import run as spike_run
+        n = spike_run()
+        print(f"[ops-scheduler] Spike detector finished: {n} spike(s)")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Spike detector error: {e}")
+
+
 def _nightly():
     """One combined nightly run — chains weekly/monthly/quarterly where applicable."""
     _run_with_heartbeat("daily")
-    _post_report_ready()  # one Slack ping with the dashboard URL
+    _run_spike_detector()  # silent unless real anomalies vs 7-day baseline
+    _post_report_ready()   # one Slack ping with the dashboard URL
 
     today = date.today()
     if today.weekday() == 0:                              # Monday → weekly
