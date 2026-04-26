@@ -120,29 +120,40 @@ _RIYADH = timezone(timedelta(hours=3))
 
 def send_heartbeat(source: str, status: str = "ok",
                    detail: str = "", duration_s: float | None = None) -> bool:
-    """Post a single-line health beacon to SLACK_CHANNEL_HEALTH.
+    """Post a health beacon to Slack — but ONLY on failure.
+
+    Success and "started" statuses are logged to console only; they are noise
+    in the main channel. Only failures get a Slack message so every alert means
+    something went wrong.
 
     Args:
         source     — e.g. "bq-refresh", "operational-scheduler", "slack-listener"
         status     — "ok" | "failed" | "started"
-        detail     — free-form tail, e.g. "4,312 rows across 6 channels"
+        detail     — free-form tail, e.g. "collector crashed"
         duration_s — how long the run took, seconds (optional)
 
-    Returns True if the beacon landed somewhere. Never raises — a heartbeat
-    failing must not take down the scheduler itself.
+    Returns True if a Slack message was sent. Never raises.
     """
+    dur  = f" ({duration_s:.1f}s)" if duration_s is not None else ""
+    when = datetime.now(_RIYADH).strftime("%Y-%m-%d %H:%M")
+    log  = f"[heartbeat] {source} {status}{dur} — {when} Riyadh"
+    if detail:
+        log += f" | {detail}"
+    print(log)
+
+    # Only alert on failure — success is silence.
+    if status != "failed":
+        return False
+
     if not (SLACK_OK and slack_client and SLACK_CHANNEL_HEALTH):
         return False
-    emoji = {"ok": ":white_check_mark:", "failed": ":x:",
-             "started": ":hourglass_flowing_sand:"}.get(status, ":grey_question:")
-    when  = datetime.now(_RIYADH).strftime("%Y-%m-%d %H:%M")
-    dur   = f" ({duration_s:.1f}s)" if duration_s is not None else ""
-    body  = f"{emoji} *{source}* `{status}`{dur} — {when} Riyadh"
+
+    body = f":x: *{source}* failed{dur} — {when} Riyadh"
     if detail:
         body += f"\n> {detail}"
     try:
         slack_client.chat_postMessage(channel=SLACK_CHANNEL_HEALTH, text=body)
         return True
     except Exception as e:
-        print(f"[heartbeat] post failed: {e}")
+        print(f"[heartbeat] Slack post failed: {e}")
         return False
