@@ -45,11 +45,19 @@ def _client():
 
 
 def list_folder(folder_id: str = DEFAULT_FOLDER_ID, page_size: int = 1000):
-    """List direct children of a Drive folder."""
+    """List direct children of a Drive folder.
+
+    Includes Shared Drive items (supportsAllDrives + includeItemsFromAllDrives).
+    Without these flags the API returns an empty list when the folder lives
+    in a Workspace Shared Drive instead of personal "My Drive".
+    """
     svc = _client()
     q = f"'{folder_id}' in parents and trashed = false"
     fields = "files(id,name,mimeType,modifiedTime,size,parents)"
-    res = svc.files().list(q=q, fields=fields, pageSize=page_size).execute()
+    res = svc.files().list(
+        q=q, fields=fields, pageSize=page_size,
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+    ).execute()
     return res.get("files", [])
 
 
@@ -66,7 +74,7 @@ def walk(folder_id: str = DEFAULT_FOLDER_ID, prefix: str = ""):
 def download(file_id: str, out_path: str) -> str:
     """Download a binary file. Returns out_path."""
     svc = _client()
-    req = svc.files().get_media(fileId=file_id)
+    req = svc.files().get_media(fileId=file_id, supportsAllDrives=True)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "wb") as f:
         dl = MediaIoBaseDownload(f, req)
@@ -97,13 +105,15 @@ def export(file_id: str, mime_type: str, out_path: str) -> str:
 def read_text(file_id: str, mime_type: Optional[str] = None) -> str:
     """Convenience: return a file's text content. Auto-exports Google Docs."""
     svc = _client()
-    meta = svc.files().get(fileId=file_id, fields="mimeType,name").execute()
+    meta = svc.files().get(
+        fileId=file_id, fields="mimeType,name", supportsAllDrives=True,
+    ).execute()
     native_mime = meta["mimeType"]
     if native_mime in EXPORT_MIMES:
         target = mime_type or EXPORT_MIMES[native_mime][0]
         data = svc.files().export(fileId=file_id, mimeType=target).execute()
         return data.decode("utf-8", errors="replace")
-    req = svc.files().get_media(fileId=file_id)
+    req = svc.files().get_media(fileId=file_id, supportsAllDrives=True)
     buf = io.BytesIO()
     dl = MediaIoBaseDownload(buf, req)
     done = False
