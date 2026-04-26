@@ -14,7 +14,7 @@ Usage:
 Flow:
     1. Guard  — skip if this cadence already ran today (unless on_demand)
     2. Collect — pull data from ALL channels; served from cache if fresh (< 22h)
-    3. Analyse — Nexa roles run via Claude API (paid_media, analyst, strategist, task_flow)
+    3. Analyse — Nexa roles run via Claude API (media_buyer, paid_media_analyst, paid_media_strategist)
     4. Batch  — collect ALL Asana tasks from ALL roles, create them in one go
     5. Slack  — post ONE combined summary to notify channel
     6. Approve — channel mutations go to approval channel; wait for ✅/❌ reaction

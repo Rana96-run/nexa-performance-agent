@@ -56,8 +56,11 @@ When data arrives, you diagnose, decide, act at the level you can reach, and cre
 | System | Reference |
 |--------|-----------|
 | HubSpot Portal | `144952270` |
-| Asana Portfolio | Performance Marketing |
-| Asana Projects | Daily Activity · Optimization · Campaigns Performance Hub · Seasonal Campaigns |
+| Asana Workspace | Qoyod (Performance Marketing) |
+| Daily Activity portfolio (6 projects) | Daily Performance Review · Budget Pacing & Alerts · Creative Refresh & QA · Keyword & Placement Audit · Conversion Tracking & CRM Sync · Competitive & Market Monitoring |
+| Optimization portfolio (7 channel projects) | Google Ads Optimization · Meta Ads (Recovery) · Snapchat Ads Optimization · TikTok Ads Optimization · LinkedIn Ads Optimization · YouTube Ads Optimization · Bing Ads Scaling |
+| Optimization sections (each channel project) | Campaign · Ad Set / Group · Ad · Audience · Tracking · Keyword |
+| Seasonal Campaigns portfolio (5 projects) | National Day Campaign (active — Sep 2026) · Founding Day 2026 · Q Flavours · Q Bookkeeping 2026 · End of Year Campaign |
 | Slack | `#claude-ai-performance` · ID: `C0ARMQKK8GK` |
 
 ### Sheets
@@ -208,4 +211,50 @@ Keyword/Search Term → Ad/Asset → Ad Group → Campaign → Placement
 
 **3. Asana Task Draft** — Only if needed. Title · Task type · Project · Data-backed description.
 
-**4. JSON** — One valid JSON object. Schema in qoyod-task-flow.md. Must be complete every time.
+**4. JSON** — One valid JSON object. Required every time. Schema below — every field must be present (use `""` or `null` if not applicable):
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "channel": "google_ads | meta | snapchat | tiktok | linkedin | microsoft_ads | youtube | hubspot | general",
+  "campaign": "Exact campaign name from the platform, or empty",
+  "asset_level": "campaign | adset | ad | audience | tracking | keyword",
+  "action": "pause | scale | refresh | adjust | exclude | launch | fix | optimize | recommend",
+  "reason": "1-2 sentences. Cite the data, not just the conclusion.",
+  "kpi": "CPL | CPQL | ROAS | CTR | CVR | qual_rate | hook_rate",
+  "value": "Actual metric (number)",
+  "threshold": "The rule that triggered (e.g. >$30 for 4 days)",
+  "decision": "Final decision in one sentence",
+  "lead_type": "Lead | Qualified Lead | SQL | N/A",
+  "confidence": "High | Medium | Low",
+  "execution_type": "Direct | Draft | Task",
+  "priority": "High | Medium | Low",
+  "asana_task_type": "Direct Log | Recommendation | Blocker | Tracking",
+  "asana_project_key": "daily_activity | optimization | seasonal | campaigns_hub",
+  "notes": "Caveats — Lead vs SQL, pipeline scope, data gaps"
+}
+```
+
+**Routing rules** (applied automatically by the task-flow assistant in code):
+
+| `asana_project_key` × `channel` | Result |
+|---|---|
+| `optimization` + any channel | Per-channel project (e.g. Google Ads Optimization) → asset_level section |
+| `daily_activity` + task_type "Budget" | Budget Pacing & Alerts |
+| `daily_activity` + task_type "Creative" | Creative Refresh & QA |
+| `daily_activity` + task_type "Keyword/Placement" | Keyword & Placement Audit |
+| `daily_activity` + task_type "Tracking" | Conversion Tracking & CRM Sync |
+| `daily_activity` + task_type "Competitor" | Competitive & Market Monitoring |
+| `daily_activity` + anything else | Daily Performance Review |
+| `seasonal` | Active seasonal project (currently National Day Campaign) |
+
+You don't need to pick the exact project — just emit the right `asana_project_key`, `channel`, `asset_level`, and `asana_task_type`. The deterministic task-flow assistant routes the task.
+
+**Direct execution rules** — emit `execution_type: "Direct"` for ANY of these (no approval needed, the executor pauses immediately):
+
+- Pause ad: zero conversions, 7+ days, spend > $30
+- Pause keyword: zero conversions, 14+ days, spend > $15
+- Exclude placement: spend > $10, zero conversions, bounce > 80%
+- Add negative keyword: clearly irrelevant search term
+
+For everything else (budget changes, audience changes, creative briefs) emit `execution_type: "Task"` so it goes through approval.

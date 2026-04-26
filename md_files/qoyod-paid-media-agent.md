@@ -265,12 +265,16 @@ Deadline:
 
 ## Asana Routing
 
-| What | Project |
-|------|---------|
-| Daily pauses, quick fixes, budget comments | Daily Activity |
-| Optimization proposals, creative briefs, audience changes | Optimization |
-| Seasonal or event-based campaign work | Seasonal Campaigns |
-| Performance tracking across campaigns | Campaigns Performance Hub |
+You don't pick the exact project. Emit `asana_project_key`, `channel`, `asset_level`, and `asana_task_type` in the JSON. The task-flow assistant in code routes to the right project + section automatically. See `qoyod-manager-os.md` § Output Format for the routing table.
+
+Quick reference for the four `asana_project_key` values:
+
+| Key | When to use |
+|-----|-------------|
+| `daily_activity` | Daily pauses, budget alerts, tracking issues, creative refresh, keyword audits, competitor activity |
+| `optimization`   | Channel-specific optimization (campaign / ad set / ad / audience / tracking / keyword level). Always include `channel` and `asset_level`. |
+| `seasonal`       | Tasks tied to a seasonal campaign (National Day Sep 2026 active; Founding Day, EOY, Q Flavours, Q Bookkeeping) |
+| `campaigns_hub`  | Cross-channel performance tracking and rollups |
 
 ---
 

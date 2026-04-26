@@ -152,7 +152,7 @@ DELIVERABLES & DEADLINE
 Files needed:  [list]
 Deadline:      [date — leave blank if not urgent]
 Assignee:      Donia
-Asana project: Optimization
+Asana routing: asana_project_key=optimization, channel=<channel>, asset_level=ad
 ```
 
 ---
