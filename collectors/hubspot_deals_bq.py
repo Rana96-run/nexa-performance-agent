@@ -30,6 +30,10 @@ PROPERTIES = [
     "deal_qoyod_source",
     "deal_utm_campaign", "deal_utm_audience", "deal_utm_content",
     "deal_utm_term", "deal_utm_source", "deal_utm_medium",
+    # Fallback signals when deal_qoyod_source is missing/None — same
+    # resolver as the leads collector (see analysers.channel_inference).
+    "deal_original_traffic_source",
+    "deal_latest_traffic_source",
     "hs_v2_time_in_current_stage",
     "hs_is_closed_won", "hs_is_closed",
 ]
@@ -183,9 +187,27 @@ def collect_and_write(days: int = None, start_date: date = None,
                 amount = to_usd(amount_native, native_cur)
                 tis = _to_float(p.get("hs_v2_time_in_current_stage"))
 
+                # Same fallback chain as the leads collector — never lose a
+                # deal because qoyod_source is empty.
+                from analysers.channel_inference import (
+                    resolve_channel, CHANNEL_TO_QOYOD_SOURCE,
+                )
+                explicit_src = (p.get("deal_qoyod_source") or "").strip()
+                inferred_slug = resolve_channel(
+                    qoyod_source=explicit_src,
+                    campaign_name=p.get("deal_utm_campaign") or "",
+                    lead_original_traffic_source=p.get("deal_original_traffic_source") or "",
+                    lead_latest_traffic_source=p.get("deal_latest_traffic_source") or "",
+                )
+                src_label = (
+                    explicit_src
+                    or CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug or "")
+                    or "Unknown"
+                )
+
                 key = (
                     created,
-                    p.get("deal_qoyod_source") or "Unknown",
+                    src_label,
                     plabel or "Unknown",
                     status,
                     (p.get("deal_utm_campaign") or "").strip() or "__none__",

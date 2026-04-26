@@ -509,35 +509,19 @@ def build_channel_section(channel_key: str, days: int = 7) -> dict:
 
 
 def _channel_from_qoyod_source(qoyod_src: str) -> str:
-    """Inverse of _channel_to_qoyod_source for cross-table joins.
-    Verified live HubSpot qoyod_source values:
-      'Google Ads', 'Meta Ads', 'Snapchat Ads', 'Tiktok Ads',
-      'LinkedIn Ads', 'Microsoft Ads', 'Direct Traffic', 'Email Marketing',
-      'Offline', 'Other'
+    """Map a HubSpot qoyod_source label to our channel slug.
+    Single source of truth lives in analysers.channel_inference.
     """
-    return {
-        "Google Ads":    "google_ads",
-        "Meta Ads":      "meta",
-        "Snapchat Ads":  "snapchat",
-        "Tiktok Ads":    "tiktok",
-        "TikTok Ads":    "tiktok",
-        "LinkedIn Ads":  "linkedin",
-        "Microsoft Ads": "microsoft_ads",
-    }.get(qoyod_src, qoyod_src)
+    from analysers.channel_inference import channel_from_qoyod_source
+    return channel_from_qoyod_source(qoyod_src) or qoyod_src
 
 
 def _channel_to_qoyod_source(channel_key: str) -> str:
-    """Map our channel keys → HubSpot's actual qoyod_source label.
-    HubSpot writes 'Google Ads', 'Meta Ads', etc. — NOT 'google' / 'facebook'.
+    """Map our channel slug → HubSpot's actual qoyod_source label.
+    Single source of truth lives in analysers.channel_inference.
     """
-    return {
-        "google_ads":    "Google Ads",
-        "meta":          "Meta Ads",
-        "snapchat":      "Snapchat Ads",
-        "tiktok":        "Tiktok Ads",
-        "linkedin":      "LinkedIn Ads",
-        "microsoft_ads": "Microsoft Ads",
-    }.get(channel_key, channel_key)
+    from analysers.channel_inference import CHANNEL_TO_QOYOD_SOURCE
+    return CHANNEL_TO_QOYOD_SOURCE.get(channel_key, channel_key)
 
 
 # ---------------------------------------------------------------------------
@@ -622,8 +606,10 @@ def assemble_report_data(
     hero   = build_hero_kpis()
     trends = build_trends_30d()  # 30 days — UI slices this client-side
 
-    # Channels that have spend in any recent period (use 30d scan)
+    # Channels that have spend in any recent period (use 30d scan).
+    # LinkedIn always included even with zero spend — it's a tracked channel.
     spending_channels = {row["channel"] for row in trends if (row["spend"] or 0) > 0}
+    spending_channels.add("linkedin")  # always show LinkedIn section
 
     # Build channel metadata (label + color) for all active channels
     active_channels_meta = {

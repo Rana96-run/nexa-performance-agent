@@ -49,6 +49,21 @@ On weekly+ cadences add:
 
 ---
 
+## Attribution Rules (read these before any analysis)
+
+When a lead or deal has an empty `lead_utm_campaign` or `qoyod_source` is missing, **do not record it as 'Unknown' without checking the fallback chain first**:
+
+1. Look at the HubSpot property `lead_original_traffic_source` — paid search, paid social, organic, etc.
+2. Look at `lead_latest_traffic_source` — what they came back through
+3. Look at the campaign name itself (which equals `lead_utm_campaign` when present) and apply the channel-name rules in `qoyod-manager-os.md` § Channel Attribution Rules
+
+These four properties are synonyms — synced from the original platform property:
+`campaign_name` ≡ `utm_campaign` ≡ `lead_utm_campaign` ≡ `deal_utm_campaign`
+
+The collector applies this resolution at write time, but if you see "Unknown" or empty source in the BQ data anyway, that means even the fallback chain failed — flag it as a tracking gap (Asana → `daily_activity` / Conversion Tracking & CRM Sync), don't silently ignore it.
+
+---
+
 ## What You Output
 
 Every response — exactly one structured JSON conforming to the schema in `qoyod-manager-os.md` § Output Format.

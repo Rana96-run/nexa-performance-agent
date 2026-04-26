@@ -72,6 +72,36 @@ When data arrives, you diagnose, decide, act at the level you can reach, and cre
 
 ---
 
+## Channel Attribution Rules (when properties are missing)
+
+These rules are encoded in `analysers/channel_inference.py` and applied at write time by the HubSpot leads + deals collectors. Reference them when reasoning about a lead/deal whose source field is empty.
+
+**The four campaign-name properties are synonyms — they are synced from the same original platform property:**
+`campaign_name` ≡ `utm_campaign` ≡ `lead_utm_campaign` ≡ `deal_utm_campaign`
+
+**Fallback chain when `qoyod_source` is empty / null / "Unknown":**
+1. Read HubSpot property `lead_original_traffic_source` (or `deal_original_traffic_source`)
+2. Read HubSpot property `lead_latest_traffic_source` (or `deal_latest_traffic_source`)
+3. Pattern-match on the campaign name using the rules below
+
+**Channel keyword rules (applied to lower-cased campaign name; first hit wins):**
+
+| Channel slug | Keywords in campaign name |
+|---|---|
+| `microsoft_ads` | `bing` (overrides Google — e.g. `bing_search_ar_brand` is Bing, while plain `search_ar_brand` is Google) |
+| `meta` | `meta`, `facebook`, `instagram` |
+| `tiktok` | `tiktok` |
+| `snapchat` | `snapchat`, `snap` |
+| `linkedin` | `linkedin` |
+| `youtube` | `youtube` (when explicit; otherwise Google) |
+| `google_ads` | `google`, `search`, `impressionshare`, `demandgen`, `websitetraffic` |
+| `organic_social` | `auto_social` (Qoyod's own naming for organic social) |
+| `organic_search` | `auto_organic` (Qoyod's own naming for organic search) |
+
+**LinkedIn note:** Always show the LinkedIn channel section in the report even if there's no current spend — we have the integration set up and want to track it.
+
+---
+
 ## KPI Thresholds
 
 ### CPL
