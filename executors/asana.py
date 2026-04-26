@@ -9,7 +9,14 @@ Features:
   Microsoft Ads / TikTok). Sections are auto-created if they don't exist.
 """
 import asana
-from config import ASANA_TOKEN, ASANA_PROJECTS, ASANA_CHANNEL_SECTIONS
+from asana.rest import ApiException as AsanaApiException
+from config import (
+    ASANA_TOKEN, ASANA_PROJECTS,
+    ASANA_CHANNEL_LABELS, ASANA_ASSET_LEVEL_LABELS, ASANA_CHANNEL_ASSET_MATRIX,
+    ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS, ASANA_SEASONAL_PROJECTS,
+    ASANA_ACTIVE_SEASONAL,
+    asana_section_name,
+)
 from cache.cache_manager import task_is_new, record_task, get_task_gid
 
 # Cache section GIDs so we only look them up once per session
@@ -41,28 +48,82 @@ def _get_or_create_section(client, project_id: str, section_name: str) -> str | 
                 _section_cache[cache_key] = gid
                 return gid
 
-        # Section doesn't exist — create it
+        # Section doesn't exist — create it.
+        # Asana SDK v5 wraps the body in an opts dict under 'body' key.
         result = sections_api.create_section_for_project(
             project_id,
-            {"data": {"name": section_name}},
-            {},
+            {"body": {"data": {"name": section_name}}},
         )
         gid = result["gid"]
         _section_cache[cache_key] = gid
         print(f"[asana] created section '{section_name}' in project {project_id}")
         return gid
 
-    except asana.ApiException as e:
+    except AsanaApiException as e:
         print(f"[asana] section error for '{section_name}': {e}")
         return None
 
 
-def _channel_section_name(channel: str) -> str | None:
-    """Map a channel key to its Asana section display name."""
+def _channel_section_name(channel: str, asset_level: str = "") -> str | None:
+    """Map (channel, asset_level) → Asana section name like 'Google Ads — Campaign'."""
     if not channel:
         return None
-    key = channel.lower().replace(" ", "_").replace("-", "_")
-    return ASANA_CHANNEL_SECTIONS.get(key)
+    ch_key  = channel.lower().replace(" ", "_").replace("-", "_")
+    lvl_key = (asset_level or "").lower()
+    if ch_key not in ASANA_CHANNEL_LABELS:
+        return None
+    return asana_section_name(ch_key, lvl_key)
+
+
+def _normalise_channel(channel: str) -> str:
+    """Lowercase + underscore the channel slug so it matches our routing maps."""
+    return (channel or "").lower().replace(" ", "_").replace("-", "_")
+
+
+def _resolve_project_id(project_key: str, channel: str, task_type: str,
+                        seasonal_hint: str = "") -> str | None:
+    """
+    Pick the correct Asana project ID based on category × channel × task type.
+
+    project_key: 'daily_activity' | 'optimization' | 'seasonal' | 'campaigns_hub'
+    channel:     normalised channel slug (e.g. 'google_ads', 'meta')
+    task_type:   role-emitted task type (e.g. 'Direct Log', 'Recommendation', 'Tracking')
+    seasonal_hint: optional explicit seasonal campaign key
+    """
+    ch = _normalise_channel(channel)
+
+    # ── Optimization portfolio: route to the per-channel project ──────────────
+    if project_key == "optimization":
+        if ch in ASANA_OPTIMIZATION_PROJECTS:
+            return ASANA_OPTIMIZATION_PROJECTS[ch]
+        # No channel match → fall back to the legacy single-project setting
+        return ASANA_PROJECTS.get("optimization")
+
+    # ── Daily Activity portfolio: route by task category ─────────────────────
+    if project_key == "daily_activity":
+        tt = (task_type or "").lower()
+        # Heuristics on the task type / decision text emitted by the roles
+        if any(k in tt for k in ("budget", "pacing", "spend alert", "overspend")):
+            return ASANA_DAILY_PROJECTS["budget"]
+        if any(k in tt for k in ("creative", "ad refresh", "fatigue", "qa")):
+            return ASANA_DAILY_PROJECTS["creative"]
+        if any(k in tt for k in ("keyword", "negative", "placement", "search term")):
+            return ASANA_DAILY_PROJECTS["keyword"]
+        if any(k in tt for k in ("tracking", "utm", "pixel", "capi", "attribution", "crm sync")):
+            return ASANA_DAILY_PROJECTS["tracking"]
+        if any(k in tt for k in ("competitor", "market", "benchmark")):
+            return ASANA_DAILY_PROJECTS["competitor"]
+        # Default = Daily Performance Review
+        return ASANA_DAILY_PROJECTS["performance"]
+
+    # ── Seasonal portfolio: route to the active seasonal campaign ─────────────
+    if project_key == "seasonal":
+        if seasonal_hint and seasonal_hint in ASANA_SEASONAL_PROJECTS:
+            return ASANA_SEASONAL_PROJECTS[seasonal_hint]
+        return ASANA_SEASONAL_PROJECTS.get(ASANA_ACTIVE_SEASONAL)
+
+    # ── Campaigns Hub: legacy single-project ─────────────────────────────────
+    return ASANA_PROJECTS.get(project_key)
 
 
 # ---------------------------------------------------------------------------
@@ -75,16 +136,25 @@ def create_task(
     project_key: str,
     task_type:   str = "Recommendation",
     channel:     str = "",           # e.g. "google_ads", "meta", "snapchat"
+    asset_level: str = "",           # campaign | adset | ad | audience | tracking | keyword
+    action:      str = "",           # pause | scale | refresh | launch | optimize | fix
 ) -> str | None:
     """
-    Create an Asana task in the correct project and (for Optimization project)
-    the correct per-channel section.
+    Create an Asana task in the correct project and per-channel/per-asset-level section.
 
-    project_key:  'daily_activity' | 'optimization' | 'campaigns_hub' | 'seasonal'
-    channel:      optional — used to route to the right section in Optimization
+    project_key: 'daily_activity' | 'optimization' | 'campaigns_hub' | 'seasonal'
+    channel:     used to route to "<Channel> — <AssetLevel>" section in Optimization
+    asset_level: campaign | adset | ad | audience | tracking | keyword
+    action:      action verb prepended to the title (Pause / Scale / Refresh / Fix)
+
     Returns the task GID (new or existing), or None on failure.
     """
-    full_title = f"[{task_type}] {title}"
+    # Title format: "[task_type | action] title"
+    parts = [task_type]
+    if action:
+        parts.append(action.title())
+    prefix = " | ".join(parts)
+    full_title = f"[{prefix}] {title}"
 
     # Deduplication guard
     if not task_is_new(full_title, project_key):
@@ -92,9 +162,10 @@ def create_task(
         print(f"[asana] skipped duplicate: {full_title[:60]!r} → gid={existing}")
         return existing
 
-    project_id = ASANA_PROJECTS.get(project_key)
+    # Resolve to the right project based on category × channel × task type.
+    project_id = _resolve_project_id(project_key, channel, task_type)
     if not project_id:
-        print(f"[asana] unknown project key: {project_key!r}")
+        print(f"[asana] could not resolve project for key={project_key!r} channel={channel!r}")
         return None
 
     client    = get_client()
@@ -107,11 +178,12 @@ def create_task(
         "projects": [project_id],
     }
 
-    # Add section routing for Optimization project (per-channel)
-    if project_key == "optimization" and channel:
-        section_name = _channel_section_name(channel)
-        if section_name:
-            section_gid = _get_or_create_section(client, project_id, section_name)
+    # Section routing — for Optimization projects, route into the
+    # asset-level section (e.g. "Campaign", "Ad Set / Group", "Audience").
+    if project_key == "optimization" and asset_level:
+        section_label = ASANA_ASSET_LEVEL_LABELS.get(asset_level)
+        if section_label:
+            section_gid = _get_or_create_section(client, project_id, section_label)
             if section_gid:
                 task_data["memberships"] = [
                     {"project": project_id, "section": section_gid}
@@ -121,10 +193,11 @@ def create_task(
         task = tasks_api.create_task({"data": task_data}, {})
         gid  = task["gid"]
         record_task(full_title, project_key, gid)
-        chan_note = f" [{channel}]" if channel else ""
+        bits = [b for b in (channel, asset_level, action) if b]
+        chan_note = f" [{' / '.join(bits)}]" if bits else ""
         print(f"[asana] created{chan_note}: {full_title[:60]!r}  gid={gid}")
         return gid
-    except asana.ApiException as e:
+    except AsanaApiException as e:
         print(f"[asana] error: {e}")
         return None
 
@@ -135,13 +208,20 @@ def create_task(
 
 def ensure_channel_sections():
     """
-    Pre-create all channel sections in the Optimization project.
-    Safe to call on every startup — skips sections that already exist.
+    For each per-channel Optimization project (Google Ads, Meta, Snap, TikTok,
+    LinkedIn, YouTube, Microsoft), make sure the asset-level sections exist:
+        Campaign / Ad Set / Group / Ad / Audience / Tracking / Keyword
+    Sections are added IN ADDITION to whatever sections already exist
+    (we never delete or rename existing sections).
     """
-    project_id = ASANA_PROJECTS.get("optimization")
-    if not project_id:
-        return
     client = get_client()
-    for key, name in ASANA_CHANNEL_SECTIONS.items():
-        _get_or_create_section(client, project_id, name)
-    print("[asana] channel sections verified/created in Optimization project")
+    created = 0
+    for ch_key, project_id in ASANA_OPTIMIZATION_PROJECTS.items():
+        levels = ASANA_CHANNEL_ASSET_MATRIX.get(ch_key, [])
+        for lvl in levels:
+            label = ASANA_ASSET_LEVEL_LABELS.get(lvl)
+            if not label:
+                continue
+            _get_or_create_section(client, project_id, label)
+            created += 1
+    print(f"[asana] verified/created {created} asset-level sections across {len(ASANA_OPTIMIZATION_PROJECTS)} optimization projects")

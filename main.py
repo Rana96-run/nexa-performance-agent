@@ -181,7 +181,22 @@ def _extract_tasks(cadence: str, results: list) -> tuple[list, list]:
     tasks     = []
     approvals = []
 
-    channel_actions = {"pause", "exclude", "adjust", "scale", "pause-and-replace"}
+    channel_actions = {"pause", "exclude", "adjust", "scale", "pause-and-replace",
+                       "refresh", "launch", "fix", "optimize"}
+
+    # Normalise asset-level synonyms the Claude prompt might emit.
+    asset_aliases = {
+        "campaign": "campaign", "campaigns": "campaign",
+        "adset": "adset", "ad_set": "adset", "ad set": "adset",
+        "adgroup": "adset", "ad_group": "adset", "ad group": "adset",
+        "ad squad": "adset", "ad-squad": "adset",
+        "ad": "ad", "ads": "ad", "creative": "ad",
+        "audience": "audience", "targeting": "audience", "lookalike": "audience",
+        "tracking": "tracking", "utm": "tracking", "pixel": "tracking",
+        "capi": "tracking", "attribution": "tracking", "conversion": "tracking",
+        "keyword": "keyword", "keywords": "keyword", "search term": "keyword",
+        "negative keyword": "keyword",
+    }
 
     for res in results:
         role     = res["role"]
@@ -197,6 +212,19 @@ def _extract_tasks(cadence: str, results: list) -> tuple[list, list]:
                 decision.get("asana_project", "Daily Activity"), "daily_activity"
             )
             task_type = decision.get("asana_task_type", "Recommendation")
+
+            # Asset level — Claude can put it in `asset_level`, `level`, or
+            # we infer it from the decision text.
+            raw_lvl = (decision.get("asset_level") or decision.get("level") or "").lower().strip()
+            asset_level = asset_aliases.get(raw_lvl, "")
+            if not asset_level:
+                # Heuristic fallback: scan decision text for known keywords
+                lower_dec = (dec_txt or "").lower()
+                for k, v in asset_aliases.items():
+                    if k in lower_dec:
+                        asset_level = v
+                        break
+
             title = (
                 f"{channel} — {dec_txt}"
                 if channel and dec_txt
@@ -207,7 +235,9 @@ def _extract_tasks(cadence: str, results: list) -> tuple[list, list]:
                 "description": _build_task_description(decision, raw, cadence, role),
                 "project_key": project_key,
                 "task_type":   task_type,
-                "channel":     channel,   # used for per-channel section routing
+                "channel":     channel,
+                "asset_level": asset_level,
+                "action":      action,
             })
 
         # Actions needing human approval go to the approvals list
@@ -296,6 +326,8 @@ def run_cadence(cadence: str, force: bool = False):
             project_key=t["project_key"],
             task_type=t["task_type"],
             channel=t.get("channel", ""),
+            asset_level=t.get("asset_level", ""),
+            action=t.get("action", ""),
         )
         if gid:
             created += 1

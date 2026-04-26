@@ -14,23 +14,28 @@ SHARED = ["qoyod-manager-os.md", "qoyod-brand-identity.md"]
 # Roles available to Nexa — modelled on the actual paid-media team seats.
 # Each role is a teammate the agent stands in for. Display names render
 # automatically from these keys (`media_buyer` -> "Media Buyer").
+#
+# NOTE: "marketing_assistant" was previously listed here. It is NOT a Claude
+# role — it's the deterministic task-flow assistant implemented in code
+# (main._extract_tasks + executors.asana.create_task). We don't pay tokens
+# to a Claude call to convert structured decisions into Asana tasks.
 ROLE_FILES = {
     "media_buyer":           ["qoyod-paid-media-agent.md"],   # Hands-on optimizer: daily pauses, quick fixes, scale
     "paid_media_analyst":    ["qoyod-analyst-agent.md"],       # Trend analysis, anomaly attribution, week-over-week
     "paid_media_strategist": ["nexa-strategist.md"],           # Briefs, scale plans, channel mix, quarterly bets
-    "marketing_assistant":   ["qoyod-task-flow.md"],           # PM/junior: turns decisions into Asana tasks, owns runbooks
     # Daily-report writer is invoked separately AFTER the team roles run, by
     # claude/reporter.py — not part of TRIGGER_ROUTES.
     "daily_report":          ["qoyod-daily-report.md"],
 }
 
-# Which roles Nexa invokes per trigger cadence
+# Which roles Nexa invokes per trigger cadence (Claude calls only — the task
+# flow assistant runs deterministically in code after all roles finish).
 TRIGGER_ROUTES = {
-    "daily":     ["media_buyer", "paid_media_analyst", "marketing_assistant"],
-    "weekly":    ["media_buyer", "paid_media_analyst", "paid_media_strategist", "marketing_assistant"],
-    "monthly":   ["paid_media_analyst", "paid_media_strategist", "marketing_assistant"],
+    "daily":     ["media_buyer", "paid_media_analyst"],
+    "weekly":    ["media_buyer", "paid_media_analyst", "paid_media_strategist"],
+    "monthly":   ["paid_media_analyst", "paid_media_strategist"],
     "quarterly": ["paid_media_analyst", "paid_media_strategist"],
-    "on_demand": ["media_buyer", "paid_media_strategist", "marketing_assistant"],
+    "on_demand": ["media_buyer", "paid_media_strategist"],
 }
 
 
