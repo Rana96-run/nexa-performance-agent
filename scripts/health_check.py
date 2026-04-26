@@ -97,14 +97,18 @@ def check_bigquery() -> tuple[bool, str]:
 
 def check_google_ads() -> tuple[bool, str]:
     try:
-        from google.ads.googleads.client import GoogleAdsClient
-        from config import GOOGLE_ADS_CONFIG
-        cfg = {**GOOGLE_ADS_CONFIG, "use_proto_plus": True}
-        client = GoogleAdsClient.load_from_dict(cfg, version="v18")
-        svc = client.get_service("CustomerService")
-        r = svc.list_accessible_customers()
-        count = len(r.resource_names)
-        return True, f"Google Ads → {count} accessible account(s)"
+        from collectors.google_ads_bq import _client, _customer_ids
+        client = _client()
+        ids = _customer_ids()
+        if not ids:
+            return False, "Google Ads: GOOGLE_ADS_CUSTOMER_IDS not set"
+        # Run a minimal GAQL query on the first account to validate connectivity
+        svc = client.get_service("GoogleAdsService")
+        q = "SELECT customer.id FROM customer LIMIT 1"
+        resp = svc.search_stream(customer_id=ids[0], query=q)
+        for _ in resp:
+            pass
+        return True, f"Google Ads → OK ({len(ids)} account(s))"
     except Exception as e:
         return False, f"Google Ads: {e}"
 
