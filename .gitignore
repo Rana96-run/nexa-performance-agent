@@ -33,8 +33,8 @@ logs/*.log
 
 # ── Local data / cache ────────────────────────────────────────────────────
 data/
-cache/
 .cache/
+cache/*.json
 scripts/miro_dump.json
 
 # ── Build artifacts ───────────────────────────────────────────────────────
