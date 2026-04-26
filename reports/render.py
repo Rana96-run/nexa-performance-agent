@@ -161,12 +161,30 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 .card-title { font-size: 14px; font-weight: 600; }
 .card-body { padding: 20px; }
 
-/* ── Narrative ── */
-.headline-text { font-size: 18px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; }
-.what-changed { list-style: none; display: flex; flex-direction: column; gap: 6px;
-                margin-bottom: 16px; }
-.what-changed li::before { content: "→ "; color: var(--accent); font-weight: 700; }
-.why-text { color: var(--muted); line-height: 1.7; white-space: pre-wrap; }
+/* ── Narrative / Summary ── */
+.summary-card .card-body { padding: 0; }
+.summary-headline { padding: 24px 24px 16px;
+                    background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+                    border-bottom: 1px solid var(--border); }
+.headline-text { font-size: 22px; font-weight: 700; margin: 0 0 4px;
+                 line-height: 1.35; color: #0f172a; letter-spacing: -0.01em; }
+.headline-meta { font-size: 12px; color: var(--muted); font-weight: 500; }
+.summary-body { padding: 20px 24px; display: grid;
+                grid-template-columns: 1fr 1fr; gap: 24px; }
+.summary-block h4 { font-size: 11px; font-weight: 700; color: var(--muted);
+                    text-transform: uppercase; letter-spacing: .08em;
+                    margin: 0 0 10px; }
+.what-changed { list-style: none; display: flex; flex-direction: column; gap: 8px;
+                margin: 0; padding: 0; }
+.what-changed li { font-size: 13.5px; line-height: 1.55;
+                   padding-left: 22px; position: relative; }
+.what-changed li::before { content: "▸"; position: absolute; left: 0;
+                           color: var(--accent); font-weight: 700; }
+.why-text { color: #334155; line-height: 1.7; font-size: 13.5px;
+            white-space: pre-wrap; margin: 0; }
+@media (max-width: 900px) {
+  .summary-body { grid-template-columns: 1fr; }
+}
 
 /* ── Channel section ── */
 .channel-section { scroll-margin-top: 20px; }
@@ -620,9 +638,23 @@ function initScrollSpy() {
   document.querySelectorAll('.channel-section[id]').forEach(s => observer.observe(s));
 }
 
+// ── Default date inputs to last 7 days ────────────────────────────────────
+function initDateInputs() {
+  const e = document.getElementById('date-end');
+  const s = document.getElementById('date-start');
+  if (!e || !s) return;
+  const today = new Date();
+  const yest  = new Date(today.getTime() - 86400000);
+  const weekAgo = new Date(today.getTime() - 7 * 86400000);
+  const fmt = d => d.toISOString().slice(0, 10);
+  if (!e.value) e.value = fmt(yest);
+  if (!s.value) s.value = fmt(weekAgo);
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   buildMetricToggles();
+  initDateInputs();
   renderAllChannels();
   renderTrends();
   initScrollSpy();
@@ -788,6 +820,24 @@ def render_html(report: dict) -> str:
     cadence      = report.get("cadence", "daily")
     channels_7d  = (report.get("windows") or {}).get("last_7d") or report.get("channels", [])
 
+    # Friendly date for the summary block, e.g. "Sun, 26 Apr 2026"
+    try:
+        from datetime import datetime as _dt
+        report_date_human = _dt.fromisoformat(report_date).strftime("%a, %d %b %Y")
+    except Exception:
+        report_date_human = report_date
+
+    # Default values if AI roles haven't run (e.g. on_demand regen via /api/regenerate)
+    if not headline:
+        active = [c.get("label") or c.get("channel", "") for c in channels_7d]
+        headline = (
+            f"{len(channels_7d)} active channel(s): " + ", ".join(active)
+        ) if channels_7d else "Awaiting first nightly analysis."
+    if not what_changed:
+        what_changed = ["Nightly Claude analysis runs at 03:00 Riyadh — full insights tomorrow."]
+    if not why:
+        why = "This dashboard refreshes once nightly. Live BigQuery data feeds the per-channel campaign tables."
+
     sidebar_html   = _sidebar(channels_7d)
     ch_scaffolds   = "\n".join(_channel_section_scaffold(ch) for ch in channels_7d)
     bullets_html   = "".join(f"<li>{b}</li>" for b in what_changed)
@@ -867,12 +917,23 @@ def render_html(report: dict) -> str:
 
     <!-- Narrative summary -->
     <section id="section-narrative">
-      <div class="card">
-        <div class="card-header"><span class="card-title">Summary</span></div>
+      <div class="card summary-card">
+        <div class="card-header"><span class="card-title">Daily Summary</span></div>
         <div class="card-body">
-          <div class="headline-text">{headline}</div>
-          <ul class="what-changed">{bullets_html}</ul>
-          <div class="why-text">{why}</div>
+          <div class="summary-headline">
+            <div class="headline-text">{headline}</div>
+            <div class="headline-meta">{report_date_human}</div>
+          </div>
+          <div class="summary-body">
+            <div class="summary-block">
+              <h4>What changed</h4>
+              <ul class="what-changed">{bullets_html}</ul>
+            </div>
+            <div class="summary-block">
+              <h4>Why it matters</h4>
+              <p class="why-text">{why}</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
