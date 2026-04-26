@@ -51,58 +51,68 @@ def _slack_post(blocks: list, text: str) -> None:
 
 def _handle_error(payload: dict) -> None:
     zap_name  = payload.get("zap_name", "Unknown Zap")
-    error_msg = (payload.get("error_message") or "No detail")[:300]
+    error_msg = (payload.get("error_message") or "No detail")[:1500]
     run_url   = payload.get("run_url", "")
-    zap_url   = payload.get("zap_url", "")
     run_id    = payload.get("run_id") or payload.get("id") or ""
 
-    link = f"<{run_url}|View run>" if run_url else (f"<{zap_url}|Open Zap>" if zap_url else "")
-
-    # Auto-replay the errored run immediately
+    # 1. Try to auto-replay the errored run (fixes transient failures)
     replayed = False
     if run_id:
         try:
             from collectors.zapier import resume_held_run
             replayed = resume_held_run(run_id)
-            if replayed:
-                print(f"[zapier-webhook] Auto-replayed error run {run_id} for {zap_name}")
         except Exception as e:
             print(f"[zapier-webhook] Auto-replay failed: {e}")
 
-    replay_note = " :recycle: _Auto-replayed_" if replayed else (" _(no run_id — manual replay needed)_" if not run_id else " :warning: _Replay failed_")
+    if replayed:
+        print(f"[zapier-webhook] Auto-replayed {run_id} for {zap_name} — silent (only escalates if it fails again)")
+        return  # transient fix worked, no Slack noise
 
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":zap: :red_circle: *Zapier Error — {zap_name}*{replay_note}\n"
-                f"```{error_msg}```\n"
-                f"{link}"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"Zapier error in {zap_name}")
-    print(f"[zapier-webhook] Error alert: {zap_name} — {error_msg[:80]}")
+    # 2. Auto-replay didn't help (or no run_id) → run a Claude-powered diagnosis
+    #    and post ONE actionable message with specific fix steps.
+    print(f"[zapier-webhook] Diagnosing persistent failure: {zap_name}")
+    try:
+        from claude.zap_diagnostician import diagnose, format_for_slack
+        diag = diagnose(
+            zap_name=zap_name,
+            error_message=error_msg,
+            run_url=run_url,
+            replay_attempts=1,
+        )
+        blocks, fallback_text = format_for_slack(diag, zap_name, run_url)
+        _slack_post(blocks, fallback_text)
 
-    # Only create an Asana task if the replay failed (needs manual fix)
-    if not replayed:
+        # Asana task with the EXACT fix steps Claude generated — not generic
         try:
             from executors.asana import create_task
+            steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(diag.get("fix_steps", [])))
             create_task(
-                title=f"Zapier error — {zap_name[:70]}",
+                title=f"Zap broken — {zap_name[:60]} ({diag.get('category', 'unknown')})",
                 description=(
                     f"Zap: {zap_name}\n"
-                    f"Error: {error_msg}\n"
                     f"Run: {run_url}\n"
-                    f"Auto-replay: {'succeeded' if replayed else 'FAILED — manual action required'}\n"
-                    f"Action: Open Zapier Task History and fix the failing step."
+                    f"Category: {diag.get('category')}  |  Severity: {diag.get('severity')}\n"
+                    f"Broken step: {diag.get('broken_step')}\n\n"
+                    f"Root cause: {diag.get('root_cause')}\n\n"
+                    f"Fix steps:\n{steps_text}\n\n"
+                    f"Original error:\n{error_msg}"
                 ),
                 project_key="daily_activity",
-                task_type="Zapier Error",
+                task_type="Zap Fix",
             )
         except Exception as e:
             print(f"[zapier-webhook] Asana task skipped: {e}")
+    except Exception as e:
+        print(f"[zapier-webhook] Diagnosis failed: {e}")
+        # Fallback so we never silently swallow a persistent failure
+        _slack_post([{
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": (
+                f":warning: *Zap broken — {zap_name}*\n"
+                f"```{error_msg[:300]}```\n"
+                f"<{run_url}|Open run>"
+            )},
+        }], f"Zap broken — {zap_name}")
 
 
 def _handle_held(payload: dict) -> None:
