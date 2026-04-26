@@ -253,83 +253,26 @@ def _handle_lead_created(lead_id: str) -> None:
 
 
 def _handle_lead_qualified(lead_id: str, stage_label: str) -> None:
-    """Lead moved to a Qualified stage — Slack alert only for paid channels."""
-    props, assoc = _get_lead(lead_id)
+    """Lead moved to a Qualified stage — logged only. Weekly report covers aggregate."""
+    props, _ = _get_lead(lead_id)
     src = props.get("lead_qoyod_source") or ""
     if not _is_paid(src):
-        print(f"[webhook] Lead {lead_id} qualified but source='{src}' is not paid — skipping")
-        return
-
-    contact = _get_associated_contact(assoc)
-    name = (
-        f"{contact.get('firstname','')} {contact.get('lastname','')}".strip()
-        or f"Lead {lead_id}"
-    )
-    company = contact.get("company") or "—"
-    cmp     = props.get("lead_utm_campaign") or "—"
-    ctn     = props.get("lead_utm_content")  or "—"
-
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":star: *Lead Qualified (SQL) — {name}*\n"
-                f"*Company:* {company}  |  *Stage:* {stage_label}\n"
-                f"*Source:* {src}  |  *Campaign:* `{cmp}`  |  *Content:* `{ctn}`\n"
-                f"_Qualified {_now_riyadh()}_"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"Lead Qualified: {name} from {src}")
-    print(f"[webhook] Lead {lead_id} qualified as SQL ({stage_label})")
-
-    try:
-        from executors.asana import create_task
-        create_task(
-            title=f"SQL Follow-up — {name} ({company})",
-            description=(
-                f"Lead ID: {lead_id}\nName: {name}\nCompany: {company}\n"
-                f"Source: {src}\nCampaign: {cmp}\nContent: {ctn}\n"
-                f"Stage: {stage_label}\nQualified: {_now_riyadh()}"
-            ),
-            project_key="daily_activity",
-            task_type="SQL Follow-up",
-        )
-    except Exception as e:
-        print(f"[webhook] Asana task skipped: {e}")
+        return  # not a paid channel
+    cmp = props.get("lead_utm_campaign") or "—"
+    print(f"[webhook] SQL: lead={lead_id} stage='{stage_label}' src={src} campaign={cmp}")
+    # No immediate Slack alert — weekly agent run aggregates by channel.
 
 
 def _handle_lead_disqualified(lead_id: str, stage_label: str) -> None:
-    """Lead moved to a Disqualified stage — Slack alert only for paid channels."""
-    props, assoc = _get_lead(lead_id)
+    """Lead moved to a Disqualified stage — logged only. Weekly report covers aggregate."""
+    props, _ = _get_lead(lead_id)
     src = props.get("lead_qoyod_source") or ""
     if not _is_paid(src):
-        print(f"[webhook] Lead {lead_id} disqualified but source='{src}' is not paid — skipping")
-        return
-
-    contact = _get_associated_contact(assoc)
-    name   = (
-        f"{contact.get('firstname','')} {contact.get('lastname','')}".strip()
-        or f"Lead {lead_id}"
-    )
-    cmp    = props.get("lead_utm_campaign") or "—"
+        return  # not a paid channel
     reason = _disq_reason(props)
-
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":x: *Lead Disqualified — {name}*\n"
-                f"*Stage:* {stage_label}  |  *Reason:* {reason}\n"
-                f"*Source:* {src}  |  *Campaign:* `{cmp}`\n"
-                f"_Disqualified {_now_riyadh()}_"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"Lead Disqualified: {name} — {reason}")
-    print(f"[webhook] Lead {lead_id} disqualified: {reason}")
+    cmp    = props.get("lead_utm_campaign") or "—"
+    print(f"[webhook] DISQ: lead={lead_id} stage='{stage_label}' src={src} reason={reason} campaign={cmp}")
+    # No immediate Slack alert — weekly agent run aggregates by channel.
 
 
 def _handle_lead_stage_change(lead_id: str, new_stage_id: str) -> None:
@@ -351,92 +294,44 @@ def _handle_lead_stage_change(lead_id: str, new_stage_id: str) -> None:
 # ─── Deal handlers ────────────────────────────────────────────────────────────
 
 def _handle_deal_won(deal_id: str) -> None:
+    """Deal closed-won — logged only. Weekly report covers aggregate by channel."""
     p   = _get_deal(deal_id)
     src = p.get("deal_qoyod_source") or ""
     if not _is_paid(src):
-        print(f"[webhook] Deal {deal_id} won but source='{src}' is not paid — skipping")
-        return
-
-    name    = p.get("dealname") or f"Deal {deal_id}"
-    amount  = _deal_amount_usd(p)
-    cmp     = p.get("deal_utm_campaign") or "—"
-    ctn     = p.get("deal_utm_content")  or "—"
-    amt_str = f"${amount:,.2f}" if amount else "—"
-
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":trophy: *Deal Closed Won — {name}*\n"
-                f"*Amount:* {amt_str} USD\n"
-                f"*Source:* {src}  |  *Campaign:* `{cmp}`  |  *Content:* `{ctn}`\n"
-                f"_Closed {_now_riyadh()}_"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"Deal Won: {name} — {amt_str}")
-    print(f"[webhook] Deal won: {name} ({amt_str})")
-
-
-def _handle_deal_lost(deal_id: str) -> None:
-    p   = _get_deal(deal_id)
-    src = p.get("deal_qoyod_source") or ""
-    if not _is_paid(src):
-        print(f"[webhook] Deal {deal_id} lost but source='{src}' is not paid — skipping")
-        return
-
+        return  # not a paid channel
     name   = p.get("dealname") or f"Deal {deal_id}"
     amount = _deal_amount_usd(p)
     cmp    = p.get("deal_utm_campaign") or "—"
-    ctn    = p.get("deal_utm_content")  or "—"
-    reason = (
-        p.get("hs_closed_lost_reason")
-        or p.get("closed_lost_reason")
-        or "—"
-    )
-    amt_str = f"${amount:,.2f}" if amount else "—"
+    print(f"[webhook] WON: deal={deal_id} name='{name}' amt={amount} src={src} campaign={cmp}")
+    # No immediate Slack alert — weekly agent run aggregates by channel.
 
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":x: *Deal Closed Lost — {name}*\n"
-                f"*Amount:* {amt_str}  |  *Reason:* {reason}\n"
-                f"*Source:* {src}  |  *Campaign:* `{cmp}`  |  *Content:* `{ctn}`\n"
-                f"_Lost {_now_riyadh()}_"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"Deal Lost: {name} — {reason}")
-    print(f"[webhook] Deal lost: {name} ({amt_str}) reason={reason}")
+
+def _handle_deal_lost(deal_id: str) -> None:
+    """Deal closed-lost — logged only. Weekly report covers aggregate by channel."""
+    p   = _get_deal(deal_id)
+    src = p.get("deal_qoyod_source") or ""
+    if not _is_paid(src):
+        return  # not a paid channel
+    name   = p.get("dealname") or f"Deal {deal_id}"
+    reason = p.get("hs_closed_lost_reason") or p.get("closed_lost_reason") or "—"
+    amount = _deal_amount_usd(p)
+    cmp    = p.get("deal_utm_campaign") or "—"
+    print(f"[webhook] LOST: deal={deal_id} name='{name}' amt={amount} reason={reason} src={src} campaign={cmp}")
+    # No immediate Slack alert — weekly agent run aggregates by channel.
 
 
 # ─── Contact handlers (fallback — lower priority than Lead module) ────────────
 
 def _handle_contact_sql(contact_id: str) -> None:
-    """Fires only if Lead module events are not configured."""
+    """Fires only if Lead module events are not configured — logged only."""
     props = _hs_get(
         f"{_BASE}/crm/v3/objects/contacts/{contact_id}"
         f"?properties={','.join(_CONTACT_PROPS)}"
     ).get("properties", {})
-    name = f"{props.get('firstname','')} {props.get('lastname','')}".strip() or f"Contact {contact_id}"
-    src  = props.get("hs_analytics_source") or "Unknown"
-    cmp  = props.get("lead_utm_campaign") or "—"
-    blocks = [{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": (
-                f":star: *New SQL (Contact) — {name}*\n"
-                f"*Source:* {src}  |  *Campaign:* `{cmp}`\n"
-                f"_Converted {_now_riyadh()}_"
-            ),
-        },
-    }]
-    _slack_post(blocks, f"New SQL: {name}")
-    print(f"[webhook] Contact SQL: {contact_id} ({name})")
+    src = props.get("hs_analytics_source") or "Unknown"
+    cmp = props.get("lead_utm_campaign") or "—"
+    print(f"[webhook] SQL contact={contact_id} src={src} campaign={cmp}")
+    # No immediate Slack alert — weekly agent run aggregates by channel.
 
 
 # ─── Event router ─────────────────────────────────────────────────────────────
