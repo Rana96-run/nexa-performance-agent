@@ -204,10 +204,16 @@ def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
     import json as _json
     ndjson = "\n".join(_json.dumps(r, default=str) for r in rows).encode("utf-8")
 
+    # Pass the explicit schema so ALLOW_FIELD_ADDITION can add new columns
+    # (e.g. 'currency') to an existing table that was created before the field
+    # was added to CAMPAIGNS_DAILY_SCHEMA.  Without an explicit schema the load
+    # job validates against only the existing table schema and rejects extras.
+    schema = TABLES.get(table_name)
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
         schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
+        schema=schema,  # None → autodetect disabled but ALLOW_FIELD_ADDITION still triggers
     )
     from io import BytesIO
     load_job = client.load_table_from_file(
