@@ -48,8 +48,20 @@ def _nightly():
         _run_with_heartbeat("quarterly")
 
 
+def _run_health_check():
+    """Run the self-contained health check and post results to Slack."""
+    try:
+        from scripts.health_check import main as hc_main
+        hc_main(post_slack=True)
+    except Exception as e:
+        print(f"[ops-scheduler] Health check failed: {e}")
+        traceback.print_exc()
+
+
 def run():
     schedule.every().day.at("00:00").do(_nightly)   # 03:00 Riyadh = 00:00 UTC
+    # Health check: every morning at 07:00 Riyadh (04:00 UTC) so Amar sees it at start of day
+    schedule.every().day.at("04:00").do(_run_health_check)
 
     print("=" * 52)
     print("  Qoyod Operational Scheduler — LIVE")
@@ -57,8 +69,16 @@ def run():
     print("  Nightly  03:00 Riyadh (00:00 UTC)")
     print("  Weekly   added Mon nights")
     print("  Monthly  added on 1st of month")
+    print("  Health   07:00 Riyadh (04:00 UTC) — daily")
     print("  Manual:  python main.py on_demand")
     print("=" * 52)
+
+    # Run a startup health check immediately (once, in background) so we get
+    # a status post every time the service restarts — no waiting until 07:00.
+    try:
+        _run_health_check()
+    except Exception as e:
+        print(f"[ops-scheduler] Startup health check error: {e}")
 
     while True:
         schedule.run_pending()
