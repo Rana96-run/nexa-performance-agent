@@ -68,6 +68,8 @@ CAMPAIGNS_DAILY_SCHEMA = [
     bigquery.SchemaField("conversions", "FLOAT64"),
     bigquery.SchemaField("cpl", "FLOAT64"),
     bigquery.SchemaField("currency", "STRING"),                        # always "USD" — collectors convert before writing
+    bigquery.SchemaField("spend_native", "FLOAT64"),                   # spend in the platform's native currency
+    bigquery.SchemaField("currency_native", "STRING"),                 # e.g. "SAR", "USD"
     bigquery.SchemaField("updated_at", "TIMESTAMP"),
 ]
 
