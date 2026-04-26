@@ -1,2 +1,1 @@
-web: gunicorn "reports.app:app" --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile -
-worker: python worker.py
+web: python app_server.py
