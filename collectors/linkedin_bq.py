@@ -22,7 +22,9 @@ AD_ACCT_URN = os.getenv("LI_AD_ACCOUNT_URN", "")
 def _headers() -> dict:
     return {
         "Authorization":             f"Bearer {TOKEN}",
-        "LinkedIn-Version":          "202410",
+        # LinkedIn rolls API versions monthly; their N-12 retirement window
+        # means we need to bump this roughly twice a year.  Current Apr 2026.
+        "LinkedIn-Version":          "202502",
         "X-Restli-Protocol-Version": "2.0.0",
     }
 

@@ -89,7 +89,7 @@ def _asana_task_counts() -> dict:
 # ─── BQ headline numbers (from the unified view) ─────────────────────────────
 
 def _headline_numbers() -> Optional[dict]:
-    """Last 7d ending yesterday — single source of truth via paid_channel_daily."""
+    """Last 7d ending yesterday — totals AND per-channel breakdown."""
     try:
         from collectors.bq_writer import get_client, PROJECT_ID, DATASET
     except Exception:
@@ -101,28 +101,59 @@ def _headline_numbers() -> Optional[dict]:
         FROM `{PROJECT_ID}.{DATASET}.paid_channel_daily`
         WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
           AND date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+      ),
+      per_channel AS (
+        SELECT channel,
+          ROUND(SUM(spend), 0) AS spend,
+          SUM(leads)    AS leads,
+          SUM(qualified) AS qual,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),     0) AS cpl,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 0) AS cpql
+        FROM base
+        GROUP BY channel
+      ),
+      total AS (
+        SELECT
+          ROUND(SUM(spend), 0)  AS spend,
+          SUM(leads)            AS leads,
+          SUM(qualified)        AS qual,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),     0) AS cpl,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 0) AS cpql
+        FROM base
       )
       SELECT
-        ROUND(SUM(spend), 0)              AS spend,
-        SUM(leads)                        AS leads,
-        SUM(qualified)                    AS qual,
-        SUM(open_leads)                   AS open_l,
-        ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),     0) AS cpl,
-        ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 0) AS cpql
-      FROM base
+        (SELECT AS STRUCT * FROM total)         AS total,
+        ARRAY(
+          SELECT AS STRUCT * FROM per_channel
+          WHERE spend > 0
+          ORDER BY spend DESC
+        ) AS channels
     """
     try:
         rows = list(client.query(q).result())
         if not rows:
             return None
         r = rows[0]
+        t = dict(r["total"])
         return {
-            "spend": int(r.spend or 0),
-            "leads": int(r.leads or 0),
-            "qual":  int(r.qual or 0),
-            "open":  int(r.open_l or 0),
-            "cpl":   int(r.cpl)  if r.cpl  is not None else 0,
-            "cpql":  int(r.cpql) if r.cpql is not None else 0,
+            "total": {
+                "spend": int(t.get("spend") or 0),
+                "leads": int(t.get("leads") or 0),
+                "qual":  int(t.get("qual") or 0),
+                "cpl":   int(t.get("cpl"))  if t.get("cpl")  is not None else 0,
+                "cpql":  int(t.get("cpql")) if t.get("cpql") is not None else 0,
+            },
+            "channels": [
+                {
+                    "channel": c["channel"],
+                    "spend":   int(c["spend"] or 0),
+                    "leads":   int(c["leads"] or 0),
+                    "qual":    int(c["qual"]  or 0),
+                    "cpl":     int(c["cpl"])  if c["cpl"]  is not None else 0,
+                    "cpql":    int(c["cpql"]) if c["cpql"] is not None else 0,
+                }
+                for c in r["channels"]
+            ],
         }
     except Exception as e:
         print(f"[daily-summary] BQ headline fetch failed: {e}")
@@ -144,10 +175,16 @@ def build_daily_summary_text(spike_count: int = 0) -> str:
 
     lines = [f"*Daily Report — {yesterday}*  <{url}|open dashboard>"]
     if h:
+        t = h["total"]
         lines.append(
-            f"7d: ${h['spend']:,} spent · {h['leads']:,} leads · "
-            f"{h['qual']:,} qual · CPL ${h['cpl']} · CPQL ${h['cpql']}"
+            f"7d total: ${t['spend']:,} spent · {t['leads']:,} leads · "
+            f"{t['qual']:,} qual · CPL ${t['cpl']} · CPQL ${t['cpql']}"
         )
+        for c in h["channels"]:
+            lines.append(
+                f"  • {c['channel']}: ${c['spend']:,} · {c['leads']} leads · "
+                f"{c['qual']} qual · CPL ${c['cpl']} · CPQL ${c['cpql']}"
+            )
     lines.append(f"Tasks created today: {counts['created_today']}")
     if counts["pending_by_project"]:
         for proj, n in counts["pending_by_project"]:
