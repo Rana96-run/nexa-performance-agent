@@ -101,6 +101,18 @@ def _run_spike_detector():
         print(f"[ops-scheduler] Spike detector error: {e}")
 
 
+def _run_google_ads_audit():
+    """Daily impression-share, quality-score, and search-terms audit.
+    Creates Asana tasks with consolidated recommendations."""
+    try:
+        from analysers.google_ads_audit_tasks import create_audit_tasks
+        tasks = create_audit_tasks()
+        print(f"[ops-scheduler] Google Ads audit: {len(tasks)} task(s) created")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Google Ads audit error: {e}")
+
+
 def _nightly():
     """One combined nightly run — chains weekly/monthly/quarterly where applicable."""
     # 1. Refresh BigQuery once so the dashboard + report read fresh data.
@@ -115,6 +127,9 @@ def _nightly():
 
     # 3. Spike detector reads from the BQ data we just refreshed.
     _run_spike_detector()
+
+    # 3b. Google Ads daily audit — IS, QS, search terms → Asana tasks
+    _run_google_ads_audit()
 
     # 4. One Slack ping with the dashboard URL.
     _post_report_ready()
