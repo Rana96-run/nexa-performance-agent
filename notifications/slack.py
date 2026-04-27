@@ -9,52 +9,56 @@ client = WebClient(token=SLACK_BOT_TOKEN)
 
 def post_approval_request(analysis: dict) -> str:
     """
-    Post Claude's decisions to Slack for approval.
+    Post Claude's decisions to Slack for approval — concise, scannable layout.
     Returns the message timestamp (ts) to track approval reaction.
     """
-    decision = analysis.get("decision", {}) or {}
-    raw = analysis.get("raw_response", "")
+    from notifications.quiet import is_quiet, quiet_log
 
-    # Prefer the structured slack_draft field from the role's JSON.
-    # Fall back to the legacy regex extractor only if the role didn't provide it.
-    slack_section = decision.get("slack_draft") or extract_slack_draft(raw)
+    decision = analysis.get("decision", {}) or {}
+    action     = decision.get("action", "?").upper()
+    channel    = decision.get("channel", "?")
+    campaign   = decision.get("campaign", "")
+    kpi        = decision.get("kpi", "?")
+    value      = decision.get("value", "?")
+    threshold  = decision.get("threshold", "")
+    reason     = decision.get("reason", "") or decision.get("decision", "")
+    confidence = decision.get("confidence", "?")
+
+    # ── Header (one line, scannable) ────────────────────────────────────────
+    header = f"*{action}* · {channel}"
+    if campaign:
+        header += f" · `{campaign}`"
+
+    # ── Why (the proof) ────────────────────────────────────────────────────
+    proof_lines = []
+    if kpi != "?":
+        proof_lines.append(f"*{kpi}* = `{value}`" + (f" (threshold {threshold})" if threshold else ""))
+    if reason:
+        proof_lines.append(f"_{reason}_")
+    proof_lines.append(f"Confidence: {confidence}")
+    proof_text = "\n".join(proof_lines)
+
+    # ── Footer ─────────────────────────────────────────────────────────────
+    footer = ":white_check_mark: approve   :x: reject"
 
     blocks = [
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Daily Performance Check -- Approval Required*\n\n{slack_section}"
-            }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Action proposed:* `{decision.get('action', 'N/A')}`\n"
-                        f"*Channel:* {decision.get('channel', 'N/A')}\n"
-                        f"*Campaign:* {decision.get('campaign', 'N/A')}\n"
-                        f"*KPI:* {decision.get('kpi', 'N/A')} = {decision.get('value', 'N/A')}\n"
-                        f"*Confidence:* {decision.get('confidence', 'N/A')}"
-            }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "React with check mark to *approve* this action, or X to *reject* it.\n"
-                        "_No action will be taken until you respond._"
-            }
-        }
+        {"type": "section", "text": {"type": "mrkdwn", "text": header}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": proof_text}},
+        {"type": "context", "elements": [
+            {"type": "mrkdwn", "text": footer},
+        ]},
     ]
+    fallback_text = f"Approval: {action} {channel} {campaign}".strip()
 
+    if is_quiet():
+        quiet_log("approval", SLACK_CHANNEL_APPROVAL, fallback_text)
+        return None
     try:
         response = client.chat_postMessage(
             channel=SLACK_CHANNEL_APPROVAL,
-            blocks=blocks,
-            text="Daily performance check -- approval required"
+            blocks=blocks, text=fallback_text,
         )
-        return response["ts"]  # message timestamp = approval tracking ID
+        return response["ts"]
     except SlackApiError as e:
         print(f"Slack error: {e}")
         return None
