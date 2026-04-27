@@ -41,6 +41,9 @@ memory/_drive_index.json
 # ── Generated report HTML — never commit (always regenerated nightly) ─────
 reports/*.html
 
+# ── Generated screenshot PNGs (uploaded to Miro, not source-of-truth) ─────
+scripts/_screenshots/
+
 # ── Build artifacts ───────────────────────────────────────────────────────
 dist/
 build/
