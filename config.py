@@ -165,18 +165,18 @@ DEFAULT_NATIVE_CURRENCY = "SAR"
 USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 
 # ---------------------------------------------------------------------------
-# KPI thresholds — all in USD
+# KPI thresholds — all in USD (per playbook in qoyod-manager-os.md)
 # ---------------------------------------------------------------------------
 # CPL (cost per lead) zones, USD
-CPL_SCALE      = 5.50   # < this  → scale up
-CPL_ACCEPTABLE = 7.50   # ≤ this  → acceptable
-CPL_WARNING    = 8.00   # ≤ this  → warning; above → pause zone
+CPL_SCALE      = 20.00  # < this  → scale up
+CPL_ACCEPTABLE = 28.00  # ≤ this  → acceptable
+CPL_WARNING    = 30.00  # ≤ this  → warning; > $30 for 4 days → pause zone
 CPL_PAUSE      = CPL_WARNING   # backwards-compat alias
 
 # CPQL (cost per qualified lead / SQL) zones, USD
-CPQL_SCALE      = 11.00
-CPQL_ACCEPTABLE = 17.00
-CPQL_WARNING    = 21.33
+CPQL_SCALE      = 40.00
+CPQL_ACCEPTABLE = 65.00
+CPQL_WARNING    = 80.00  # > $80 for 4 days → pause zone
 CPQL_PAUSE      = CPQL_WARNING  # backwards-compat alias
 
 # Qualification / ROAS targets
