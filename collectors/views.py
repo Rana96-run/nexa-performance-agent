@@ -305,6 +305,110 @@ GROUP BY 1,2,3,4,5,6
 """
 
 
+# ─── Unified paid-channel view (single source of truth for the dashboard) ────
+# Joins ad-platform spend with HubSpot leads + deals, computing CPL/CPQL/ROAS
+# in SQL.  All reporting MUST use this view — no Python-side spend/leads math.
+#
+# Date discipline: rows emitted only for date <= CURRENT_DATE('Asia/Riyadh') - 1.
+# Today's data is always partial across platforms (Google Ads is T-1, Meta has
+# 24h lag) so we ALWAYS cut at yesterday.  The dashboard tells the user
+# "data through {yesterday}".
+PAID_CHANNEL_CAMPAIGN_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_campaign_daily` AS
+WITH
+  -- Map our channel slug → the qoyod_source label HubSpot writes
+  channel_map AS (
+    SELECT 'google_ads'    AS channel, 'Google Ads'    AS qoyod_source UNION ALL
+    SELECT 'meta',                     'Meta Ads'                       UNION ALL
+    SELECT 'snapchat',                 'Snapchat Ads'                   UNION ALL
+    SELECT 'tiktok',                   'Tiktok Ads'                     UNION ALL
+    SELECT 'linkedin',                 'LinkedIn Ads'                   UNION ALL
+    SELECT 'microsoft_ads',            'Microsoft Ads'
+  ),
+  spend AS (
+    SELECT date, channel, campaign_name,
+           SUM(spend)        AS spend,
+           SUM(impressions)  AS impressions,
+           SUM(clicks)       AS clicks
+    FROM `{P}.{D}.campaigns_daily`
+    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    GROUP BY date, channel, campaign_name
+  ),
+  leads AS (
+    SELECT date, qoyod_source, lead_utm_campaign AS campaign_name,
+           SUM(leads_total)        AS leads,
+           SUM(leads_qualified)    AS qualified,
+           SUM(leads_disqualified) AS disqualified
+    FROM `{P}.{D}.hubspot_leads_module_daily`
+    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    GROUP BY date, qoyod_source, lead_utm_campaign
+  ),
+  deals AS (
+    SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
+           SUM(deals_won)  AS deals_won,
+           SUM(amount_won) AS amount_won
+    FROM `{P}.{D}.hubspot_deals_daily`
+    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    GROUP BY date, qoyod_source, deal_utm_campaign
+  )
+SELECT
+  s.date,
+  s.channel,
+  s.campaign_name,
+  -- Spend metrics (from ad platform)
+  ROUND(s.spend, 2)        AS spend,
+  s.impressions,
+  s.clicks,
+  -- Lead metrics (from HubSpot)
+  IFNULL(l.leads, 0)        AS leads,
+  IFNULL(l.qualified, 0)    AS qualified,
+  IFNULL(l.disqualified, 0) AS disqualified,
+  IFNULL(l.leads, 0) - IFNULL(l.qualified, 0) - IFNULL(l.disqualified, 0) AS open_leads,
+  -- Deal metrics (from HubSpot)
+  IFNULL(d.deals_won, 0)              AS deals,
+  ROUND(IFNULL(d.amount_won, 0), 2)   AS deal_amount,
+  -- Computed KPIs (single source of truth — never recompute in Python)
+  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads, 0)),     2) AS cpl,
+  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)), 2) AS cpql,
+  ROUND(SAFE_DIVIDE(d.amount_won, NULLIF(s.spend, 0)), 2) AS roas,
+  ROUND(SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
+  ROUND(SAFE_DIVIDE(l.leads, NULLIF(s.clicks, 0)) * 100, 4)        AS cvr_pct,
+  ROUND(SAFE_DIVIDE(l.qualified, NULLIF(l.leads, 0)) * 100, 2)     AS qual_rate_pct
+FROM spend s
+LEFT JOIN channel_map cm  ON cm.channel = s.channel
+LEFT JOIN leads l         ON l.date = s.date
+                         AND l.qoyod_source = cm.qoyod_source
+                         AND l.campaign_name = s.campaign_name
+LEFT JOIN deals d         ON d.date = s.date
+                         AND d.qoyod_source = cm.qoyod_source
+                         AND d.campaign_name = s.campaign_name
+"""
+
+
+# Channel-level rollup view — same data aggregated to (date, channel)
+PAID_CHANNEL_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_daily` AS
+SELECT
+  date,
+  channel,
+  ROUND(SUM(spend), 2)        AS spend,
+  SUM(impressions)            AS impressions,
+  SUM(clicks)                 AS clicks,
+  SUM(leads)                  AS leads,
+  SUM(qualified)              AS qualified,
+  SUM(disqualified)           AS disqualified,
+  SUM(open_leads)             AS open_leads,
+  SUM(deals)                  AS deals,
+  ROUND(SUM(deal_amount), 2)  AS deal_amount,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),       2) AS cpl,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)),   2) AS cpql,
+  ROUND(SAFE_DIVIDE(SUM(deal_amount), NULLIF(SUM(spend), 0)), 2) AS roas,
+  ROUND(SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads), 0)) * 100, 2) AS qual_rate_pct
+FROM `{P}.{D}.paid_channel_campaign_daily`
+GROUP BY date, channel
+"""
+
+
 ALL_VIEWS = [
     ("v_channel_key_map",          CHANNEL_MAP_SQL),
     ("campaign_performance_daily", CAMPAIGN_PERFORMANCE_DAILY_SQL),
@@ -313,6 +417,9 @@ ALL_VIEWS = [
     ("channel_roas_monthly",       CHANNEL_ROAS_MONTHLY_SQL),
     ("disqualification_matrix",    DISQUAL_MATRIX_SQL),
     ("pipeline_funnel",            PIPELINE_FUNNEL_SQL),
+    # Unified views — single source of truth for the dashboard
+    ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
+    ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
 ]
 
 
