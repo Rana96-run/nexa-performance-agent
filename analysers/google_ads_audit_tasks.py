@@ -78,11 +78,11 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                 f"- Lost-IS to RANK > 30% → quality / bid issue (improve QS or raise bid)\n"
                 f"- IS > 80% → saturated (broaden keywords / new ad groups)\n\n")
         if scale:
-            body += f"### 🟢 SCALE candidates ({len(scale)})\n" + _is_table(scale) + "\n"
+            body += f"### Scale candidates ({len(scale)})\n" + _is_table(scale) + "\n"
         if rank:
-            body += f"### 🟠 RANK issues ({len(rank)})\n" + _is_table(rank) + "\n"
+            body += f"### Rank issues ({len(rank)})\n" + _is_table(rank) + "\n"
         if saturated:
-            body += f"### 🔵 SATURATED ({len(saturated)})\n" + _is_table(saturated) + "\n"
+            body += f"### Saturated ({len(saturated)})\n" + _is_table(saturated) + "\n"
         body += ("\n**Action:** Budget changes are approval-gated. Open the channel "
                  "optimization board, review, and approve the bid/budget mutations "
                  "in the Slack approval channel.")
@@ -109,9 +109,9 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                 f"**Why this matters:** Low QS means higher CPC and lower IS. "
                 f"Improving QS reduces cost AND wins more impressions.\n\n")
         if urgent:
-            body += f"### 🔴 URGENT (QS < 4) — {len(urgent)} keywords\n" + _qs_table(urgent[:30]) + "\n"
+            body += f"### Urgent (QS < 4) — {len(urgent)} keywords\n" + _qs_table(urgent[:30]) + "\n"
         if review:
-            body += f"### 🟠 Review (QS < 5) — {len(review)} keywords\n" + _qs_table(review[:30]) + "\n"
+            body += f"### Review (QS < 5) — {len(review)} keywords\n" + _qs_table(review[:30]) + "\n"
 
         body += ("\n**How to improve QS:**\n"
                  "1. **Ad relevance** below average → ad copy doesn't match the "

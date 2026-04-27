@@ -35,39 +35,30 @@ def _run_with_heartbeat(cadence: str):
                        duration_s=time.time() - t0)
 
 
-def _post_report_ready():
-    """One Slack message saying the daily report is ready, with the URL.
-    Called once per nightly run after the daily cadence completes successfully.
+def _post_report_ready(spike_count: int = 0):
+    """ONE consolidated Slack message: dashboard URL + 7d headline + Asana
+    task counts (created today, pending per project) + spike count if any.
+
+    Replaces the older 'Report Ready' ping AND the spike-detector's separate
+    message — we only post once per night to avoid noise.
     """
-    import os
     try:
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
-        from datetime import datetime, timezone, timedelta
-
-        riyadh = timezone(timedelta(hours=3))
-        when   = datetime.now(riyadh).strftime("%d %b %Y")
-
-        domain = (
-            os.getenv("RAILWAY_PUBLIC_DOMAIN")
-            or "nexa-web-production-c859.up.railway.app"
-        )
-        url = f"https://{domain}/reports/latest"
-
-        text = (
-            f":bar_chart: *Daily Report Ready — {when}*\n"
-            f"<{url}|Open dashboard>"
-        )
         from notifications.quiet import is_quiet, quiet_log
+        from notifications.daily_summary import build_daily_summary_text
+
+        text = build_daily_summary_text(spike_count=spike_count)
+
         if is_quiet():
             quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, text)
-        else:
-            WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-                channel=SLACK_CHANNEL_NOTIFY, text=text
-            )
-            print(f"[ops-scheduler] Posted 'Report ready' to Slack ({when})")
+            return
+        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+            channel=SLACK_CHANNEL_NOTIFY, text=text,
+        )
+        print(f"[ops-scheduler] Posted daily summary to Slack")
     except Exception as e:
-        print(f"[ops-scheduler] Report-ready post failed (non-fatal): {e}")
+        print(f"[ops-scheduler] Daily summary post failed (non-fatal): {e}")
 
 
 def _refresh_bigquery():
@@ -90,15 +81,19 @@ def _refresh_drive_index():
         print(f"[ops-scheduler] Drive index refresh failed (non-fatal): {e}")
 
 
-def _run_spike_detector():
-    """Detect daily anomalies in spend/leads/qualification rate. Silent if none."""
+def _run_spike_detector() -> int:
+    """Detect daily anomalies. Returns the spike count so the daily-summary
+    poster can include it inline (no separate Slack message)."""
     try:
-        from analysers.spike_detector import run as spike_run
-        n = spike_run()
-        print(f"[ops-scheduler] Spike detector finished: {n} spike(s)")
+        from analysers.spike_detector import detect_spikes
+        spikes = detect_spikes()
+        n = len(spikes) if spikes else 0
+        print(f"[ops-scheduler] Spike detector found {n} spike(s)")
+        return n
     except Exception as e:
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] Spike detector error: {e}")
+        return 0
 
 
 def _run_google_ads_audit():
@@ -125,14 +120,15 @@ def _nightly():
     #    Slack summary, HTML report rendering with Drive upload).
     _run_with_heartbeat("daily")
 
-    # 3. Spike detector reads from the BQ data we just refreshed.
-    _run_spike_detector()
+    # 3. Spike detector — returns count, no Slack post (folded into summary).
+    spike_count = _run_spike_detector()
 
     # 3b. Google Ads daily audit — IS, QS, search terms → Asana tasks
     _run_google_ads_audit()
 
-    # 4. One Slack ping with the dashboard URL.
-    _post_report_ready()
+    # 4. ONE consolidated Slack message: dashboard + 7d numbers +
+    #    Asana counts + anomaly count. Replaces the prior 3 separate posts.
+    _post_report_ready(spike_count=spike_count)
 
     today = date.today()
     if today.weekday() == 0:                              # Monday → weekly

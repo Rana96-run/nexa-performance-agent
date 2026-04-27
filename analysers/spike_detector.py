@@ -255,16 +255,8 @@ def _format_slack(spikes: list[dict]) -> tuple[list, str]:
     """Build a single Slack block + fallback text from a list of spikes."""
     yesterday = (_riyadh_today() - timedelta(days=1)).strftime("%d %b")
 
-    icon_map = {
-        ("spend",            "up"):   ":money_with_wings:",
-        ("spend",            "down"): ":chart_with_downwards_trend:",
-        ("leads",            "up"):   ":rocket:",
-        ("leads",            "down"): ":warning:",
-        ("qualified_rate",   "up"):   ":star:",
-        ("qualified_rate",   "down"): ":thinking_face:",
-        ("disqualified_rate", "up"):  ":x:",
-        ("disqualified_rate", "down"): ":white_check_mark:",
-    }
+    # No emoji — Slack message stays minimal. Direction arrows below carry the signal.
+    icon_map: dict[tuple, str] = {}
 
     metric_label = {
         "spend":             "Spend",
@@ -278,31 +270,28 @@ def _format_slack(spikes: list[dict]) -> tuple[list, str]:
         ch = CHANNEL_LABELS.get(s["channel"], s["channel"])
         mtype = s["metric"]
         direction = s["direction"]
-        icon = icon_map.get((mtype, direction), ":small_orange_diamond:")
         label = metric_label.get(mtype, mtype)
+        arrow = "▲" if direction == "up" else "▼"
 
         if "pct" in s:
-            arrow = "▲" if direction == "up" else "▼"
             if mtype == "spend":
                 lines.append(
-                    f"{icon} *{ch} — {label}* {arrow} `{abs(s['pct']):.0f}%`  "
+                    f"*{ch} {label}* {arrow} `{abs(s['pct']):.0f}%`  "
                     f"(${s['yesterday']:,.0f} vs avg ${s['baseline']:,.0f})"
                 )
             else:
                 lines.append(
-                    f"{icon} *{ch} — {label}* {arrow} `{abs(s['pct']):.0f}%`  "
+                    f"*{ch} {label}* {arrow} `{abs(s['pct']):.0f}%`  "
                     f"({s['yesterday']:.0f} vs avg {s['baseline']:.1f})"
                 )
         elif "pp" in s:
-            arrow = "▲" if direction == "up" else "▼"
             lines.append(
-                f"{icon} *{ch} — {label}* {arrow} `{abs(s['pp']):.0f}pp`  "
+                f"*{ch} {label}* {arrow} `{abs(s['pp']):.0f}pp`  "
                 f"({s['yesterday_pct']:.0f}% vs {s['baseline_pct']:.0f}% baseline)"
             )
 
     body = (
-        f":vertical_traffic_light: *Daily Spike Report — {yesterday}*\n"
-        f"_{len(spikes)} anomaly(ies) vs trailing 7-day baseline_\n\n"
+        f"*Anomalies — {yesterday}* ({len(spikes)} vs 7d baseline)\n"
         + "\n".join(lines)
     )
     blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": body}}]
