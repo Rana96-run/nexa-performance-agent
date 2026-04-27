@@ -222,51 +222,57 @@ def build():
     text("4 stickies per use case · screenshot below · click 'open' to see the live artifact",
          x=0, y=1000, w=1400, font=14, color="#64748b", align="center")
 
-    ROW_TOP = 1100         # first use case top
-    ROW_HEIGHT = 600       # space per use case
-    STICKY_W = 220
-    STICKY_GAP = 240       # x-distance between sticky centers
-
-    # x positions for the 4 stickies in a row, centered around x=0
-    sx = [-360, -120, 120, 360]
-    image_x = 0
-    image_w = 800
-    image_y_offset = 230   # below the stickies
+    # ── Layout constants — compact + organized ─────────────────────────────
+    ROW_TOP    = 1100   # first use case top
+    ROW_HEIGHT = 480    # space per use case (was 600 — tightened)
+    STICKY_W   = 200    # was 220
+    sx         = [-330, -110, 110, 330]   # 4-sticky row, total span ~660
+    IMG_W      = 480    # was 800 — much smaller, sized to readable
+    IMG_Y_OFF  = 180    # below the stickies
+    LINK_Y_OFF = 320    # below the image
 
     sticky_colors = ["light_yellow", "light_blue", "light_pink", "light_green"]
 
     for idx, uc in enumerate(USE_CASES):
         y_top = ROW_TOP + idx * ROW_HEIGHT
 
+        # ── Subtle divider line between use cases (thin grey rule) ───────
+        if idx > 0:
+            _post("/shapes", {
+                "data":  {"shape": "rectangle", "content": ""},
+                "style": {"fillColor": "#e2e8f0", "borderColor": "#e2e8f0",
+                           "borderWidth": "1"},
+                "position": {"x": 0, "y": y_top - 30, "origin": "center"},
+                "geometry": {"width": 900, "height": 2},
+            })
+
         # 1. Title + subtitle
         text(f"<strong>Use Case {uc['n']} — {uc['title']}</strong>",
-             x=0, y=y_top, w=1400, font=22, align="center")
-        text(uc["subtitle"], x=0, y=y_top + 38, w=1400,
-             font=13, color="#64748b", align="center")
+             x=0, y=y_top, w=1000, font=20, align="center")
+        text(uc["subtitle"], x=0, y=y_top + 32, w=1000,
+             font=12, color="#64748b", align="center")
 
         # 2. The 4 stickies row
-        sticky_y = y_top + 130
+        sticky_y = y_top + 110
         labels = ["1 · TRIGGER", "2 · ACTION", "3 · SCREENSHOT", "4 · RESULT"]
         contents = [uc["trigger"], uc["action"],
-                    "[image below ↓]", uc["result"]]
+                    "see image below", uc["result"]]
         for i in range(4):
             sticky(f"<strong>{labels[i]}</strong>\n\n{contents[i]}",
                    x=sx[i], y=sticky_y, color=sticky_colors[i], w=STICKY_W)
 
-        # 3. Screenshot image (centered below the stickies)
+        # 3. Screenshot image (centered below stickies, smaller width)
         img_path = SHOTS / uc["image"]
         if img_path.exists():
             upload_image(img_path,
-                          x=image_x,
-                          y=sticky_y + image_y_offset,
-                          w=image_w)
+                          x=0, y=sticky_y + IMG_Y_OFF, w=IMG_W)
         else:
             print(f"  [warn] missing image: {img_path}")
 
         # 4. Link below the image
-        link_y = sticky_y + image_y_offset + 250
         text(f'<a href="{uc["link"]}">↗ {uc["link_label"]}</a>',
-             x=0, y=link_y, w=1200, font=14, color="#2563eb", align="center")
+             x=0, y=sticky_y + LINK_Y_OFF, w=600,
+             font=13, color="#2563eb", align="center")
 
     print(f"\n[miro] {len(USE_CASES)} use case rows built")
     print(f"      https://miro.com/app/board/{BOARD}")
