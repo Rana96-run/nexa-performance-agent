@@ -156,10 +156,14 @@ def root():
 
 @app.route("/reports/latest")
 def latest():
-    f = REPORTS_DIR / "latest.html"
-    if f.exists():
-        return send_file(f, mimetype="text/html")
-    # Fall back to Google Drive — persists across Railway restarts
+    """
+    Serve the most recent dashboard.
+
+    Strategy: Drive is the source of truth (Railway containers are ephemeral
+    so local /app/reports/latest.html can be wiped on restart).  We try
+    Drive FIRST and fall back to local only if Drive is unavailable.
+    """
+    # 1. Drive (always-fresh — uploaded by every save_report() call)
     try:
         from collectors.drive_writer import load_report_from_drive
         html = load_report_from_drive()
@@ -167,7 +171,13 @@ def latest():
             from flask import Response
             return Response(html, mimetype="text/html")
     except Exception as e:
-        print(f"[app] Drive fallback failed: {e}")
+        print(f"[app] Drive fetch failed (falling back to local): {e}")
+
+    # 2. Local file fallback
+    f = REPORTS_DIR / "latest.html"
+    if f.exists():
+        return send_file(f, mimetype="text/html")
+
     abort(404, "No report available. Run: python main.py daily")
 
 

@@ -38,6 +38,9 @@ cache/*.json
 scripts/miro_dump.json
 memory/_drive_index.json
 
+# ── Generated report HTML — never commit (always regenerated nightly) ─────
+reports/*.html
+
 # ── Build artifacts ───────────────────────────────────────────────────────
 dist/
 build/
