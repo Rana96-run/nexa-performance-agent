@@ -58,10 +58,14 @@ def _post_report_ready():
             f":bar_chart: *Daily Report Ready — {when}*\n"
             f"<{url}|Open dashboard>"
         )
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=SLACK_CHANNEL_NOTIFY, text=text
-        )
-        print(f"[ops-scheduler] Posted 'Report ready' to Slack ({when})")
+        from notifications.quiet import is_quiet, quiet_log
+        if is_quiet():
+            quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, text)
+        else:
+            WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+                channel=SLACK_CHANNEL_NOTIFY, text=text
+            )
+            print(f"[ops-scheduler] Posted 'Report ready' to Slack ({when})")
     except Exception as e:
         print(f"[ops-scheduler] Report-ready post failed (non-fatal): {e}")
 

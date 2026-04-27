@@ -333,11 +333,15 @@ def run() -> int:
     try:
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
+        from notifications.quiet import is_quiet, quiet_log
         blocks, text = _format_slack(spikes)
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=SLACK_CHANNEL_NOTIFY, blocks=blocks, text=text
-        )
-        print(f"[spike-detector] Posted {len(spikes)} spike(s) to Slack")
+        if is_quiet():
+            quiet_log("spike-detector", SLACK_CHANNEL_NOTIFY, text)
+        else:
+            WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+                channel=SLACK_CHANNEL_NOTIFY, blocks=blocks, text=text
+            )
+            print(f"[spike-detector] Posted {len(spikes)} spike(s) to Slack")
     except Exception as e:
         print(f"[spike-detector] Slack post failed: {e}")
 

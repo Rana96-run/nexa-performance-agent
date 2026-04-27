@@ -244,15 +244,19 @@ def post_to_slack(results: dict, failures_only: bool = True) -> None:
             f"{fail_count} issue(s) detected  ({ok_count}/{len(results)} passing)"
         )
 
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=SLACK_CHANNEL_HEALTH,
-            text=header,
-            blocks=[
-                {"type": "section", "text": {"type": "mrkdwn", "text": header}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(failed_lines)}},
-            ],
-        )
-        print(f"[health_check] Posted {fail_count} failure(s) to Slack")
+        from notifications.quiet import is_quiet, quiet_log
+        if is_quiet():
+            quiet_log("health_check", SLACK_CHANNEL_HEALTH, header)
+        else:
+            WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+                channel=SLACK_CHANNEL_HEALTH,
+                text=header,
+                blocks=[
+                    {"type": "section", "text": {"type": "mrkdwn", "text": header}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(failed_lines)}},
+                ],
+            )
+            print(f"[health_check] Posted {fail_count} failure(s) to Slack")
     except Exception as e:
         print(f"[health_check] Slack post failed: {e}")
 

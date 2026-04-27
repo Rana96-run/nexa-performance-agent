@@ -228,6 +228,10 @@ def _now_riyadh() -> str:
 
 
 def _slack_post(blocks: list, text: str) -> None:
+    from notifications.quiet import is_quiet, quiet_log
+    if is_quiet():
+        quiet_log("hubspot-webhook", SLACK_CHANNEL_NOTIFY, text)
+        return
     try:
         _SLACK.chat_postMessage(
             channel=SLACK_CHANNEL_NOTIFY, blocks=blocks, text=text

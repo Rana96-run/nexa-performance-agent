@@ -309,6 +309,10 @@ def handle_general(request: str) -> str:
 
 def post_reply(channel: str, thread_ts: str, text: str):
     """Post a reply in-thread, splitting if needed (Slack 3000-char limit)."""
+    from notifications.quiet import is_quiet, quiet_log
+    if is_quiet():
+        quiet_log("listener", f"{channel}/{thread_ts}", text)
+        return
     chunks = [text[i:i+2900] for i in range(0, len(text), 2900)]
     for chunk in chunks:
         try:

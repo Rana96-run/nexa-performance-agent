@@ -32,7 +32,13 @@ except Exception as e:
     SLACK_OK = False
 
 
+from notifications.quiet import is_quiet, quiet_log
+
+
 def _slack_post(channel: str, text: str, blocks=None) -> Optional[str]:
+    if is_quiet():
+        quiet_log("notify", channel, text)
+        return None
     if not (SLACK_OK and slack_client and channel):
         return None
     try:
@@ -79,10 +85,13 @@ def send_approval_request(analysis: dict) -> dict:
     mailed = False
 
     if NOTIFY_VIA in ("slack", "both") and SLACK_OK:
-        try:
-            ts = slack_approval(analysis)
-        except Exception as e:
-            print(f"[notify] Slack approval post failed: {e}")
+        if is_quiet():
+            quiet_log("notify", "approval-channel", body)
+        else:
+            try:
+                ts = slack_approval(analysis)
+            except Exception as e:
+                print(f"[notify] Slack approval post failed: {e}")
 
     if NOTIFY_VIA in ("email", "both"):
         html = (
@@ -151,6 +160,9 @@ def send_heartbeat(source: str, status: str = "ok",
     body = f":x: *{source}* failed{dur} — {when} Riyadh"
     if detail:
         body += f"\n> {detail}"
+    if is_quiet():
+        quiet_log("heartbeat", SLACK_CHANNEL_HEALTH, body)
+        return False
     try:
         slack_client.chat_postMessage(channel=SLACK_CHANNEL_HEALTH, text=body)
         return True
