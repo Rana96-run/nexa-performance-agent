@@ -162,35 +162,267 @@ def _headline_numbers() -> Optional[dict]:
 
 # ─── The message itself ──────────────────────────────────────────────────────
 
-def build_daily_summary_text(spike_count: int = 0) -> str:
-    """One short Slack message string. Markdown.  No more than 12 lines."""
+def _extract_n(label: str) -> str:
+    """Pull the number from 'scale-executed (3)' -> '3'. Returns '' if not found."""
+    if "(" in label and ")" in label:
+        return label.split("(")[1].split(")")[0].strip()
+    return ""
+
+
+def _agent_actions_lines(audit_tasks: list, health_tasks: list) -> list[str]:
+    """
+    Summarise what the agent actually did tonight in 1–6 bullet lines.
+    Both lists are [(label, gid), ...].  Action type is inferred from label.
+    """
+    lines = []
+
+    # ── Campaign health (all channels) ────────────────────────────────────────
+    scaled   = [t for t in health_tasks if str(t[0]).startswith("scale-executed")]
+    paused   = [t for t in health_tasks if str(t[0]).startswith("pause-executed")]
+    junk     = [t for t in health_tasks if "junk-leads" in str(t[0])]
+    optimize = [t for t in health_tasks if str(t[0]).startswith("optimize")]
+
+    if scaled:
+        n = _extract_n(scaled[0][0])
+        lines.append(f"  • Scaled {n} campaign(s) +25% (CPQL + CPL both in scale zone) — executed")
+    if paused:
+        n = _extract_n(paused[0][0])
+        lines.append(f"  • Paused {n} campaign(s) (CPQL critical) — executed")
+    if junk:
+        n = _extract_n(junk[0][0])
+        lines.append(f"  • {n} junk-leads alert(s) — low qual rate despite cheap CPL")
+    if optimize:
+        lines.append(f"  • {len(optimize)} channel(s) have optimization recommendations in Asana")
+
+    # ── Google Ads audit ──────────────────────────────────────────────────────
+    kw_paused = [t for t in audit_tasks if "kw-auto-paused" in str(t[0])]
+    negatives = [t for t in audit_tasks if str(t[0]).startswith("negatives")]
+    is_audit  = [t for t in audit_tasks if str(t[0]).startswith("IS audit")]
+    qs_audit  = [t for t in audit_tasks if str(t[0]).startswith("QS audit")]
+    kw_expand = [t for t in audit_tasks if str(t[0]).startswith("keyword expansion")]
+
+    gads_parts = []
+    if is_audit:  gads_parts.append(f"Impression Share flagged {_extract_n(is_audit[0][0])} campaigns")
+    if qs_audit:  gads_parts.append(f"Quality Score flagged {_extract_n(qs_audit[0][0])} keywords")
+    if kw_expand: gads_parts.append(f"{_extract_n(kw_expand[0][0])} search terms ready to add as keywords")
+    if negatives: gads_parts.append(f"{_extract_n(negatives[0][0])} negative keywords to add")
+    if kw_paused: gads_parts.append(f"{_extract_n(kw_paused[0][0])} non-converting keywords auto-paused — executed")
+    if gads_parts:
+        for part in gads_parts:
+            lines.append(f"  • Google Ads: {part}")
+
+    return lines
+
+
+def _peak_numbers_lines() -> list[str]:
+    """
+    For each active channel, show the best campaign (lowest CPQL) and
+    worst campaign (highest CPQL) over the last 7 days.
+    Campaigns with no SQLs are excluded from best; worst shows N/A CPQL if no SQLs.
+    """
+    try:
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+    except Exception:
+        return []
+    try:
+        client = get_client()
+        # Per-campaign CPQL over last 7d, pre-aggregating HubSpot to avoid fan-out
+        rows = list(client.query(f"""
+            WITH hs AS (
+              SELECT date, lead_utm_campaign,
+                     SUM(leads_qualified) AS sqls
+              FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+              GROUP BY date, lead_utm_campaign
+            ),
+            camp AS (
+              SELECT
+                c.channel,
+                c.campaign_name,
+                SUM(c.spend) AS spend,
+                SUM(hs.sqls) AS sqls,
+                SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
+              FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
+              LEFT JOIN hs
+                ON c.date = hs.date
+               AND LOWER(CASE WHEN c.channel = 'linkedin'
+                              THEN IFNULL(c.campaign_group_name, c.campaign_name)
+                              ELSE c.campaign_name END) = LOWER(hs.lead_utm_campaign)
+              WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+                AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+              GROUP BY c.channel, c.campaign_name
+              HAVING SUM(c.spend) >= 20
+            ),
+            ranked AS (
+              SELECT *,
+                ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql ASC NULLS LAST)  AS rn_best,
+                ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql DESC NULLS FIRST) AS rn_worst
+              FROM camp
+            )
+            SELECT channel, campaign_name, spend, sqls, cpql,
+                   rn_best, rn_worst
+            FROM ranked
+            WHERE rn_best = 1 OR rn_worst = 1
+            ORDER BY channel, rn_best
+        """).result())
+    except Exception as e:
+        err = str(e)
+        if "campaign_group_name not found" in err:
+            # Column added recently — retry without LinkedIn-specific join
+            try:
+                rows = list(client.query(f"""
+                    WITH hs AS (
+                      SELECT date, lead_utm_campaign, SUM(leads_qualified) AS sqls
+                      FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+                      GROUP BY date, lead_utm_campaign
+                    ),
+                    camp AS (
+                      SELECT c.channel, c.campaign_name,
+                             SUM(c.spend) AS spend, SUM(hs.sqls) AS sqls,
+                             SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
+                      FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
+                      LEFT JOIN hs ON c.date = hs.date
+                                  AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+                      WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+                        AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+                      GROUP BY c.channel, c.campaign_name HAVING SUM(c.spend) >= 20
+                    ),
+                    ranked AS (
+                      SELECT *, ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql ASC NULLS LAST) AS rn_best,
+                                ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql DESC NULLS FIRST) AS rn_worst
+                      FROM camp
+                    )
+                    SELECT channel, campaign_name, spend, sqls, cpql, rn_best, rn_worst
+                    FROM ranked WHERE rn_best = 1 OR rn_worst = 1 ORDER BY channel
+                """).result())
+            except Exception as e2:
+                print(f"[daily-summary] peak_numbers fallback also failed: {e2}")
+                return []
+        else:
+            print(f"[daily-summary] peak_numbers BQ query failed: {e}")
+            return []
+
+    # Group into {channel: {best, worst}}
+    from collections import defaultdict
+    by_channel: dict = defaultdict(dict)
+    for r in rows:
+        name  = r.campaign_name or ""
+        cpql  = f"${r.cpql:.0f}" if r.cpql else "no SQLs"
+        label = f"{name} · CPQL {cpql}"
+        if r.rn_best == 1:
+            by_channel[r.channel]["best"] = label
+        if r.rn_worst == 1:
+            by_channel[r.channel]["worst"] = label
+
+    lines = []
+    for channel in sorted(by_channel):
+        d = by_channel[channel]
+        best  = d.get("best",  "—")
+        worst = d.get("worst", "—")
+        lines.append(f"  *{channel}*")
+        lines.append(f"    top:   {best}")
+        if best != worst:
+            lines.append(f"    worst: {worst}")
+    return lines
+
+
+def _spike_lines(spikes: list) -> list[str]:
+    """Format spike detector results into readable one-liners."""
+    lines = []
+    for s in spikes:
+        ch  = s.get("channel", "?")
+        m   = s.get("metric", "?")
+        dir_ = s.get("direction", "")
+        arrow = "(+)" if dir_ == "up" else "(-)"
+        if m == "spend":
+            pct = s.get("pct", 0)
+            lines.append(f"  • {ch}: spend {arrow}{abs(pct):.0f}% vs 7d avg "
+                         f"(${s.get('yesterday', 0):.0f} vs ${s.get('baseline', 0):.0f} avg)")
+        elif m == "leads":
+            pct = s.get("pct", 0)
+            lines.append(f"  • {ch}: leads {arrow}{abs(pct):.0f}% vs 7d avg "
+                         f"({s.get('yesterday', 0)} vs {s.get('baseline', 0):.1f} avg)")
+        elif m == "qualified_rate":
+            pp = s.get("pp", 0)
+            lines.append(f"  • {ch}: qual rate {arrow}{abs(pp):.0f}pp "
+                         f"({s.get('yesterday_pct', 0):.0f}% vs {s.get('baseline_pct', 0):.0f}% avg)")
+        elif m == "disqualified_rate":
+            pp = s.get("pp", 0)
+            lines.append(f"  • {ch}: disqual rate {arrow}{abs(pp):.0f}pp "
+                         f"({s.get('yesterday_pct', 0):.0f}% vs {s.get('baseline_pct', 0):.0f}% avg)")
+    return lines
+
+
+def build_daily_summary_text(spikes: list | None = None,
+                              audit_tasks: list | None = None,
+                              health_tasks: list | None = None) -> str:
+    """One short Slack message string. Markdown."""
     riyadh = timezone(timedelta(hours=3))
-    yesterday = (datetime.now(riyadh) - timedelta(days=1)).strftime("%d %b")
+    today_str = datetime.now(riyadh).strftime("%d %b %Y")
     domain = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
               or "nexa-web-production-c859.up.railway.app")
     url = f"https://{domain}/reports/latest"
 
-    h = _headline_numbers()
     counts = _asana_task_counts()
+    action_lines = _agent_actions_lines(audit_tasks or [], health_tasks or [])
+    peak_lines   = _peak_numbers_lines()
+    spike_lines  = _spike_lines(spikes or [])
 
-    lines = [f"*Daily Report — {yesterday}*  <{url}|open dashboard>"]
-    if h:
-        t = h["total"]
-        lines.append(
-            f"7d total: ${t['spend']:,} spent · {t['leads']:,} leads · "
-            f"{t['qual']:,} qual · CPL ${t['cpl']} · CPQL ${t['cpql']}"
-        )
-        for c in h["channels"]:
-            lines.append(
-                f"  • {c['channel']}: ${c['spend']:,} · {c['leads']} leads · "
-                f"{c['qual']} qual · CPL ${c['cpl']} · CPQL ${c['cpql']}"
-            )
-    lines.append(f"Tasks created today: {counts['created_today']}")
+    # Dashboard URL always visible as plain text
+    lines = [
+        f"*Daily Report — {today_str}*",
+        f"Dashboard: {url}",
+    ]
+
+    if peak_lines:
+        lines.append("*Peak numbers (7d CPQL):*")
+        lines.extend(peak_lines)
+
+    if action_lines:
+        lines.append("*Agent actions:*")
+        lines.extend(action_lines)
+
+    if spike_lines:
+        lines.append("*Performance alerts vs 7d avg:*")
+        lines.extend(spike_lines)
+
+    lines.append(f"Asana tasks created today: {counts['created_today']}")
     if counts["pending_by_project"]:
         for proj, n in counts["pending_by_project"]:
             lines.append(f"  • {proj}: {n} pending")
-    if spike_count > 0:
-        lines.append(f"Anomalies detected: {spike_count} (see dashboard)")
+
+    return "\n".join(lines)
+
+
+def build_recommendations_text(findings: list) -> str:
+    """
+    Second Slack message: one line per campaign that needs action.
+    Only shows optimize / pause / junk — scale is already executed and in main message.
+    Sorted: pause first, junk second, optimize last.
+    """
+    if not findings:
+        return ""
+
+    ACTION_ORDER = {"pause": 0, "junk": 1, "optimize": 2, "monitor": 99}
+
+    rows = []
+    for f in findings:
+        action = f.get("action", "monitor")
+        if action == "monitor" or action == "scale":
+            continue
+        is_junk = f.get("junk_leads", False)
+        sort_key = ACTION_ORDER.get("junk" if is_junk else action, 99)
+        cpql = f"${f['cpql']:.0f}" if f.get("cpql") else "no SQLs"
+        tag = "JUNK-LEADS" if is_junk else action.upper()
+        name = (f.get("campaign") or "")[:40]
+        rows.append((sort_key, f"  [{f['channel']}] {name} — {tag} · CPQL {cpql}"))
+
+    if not rows:
+        return ""
+
+    rows.sort(key=lambda x: x[0])
+    lines = [
+        "*Recommended actions* — tasks created in Asana, approval request sent to #approvals:",
+    ] + [r[1] for r in rows]
     return "\n".join(lines)
 
 

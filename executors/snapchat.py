@@ -1,0 +1,481 @@
+"""
+Snapchat Ads executor — full mutation surface.
+All mutations create resources in PAUSED state unless explicitly enabled.
+
+Supported:
+  Campaign  — create / set status / change budget
+  Ad Squad  — create / set status / change bid / change audience
+  Ad        — create / set status
+
+Campaign naming convention: {Channel}_{Type}_{Language}_{Product}_{Audience}
+  Channel:  Snapchat
+  Type:     LeadGen | Awareness | Video | Remarketing | Conversion
+  Language: AR | EN | AREN
+  Product:  Invoice (E-Invoice) | Bookkeeping (Qbookkeeping) | Qflavours | General | {SeasonalName}
+  Audience: Interests | Lookalike | Retargeting | Broad
+  Rules:
+    - Prospecting campaigns use Interests or Lookalike — never "Prospecting" alone
+    - Retargeting campaigns use Retargeting — never combined with Prospecting
+    - Product aliases auto-normalised: E-Invoice->Invoice, Qbookkeeping->Bookkeeping, etc.
+  Examples: Snapchat_LeadGen_AR_Invoice_Interests
+            Snapchat_LeadGen_AR_Invoice_Retargeting
+            Snapchat_LeadGen_AR_Ramadan_Lookalike
+
+Accounts: SNAPCHAT_AD_ACCOUNT_2025 (default) | SNAPCHAT_AD_ACCOUNT_2024
+Use best_account() to pick the one with better CPL from BQ.
+"""
+from __future__ import annotations
+
+import os
+import requests
+from dotenv import load_dotenv, set_key
+
+from executors.naming import prefixed as _naming_prefixed
+
+load_dotenv(override=True)
+
+_BASE        = "https://adsapi.snapchat.com/v1"
+_TOKEN_URL   = "https://accounts.snapchat.com/login/oauth2/access_token"
+_ACCOUNT_2024 = os.getenv("SNAPCHAT_AD_ACCOUNT_2024")
+_ACCOUNT_2025 = os.getenv("SNAPCHAT_AD_ACCOUNT_2025")
+_DEFAULT_ACCOUNT = _ACCOUNT_2025
+
+_CHANNEL_PREFIX = "Snapchat"
+
+
+def _prefixed(name: str) -> str:
+    return _naming_prefixed(_CHANNEL_PREFIX, name)
+
+
+def _refresh_token() -> str:
+    r = requests.post(_TOKEN_URL, data={
+        "refresh_token": os.getenv("SNAPCHAT_REFRESH_TOKEN"),
+        "client_id":     os.getenv("SNAPCHAT_CLIENT_ID"),
+        "client_secret": os.getenv("SNAPCHAT_CLIENT_SECRET"),
+        "grant_type":    "refresh_token",
+    }, timeout=15)
+    r.raise_for_status()
+    token = r.json()["access_token"]
+    set_key(".env", "SNAPCHAT_ACCESS_TOKEN", token)
+    return token
+
+
+def _headers() -> dict:
+    token = os.getenv("SNAPCHAT_ACCESS_TOKEN") or _refresh_token()
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _post(path: str, payload: dict) -> dict:
+    r = requests.post(f"{_BASE}{path}", headers=_headers(), json=payload, timeout=15)
+    if r.status_code == 401:
+        # Token expired — refresh once and retry
+        _refresh_token()
+        r = requests.post(f"{_BASE}{path}", headers=_headers(), json=payload, timeout=15)
+    if not r.ok:
+        raise RuntimeError(f"Snapchat POST {path} -> {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def _put(path: str, payload: dict) -> dict:
+    r = requests.put(f"{_BASE}{path}", headers=_headers(), json=payload, timeout=15)
+    if not r.ok:
+        raise RuntimeError(f"Snapchat PUT {path} -> {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def _get_one(path: str) -> dict:
+    r = requests.get(f"{_BASE}{path}", headers=_headers(), timeout=10)
+    r.raise_for_status()
+    items = list(r.json().values())
+    return items[0][0] if items else {}
+
+
+# ── Account selection ─────────────────────────────────────────────────────────
+
+def best_account(campaign_name: str, days: int = 30) -> str:
+    """
+    Return the Snapchat account_id whose existing campaigns with a name similar
+    to `campaign_name` have driven the most HubSpot-qualified leads (SQLs) over
+    the last N days.  Falls back to _DEFAULT_ACCOUNT when BQ is unreachable or
+    no matching campaigns found.
+    """
+    accounts = [a for a in [_ACCOUNT_2025, _ACCOUNT_2024] if a]
+    if len(accounts) < 2:
+        return _DEFAULT_ACCOUNT or (accounts[0] if accounts else "")
+    try:
+        import os as _os
+        from google.cloud import bigquery as _bq
+        from google.oauth2 import service_account as _sa
+        from datetime import date as _date, timedelta as _td
+
+        project  = _os.getenv("BQ_PROJECT_ID")
+        dataset  = _os.getenv("BQ_DATASET", "qoyod_marketing")
+        key_path = _os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
+        creds    = _sa.Credentials.from_service_account_file(key_path)
+        client   = _bq.Client(project=project, credentials=creds)
+
+        since  = (_date.today() - _td(days=days)).isoformat()
+        tokens = [t.lower() for t in campaign_name.replace("-", "_").split("_") if len(t) > 2]
+        if not tokens:
+            tokens = [campaign_name.lower()]
+        like_clauses = " AND ".join(
+            f"LOWER(c.campaign_name) LIKE '%{t}%'" for t in tokens
+        )
+        acct_list = ", ".join(f"'{a}'" for a in accounts)
+
+        sql = f"""
+            SELECT c.account_id,
+                   SUM(h.leads_qualified) AS sqls
+            FROM `{project}.{dataset}.campaigns_daily` c
+            JOIN `{project}.{dataset}.hubspot_leads_module_daily` h
+              ON  c.date = h.date
+             AND  LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)
+            WHERE c.channel = 'snapchat'
+              AND c.date >= '{since}'
+              AND c.account_id IN ({acct_list})
+              AND ({like_clauses})
+            GROUP BY c.account_id
+            ORDER BY sqls DESC
+            LIMIT 1
+        """
+        rows = list(client.query(sql).result())
+        if rows and rows[0].account_id:
+            print(f"[snap] best account for '{campaign_name}' "
+                  f"({int(rows[0].sqls or 0)} SQLs last {days}d): {rows[0].account_id}")
+            return rows[0].account_id
+    except Exception as e:
+        print(f"[snap] best_account BQ query failed ({e}), using default")
+    return _DEFAULT_ACCOUNT
+
+
+# ── Campaign ──────────────────────────────────────────────────────────────────
+
+def create_campaign(
+    name: str,
+    daily_budget_usd: float | None = None,
+    lifetime_budget_usd: float | None = None,
+    objective: str = "LEAD_GENERATION",
+    status: str = "PAUSED",
+    account_id: str | None = None,
+) -> dict:
+    """
+    Create a Snapchat campaign. Supply either daily or lifetime budget.
+    objective: LEAD_GENERATION | WEBSITE_CONVERSIONS | BRAND_AWARENESS | APP_INSTALLS
+    If account_id is None, picks the better-performing account from BQ.
+    Follow naming convention: {Type}_{Language}_{Product}_{Variant}
+    e.g. Snap_LeadGen_AR_Invoice_Retargeting
+    """
+    name = _prefixed(name)
+    if account_id is None:
+        account_id = best_account(name)
+    campaign: dict = {
+        "name":      name,
+        "ad_account_id": account_id,
+        "status":    status,
+        "objective": objective,
+    }
+    if daily_budget_usd is not None:
+        campaign["daily_budget_micro"] = int(daily_budget_usd * 1_000_000)
+    if lifetime_budget_usd is not None:
+        campaign["lifetime_spend_cap_micro"] = int(lifetime_budget_usd * 1_000_000)
+
+    r = _post(f"/adaccounts/{account_id}/campaigns", {"campaigns": [{"campaign": campaign}]})
+    result = r.get("campaigns", [{}])[0].get("campaign", {})
+    print(f"[snap] campaign created ({status}): {name} -> {result.get('id')}")
+    return result
+
+
+def set_campaign_status(campaign_id: str, status: str,
+                        account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    """status: ACTIVE | PAUSED | DELETED"""
+    current = _get_one(f"/campaigns/{campaign_id}")
+    current["status"] = status
+    r = _put(f"/adaccounts/{account_id}/campaigns",
+             {"campaigns": [{"campaign": current}]})
+    result = r.get("campaigns", [{}])[0].get("campaign", {})
+    print(f"[snap] campaign {campaign_id} -> {status}")
+    return result
+
+
+def pause_campaign(campaign_id: str, account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    return set_campaign_status(campaign_id, "PAUSED", account_id)
+
+
+def enable_campaign(campaign_id: str, account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    return set_campaign_status(campaign_id, "ACTIVE", account_id)
+
+
+def set_campaign_budget(campaign_id: str, daily_budget_usd: float,
+                        account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    current = _get_one(f"/campaigns/{campaign_id}")
+    current["daily_budget_micro"] = int(daily_budget_usd * 1_000_000)
+    r = _put(f"/adaccounts/{account_id}/campaigns",
+             {"campaigns": [{"campaign": current}]})
+    result = r.get("campaigns", [{}])[0].get("campaign", {})
+    print(f"[snap] campaign {campaign_id} budget -> ${daily_budget_usd}/day")
+    return result
+
+
+# ── Ad squad (ad set) ─────────────────────────────────────────────────────────
+
+def create_ad_squad(
+    campaign_id: str,
+    name: str,
+    daily_budget_usd: float,
+    bid_usd: float,
+    optimization_goal: str = "SWIPES",
+    placement: str = "SNAP_ADS",
+    targeting: dict | None = None,
+    status: str = "PAUSED",
+    account_id: str = _DEFAULT_ACCOUNT,
+) -> dict:
+    """
+    optimization_goal: SWIPES | IMPRESSIONS | VIDEO_VIEWS | APP_INSTALLS | LEAD_GENERATION
+    placement: SNAP_ADS | STORIES | PUBLISHER_NETWORK | ALL
+    targeting: Snapchat targeting spec dict (age, gender, geos, interests, etc.)
+    """
+    name = _prefixed(name)
+    squad: dict = {
+        "name":               name,
+        "campaign_id":        campaign_id,
+        "status":             status,
+        "type":               "SNAP_ADS",
+        "placement_v2":       {"config": placement},
+        "optimization_goal":  optimization_goal,
+        "bid_micro":          int(bid_usd * 1_000_000),
+        "daily_budget_micro": int(daily_budget_usd * 1_000_000),
+        "auto_bid":           False,
+        "targeting":          targeting or {
+            "geos": [{"country_code": "SA"}],
+        },
+    }
+    r = _post(f"/campaigns/{campaign_id}/adsquads",
+              {"adsquads": [{"adsquad": squad}]})
+    result = r.get("adsquads", [{}])[0].get("adsquad", {})
+    print(f"[snap] ad squad created ({status}): {name} -> {result.get('id')}")
+    return result
+
+
+def set_adsquad_status(adsquad_id: str, status: str,
+                       account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    current = _get_one(f"/adsquads/{adsquad_id}")
+    current["status"] = status
+    r = _put(f"/adaccounts/{account_id}/adsquads",
+             {"adsquads": [{"adsquad": current}]})
+    result = r.get("adsquads", [{}])[0].get("adsquad", {})
+    print(f"[snap] adsquad {adsquad_id} -> {status}")
+    return result
+
+
+def set_adsquad_budget(adsquad_id: str, daily_budget_usd: float,
+                       account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    current = _get_one(f"/adsquads/{adsquad_id}")
+    current["daily_budget_micro"] = int(daily_budget_usd * 1_000_000)
+    r = _put(f"/adaccounts/{account_id}/adsquads",
+             {"adsquads": [{"adsquad": current}]})
+    result = r.get("adsquads", [{}])[0].get("adsquad", {})
+    print(f"[snap] adsquad {adsquad_id} budget -> ${daily_budget_usd}/day")
+    return result
+
+
+def set_adsquad_targeting(adsquad_id: str, targeting: dict,
+                          account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    """Update audience targeting on an ad squad."""
+    current = _get_one(f"/adsquads/{adsquad_id}")
+    current["targeting"] = targeting
+    r = _put(f"/adaccounts/{account_id}/adsquads",
+             {"adsquads": [{"adsquad": current}]})
+    result = r.get("adsquads", [{}])[0].get("adsquad", {})
+    print(f"[snap] adsquad {adsquad_id} targeting updated")
+    return result
+
+
+# ── Ads ───────────────────────────────────────────────────────────────────────
+
+def create_ad(
+    adsquad_id: str,
+    name: str,
+    creative_id: str,
+    status: str = "PAUSED",
+    account_id: str = _DEFAULT_ACCOUNT,
+) -> dict:
+    """Attach a creative to an ad squad as an ad (PAUSED by default)."""
+    name = _prefixed(name)
+    ad = {
+        "name":       name,
+        "ad_squad_id": adsquad_id,
+        "creative_id": creative_id,
+        "status":     status,
+        "type":       "SNAP_AD",
+    }
+    r = _post(f"/adsquads/{adsquad_id}/ads",
+              {"ads": [{"ad": ad}]})
+    result = r.get("ads", [{}])[0].get("ad", {})
+    print(f"[snap] ad created ({status}): {name} -> {result.get('id')}")
+    return result
+
+
+def set_ad_status(ad_id: str, status: str,
+                  account_id: str = _DEFAULT_ACCOUNT) -> dict:
+    current = _get_one(f"/ads/{ad_id}")
+    current["status"] = status
+    r = _put(f"/adaccounts/{account_id}/ads",
+             {"ads": [{"ad": current}]})
+    result = r.get("ads", [{}])[0].get("ad", {})
+    print(f"[snap] ad {ad_id} -> {status}")
+    return result
+
+
+# ── Full campaign setup (one call) ───────────────────────────────────────────
+
+def _build_utm_url(base_url: str, campaign_name: str,
+                   squad_name: str, ad_name: str) -> str:
+    sep = "&" if "?" in base_url else "?"
+    return (
+        f"{base_url}{sep}"
+        f"utm_source=snapchat&utm_medium=paid"
+        f"&utm_campaign={campaign_name}"
+        f"&utm_content={ad_name}"
+    )
+
+
+def create_full_campaign(
+    product: str,
+    campaign_type: str,
+    language: str,
+    audience_type: str,
+    daily_budget_usd: float,
+    creative_id: str,
+    bid_strategy: str = "MAX_BID",
+    bid_usd: float = 16.0,
+    ad_format: str = "INSTANT_FORM",
+    landing_url: str | None = None,
+    placement: str = "SNAP_ADS",
+    targeting: dict | None = None,
+    account_id: str | None = None,
+    status: str = "PAUSED",
+) -> dict:
+    """
+    Full Snapchat campaign setup in one call.
+
+    Objective is always LEAD_GENERATION.
+    Optimization goal is always LEAD_GENERATION.
+
+    bid_strategy : MAX_BID | TARGET_COST
+    bid_usd      : target bid amount — Qoyod range $15-$17 (default $16)
+    ad_format    : INSTANT_FORM (Snap native lead form) | WEB_FORM (landing page with form)
+                   WEB_FORM requires landing_url; UTMs auto-appended.
+
+    Naming (enforced automatically):
+      Campaign : Snapchat_{campaign_type}_{language}_{product}_{audience_type}
+      Ad Squad : same name
+      Ad       : Snapchat_{product}V1_{language}
+
+    targeting defaults: Saudi Arabia, age 18-49.
+    Override with full Snapchat targeting dict.
+
+    Returns dict with campaign_id, squad_id, ad_id.
+    """
+    # Enforce: Snapchat campaigns are always Lead Generation
+    if bid_strategy not in ("MAX_BID", "TARGET_COST"):
+        raise ValueError(f"bid_strategy must be MAX_BID or TARGET_COST, got {bid_strategy!r}")
+    if not (15.0 <= bid_usd <= 17.0):
+        raise ValueError(f"bid_usd must be $15-$17 (Qoyod range), got ${bid_usd}")
+    if ad_format not in ("INSTANT_FORM", "WEB_FORM"):
+        raise ValueError(f"ad_format must be INSTANT_FORM or WEB_FORM, got {ad_format!r}")
+    if ad_format == "WEB_FORM" and not landing_url:
+        raise ValueError("WEB_FORM ad_format requires a landing_url")
+
+    result: dict = {}
+    acct = account_id or best_account(
+        _prefixed(f"{campaign_type}_{language}_{product}_{audience_type}")
+    )
+    full_name = f"{campaign_type}_{language}_{product}_{audience_type}"
+
+    # 1. Campaign — always LEAD_GENERATION
+    camp = create_campaign(
+        name=full_name,
+        daily_budget_usd=daily_budget_usd,
+        objective="LEAD_GENERATION",
+        status=status,
+        account_id=acct,
+    )
+    campaign_id = camp.get("id")
+    campaign_name = camp.get("name", _prefixed(full_name))
+    result["campaign_id"] = campaign_id
+    result["campaign_name"] = campaign_name
+
+    # 2. Ad Squad — always LEAD_GENERATION optimization, MAX_BID or TARGET_COST
+    default_targeting = targeting or {
+        "geos": [{"country_code": "SA"}],
+        "demographics": [{"age_groups": ["18-24", "25-34", "35-49"]}],
+    }
+    squad_payload: dict = {
+        "name":               _prefixed(full_name),
+        "campaign_id":        campaign_id,
+        "status":             status,
+        "type":               "SNAP_ADS",
+        "placement_v2":       {"config": placement},
+        "optimization_goal":  "LEAD_GENERATION",
+        "daily_budget_micro": int(daily_budget_usd * 1_000_000),
+        "auto_bid":           False,
+        "targeting":          default_targeting,
+    }
+    # Bidding: MAX_BID sets bid_micro; TARGET_COST sets target_bid_micro
+    if bid_strategy == "MAX_BID":
+        squad_payload["bid_micro"] = int(bid_usd * 1_000_000)
+        squad_payload["bid_strategy"] = "MAX_BID"
+    else:
+        squad_payload["target_bid_micro"] = int(bid_usd * 1_000_000)
+        squad_payload["bid_strategy"] = "TARGET_COST"
+
+    r = _post(f"/campaigns/{campaign_id}/adsquads",
+              {"adsquads": [{"adsquad": squad_payload}]})
+    squad = r.get("adsquads", [{}])[0].get("adsquad", {})
+    squad_id = squad.get("id")
+    result["squad_id"] = squad_id
+    result["bid_strategy"] = bid_strategy
+    result["bid_usd"] = bid_usd
+    print(f"[snap] Ad Squad created ({bid_strategy} ${bid_usd}): {squad_payload['name']} -> {squad_id}")
+
+    # 3. Ad — INSTANT_FORM or WEB_FORM
+    ad_name_raw = f"{campaign_type}_{language}_{product}V1"
+    ad_name = _prefixed(ad_name_raw)
+
+    if ad_format == "WEB_FORM":
+        utm_url = _build_utm_url(landing_url, campaign_name, _prefixed(full_name), ad_name)
+        print(f"[snap] WEB_FORM URL: {utm_url}")
+        result["final_url"] = utm_url
+    else:
+        print(f"[snap] INSTANT_FORM — lead captured in-app via Snap Lead Gen Form")
+
+    ad = create_ad(
+        adsquad_id=squad_id,
+        name=ad_name_raw,
+        creative_id=creative_id,
+        status=status,
+        account_id=acct,
+    )
+    result["ad_id"] = ad.get("id")
+    result["ad_name"] = ad_name
+
+    result["utm_mapping"] = {
+        "utm_source":   "snapchat",
+        "utm_medium":   "paid",
+        "utm_campaign": campaign_name,
+        "utm_content":  ad_name,
+    }
+    print(f"\n[snap] Full campaign setup complete:")
+    print(f"  Campaign  : {campaign_name} (id={campaign_id})")
+    print(f"  Ad Squad  : {squad_id} | {bid_strategy} ${bid_usd} | LEAD_GENERATION")
+    print(f"  Ad        : {ad_name} | {ad_format}")
+    return result
+
+
+# ── Segments / audiences ──────────────────────────────────────────────────────
+
+def list_segments(account_id: str = _DEFAULT_ACCOUNT) -> list[dict]:
+    r = requests.get(f"{_BASE}/adaccounts/{account_id}/segments",
+                     headers=_headers(), timeout=10)
+    r.raise_for_status()
+    return [s.get("segment", s) for s in r.json().get("segments", [])]

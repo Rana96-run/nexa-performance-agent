@@ -97,6 +97,20 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] **Map Funnel `channel_unified` → our `CHANNEL_MAP`** in
   `collectors/views.py` so labels match across stacks.
 
+## P2 — LinkedIn campaign cloning use case
+
+- [ ] **LinkedIn: clone creatives from closest matching campaign**
+  When creating a new LinkedIn campaign via API, find the closest existing campaign
+  by keyword/product name match, copy its creative reference URN, and attach it
+  to the new ad set automatically. Requires `rw_organization_admin` scope added
+  to the LinkedIn app so the token can read `adCreativesV2`.
+  Steps:
+  1. Add scope in LinkedIn Developer Portal → Products → Marketing Developer Platform
+  2. Re-mint token with new scope: `python scripts/linkedin_oauth.py`
+  3. Build `executors/linkedin.py::clone_creative(source_campaign_id, target_campaign_id)`
+     that reads creative from source and POSTs to `/adCreatives` on target
+  4. In `create_campaign()`, add optional `clone_from_campaign_id` param
+
 ## P3 — Nice-to-have
 
 - [ ] **Microsoft Ads collector** (env scaffolding now present — unblocked
@@ -109,6 +123,15 @@ mirror (and extend) the Looker boards the team already trusts.
 
 ## Done this session (for audit trail)
 
+- [x] **Campaign naming enforcement** — `executors/naming.py` with product aliases, audience validation, LinkedIn UTM mapping
+- [x] **LinkedIn API fixed** — targetingCriteria, locale en/US, campaign_group_name stored in BQ
+- [x] **LinkedIn UTM join** — CASE WHEN in campaign_health.py + bq_writer.py view to join on campaign_group_name
+- [x] **Slack daily format** — peak numbers (top+worst per channel), agent actions spelled out, recommendations in follow-up message
+- [x] **Asana task footer** — Created, Due, Priority, Type, Channel, Asset level, Action on every task
+- [x] **Approval flow** — optimize/junk findings send approval request to #approvals; scale/pause logged as EXECUTED
+- [x] **Pre-send review hook** — `.claude/settings.json` PreToolUse hook fires before Slack posts and Asana task creation
+- [x] **ASANA_ASSIGNEE_GID** — set to Donia's GID in `.env`
+- [x] **CLAUDE.md** — updated with naming convention, LinkedIn UTM table, KPI rules, pre-send review checklist
 - [x] Meta multi-account fix
 - [x] Snap collector (with `conversion_sign_ups` fix)
 - [x] Unified channel_roas_daily view + supporting views

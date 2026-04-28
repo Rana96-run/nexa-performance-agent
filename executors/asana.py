@@ -11,7 +11,7 @@ Features:
 import asana
 from asana.rest import ApiException as AsanaApiException
 from config import (
-    ASANA_TOKEN, ASANA_PROJECTS,
+    ASANA_TOKEN, ASANA_PROJECTS, ASANA_ASSIGNEE_GID,
     ASANA_CHANNEL_LABELS, ASANA_ASSET_LEVEL_LABELS, ASANA_CHANNEL_ASSET_MATRIX,
     ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS, ASANA_SEASONAL_PROJECTS,
     ASANA_ACTIVE_SEASONAL,
@@ -19,8 +19,42 @@ from config import (
 )
 from cache.cache_manager import task_is_new, record_task, get_task_gid
 
+# Action -> priority label (shown in task footer)
+_ACTION_PRIORITY = {
+    "pause":    "High",
+    "exclude":  "High",
+    "optimize": "Medium",
+    "scale":    "Medium",
+    "launch":   "Medium",
+    "fix":      "High",
+    "refresh":  "Low",
+}
+
+
+def _task_footer(channel: str, asset_level: str, action: str, task_type: str) -> str:
+    """Structured metadata block appended to every task description."""
+    from datetime import datetime, timedelta, timezone
+    riyadh    = timezone(timedelta(hours=3))
+    now_str   = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M Riyadh")
+    due_str   = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
+    priority  = _ACTION_PRIORITY.get((action or "").lower(), "Medium")
+    ch_label  = ASANA_CHANNEL_LABELS.get(
+                    (channel or "").lower().replace(" ", "_").replace("-", "_"),
+                    channel or "—")
+    lvl_label = ASANA_ASSET_LEVEL_LABELS.get((asset_level or "").lower(), asset_level or "—")
+    return (
+        f"\n\n---\n"
+        f"**Created:** {now_str}\n"
+        f"**Due:** {due_str}\n"
+        f"**Priority:** {priority}\n"
+        f"**Type:** {task_type}\n"
+        f"**Channel:** {ch_label}\n"
+        f"**Asset level:** {lvl_label}\n"
+        f"**Action:** {(action or '—').title()}"
+    )
+
 # Cache section GIDs so we only look them up once per session
-_section_cache: dict[str, str] = {}   # "project_id:section_name" → section_gid
+_section_cache: dict[str, str] = {}   # "project_id:section_name" -> section_gid
 
 
 def get_client():
@@ -65,7 +99,7 @@ def _get_or_create_section(client, project_id: str, section_name: str) -> str | 
 
 
 def _channel_section_name(channel: str, asset_level: str = "") -> str | None:
-    """Map (channel, asset_level) → Asana section name like 'Google Ads — Campaign'."""
+    """Map (channel, asset_level) -> Asana section name like 'Google Ads — Campaign'."""
     if not channel:
         return None
     ch_key  = channel.lower().replace(" ", "_").replace("-", "_")
@@ -96,7 +130,7 @@ def _resolve_project_id(project_key: str, channel: str, task_type: str,
     if project_key == "optimization":
         if ch in ASANA_OPTIMIZATION_PROJECTS:
             return ASANA_OPTIMIZATION_PROJECTS[ch]
-        # No channel match → fall back to the legacy single-project setting
+        # No channel match -> fall back to the legacy single-project setting
         return ASANA_PROJECTS.get("optimization")
 
     # ── Daily Activity portfolio: route by task category ─────────────────────
@@ -159,7 +193,7 @@ def create_task(
     # Deduplication guard
     if not task_is_new(full_title, project_key):
         existing = get_task_gid(full_title, project_key)
-        print(f"[asana] skipped duplicate: {full_title[:60]!r} → gid={existing}")
+        print(f"[asana] skipped duplicate: {full_title[:60]!r} -> gid={existing}")
         return existing
 
     # Resolve to the right project based on category × channel × task type.
@@ -171,12 +205,22 @@ def create_task(
     client    = get_client()
     tasks_api = asana.TasksApi(client)
 
+    from datetime import datetime, timedelta, timezone
+    riyadh   = timezone(timedelta(hours=3))
+    due_date = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Append structured metadata footer to every description
+    full_description = description + _task_footer(channel, asset_level, action, task_type)
+
     # Build task body
     task_data: dict = {
         "name":     full_title,
-        "notes":    description,
+        "notes":    full_description,
         "projects": [project_id],
+        "due_on":   due_date,
     }
+    if ASANA_ASSIGNEE_GID:
+        task_data["assignee"] = ASANA_ASSIGNEE_GID
 
     # Section routing — for Optimization projects, route into the
     # asset-level section (e.g. "Campaign", "Ad Set / Group", "Audience").

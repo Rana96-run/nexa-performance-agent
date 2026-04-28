@@ -58,6 +58,7 @@ CAMPAIGNS_DAILY_SCHEMA = [
     bigquery.SchemaField("account_id", "STRING"),
     bigquery.SchemaField("campaign_id", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("campaign_name", "STRING"),
+    bigquery.SchemaField("campaign_group_name", "STRING"),             # LinkedIn only: utm_campaign level (group name)
     bigquery.SchemaField("status", "STRING"),                          # ENABLED / PAUSED / LEARNING / REMOVED
     bigquery.SchemaField("objective", "STRING"),
     bigquery.SchemaField("spend", "FLOAT64"),
@@ -215,7 +216,7 @@ def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
         source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
         schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
-        schema=schema,  # None → autodetect disabled but ALLOW_FIELD_ADDITION still triggers
+        schema=schema,  # None -> autodetect disabled but ALLOW_FIELD_ADDITION still triggers
     )
     from io import BytesIO
     load_job = client.load_table_from_file(
@@ -230,45 +231,107 @@ def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
 
 CAMPAIGN_PERFORMANCE_VIEW_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.campaign_performance` AS
+WITH hs AS (
+  SELECT
+    date,
+    lead_utm_campaign,
+    qoyod_source,
+    SUM(leads_total)        AS leads,
+    SUM(leads_open)         AS leads_open,
+    SUM(leads_qualified)    AS leads_qualified,
+    SUM(leads_disqualified) AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  GROUP BY date, lead_utm_campaign, qoyod_source
+)
 SELECT
   c.date,
   c.channel,
   c.campaign_name,
   c.status,
   c.spend,
-  c.leads AS platform_leads,
+  c.leads           AS platform_leads,
   c.conversions,
-  c.cpl AS platform_cpl,
-  h.leads_count  AS hs_leads,
-  h.sqls_count   AS hs_sqls,
-  h.customers_count AS hs_customers,
-  SAFE_DIVIDE(c.spend, h.sqls_count)                       AS cpql,
-  SAFE_DIVIDE(h.sqls_count + h.customers_count, h.leads_count) AS qual_rate,
-  -- Thresholds in USD — values injected from config.py at view-creation time
+  c.cpl             AS platform_cpl,
+  h.leads           AS hs_leads,
+  h.leads_open      AS hs_leads_open,
+  h.leads_qualified AS hs_sqls,
+  h.leads_disqualified AS hs_disqualified,
+  SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0))                      AS cpl,
+  SAFE_DIVIDE(c.spend, NULLIF(h.leads_qualified, 0))            AS cpql,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))            AS qual_rate,
   CASE
-    WHEN c.cpl < {CPL_SCALE} THEN 'scale'
-    WHEN c.cpl <= {CPL_ACCEPTABLE} THEN 'acceptable'
-    WHEN c.cpl <= {CPL_WARNING} THEN 'warning'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0)) < {CPL_SCALE} THEN 'scale'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0)) <= {CPL_ACCEPTABLE} THEN 'acceptable'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0)) <= {CPL_WARNING} THEN 'warning'
     ELSE 'pause_zone'
   END AS cpl_zone,
   CASE
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) IS NULL THEN 'no_data'
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) < {CPQL_SCALE} THEN 'scale'
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) <= {CPQL_ACCEPTABLE} THEN 'acceptable'
-    WHEN SAFE_DIVIDE(c.spend, h.sqls_count) <= {CPQL_WARNING} THEN 'warning'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads_qualified, 0)) IS NULL THEN 'no_data'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads_qualified, 0)) < {CPQL_SCALE} THEN 'scale'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads_qualified, 0)) <= {CPQL_ACCEPTABLE} THEN 'acceptable'
+    WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads_qualified, 0)) <= {CPQL_WARNING} THEN 'warning'
     ELSE 'pause_zone'
   END AS cpql_zone
 FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
-LEFT JOIN `{PROJECT_ID}.{DATASET}.hubspot_leads_daily` h
-  ON c.date = h.date
- AND LOWER(c.campaign_name) = LOWER(h.utm_campaign)
+LEFT JOIN hs h
+  ON  c.date = h.date
+  -- LinkedIn: utm_campaign maps to campaign group name, not campaign name
+ AND  LOWER(CASE WHEN c.channel = 'linkedin'
+                 THEN c.campaign_group_name
+                 ELSE c.campaign_name END) = LOWER(h.lead_utm_campaign)
+"""
+
+# All-dimension lead performance: per channel + campaign + adset + ad + keyword
+LEAD_UTM_PERFORMANCE_VIEW_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.lead_utm_performance` AS
+SELECT
+  date,
+  qoyod_source                              AS channel,
+  lead_utm_campaign                         AS utm_campaign,
+  IFNULL(lead_utm_audience, '(none)')       AS utm_audience,
+  IFNULL(lead_utm_content,  '(none)')       AS utm_content,
+  IFNULL(lead_utm_term,     '(none)')       AS utm_term,
+  SUM(leads_total)                          AS leads,
+  SUM(leads_open)                           AS leads_open,
+  SUM(leads_qualified)                      AS leads_qualified,
+  SUM(leads_disqualified)                   AS leads_disqualified,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_total), 0)) AS qual_rate
+FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+GROUP BY 1, 2, 3, 4, 5, 6
+"""
+
+# Pipeline breakdown: per channel + campaign + adset + ad + keyword + pipeline + stage
+LEAD_FUNNEL_BY_PIPELINE_VIEW_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.lead_funnel_by_pipeline` AS
+SELECT
+  date,
+  qoyod_source                              AS channel,
+  pipeline,
+  stage,
+  lead_utm_campaign                         AS utm_campaign,
+  IFNULL(lead_utm_audience, '(none)')       AS utm_audience,
+  IFNULL(lead_utm_content,  '(none)')       AS utm_content,
+  IFNULL(lead_utm_term,     '(none)')       AS utm_term,
+  SUM(leads_total)                          AS leads,
+  SUM(leads_open)                           AS leads_open,
+  SUM(leads_qualified)                      AS leads_qualified,
+  SUM(leads_disqualified)                   AS leads_disqualified,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_total), 0)) AS qual_rate,
+  ANY_VALUE(top_disq_reason)                AS top_disq_reason
+FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
 """
 
 
 def create_views():
     client = get_client()
-    client.query(CAMPAIGN_PERFORMANCE_VIEW_SQL).result()
-    print("[OK] View campaign_performance created.")
+    for sql, name in [
+        (CAMPAIGN_PERFORMANCE_VIEW_SQL,     "campaign_performance"),
+        (LEAD_UTM_PERFORMANCE_VIEW_SQL,     "lead_utm_performance"),
+        (LEAD_FUNNEL_BY_PIPELINE_VIEW_SQL,  "lead_funnel_by_pipeline"),
+    ]:
+        client.query(sql).result()
+        print(f"[OK] View {name} created.")
 
 
 # ---------- TEST ----------

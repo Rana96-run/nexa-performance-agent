@@ -41,7 +41,8 @@ SLACK_CHANNEL_ID = SLACK_CHANNEL_NOTIFY  # legacy alias
 NOTIFY_VIA = os.getenv("NOTIFY_VIA", "email").lower()
 
 # Asana
-ASANA_TOKEN = os.getenv("ASANA_ACCESS_TOKEN")
+ASANA_TOKEN        = os.getenv("ASANA_ACCESS_TOKEN")
+ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # default assignee (media buyer GID)
 ASANA_PROJECTS = {
     "daily_activity": os.getenv("ASANA_PROJECT_DAILY_ACTIVITY") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY"),
     "optimization": os.getenv("ASANA_PROJECT_OPTIMIZATION") or os.getenv("ASANA_PORTFOLIO_OPTIMIZATION"),
@@ -168,15 +169,15 @@ USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 # KPI thresholds — all in USD (per playbook in qoyod-manager-os.md)
 # ---------------------------------------------------------------------------
 # CPL (cost per lead) zones, USD
-CPL_SCALE      = 20.00  # < this  → scale up
-CPL_ACCEPTABLE = 28.00  # ≤ this  → acceptable
-CPL_WARNING    = 30.00  # ≤ this  → warning; > $30 for 4 days → pause zone
+CPL_SCALE      = 20.00  # < this  -> scale up
+CPL_ACCEPTABLE = 28.00  # ≤ this  -> acceptable
+CPL_WARNING    = 30.00  # ≤ this  -> warning; > $30 for 4 days -> pause zone
 CPL_PAUSE      = CPL_WARNING   # backwards-compat alias
 
 # CPQL (cost per qualified lead / SQL) zones, USD
 CPQL_SCALE      = 40.00
 CPQL_ACCEPTABLE = 65.00
-CPQL_WARNING    = 80.00  # > $80 for 4 days → pause zone
+CPQL_WARNING    = 80.00  # > $80 for 4 days -> pause zone
 CPQL_PAUSE      = CPQL_WARNING  # backwards-compat alias
 
 # Qualification / ROAS targets
@@ -184,7 +185,7 @@ QUAL_RATE_TARGET = 0.30   # ≥ 30 %
 ROAS_TARGET      = 1.0
 
 # Pause decision rules (USD, days)
-DAYS_FOR_PAUSE_DECISION    = 4
+DAYS_FOR_PAUSE_DECISION    = 14
 ZERO_CONV_SPEND_THRESHOLD  = 8     # pause ad if spend > $8 with zero conv
 ZERO_CONV_DAYS_THRESHOLD   = 7
 KEYWORD_PAUSE_SPEND        = 4     # pause keyword if spend > $4 with zero conv

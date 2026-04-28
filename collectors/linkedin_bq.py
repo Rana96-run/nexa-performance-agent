@@ -1,6 +1,6 @@
 """
-LinkedIn Ads → BigQuery collector.
-Pulls per-day per-campaign stats → campaigns_daily.
+LinkedIn Ads -> BigQuery collector.
+Pulls per-day per-campaign stats -> campaigns_daily.
 
 Auth: LI_ACCESS_TOKEN in .env (expires every 60 days — refresh manually).
       LI_AD_ACCOUNT_URN e.g. urn:li:sponsoredAccount:506171805
@@ -33,7 +33,7 @@ def _account_currency() -> str:
     """Fetch the ad account's native currency. Defaults to SAR on error."""
     if not AD_ACCT_URN:
         return "SAR"
-    # Extract numeric ID from URN: "urn:li:sponsoredAccount:506171805" → "506171805"
+    # Extract numeric ID from URN: "urn:li:sponsoredAccount:506171805" -> "506171805"
     acct_id = AD_ACCT_URN.rsplit(":", 1)[-1]
     try:
         r = requests.get(f"{BASE}/adAccounts/{acct_id}",
@@ -45,14 +45,38 @@ def _account_currency() -> str:
     return "SAR"
 
 
-def _list_campaigns() -> dict:
-    """Return {campaign_urn: {name, status, objective}} for all campaigns."""
+def _list_campaign_groups() -> dict:
+    """Return {group_urn: group_name} for all campaign groups on the account."""
+    if not AD_ACCT_URN:
+        return {}
+    acct_id = AD_ACCT_URN.rsplit(":", 1)[-1]
+    r = requests.get(f"{BASE}/adAccounts/{acct_id}/adCampaignGroups",
+                     headers=_headers(),
+                     params={"q": "search", "fields": "id,name"},
+                     timeout=15)
+    if r.status_code >= 400:
+        print(f"[li-bq] campaign groups {r.status_code}: {r.text[:200]}")
+        return {}
+    out = {}
+    for g in r.json().get("elements", []):
+        urn = f"urn:li:sponsoredCampaignGroup:{g.get('id', '')}"
+        out[urn] = g.get("name", urn)
+    return out
+
+
+def _list_campaigns(group_names: dict) -> dict:
+    """Return {campaign_urn: {name, group_name, status, objective}} for all campaigns.
+
+    LinkedIn UTM mapping:
+      campaign group name -> utm_campaign
+      campaign name       -> utm_audience
+    """
     if not AD_ACCT_URN:
         return {}
     params = {
         "q":                         "search",
         "search.account.values[0]":  AD_ACCT_URN,
-        "fields":                    "id,name,status,objectiveType",
+        "fields":                    "id,name,status,objectiveType,campaignGroup",
     }
     r = requests.get(f"{BASE}/adCampaigns", headers=_headers(),
                      params=params, timeout=15)
@@ -61,11 +85,13 @@ def _list_campaigns() -> dict:
         return {}
     out = {}
     for c in r.json().get("elements", []):
-        urn = f"urn:li:sponsoredCampaign:{c.get('id', '')}"
+        urn        = f"urn:li:sponsoredCampaign:{c.get('id', '')}"
+        group_urn  = c.get("campaignGroup", "")
         out[urn] = {
-            "name":      c.get("name", urn),
-            "status":    c.get("status", ""),
-            "objective": c.get("objectiveType", ""),
+            "name":       c.get("name", urn),
+            "group_name": group_names.get(group_urn, ""),  # utm_campaign
+            "status":     c.get("status", ""),
+            "objective":  c.get("objectiveType", ""),
         }
     return out
 
@@ -115,14 +141,15 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
     else:
         start = date(end.year, 1, 1)
 
-    print(f"[li-bq] Window {start} → {end}")
+    print(f"[li-bq] Window {start} -> {end}")
 
     native_cur = _account_currency()
-    print(f"[li-bq] account {AD_ACCT_URN} native={native_cur} → converting to USD")
+    print(f"[li-bq] account {AD_ACCT_URN} native={native_cur} -> converting to USD")
 
     try:
-        campaigns = _list_campaigns()
-        analytics = _fetch_analytics(start, end)
+        group_names = _list_campaign_groups()
+        campaigns   = _list_campaigns(group_names)
+        analytics   = _fetch_analytics(start, end)
     except Exception as e:
         print(f"[li-bq] API error: {e}")
         return 0
@@ -159,13 +186,14 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
         cpl = round(spend / leads, 2) if leads > 0 else None
 
         rows.append({
-            "date":           day,
-            "channel":        "linkedin",
-            "account_id":     AD_ACCT_URN,
-            "campaign_id":    camp_urn,
-            "campaign_name":  meta.get("name", camp_urn),
-            "status":         meta.get("status", ""),
-            "objective":      meta.get("objective", ""),
+            "date":                day,
+            "channel":             "linkedin",
+            "account_id":          AD_ACCT_URN,
+            "campaign_id":         camp_urn,
+            "campaign_name":       meta.get("name", camp_urn),
+            "campaign_group_name": meta.get("group_name", ""),  # utm_campaign for LinkedIn
+            "status":              meta.get("status", ""),
+            "objective":           meta.get("objective", ""),
             "spend":          round(spend, 2),
             "impressions":    impr,
             "clicks":         clicks,
