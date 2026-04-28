@@ -5,12 +5,12 @@ builder = "NIXPACKS"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 
-# Railway reads the Procfile for process types.
-# Two services are expected in this project:
+# Single service: nexa-web
+# Start Command: python app_server.py
 #
-#   nexa-web    → runs the Procfile "web" command  (Flask + webhook)
-#   nexa-worker → runs the Procfile "worker" command (schedulers + Slack listener)
+# app_server.py runs everything in one process:
+#   - Flask (reports + webhooks) on $PORT
+#   - operational_scheduler thread (agent cadences)
+#   - slack_listener thread (responds to @Nexa mentions)
 #
-# Set these in Railway dashboard:
-#   nexa-web    → Start Command: gunicorn "reports.app:app" --bind 0.0.0.0:$PORT --workers 2 --timeout 120
-#   nexa-worker → Start Command: python worker.py
+# nexa-worker has been removed — it was a duplicate.
