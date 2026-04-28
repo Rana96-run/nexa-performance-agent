@@ -2,10 +2,10 @@
 reports/app.py
 ==============
 Tiny Flask server that:
-  GET  /                       → redirect to /reports/latest
-  GET  /reports/latest         → serve the most-recent pre-rendered HTML
-  GET  /reports/<date>         → serve a specific dated HTML  (e.g. /reports/2026-04-25)
-  GET  /api/report             → custom date range: ?start=YYYY-MM-DD&end=YYYY-MM-DD
+  GET  /                       -> redirect to /reports/latest
+  GET  /reports/latest         -> serve the most-recent pre-rendered HTML
+  GET  /reports/<date>         -> serve a specific dated HTML  (e.g. /reports/2026-04-25)
+  GET  /api/report             -> custom date range: ?start=YYYY-MM-DD&end=YYYY-MM-DD
                                  runs assemble_report_data live against BQ, returns JSON
                                  (front-end JS patches window.NEXA_DATA.windows['custom'])
 
@@ -134,7 +134,7 @@ def regenerate():
             role_results=[],
             tasks_created=[],
             approvals_pending=[],
-            permalink="/reports/latest",
+            permalink="/paid-performance/latest",
         )
         path = save_report(report)
         return jsonify({
@@ -151,10 +151,12 @@ def regenerate():
 
 @app.route("/")
 def root():
-    return redirect("/reports/latest")
+    return redirect("/paid-performance/latest")
 
 
-@app.route("/reports/latest")
+# ── New canonical URL (/paid-performance/) ────────────────────────────────────
+@app.route("/paid-performance/latest")
+@app.route("/reports/latest")   # backward-compat redirect kept alive
 def latest():
     """
     Serve the most recent dashboard.
@@ -181,7 +183,8 @@ def latest():
     abort(404, "No report available. Run: python main.py daily")
 
 
-@app.route("/reports/<report_date>")
+@app.route("/paid-performance/<report_date>")
+@app.route("/reports/<report_date>")   # backward-compat
 def dated(report_date: str):
     # Accept both "2026-04-25" and "2026-04-25.html"
     name = report_date if report_date.endswith(".html") else f"{report_date}.html"

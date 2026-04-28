@@ -360,7 +360,7 @@ def build_daily_summary_text(spikes: list | None = None,
     today_str = datetime.now(riyadh).strftime("%d %b %Y")
     domain = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
               or "nexa-web-production-c859.up.railway.app")
-    url = f"https://{domain}/reports/latest"
+    url = f"https://{domain}/paid-performance/latest"
 
     counts = _asana_task_counts()
     action_lines = _agent_actions_lines(audit_tasks or [], health_tasks or [])

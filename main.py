@@ -358,7 +358,7 @@ def run_cadence(cadence: str, force: bool = False):
                 {"role": r["role"], "decision": r.get("decision") or {}}
                 for r in approvals
             ],
-            permalink="/reports/latest",
+            permalink="/paid-performance/latest",
         )
         path = save_report(report)
         log.info(f"Daily report rendered -> {path}")
