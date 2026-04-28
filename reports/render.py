@@ -113,6 +113,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
               transition: all .15s; white-space: nowrap; }
 .window-tab.active { background: var(--accent); color: #fff; }
 
+/* ── Preset quick-select tabs ── */
+.preset-tabs { display: flex; border: 1px solid var(--border); border-radius: 6px;
+               overflow: hidden; }
+.preset-tab { padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
+              border: none; background: var(--surface); color: var(--muted);
+              transition: all .15s; white-space: nowrap; border-right: 1px solid var(--border); }
+.preset-tab:last-child { border-right: none; }
+.preset-tab:hover  { background: #f0f4ff; color: var(--accent); }
+.preset-tab.active { background: #e0e7ff; color: var(--accent); font-weight: 600; }
+
 /* ── Date range ── */
 .date-range { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .date-range input { padding: 5px 8px; border: 1px solid var(--border);
@@ -163,28 +173,56 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 /* ── Narrative / Summary ── */
 .summary-card .card-body { padding: 0; }
-.summary-headline { padding: 24px 24px 16px;
+.summary-headline { padding: 28px 32px 22px;
                     background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
                     border-bottom: 1px solid var(--border); }
-.headline-text { font-size: 22px; font-weight: 700; margin: 0 0 4px;
-                 line-height: 1.35; color: #0f172a; letter-spacing: -0.01em; }
+.headline-text { font-size: 26px; font-weight: 800; margin: 0 0 6px;
+                 line-height: 1.3; color: #0f172a; letter-spacing: -0.02em; }
 .headline-meta { font-size: 12px; color: var(--muted); font-weight: 500; }
-.summary-body { padding: 20px 24px; display: grid;
-                grid-template-columns: 1fr 1fr; gap: 24px; }
-.summary-block h4 { font-size: 11px; font-weight: 700; color: var(--muted);
-                    text-transform: uppercase; letter-spacing: .08em;
-                    margin: 0 0 10px; }
-.what-changed { list-style: none; display: flex; flex-direction: column; gap: 8px;
+.summary-body { padding: 0; display: grid;
+                grid-template-columns: 1fr 1fr 1fr; }
+.summary-block { padding: 24px 28px; border-right: 1px solid var(--border); }
+.summary-block:last-child { border-right: none; }
+.summary-block h4 { font-size: 10px; font-weight: 700; color: var(--muted);
+                    text-transform: uppercase; letter-spacing: .10em;
+                    margin: 0 0 14px; display: flex; align-items: center; gap: 6px; }
+.summary-block h4::before { content: ''; display: inline-block; width: 3px; height: 14px;
+                             background: var(--accent); border-radius: 2px; }
+.what-changed { list-style: none; display: flex; flex-direction: column; gap: 10px;
                 margin: 0; padding: 0; }
-.what-changed li { font-size: 13.5px; line-height: 1.55;
-                   padding-left: 22px; position: relative; }
-.what-changed li::before { content: "▸"; position: absolute; left: 0;
+.what-changed li { font-size: 13px; line-height: 1.6;
+                   padding: 10px 12px 10px 36px; position: relative;
+                   background: var(--bg); border-radius: 6px; border-left: 3px solid var(--accent); }
+.what-changed li::before { content: "▸"; position: absolute; left: 12px;
                            color: var(--accent); font-weight: 700; }
-.why-text { color: #334155; line-height: 1.7; font-size: 13.5px;
+.why-text { color: #334155; line-height: 1.75; font-size: 13px;
             white-space: pre-wrap; margin: 0; }
-@media (max-width: 900px) {
-  .summary-body { grid-template-columns: 1fr; }
+.summary-actions { display: flex; flex-direction: column; gap: 8px; }
+.action-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+               background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px;
+               font-size: 13px; line-height: 1.5; }
+.action-dot { width: 8px; height: 8px; border-radius: 50%; background: #f97316;
+              flex-shrink: 0; margin-top: 5px; }
+@media (max-width: 1100px) {
+  .summary-body { grid-template-columns: 1fr 1fr; }
 }
+@media (max-width: 700px) {
+  .summary-body { grid-template-columns: 1fr; }
+  .summary-block { border-right: none; border-bottom: 1px solid var(--border); }
+}
+
+/* ── Channel page switcher ── */
+.channel-pager { display: flex; align-items: center; gap: 8px;
+                 margin-bottom: 20px; flex-wrap: wrap; }
+.ch-page-btn { padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+               background: var(--surface); font-size: 13px; font-weight: 500;
+               cursor: pointer; color: var(--muted); display: flex; align-items: center;
+               gap: 6px; transition: all .15s; }
+.ch-page-btn:hover  { border-color: var(--accent); color: var(--accent); }
+.ch-page-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ch-page-dot { width: 8px; height: 8px; border-radius: 50%; }
+.channel-section { display: none; }
+.channel-section.active { display: block; }
 
 /* ── Channel section ── */
 .channel-section { scroll-margin-top: 20px; }
@@ -339,12 +377,27 @@ function buildTable(rows, columns, emptyMsg) {
   vis.forEach(c => { h += `<th style="${c.left||c.always?'text-align:left':''}">${c.label}</th>`; });
   h += '</tr></thead><tbody>';
   rows.forEach(row => {
-    h += '<tr>';
+    // Junk-leads: CPL looks good (scale/ok) but CPQL is bad (pause/warning)
+    // and qual rate < 30%. Low CPL ≠ scale — leads may be junk.
+    const junkLeads = (
+      ['scale','acceptable'].includes(row.cpl_zone) &&
+      ['pause_zone','warning'].includes(row.cpql_zone) &&
+      (row.qual_rate != null && row.qual_rate < 30)
+    );
+    const rowStyle = junkLeads
+      ? 'background:#fff7ed;outline:1px solid #fb923c'
+      : '';
+    h += `<tr style="${rowStyle}">`;
     vis.forEach(c => {
       const val = row[c.key];
       let cell;
       if (c.zone_key) {
         cell = zoneCell(val, row[c.zone_key], c.zone_fmt || fmtUSD);
+        // Junk-leads tooltip on the CPL cell
+        if (junkLeads && c.key === 'cpl') {
+          cell = `<span title="Junk-leads alert: CPL looks cheap but qual rate is ${(row.qual_rate||0).toFixed(0)}% — do not scale on CPL alone"
+                        style="border-bottom:2px dashed #f97316">${cell} &#9888;</span>`;
+        }
       } else if (c.fmt) {
         cell = c.fmt(val);
       } else {
@@ -474,14 +527,10 @@ function renderChannel(ch) {
 
   setPanel(el, 'campaign',     buildTable(ch.campaigns,    CAMP_COLS, 'No campaign data for this period.'));
   setPanel(el, 'utm-campaign', buildTable(ch.utm_campaign, utmCols('UTM Campaign'),  'No UTM campaign data.'));
-  setPanel(el, 'utm-audience', buildTable(ch.utm_audience, utmCols('UTM Audience'),  'No UTM audience data.'));
-  setPanel(el, 'utm-content',  buildTable(ch.utm_content,  utmCols('UTM Content'),   'No UTM content data.'));
+  setPanel(el, 'utm-audience', buildTable(ch.utm_audience, utmCols('Ad Group / Audience'), 'No audience data.'));
+  setPanel(el, 'utm-content',  buildTable(ch.utm_content,  utmCols('Ad / Creative'),        'No creative data.'));
+  setPanel(el, 'utm-term',     buildTable(ch.utm_term,     utmCols('Keyword'),               'No keyword data for this channel.'));
   setPanel(el, 'disq',         disqTable(ch.disq_reasons));
-
-  const agNote = ((ch.ad_groups || {}).note) || 'Ad-group grain — collector pending';
-  const adNote = ((ch.ads       || {}).note) || 'Ad-creative grain — collector pending';
-  setPanel(el, 'adgroups', `<span class="pending-badge">⏳ ${agNote}</span>`);
-  setPanel(el, 'ads',      `<span class="pending-badge">⏳ ${adNote}</span>`);
 }
 
 function renderAllChannels() {
@@ -562,10 +611,41 @@ function setWindow(w) {
   renderAllChannels();
 }
 
+// ── Preset date calculator ─────────────────────────────────────────────────
+function computePreset(name) {
+  const fmt = d => d.toISOString().slice(0, 10);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yest = new Date(today); yest.setDate(today.getDate() - 1);
+
+  switch (name) {
+    case 'today':       return { start: fmt(today), end: fmt(today), label: 'Today' };
+    case 'this_week': {
+      const mon = new Date(today);
+      mon.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Monday
+      return { start: fmt(mon), end: fmt(yest), label: 'This Week' };
+    }
+    case 'this_month': {
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { start: fmt(first), end: fmt(yest), label: 'This Month' };
+    }
+    case 'this_quarter': {
+      const q = Math.floor(today.getMonth() / 3);
+      const first = new Date(today.getFullYear(), q * 3, 1);
+      return { start: fmt(first), end: fmt(yest), label: 'This Quarter' };
+    }
+    case 'last_3m': {
+      const from = new Date(yest); from.setMonth(from.getMonth() - 3);
+      return { start: fmt(from), end: fmt(yest), label: 'Last 3 Months' };
+    }
+    default: return null;
+  }
+}
+
 // ── Custom date range (Flask-backed) ──────────────────────────────────────
-async function fetchCustomRange() {
-  const start = document.getElementById('date-start').value;
-  const end   = document.getElementById('date-end').value;
+async function fetchCustomRange(presetStart, presetEnd, presetLabel) {
+  const start = presetStart || document.getElementById('date-start').value;
+  const end   = presetEnd   || document.getElementById('date-end').value;
   if (!start || !end) { alert('Pick start and end dates.'); return; }
   const loading = document.getElementById('custom-loading');
   loading.classList.add('on');
@@ -575,7 +655,12 @@ async function fetchCustomRange() {
     const data = await resp.json();
     D.windows = D.windows || {};
     D.windows['custom'] = data.channels || [];
-    // Add or update custom tab
+    // Update date inputs to reflect what was fetched
+    const ds = document.getElementById('date-start');
+    const de = document.getElementById('date-end');
+    if (ds) ds.value = start;
+    if (de) de.value = end;
+    // Add/update custom tab label
     const tabs = document.querySelector('.window-tabs');
     let btn = tabs.querySelector('[data-w="custom"]');
     if (!btn) {
@@ -585,7 +670,9 @@ async function fetchCustomRange() {
       btn.onclick = () => setWindow('custom');
       tabs.appendChild(btn);
     }
-    btn.textContent = `${start} → ${end}`;
+    btn.textContent = presetLabel || `${start} → ${end}`;
+    // Clear preset active state, set window tab active
+    document.querySelectorAll('.preset-tab').forEach(t => t.classList.remove('active'));
     setWindow('custom');
   } catch(e) {
     alert('Failed: ' + e.message);
@@ -654,12 +741,66 @@ function initDateInputs() {
   if (!s.value) s.value = fmt(weekAgo);
 }
 
+// ── Channel pager ─────────────────────────────────────────────────────────
+function buildChannelPager() {
+  const pager = document.getElementById('channel-pager');
+  if (!pager) return;
+  const sections = document.querySelectorAll('.channel-section[id]');
+  if (!sections.length) return;
+  sections.forEach((sec, i) => {
+    const dot   = sec.querySelector('.channel-dot');
+    const title = sec.querySelector('.card-title');
+    const color = dot ? dot.style.background : '#888';
+    const label = title ? title.textContent.trim() : sec.id;
+    const btn = document.createElement('button');
+    btn.className = 'ch-page-btn' + (i === 0 ? ' active' : '');
+    btn.dataset.target = sec.id;
+    btn.innerHTML = `<span class="ch-page-dot" style="background:${color}"></span>${label}`;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.channel-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.ch-page-btn').forEach(b => b.classList.remove('active'));
+      sec.classList.add('active');
+      btn.classList.add('active');
+      const ch = getChannelData(sec.id);
+      if (ch.channel) renderChannel(ch);
+    });
+    pager.appendChild(btn);
+    if (i !== 0) sec.classList.remove('active');
+    else         sec.classList.add('active');
+  });
+}
+
+function getChannelData(id) {
+  const key = id.replace(/^ch-/, '');
+  const chs = ((D.windows || {})[currentWindow]) || D.channels || [];
+  return chs.find(c => c.channel === key) || {};
+}
+
+// Populate "Actions needed" panel from approvals_pending
+function buildActionsPanel() {
+  const container = document.getElementById('actions-list');
+  if (!container) return;
+  const approvals = D.approvals_pending || [];
+  if (!approvals.length) return;
+  container.innerHTML = '';
+  approvals.forEach(a => {
+    const dec = a.decision || {};
+    const text = [dec.channel, dec.action, dec.decision].filter(Boolean).join(' — ') || JSON.stringify(a);
+    const item = document.createElement('div');
+    item.className = 'action-item';
+    item.innerHTML = `<span class="action-dot"></span><span>${text}</span>`;
+    container.appendChild(item);
+  });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   buildMetricToggles();
   initDateInputs();
+  buildChannelPager();
   renderAllChannels();
   renderTrends();
+  buildActionsPanel();
   initScrollSpy();
 
   document.querySelectorAll('.channel-section').forEach(el => initSubTabs(el));
@@ -667,6 +808,16 @@ document.addEventListener('DOMContentLoaded', () => {
     t.addEventListener('click', () => setWindow(t.dataset.w));
   });
   document.getElementById('fetch-custom')?.addEventListener('click', fetchCustomRange);
+  document.querySelectorAll('.preset-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      const p = computePreset(t.dataset.preset);
+      if (!p) return;
+      document.querySelectorAll('.preset-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelectorAll('.window-tab').forEach(x => x.classList.remove('active'));
+      fetchCustomRange(p.start, p.end, p.label);
+    });
+  });
   document.getElementById('metric-toggle-btn')?.addEventListener('click', toggleMetricDropdown);
   document.querySelectorAll('.nav-pill[data-target]').forEach(p => {
     p.addEventListener('click', () => {
@@ -699,7 +850,7 @@ def _delta_html(d: float | None, lower_is_better: bool = False) -> str:
     sign = "+" if d > 0 else ""
     good = (d < 0) if lower_is_better else (d > 0)
     cls  = "pos" if good else ("neg" if d != 0 else "neu")
-    arrow = "↑" if d > 0 else ("↓" if d < 0 else "→")
+    arrow = "↑" if d > 0 else ("↓" if d < 0 else "->")
     return f'<span class="kpi-delta {cls}">{arrow} {sign}{d:.1f}%</span>'
 
 
@@ -754,11 +905,10 @@ def _channel_section_scaffold(ch: dict) -> str:
     tabs = [
         ("campaign",     "Campaigns"),
         ("utm-campaign", "UTM Campaign"),
-        ("utm-audience", "UTM Audience"),
-        ("utm-content",  "UTM Content"),
+        ("utm-audience", "UTM Audience"),   # = ad group name
+        ("utm-content",  "UTM Content"),    # = ad / creative name
+        ("utm-term",     "Keywords"),        # = search keyword (utm_term)
         ("disq",         "Disqual. Reasons"),
-        ("adgroups",     "Ad Groups ⏳"),
-        ("ads",          "Ads ⏳"),
     ]
     tabs_html = "".join(
         f'<button class="sub-tab{" active" if i == 0 else ""}" data-panel="{k}">{lbl}</button>'
@@ -876,12 +1026,21 @@ def render_html(report: dict) -> str:
         <div class="window-tabs">
           <button class="window-tab" data-w="yesterday">Yesterday</button>
           <button class="window-tab active" data-w="last_7d">7 Days</button>
+          <button class="window-tab" data-w="last_14d">14 Days</button>
           <button class="window-tab" data-w="last_30d">30 Days</button>
+        </div>
+
+        <div class="preset-tabs">
+          <button class="preset-tab" data-preset="today">Today</button>
+          <button class="preset-tab" data-preset="this_week">This Week</button>
+          <button class="preset-tab" data-preset="this_month">This Month</button>
+          <button class="preset-tab" data-preset="this_quarter">This Quarter</button>
+          <button class="preset-tab" data-preset="last_3m">Last 3 Months</button>
         </div>
 
         <div class="date-range">
           <input type="date" id="date-start" title="Start date">
-          <span style="color:var(--muted)">→</span>
+          <span style="color:var(--muted)">-></span>
           <input type="date" id="date-end" title="End date">
           <button id="fetch-custom">Apply</button>
         </div>
@@ -936,12 +1095,21 @@ def render_html(report: dict) -> str:
               <h4>Why it matters</h4>
               <p class="why-text">{why}</p>
             </div>
+            <div class="summary-block">
+              <h4>Actions needed</h4>
+              <div class="summary-actions" id="actions-list">
+                <div style="color:var(--muted);font-size:13px">Awaiting nightly analysis…</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Per-channel sections -->
+    <!-- Channel page switcher -->
+    <div class="channel-pager" id="channel-pager"></div>
+
+    <!-- Per-channel sections (one visible at a time) -->
     {ch_scaffolds}
 
   </main>

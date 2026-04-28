@@ -470,9 +470,11 @@ def build_channel_section(channel_key: str, days: int = 7) -> dict:
     )[:5]
 
     # ── UTM-grain tables ────────────────────────────────────────────────────
+    # utm_audience = ad group name, utm_content = ad/creative name, utm_term = keyword
     utm_campaign = _utm_breakdown(project, dataset, bq, qoyod_src, start, end, "lead_utm_campaign")
     utm_audience = _utm_breakdown(project, dataset, bq, qoyod_src, start, end, "lead_utm_audience")
     utm_content  = _utm_breakdown(project, dataset, bq, qoyod_src, start, end, "lead_utm_content")
+    utm_term     = _utm_breakdown(project, dataset, bq, qoyod_src, start, end, "lead_utm_term")
 
     # ── Disqualification reasons ────────────────────────────────────────────
     disq_reasons = _disq_reason_breakdown(project, dataset, bq, qoyod_src, start, end)
@@ -499,12 +501,8 @@ def build_channel_section(channel_key: str, days: int = 7) -> dict:
         "utm_campaign":      utm_campaign,
         "utm_audience":      utm_audience,
         "utm_content":       utm_content,
+        "utm_term":          utm_term,
         "disq_reasons":      disq_reasons,
-        # Grain we don't yet collect — surfaced in render with a "data pending" badge
-        "ad_groups": {"available": False,
-                      "note": "ad_group grain not yet in BQ — needs adgroups_daily collector"},
-        "ads":       {"available": False,
-                      "note": "ad grain not yet in BQ — needs ads_daily collector"},
     }
 
 
@@ -517,7 +515,7 @@ def _channel_from_qoyod_source(qoyod_src: str) -> str:
 
 
 def _channel_to_qoyod_source(channel_key: str) -> str:
-    """Map our channel slug → HubSpot's actual qoyod_source label.
+    """Map our channel slug -> HubSpot's actual qoyod_source label.
     Single source of truth lives in analysers.channel_inference.
     """
     from analysers.channel_inference import CHANNEL_TO_QOYOD_SOURCE
@@ -620,7 +618,7 @@ def assemble_report_data(
 
     # Pre-compute 3 windows per channel
     windows = {}
-    for days, window_key in [(1, "yesterday"), (7, "last_7d"), (30, "last_30d")]:
+    for days, window_key in [(1, "yesterday"), (7, "last_7d"), (14, "last_14d"), (30, "last_30d")]:
         window_channels = []
         for key in [k for k, _, _ in CHANNEL_DISPLAY if k in spending_channels]:
             section = build_channel_section(key, days=days)
@@ -636,7 +634,7 @@ def assemble_report_data(
 
     # Stitch narrative paragraph into all three windows
     ch_narratives = narrative.get("channel_narratives") or {}
-    for wk in ("yesterday", "last_7d", "last_30d"):
+    for wk in ("yesterday", "last_7d", "last_14d", "last_30d"):
         for ch in windows[wk]:
             ch["narrative"] = ch_narratives.get(ch["channel"], "")
 

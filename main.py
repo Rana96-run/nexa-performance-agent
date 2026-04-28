@@ -20,7 +20,7 @@ Flow:
     6. Approve — channel mutations go to approval channel; wait for ✅/❌ reaction
     7. Mark   — record cadence as complete so scheduler doesn't double-fire
 
-Channels in analysis: Google Ads · Meta · Snapchat · LinkedIn · Microsoft Ads · HubSpot
+Channels in analysis: Google Ads · Meta · Snapchat · TikTok · LinkedIn · Microsoft Ads · HubSpot
 """
 from scripts import bootstrap  # noqa: F401  -- materializes GOOGLE creds from env if needed
 import sys
@@ -79,7 +79,7 @@ def collect(cadence: str) -> dict:
     days    = CADENCE_DAYS.get(cadence, 4)
     kw_days = max(days, 14)
     print(f"[collect] cadence={cadence}  window={days}d  kw={kw_days}d")
-    print(f"[collect] channels: Google Ads · Meta · Snapchat · LinkedIn · Microsoft Ads · HubSpot")
+    print(f"[collect] channels: Google Ads · Meta · Snapchat · TikTok · LinkedIn · Microsoft Ads · HubSpot")
 
     return {
         "date":    str(date.today()),
@@ -365,7 +365,7 @@ def run_cadence(cadence: str, force: bool = False):
     except Exception as e:
         log.warning(f"Daily report generation failed (non-fatal): {e}")
 
-    # 7. Handle high-confidence channel actions → approval channel
+    # 7. Handle high-confidence channel actions -> approval channel
     for res in approvals:
         print(f"[approval] Requesting approval for: {res['role']}")
         result = send_approval_request(res)
