@@ -136,7 +136,7 @@ mock_report = {
 
 if __name__ == "__main__":
     path = save_report(mock_report)
-    print(f"Report saved → {path}")
+    print(f"Report saved -> {path}")
     print(f"File size:     {path.stat().st_size / 1024:.0f} KB")
     import webbrowser
     webbrowser.open(path.as_uri())

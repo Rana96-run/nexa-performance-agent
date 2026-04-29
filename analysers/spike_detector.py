@@ -5,12 +5,12 @@ Detects daily anomalies in paid-channel performance and posts ONE Slack
 message per day only when something worth noting actually happens.
 
 What counts as a "spike":
-  - Spend up   ≥ 30%  vs trailing 7-day average → :money_with_wings:
-  - Spend down ≥ 30%                            → :chart_with_downwards_trend:
-  - Leads up   ≥ 40%                            → :rocket:
-  - Leads down ≥ 40%                            → :warning:
-  - Qualified rate change ≥ 20 percentage points → :star: / :thinking_face:
-  - Disqualified rate change ≥ 20 percentage points → :x: / :warning:
+  - Spend up   ≥ 30%  vs trailing 7-day average -> :money_with_wings:
+  - Spend down ≥ 30%                            -> :chart_with_downwards_trend:
+  - Leads up   ≥ 40%                            -> :rocket:
+  - Leads down ≥ 40%                            -> :warning:
+  - Qualified rate change ≥ 20 percentage points -> :star: / :thinking_face:
+  - Disqualified rate change ≥ 20 percentage points -> :x: / :warning:
 
 The detector runs on the most recent full day (yesterday Riyadh) vs the
 7 days before that. Only paid channels are checked — organic/SEO are
@@ -39,7 +39,7 @@ MIN_LEADS_COUNT     = int(  os.getenv("SPIKE_MIN_LEADS",  "5"))
 # Channels we care about for spike alerts (paid only)
 PAID_CHANNELS = ["google_ads", "meta", "snapchat", "linkedin", "microsoft_ads", "tiktok"]
 
-# Map BQ channel slug → human-readable label for Slack
+# Map BQ channel slug -> human-readable label for Slack
 CHANNEL_LABELS = {
     "google_ads":    "Google Ads",
     "meta":          "Meta",

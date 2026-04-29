@@ -38,14 +38,12 @@ def post_approval_request(analysis: dict) -> str:
     proof_lines.append(f"Confidence: {confidence}")
     proof_text = "\n".join(proof_lines)
 
-    # ── Footer ─────────────────────────────────────────────────────────────
-    footer = ":white_check_mark: approve   :x: reject"
-
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": header}},
         {"type": "section", "text": {"type": "mrkdwn", "text": proof_text}},
         {"type": "context", "elements": [
-            {"type": "mrkdwn", "text": footer},
+            {"type": "mrkdwn",
+             "text": "React with :white_check_mark: to approve or :x: to reject"},
         ]},
     ]
     fallback_text = f"Approval: {action} {channel} {campaign}".strip()
@@ -58,7 +56,19 @@ def post_approval_request(analysis: dict) -> str:
             channel=SLACK_CHANNEL_APPROVAL,
             blocks=blocks, text=fallback_text,
         )
-        return response["ts"]
+        ts = response["ts"]
+        # Pre-add both reactions so the user just clicks an existing reaction
+        # (no need to search for emoji — just click the count)
+        for emoji in ("white_check_mark", "x"):
+            try:
+                client.reactions_add(
+                    channel=SLACK_CHANNEL_APPROVAL,
+                    name=emoji,
+                    timestamp=ts,
+                )
+            except SlackApiError:
+                pass  # reaction already exists or missing scope — non-fatal
+        return ts
     except SlackApiError as e:
         print(f"Slack error: {e}")
         return None

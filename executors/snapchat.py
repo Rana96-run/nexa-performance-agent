@@ -326,6 +326,69 @@ def set_ad_status(ad_id: str, status: str,
     return result
 
 
+# ── Lead gen / Instant Form ───────────────────────────────────────────────────
+
+def create_instant_form(
+    name: str,
+    questions: list[dict] | None = None,
+    privacy_url: str = "https://qoyod.com/privacy",
+    thank_you_message: str = "شكراً لك! سنتواصل معك قريباً",
+    account_id: str | None = None,
+) -> str:
+    """
+    Create a Snapchat Lead Gen Form via the Snap Ads API.
+
+    The form is created with status ACTIVE so it is immediately ready to
+    attach to an ad squad.  Pause the containing ad squad first if you
+    need to review before traffic runs.
+
+    Parameters
+    ----------
+    name              : Form name — should follow naming convention, e.g.
+                        "Snapchat_LeadGen_AR_Invoice_Form".
+    questions         : List of question dicts. Each dict must contain a
+                        ``type`` key. Supported types: NAME, PHONE, EMAIL,
+                        COMPANY, JOB_TITLE.
+                        Defaults to name, phone number, company name,
+                        and job title.
+    privacy_url       : URL of the privacy policy page (required by Snap).
+    thank_you_message : Thank-you body text shown after submission.
+    account_id        : Ad account ID. Defaults to _DEFAULT_ACCOUNT.
+
+    Returns
+    -------
+    str  — the lead_gen_form id returned by the Snap Ads API.
+    """
+    acct = account_id or _DEFAULT_ACCOUNT
+
+    if questions is None:
+        questions = [
+            {"type": "NAME"},
+            {"type": "PHONE"},
+            {"type": "COMPANY"},
+            {"type": "JOB_TITLE"},
+        ]
+
+    payload = {
+        "lead_gen_form": {
+            "name":                  name,
+            "organization_name":     "Qoyod",
+            "status":                "ACTIVE",
+            "questions":             questions,
+            "privacy_policy_url":    privacy_url,
+            "terms_and_conditions_url": privacy_url,
+            "thank_you_headline":    "شكراً لك",
+            "thank_you_body":        thank_you_message,
+        }
+    }
+
+    r      = _post(f"/adaccounts/{acct}/leadgenforms", payload)
+    form   = r.get("lead_gen_form", {})
+    form_id = str(form.get("id", ""))
+    print(f"[snap] form created: {form_id}")
+    return form_id
+
+
 # ── Full campaign setup (one call) ───────────────────────────────────────────
 
 def _build_utm_url(base_url: str, campaign_name: str,
@@ -470,6 +533,49 @@ def create_full_campaign(
     print(f"  Ad Squad  : {squad_id} | {bid_strategy} ${bid_usd} | LEAD_GENERATION")
     print(f"  Ad        : {ad_name} | {ad_format}")
     return result
+
+
+# ── Creatives / media library ────────────────────────────────────────────────
+
+def list_creatives(limit: int = 20, account_id: str | None = None) -> list[dict]:
+    """
+    List media assets (images) for a Snapchat ad account.
+    Returns list of {id, name, thumbnail_url}.
+    """
+    acct = account_id or _DEFAULT_ACCOUNT
+    if not acct:
+        raise ValueError("No SNAPCHAT_AD_ACCOUNT_2025 set in env")
+
+    r = requests.get(
+        f"{_BASE}/adaccounts/{acct}/media",
+        headers=_headers(),
+        params={"media_type": "IMAGE", "limit": limit},
+        timeout=15,
+    )
+    if r.status_code == 401:
+        _refresh_token()
+        r = requests.get(
+            f"{_BASE}/adaccounts/{acct}/media",
+            headers=_headers(),
+            params={"media_type": "IMAGE", "limit": limit},
+            timeout=15,
+        )
+    if not r.ok:
+        raise RuntimeError(f"Snapchat GET /media -> {r.status_code}: {r.text[:300]}")
+
+    items = r.json().get("media", [])
+    results = []
+    for item in items:
+        m = item.get("media", item)
+        results.append({
+            "id":           m.get("id"),
+            "name":         m.get("name"),
+            "thumbnail_url": m.get("download_url") or m.get("media_url"),
+            "source":       "media",
+        })
+
+    print(f"[snap] list_creatives -> {len(results)} assets (account={acct})")
+    return results
 
 
 # ── Segments / audiences ──────────────────────────────────────────────────────

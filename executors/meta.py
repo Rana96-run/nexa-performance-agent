@@ -601,6 +601,56 @@ def create_full_campaign(
     return result
 
 
+def list_creatives(limit: int = 20, account_id: str | None = None) -> list[dict]:
+    """
+    List ad creatives for a Meta ad account.
+    Returns list of {id, name, thumbnail_url, object_type}.
+    Also queries adimages for additional asset visibility.
+    """
+    acct = account_id or _DEFAULT_ACCOUNT
+    if not acct:
+        raise ValueError("No META_AD_ACCOUNT_1 or META_AD_ACCOUNT_2 set in env")
+
+    results: list[dict] = []
+
+    # 1. Ad Creatives
+    try:
+        data = _get(f"/{acct}/adcreatives", {
+            "fields": "id,name,thumbnail_url,object_type,status",
+            "limit":  limit,
+        })
+        for c in data.get("data", []):
+            results.append({
+                "id":           c.get("id"),
+                "name":         c.get("name"),
+                "thumbnail_url": c.get("thumbnail_url"),
+                "object_type":  c.get("object_type"),
+                "source":       "adcreatives",
+            })
+    except Exception as e:
+        print(f"[meta] list_creatives adcreatives error: {e}")
+
+    # 2. Ad Images (additional asset inventory)
+    try:
+        img_data = _get(f"/{acct}/adimages", {
+            "fields": "hash,name,permalink_url,creatives",
+            "limit":  limit,
+        })
+        for img in img_data.get("data", []):
+            results.append({
+                "id":           img.get("hash"),
+                "name":         img.get("name"),
+                "thumbnail_url": img.get("permalink_url"),
+                "object_type":  "IMAGE",
+                "source":       "adimages",
+            })
+    except Exception as e:
+        print(f"[meta] list_creatives adimages error: {e}")
+
+    print(f"[meta] list_creatives -> {len(results)} assets (account={acct})")
+    return results
+
+
 def create_lead_gen_adset(
     campaign_id: str,
     name: str,

@@ -54,7 +54,7 @@ def test_currency_math():
     from collectors.currency import to_usd, normalize_currency, PEG_RATES_TO_USD
     import config
 
-    # SAR → USD is the only one we hard-pin (peg is policy, not market).
+    # SAR -> USD is the only one we hard-pin (peg is policy, not market).
     assert to_usd(3.75, "SAR") == 1.0, "1 USD must equal 3.75 SAR exactly"
     assert to_usd(375, "SAR") == 100.0
     assert to_usd(100, "USD") == 100.0

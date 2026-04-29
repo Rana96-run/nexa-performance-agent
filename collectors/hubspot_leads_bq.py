@@ -156,6 +156,7 @@ def collect_and_write(days: int = None, start_date: date = None,
                 explicit_src = (p.get("lead_qoyod_source") or "").strip()
                 inferred_slug = resolve_channel(
                     qoyod_source=explicit_src,
+                    lead_utm_source=p.get("lead_utm_source") or "",
                     lead_utm_campaign=p.get("lead_utm_campaign") or "",
                     lead_original_traffic_source=p.get("lead_original_traffic_source") or "",
                     lead_latest_traffic_source=p.get("lead_latest_traffic_source") or "",
@@ -244,7 +245,9 @@ def collect_and_write(days: int = None, start_date: date = None,
     print(f"Processed {total_fetched} leads -> {len(rows)} daily buckets")
     _ensure_table_exists()
     return upsert_rows("hubspot_leads_module_daily", rows,
-                       key_fields=["date", "qoyod_source", "pipeline", "stage", "lead_utm_campaign"])
+                       key_fields=["date", "qoyod_source", "pipeline", "stage",
+                                   "lead_utm_campaign", "lead_utm_audience",
+                                   "lead_utm_content", "lead_utm_term"])
 
 
 def _ensure_table_exists():

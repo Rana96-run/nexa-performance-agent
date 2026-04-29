@@ -20,7 +20,7 @@ except Exception:   # allow this module to stand alone in tests
     USD_SAR_PEG = 3.75
     DEFAULT_NATIVE_CURRENCY = "SAR"
 
-# 1 unit of native → USD
+# 1 unit of native -> USD
 PEG_RATES_TO_USD: dict[str, float] = {
     "USD": 1.0,
     "SAR": 1 / USD_SAR_PEG,   # pegged — see config.USD_SAR_PEG

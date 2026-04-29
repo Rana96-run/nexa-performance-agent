@@ -7,11 +7,11 @@ trip the 30-min access-token expiry on scheduled runs.
 
 API constraints (learned the hard way):
   - DAY granularity queries are capped at 31 days per call
-    → we chunk longer windows into 30-day pieces.
+    -> we chunk longer windows into 30-day pieces.
   - start_time / end_time MUST be midnight in the ad account's timezone,
     not UTC midnight. For a USD account in America/Los_Angeles, "T00:00:00Z"
     is 4–5 PM local — Snap rejects it.
-    → we fetch the account's `timezone` field and convert local midnight → UTC.
+    -> we fetch the account's `timezone` field and convert local midnight -> UTC.
 """
 import os
 from datetime import date, timedelta, datetime, timezone
@@ -49,7 +49,7 @@ def _headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-# Broader Snap conversion set. DON'T add conversion_lead / total_conversions — rejected.
+# DON'T add conversion_lead / total_conversions — rejected by Snap API.
 SNAP_STATS_FIELDS = (
     "impressions,swipes,spend,"
     "conversion_sign_ups,conversion_purchases,conversion_add_cart,"
@@ -174,7 +174,7 @@ def collect_and_write(days: int = None, incremental: bool = False):
         meta = _get_account(token, acct)
         cur  = normalize_currency(meta.get("currency"))
         tz   = meta.get("timezone") or "UTC"
-        print(f"[snap]   account {acct} tz={tz} native={cur} → converting to USD")
+        print(f"[snap]   account {acct} tz={tz} native={cur} -> converting to USD")
 
         campaigns = _list_campaigns(token, acct)
         acct_count = 0
@@ -183,11 +183,12 @@ def collect_and_write(days: int = None, incremental: bool = False):
             for pt in series:
                 stats        = pt.get("stats", {})
                 spend_micro  = float(stats.get("spend", 0) or 0)
-                spend_native = spend_micro / 1_000_000   # micro-currency → native currency
-                spend        = to_usd(spend_native, cur)  # → USD
-                sign_ups     = int(stats.get("conversion_sign_ups", 0) or 0)
+                spend_native = spend_micro / 1_000_000   # micro-currency -> native currency
+                spend        = to_usd(spend_native, cur)  # -> USD
+                impressions = int(stats.get("impressions", 0) or 0)
+                clicks      = int(stats.get("swipes", 0) or 0)
+                sign_ups    = int(stats.get("conversion_sign_ups", 0) or 0)
                 purchases   = int(stats.get("conversion_purchases", 0) or 0)
-                leads       = sign_ups
                 conversions_total = (
                     sign_ups + purchases
                     + int(stats.get("conversion_add_cart", 0) or 0)
@@ -196,8 +197,9 @@ def collect_and_write(days: int = None, incremental: bool = False):
                     + int(stats.get("conversion_subscribe", 0) or 0)
                     + int(stats.get("conversion_app_installs", 0) or 0)
                 )
-                impressions = int(stats.get("impressions", 0) or 0)
-                clicks      = int(stats.get("swipes", 0) or 0)
+                # leads = 0 here; source of truth is HubSpot (by channel attribution).
+                # Platform conversion metrics are stored in conversions field.
+                leads       = 0
                 ctr         = (clicks / impressions * 100) if impressions else 0.0
                 d           = (pt.get("start_time") or "")[:10]
                 if not d:

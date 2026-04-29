@@ -9,8 +9,8 @@ You create ONE "monitor Zap" in Zapier that triggers on errors or held tasks
 from your OTHER Zaps, then sends the details here via a Webhook action.
 
 The monitor Zap recipe:
-  Trigger : Zapier Manager → "Zap Error" (or "Task Held")
-  Action  : Webhooks by Zapier → POST → https://<railway-domain>/webhooks/zapier
+  Trigger : Zapier Manager -> "Zap Error" (or "Task Held")
+  Action  : Webhooks by Zapier -> POST -> https://<railway-domain>/webhooks/zapier
   Payload : { "zap_name": "{{zap_name}}", "status": "error",
                "error_message": "{{error_message}}", "run_url": "{{run_url}}",
                "zap_url": "{{zap_url}}" }
@@ -128,7 +128,7 @@ def _handle_error(payload: dict) -> None:
     # Only the things the user actually has to do (not generic 'check the Zap')
     user_action = ""
     if category == "auth":
-        user_action = "\n*You need to:* Reconnect the disconnected app in Zapier → My Apps, then re-enable the Zap."
+        user_action = "\n*You need to:* Reconnect the disconnected app in Zapier -> My Apps, then re-enable the Zap."
     elif category in ("data_format", "logic", "config"):
         user_action = f"\n*You need to:* Open the Zap, fix step `{diag.get('broken_step', '?')}`, then re-enable it."
 

@@ -84,7 +84,7 @@ def download(file_id: str, out_path: str) -> str:
     return out_path
 
 
-# MIME types for google-native files → export format
+# MIME types for google-native files -> export format
 EXPORT_MIMES = {
     "application/vnd.google-apps.document": ("text/plain", ".txt"),
     "application/vnd.google-apps.spreadsheet": ("text/csv", ".csv"),

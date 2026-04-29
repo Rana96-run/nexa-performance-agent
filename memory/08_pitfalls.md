@@ -146,3 +146,41 @@ IG insights:
 - **Meta page tokens from long-lived user tokens are permanent** — don't
   bother refreshing. Use `scripts/meta_organic_setup.py` to derive.
 - **Google refresh tokens** perpetual unless revoked in account settings.
+
+## Campaign naming convention
+
+- **Naming convention applies to NEW campaigns only.** Existing campaigns have
+  varied legacy names that must be parsed as-is. Never reject or rename an
+  existing campaign that doesn't match `{Channel}_{Type}_{Language}_{Product}_{Audience}`.
+  The convention enforcer (`executors/naming.py`) is for campaign creation only.
+
+## Leads & qualified leads terminology
+
+- **Never use "SQLs" or "MQLs".** Those refer to the contact lifecycle stage
+  stored in `hubspot_leads_daily` which is NOT used and never written to.
+- The only valid source for lead counts and qualified lead counts is
+  `hubspot_leads_module_daily` (`leads_total`, `leads_qualified`).
+- A "qualified lead" = `leads_qualified` from the HubSpot Lead Module (object
+  `0-136`). CPQL = spend / qualified leads. Never compute CPQL from
+  contact-stage data.
+
+## TikTok
+
+- **`qoyod_source` is stored as `'Tiktok Ads'`** (lowercase 'i' — not
+  `'TikTok'` and not `'TikTok Ads'`). `v_channel_key_map` in `collectors/views.py`
+  must use `WHEN 'tiktok' THEN 'Tiktok Ads'` or the BQ join in
+  `channel_roas_daily` will silently produce 0 TikTok rows.
+- **Deep Funnel Optimization in UI:** Instant Form → scroll down → toggle
+  "Deep Funnel Optimization" → select CRM pixel → choose "Initiate Checkout"
+  as the further optimization event. API equivalent: `optimization_goal="CONVERT"`,
+  `pixel_id=TIKTOK_CRM_PIXEL`, `conversion_event="INITIATE_CHECKOUT"`.
+- **TikTok access token** expires in 24 hours; refresh token in 365 days.
+  Run `python scripts/tiktok_oauth.py --refresh` daily (or via Railway cron).
+
+## BigQuery — campaigns_daily schema
+
+- **`campaign_group_name` does NOT exist in `campaigns_daily`.**  Use
+  `campaign_name` for all channels including LinkedIn. The BQ table only has:
+  `channel`, `campaign_id`, `campaign_name`, `date`, `spend`, `impressions`,
+  `clicks`, `leads`, and channel-specific columns. Any JOIN or GROUP BY on
+  `campaign_group_name` will fail silently (column not found).

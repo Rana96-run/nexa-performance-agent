@@ -456,7 +456,7 @@ def main():
             print()
             print(f"  1. Go to: {YELLOW}https://ads.tiktok.com/marketing_api/apps/{RESET}")
             print(f"  2. Select your app (or create one)")
-            print(f"  3. Go to {YELLOW}My Apps → App Details → Access Token{RESET}")
+            print(f"  3. Go to {YELLOW}My Apps -> App Details -> Access Token{RESET}")
             print(f"  4. Copy the long-lived access token")
             print(f"  5. Open: {YELLOW}D:\\Nexa Performance Agent\\.env{RESET}")
             print(f"  6. Find the line: {YELLOW}TIKTOK_ACCESS_TOKEN={RESET}")

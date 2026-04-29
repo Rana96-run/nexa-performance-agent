@@ -46,7 +46,7 @@ ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # default assignee (m
 ASANA_PROJECTS = {
     "daily_activity": os.getenv("ASANA_PROJECT_DAILY_ACTIVITY") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY"),
     "optimization": os.getenv("ASANA_PROJECT_OPTIMIZATION") or os.getenv("ASANA_PORTFOLIO_OPTIMIZATION"),
-    "campaigns_hub": os.getenv("ASANA_PROJECT_CAMPAIGNS_HUB") or os.getenv("ASANA_PORTFOLIO_CAMPAIGNS_HUB") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY"),
+    "campaigns_hub": os.getenv("ASANA_PROJECT_CAMPAIGNS_HUB") or os.getenv("ASANA_PORTFOLIO_CAMPAIGNS_HUB") or "1212809922478291",  # Paid Growth Command (2.0 Q1_26 Scale)
     "seasonal": os.getenv("ASANA_PROJECT_SEASONAL") or os.getenv("ASANA_PORTFOLIO_SEASONAL"),
 }
 
@@ -169,25 +169,76 @@ USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 # KPI thresholds — all in USD (per playbook in qoyod-manager-os.md)
 # ---------------------------------------------------------------------------
 # CPL (cost per lead) zones, USD
-CPL_SCALE      = 20.00  # < this  -> scale up
-CPL_ACCEPTABLE = 28.00  # ≤ this  -> acceptable
-CPL_WARNING    = 30.00  # ≤ this  -> warning; > $30 for 4 days -> pause zone
+# ≤ $30 is "good" (acceptable). Only warn/pause above that.
+CPL_SCALE      = 15.00  # < this  -> scale up
+CPL_ACCEPTABLE = 30.00  # ≤ this  -> acceptable (good)
+CPL_WARNING    = 40.00  # ≤ this  -> warning
 CPL_PAUSE      = CPL_WARNING   # backwards-compat alias
 
-# CPQL (cost per qualified lead / SQL) zones, USD
-CPQL_SCALE      = 40.00
-CPQL_ACCEPTABLE = 65.00
-CPQL_WARNING    = 80.00  # > $80 for 4 days -> pause zone
+# CPQL (cost per qualified lead) zones, USD
+# ≤ $95 is "good" (acceptable). Only warn/pause above that.
+CPQL_SCALE      = 60.00   # < this  -> scale up
+CPQL_ACCEPTABLE = 95.00   # ≤ this  -> acceptable (good)
+CPQL_WARNING    = 120.00  # ≤ this  -> warning
 CPQL_PAUSE      = CPQL_WARNING  # backwards-compat alias
 
 # Qualification / ROAS targets
 QUAL_RATE_TARGET = 0.30   # ≥ 30 %
 ROAS_TARGET      = 1.0
 
+# ROAS override — if campaign ROAS ≥ this, it's healthy regardless of qual rate
+# (revenue is covering spend; don't pause on qual rate alone)
+ROAS_GOOD = 0.8
+
+# Awareness / traffic campaign name patterns (case-insensitive).
+# These campaigns are evaluated on impression share/reach, NOT leads.
+# Zero leads is fine — primary KPI is impressions or IS ≥ 25%.
+AWARENESS_PATTERNS = [
+    "impressionshare", "impression_share",
+    "websitetraffic", "website_traffic",
+    "reach",
+]
+
+# Per-channel CPQL acceptable overrides.
+# Up to $130 is acceptable for Google Ads within 14 days.
+CHANNEL_CPQL_ACCEPTABLE = {
+    "google_ads": 130.00,
+}
+
+# Scale condition: CPQL < CPQL_SCALE *AND* ROAS > ROAS_GOOD — both required.
+# CPQL alone is not enough; revenue must also be covering spend.
+SCALE_REQUIRES_ROAS = True   # set False to scale on CPQL alone
+
+# Drill-down trigger — when BOTH conditions are true for ≥ DRILL_DOWN_DAYS,
+# analyse at ad/keyword level before touching the campaign.
+DRILL_DOWN_CPQL   = 130.00   # CPQL must be above this
+DRILL_DOWN_CPL    = 32.00    # AND CPL must be above this
+DRILL_DOWN_DAYS   = 10       # for at least this many days of data
+
+# Channel taxonomy for drill-down hierarchy.
+# Social: start at Ad → AdSet → Campaign
+# Search: start at Keyword → Ad Group → Campaign
+SOCIAL_CHANNELS  = ["meta", "snapchat", "tiktok", "linkedin"]
+SEARCH_CHANNELS  = ["google_ads", "microsoft_ads"]
+
+# Minimum days since last campaign edit before we take action.
+# If a campaign was edited < 7 days ago, changes haven't had time to show
+# results yet — downgrade to "monitor" regardless of CPQL.
+MIN_DAYS_SINCE_EDIT = 7
+
+# Qflavours HubSpot pipeline — leads for the Qflavours product are tracked
+# in a separate pipeline. Flag campaigns with "qflavours" in the name for
+# manual pipeline verification.
+QFLAVOURS_PIPELINE_CHECK = True
+
 # Pause decision rules (USD, days)
 DAYS_FOR_PAUSE_DECISION    = 14
 ZERO_CONV_SPEND_THRESHOLD  = 8     # pause ad if spend > $8 with zero conv
 ZERO_CONV_DAYS_THRESHOLD   = 7
-KEYWORD_PAUSE_SPEND        = 4     # pause keyword if spend > $4 with zero conv
+# Keyword pause rules (Google Ads / Microsoft Ads) — two independent triggers:
+#   Rule A: spend > $35, zero conversions, running ≥ 14 days  → pause
+#   Rule B: CPL > $80, 1+ conversions (low quality), ≥ 14 days → pause
+KEYWORD_PAUSE_SPEND        = 35.00   # Rule A: zero-conv threshold
+KEYWORD_PAUSE_CPL          = 80.00   # Rule B: poor-CPL threshold (1+ conv)
 KEYWORD_PAUSE_DAYS         = 14
 PLACEMENT_PAUSE_SPEND      = 3

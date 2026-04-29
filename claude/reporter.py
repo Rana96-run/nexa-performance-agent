@@ -340,6 +340,58 @@ def _disq_reason_breakdown(
     ]
 
 
+def _disq_reason_by_dim(
+    project: str, dataset: str, bq, qoyod_src: str,
+    start: date, end: date, dim: str,
+) -> dict[str, list[dict]]:
+    """
+    Disqualification reason breakdown grouped by an extra dimension first.
+
+    `dim` must be one of: lead_utm_campaign | lead_utm_audience | lead_utm_content
+
+    Returns:
+        { entity_label: [{reason, count, share}, ...], ... }
+    where share is the reason's fraction of that entity's total disqualified leads.
+    """
+    sql = f"""
+        SELECT
+          IFNULL({dim}, '(none)') AS entity,
+          IFNULL(top_disq_reason, 'Unknown') AS reason,
+          SUM(leads_disqualified) AS count
+        FROM `{project}.{dataset}.hubspot_leads_module_daily`
+        WHERE qoyod_source = @qoyod_src
+          AND date BETWEEN @start AND @end
+          AND leads_disqualified > 0
+        GROUP BY entity, reason
+        HAVING count > 0
+        ORDER BY entity, count DESC
+    """
+    rows = _query(sql, [
+        bq.ScalarQueryParameter("qoyod_src", "STRING", qoyod_src),
+        bq.ScalarQueryParameter("start",     "DATE",   start),
+        bq.ScalarQueryParameter("end",       "DATE",   end),
+    ])
+
+    # Group by entity, compute per-entity totals for share calculation
+    entity_totals: dict[str, int] = {}
+    for r in rows:
+        entity = r["entity"]
+        entity_totals[entity] = entity_totals.get(entity, 0) + int(r["count"] or 0)
+
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        entity = r["entity"]
+        cnt    = int(r["count"] or 0)
+        total  = entity_totals.get(entity, 1) or 1
+        entry  = {
+            "reason": r["reason"],
+            "count":  cnt,
+            "share":  round(cnt / total, 3),
+        }
+        out.setdefault(entity, []).append(entry)
+    return out
+
+
 def build_channel_section(channel_key: str, days: int = 7) -> dict:
     """
     Single channel block:
@@ -477,7 +529,10 @@ def build_channel_section(channel_key: str, days: int = 7) -> dict:
     utm_term     = _utm_breakdown(project, dataset, bq, qoyod_src, start, end, "lead_utm_term")
 
     # ── Disqualification reasons ────────────────────────────────────────────
-    disq_reasons = _disq_reason_breakdown(project, dataset, bq, qoyod_src, start, end)
+    disq_reasons     = _disq_reason_breakdown(project, dataset, bq, qoyod_src, start, end)
+    disq_by_campaign = _disq_reason_by_dim(project, dataset, bq, qoyod_src, start, end, "lead_utm_campaign")
+    disq_by_adgroup  = _disq_reason_by_dim(project, dataset, bq, qoyod_src, start, end, "lead_utm_audience")
+    disq_by_ad       = _disq_reason_by_dim(project, dataset, bq, qoyod_src, start, end, "lead_utm_content")
 
     return {
         "channel":  channel_key,
@@ -503,6 +558,9 @@ def build_channel_section(channel_key: str, days: int = 7) -> dict:
         "utm_content":       utm_content,
         "utm_term":          utm_term,
         "disq_reasons":      disq_reasons,
+        "disq_by_campaign":  disq_by_campaign,
+        "disq_by_adgroup":   disq_by_adgroup,
+        "disq_by_ad":        disq_by_ad,
     }
 
 

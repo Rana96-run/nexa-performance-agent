@@ -134,7 +134,7 @@ def index_shared_drive(root_folder_id: str = DEFAULT_FOLDER_ID,
     from collectors.drive_reader import _client
     svc = _client()
 
-    # 1. Resolve top-folder names → IDs
+    # 1. Resolve top-folder names -> IDs
     folder_ids = _find_folder_ids_by_name(svc, ALLOWED_TOP_FOLDERS)
 
     # 2. Walk each one (and write the top folder itself as a marker entry)

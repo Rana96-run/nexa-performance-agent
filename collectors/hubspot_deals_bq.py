@@ -197,6 +197,7 @@ def collect_and_write(days: int = None, start_date: date = None,
                 explicit_src = (p.get("deal_qoyod_source") or "").strip()
                 inferred_slug = resolve_channel(
                     qoyod_source=explicit_src,
+                    lead_utm_source=p.get("deal_utm_source") or "",
                     lead_utm_campaign=p.get("deal_utm_campaign") or "",
                     lead_original_traffic_source=p.get("deal_original_traffic_source") or "",
                     lead_latest_traffic_source=p.get("deal_latest_traffic_source") or "",

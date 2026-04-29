@@ -50,7 +50,7 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     Args:
         incremental: True = last 2 days only (fast). False = full historical.
         days:        If set, overrides incremental — pulls last N days for each
-                     collector that supports it. e.g. days=30 → 30-day backfill.
+                     collector that supports it. e.g. days=30 -> 30-day backfill.
     """
     started = datetime.now(timezone.utc)
     mode = "backfill" if days else ("incremental" if incremental else "full")

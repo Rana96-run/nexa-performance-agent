@@ -1,6 +1,6 @@
 """
-TikTok Ads → BigQuery collector.
-Pulls per-campaign stats from all TikTok ad accounts → campaigns_daily.
+TikTok Ads -> BigQuery collector.
+Pulls per-campaign stats from all TikTok ad accounts -> campaigns_daily.
 
 Auth: TIKTOK_ACCESS_TOKEN in .env (long-lived token from Ads Manager).
 """
@@ -104,7 +104,7 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
 
     for account_id in _ad_accounts():
         native_cur  = _advertiser_currency(account_id)
-        print(f"[tiktok-bq] account {account_id} native={native_cur} → converting to USD")
+        print(f"[tiktok-bq] account {account_id} native={native_cur} -> converting to USD")
         report_rows = _get_report(account_id, start, end)
         for row in report_rows:
             dims    = row.get("dimensions", {})

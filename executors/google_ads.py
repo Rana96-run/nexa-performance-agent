@@ -433,6 +433,104 @@ def update_ad_final_url(ad_resource_name: str, final_url: str,
     return {"resource_name": r.results[0].resource_name}
 
 
+# ── Lead form extension ───────────────────────────────────────────────────────
+
+def create_lead_form_extension(
+    customer_id: str,
+    campaign_resource_name: str,
+    headline: str,
+    description: str,
+    questions: list[dict] | None = None,
+    privacy_policy_url: str = "https://qoyod.com/privacy",
+    call_to_action_type: str = "LEARN_MORE",
+    business_name: str = "Qoyod",
+) -> str:
+    """
+    Create a Google Ads Lead Form Asset and link it to a campaign.
+
+    The asset is created and immediately attached to the campaign as a
+    CampaignAsset.  The containing campaign should remain PAUSED until the
+    form content has been reviewed.
+
+    Parameters
+    ----------
+    customer_id             : Google Ads customer ID (no dashes).
+    campaign_resource_name  : Resource name of the campaign to link the form
+                              to, e.g. ``customers/1234/campaigns/5678``.
+    headline                : Short headline shown on the lead form unit
+                              (max 30 chars).
+    description             : Description shown below the headline
+                              (max 90 chars).
+    questions               : List of question dicts. Each dict must contain a
+                              ``field_type`` key mapping to a
+                              ``LeadFormFieldUserInputTypeEnum`` value.
+                              Supported types: FULL_NAME, PHONE_NUMBER,
+                              COMPANY_NAME, JOB_TITLE.
+                              Defaults to all four standard Qoyod fields.
+    privacy_policy_url      : URL of the privacy policy page (required by
+                              Google Ads).
+    call_to_action_type     : CTA shown on the trigger button.
+                              Supported values: LEARN_MORE, GET_QUOTE,
+                              APPLY_NOW, SIGN_UP, CONTACT_US, SUBSCRIBE,
+                              DOWNLOAD, BOOK_NOW, GET_OFFER, REGISTER,
+                              GET_INFO, REQUEST_DEMO, JOIN_NOW, GET_STARTED.
+                              Defaults to LEARN_MORE.
+    business_name           : Business name shown in the form header
+                              (max 25 chars).
+
+    Returns
+    -------
+    str  — the asset resource name, e.g. ``customers/1234/assets/9999``.
+    """
+    if questions is None:
+        questions = [
+            {"field_type": "FULL_NAME"},
+            {"field_type": "PHONE_NUMBER"},
+            {"field_type": "COMPANY_NAME"},
+            {"field_type": "JOB_TITLE"},
+        ]
+
+    client   = get_client()
+    asset_svc = client.get_service("AssetService")
+    camp_asset_svc = client.get_service("CampaignAssetService")
+
+    # 1. Build the LeadFormAsset
+    asset_op   = client.get_type("AssetOperation")
+    asset      = asset_op.create
+    lead_form  = asset.lead_form_asset
+
+    lead_form.business_name      = business_name[:25]
+    lead_form.headline           = headline[:30]
+    lead_form.description        = description[:90]
+    lead_form.privacy_policy_url = privacy_policy_url
+    lead_form.call_to_action_type = getattr(
+        client.enums.LeadFormCallToActionTypeEnum, call_to_action_type
+    )
+
+    # Append question fields
+    for q in questions:
+        field = client.get_type("LeadFormField")
+        field.input_type = getattr(
+            client.enums.LeadFormFieldUserInputTypeEnum, q["field_type"]
+        )
+        lead_form.fields.append(field)
+
+    asset_r    = asset_svc.mutate_assets(customer_id=customer_id, operations=[asset_op])
+    asset_rn   = asset_r.results[0].resource_name
+
+    # 2. Link the asset to the campaign
+    ca_op      = client.get_type("CampaignAssetOperation")
+    ca         = ca_op.create
+    ca.asset    = asset_rn
+    ca.campaign = campaign_resource_name
+    ca.field_type = client.enums.AssetFieldTypeEnum.LEAD_FORM
+
+    camp_asset_svc.mutate_campaign_assets(customer_id=customer_id, operations=[ca_op])
+
+    print(f"[gads] form created: {asset_rn}")
+    return asset_rn
+
+
 # ── Full campaign setup (one call) ───────────────────────────────────────────
 
 def _build_utm_url(base_url: str, campaign_name: str,
@@ -553,6 +651,49 @@ def create_full_campaign(
     print(f"  Ad (RSA) : PAUSED — review in Google Ads before enabling")
     print(f"  URL      : {utm_url}")
     return result
+
+
+# ── Asset / creative library ──────────────────────────────────────────────────
+
+def list_creatives(limit: int = 20, customer_id: str = _DEFAULT_CID) -> list[dict]:
+    """
+    List image and video assets from the Google Ads Asset service.
+    Returns list of {id, name, type, thumbnail_url}.
+    """
+    client  = get_client()
+    ga_svc  = client.get_service("GoogleAdsService")
+
+    # Note: cannot filter by enum in WHERE for VIDEO/IMAGE in all API versions;
+    # use two separate queries and merge results.
+    results_raw = []
+    for asset_type in ("IMAGE", "VIDEO"):
+        q = f"""
+            SELECT asset.id, asset.name, asset.type,
+                   asset.image_asset.full_size.url
+            FROM asset
+            WHERE asset.type = '{asset_type}'
+            LIMIT {limit}
+        """
+        try:
+            for row in ga_svc.search(customer_id=customer_id, query=q):
+                results_raw.append(row)
+        except Exception as e:
+            print(f"[gads] list_creatives {asset_type} query error: {e}")
+    rows = results_raw
+
+    results = []
+    for row in rows:
+        asset = row.asset
+        results.append({
+            "id":           str(asset.id),
+            "name":         asset.name,
+            "type":         asset.type_.name if hasattr(asset.type_, "name") else str(asset.type_),
+            "thumbnail_url": asset.image_asset.full_size.url if asset.image_asset.full_size.url else None,
+            "source":       "asset_service",
+        })
+
+    print(f"[gads] list_creatives -> {len(results)} assets (customer={customer_id})")
+    return results
 
 
 # ── Keyword planning ──────────────────────────────────────────────────────────

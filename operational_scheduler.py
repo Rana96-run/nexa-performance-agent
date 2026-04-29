@@ -157,6 +157,13 @@ def _nightly():
     #     Cost: channel source | Leads: HubSpot Lead Module | Window: 14d
     health_tasks, health_findings = _run_campaign_health()
 
+    # 3d. Asana housekeeping — roll stale due dates forward, send overdue reminders
+    try:
+        from executors.asana_maintenance import run_daily_maintenance
+        run_daily_maintenance()
+    except Exception as e:
+        print(f"[ops-scheduler] Asana maintenance failed (non-fatal): {e}")
+
     # 4. Main Slack message + follow-up recommendations message
     _post_report_ready(
         spikes=spikes,

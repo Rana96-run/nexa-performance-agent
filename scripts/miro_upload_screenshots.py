@@ -70,7 +70,7 @@ def _upload_image(path: Path, x: int, y: int, w: int) -> str | None:
         print(f"  upload FAIL {path.name}: {r.status_code} {r.text[:160]}")
         return None
     img_id = r.json().get("id")
-    print(f"  uploaded {path.name} → {img_id}")
+    print(f"  uploaded {path.name} -> {img_id}")
     return img_id
 
 
@@ -83,24 +83,24 @@ def main():
     ROW_GAP = 380
     IMG_W = 320
 
-    # Map use cases → file (in order matching miro_use_cases.py grid).
+    # Map use cases -> file (in order matching miro_use_cases.py grid).
     # Use cases that have screenshots replace those slots; others keep text mocks.
     # The 15 cards in miro_use_cases.py are indexed 0..14:
-    #   0: Daily HTML Dashboard      → 07_dashboard
-    #   1: Spike Detection           → (no screenshot — keep text)
-    #   2: Keyword Waste             → (no screenshot)
-    #   3: Impression-Share Audit    → (no screenshot)
-    #   4: Quality-Score Audit       → (no screenshot)
-    #   5: Search-Terms              → (no screenshot)
-    #   6: Channel Attribution       → (no screenshot)
-    #   7: Health Check              → (no screenshot)
-    #   8: HubSpot Lists             → 04_hubspot_list
-    #   9: Asana Tasks               → 03_asana_task
-    #  10: LinkedIn Paused Campaign  → 05_linkedin_campaign
-    #  11: Meta Paused Campaign      → 06_meta_campaign
-    #  12: Daily Slack Summary       → 01_slack_daily
-    #  13: Approval Request          → 02_slack_approval
-    #  14: Auto-Fix Zapier           → (no screenshot — could add later)
+    #   0: Daily HTML Dashboard      -> 07_dashboard
+    #   1: Spike Detection           -> (no screenshot — keep text)
+    #   2: Keyword Waste             -> (no screenshot)
+    #   3: Impression-Share Audit    -> (no screenshot)
+    #   4: Quality-Score Audit       -> (no screenshot)
+    #   5: Search-Terms              -> (no screenshot)
+    #   6: Channel Attribution       -> (no screenshot)
+    #   7: Health Check              -> (no screenshot)
+    #   8: HubSpot Lists             -> 04_hubspot_list
+    #   9: Asana Tasks               -> 03_asana_task
+    #  10: LinkedIn Paused Campaign  -> 05_linkedin_campaign
+    #  11: Meta Paused Campaign      -> 06_meta_campaign
+    #  12: Daily Slack Summary       -> 01_slack_daily
+    #  13: Approval Request          -> 02_slack_approval
+    #  14: Auto-Fix Zapier           -> (no screenshot — could add later)
     # Email screenshot (08) is NOT in use_cases — let's add it as a 16th card.
     placements = {
         0:  "07_dashboard.png",

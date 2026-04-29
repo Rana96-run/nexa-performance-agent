@@ -395,34 +395,50 @@ def build_daily_summary_text(spikes: list | None = None,
 
 def build_recommendations_text(findings: list) -> str:
     """
-    Second Slack message: one line per campaign that needs action.
-    Only shows optimize / pause / junk — scale is already executed and in main message.
-    Sorted: pause first, junk second, optimize last.
+    Second Slack message: task count summary only (no campaign-by-campaign list).
+    Full details are in Asana. Approval requests go to #approvals separately.
+
+    Shows:
+      - Date range the data covers
+      - Last edit cutoff note (actions only taken if edit ≥ 7 days ago)
+      - Count breakdown by action type
     """
     if not findings:
         return ""
 
-    ACTION_ORDER = {"pause": 0, "junk": 1, "optimize": 2, "monitor": 99}
-
-    rows = []
-    for f in findings:
-        action = f.get("action", "monitor")
-        if action == "monitor" or action == "scale":
-            continue
-        is_junk = f.get("junk_leads", False)
-        sort_key = ACTION_ORDER.get("junk" if is_junk else action, 99)
-        cpql = f"${f['cpql']:.0f}" if f.get("cpql") else "no SQLs"
-        tag = "JUNK-LEADS" if is_junk else action.upper()
-        name = (f.get("campaign") or "")[:40]
-        rows.append((sort_key, f"  [{f['channel']}] {name} — {tag} · CPQL {cpql}"))
-
-    if not rows:
+    actionable = [f for f in findings
+                  if f.get("action") not in ("monitor", "scale", "review_impression_share")]
+    if not actionable:
         return ""
 
-    rows.sort(key=lambda x: x[0])
-    lines = [
-        "*Recommended actions* — tasks created in Asana, approval request sent to #approvals:",
-    ] + [r[1] for r in rows]
+    pause_n    = sum(1 for f in actionable if f.get("action") == "pause")
+    optimize_n = sum(1 for f in actionable if f.get("action") == "optimize")
+    drill_n    = sum(1 for f in actionable if f.get("action") == "drilldown")
+    junk_n     = sum(1 for f in actionable if f.get("junk_leads"))
+    aware_n    = sum(1 for f in findings   if f.get("is_awareness"))
+    held_n     = sum(1 for f in findings   if "HOLD" in (f.get("note") or ""))
+
+    # Date range from findings
+    date_from = next((f.get("date_from") for f in findings if f.get("date_from")), "")
+    date_to   = next((f.get("date_to")   for f in findings if f.get("date_to")),   "")
+    date_range = f"{date_from} to {date_to}" if date_from and date_to else ""
+
+    lines = ["*Recommended actions* — full details in Asana, approval requests in #approvals"]
+    if date_range:
+        lines.append(f"  Data: {date_range}  |  Only acting on campaigns edited ≥7 days ago")
+    if pause_n:
+        lines.append(f"  :octagonal_sign: *{pause_n}* campaign(s) flagged for pause")
+    if drill_n:
+        lines.append(f"  :microscope: *{drill_n}* campaign(s) need ad/keyword drill-down first")
+    if junk_n:
+        lines.append(f"  :warning: *{junk_n}* campaign(s) with junk-leads pattern")
+    if optimize_n:
+        lines.append(f"  :mag: *{optimize_n}* campaign(s) need optimization review")
+    if aware_n:
+        lines.append(f"  :eyes: *{aware_n}* awareness/traffic campaign(s) — check impression share")
+    if held_n:
+        lines.append(f"  :hourglass: *{held_n}* campaign(s) on hold (edited < 7 days ago — recheck later)")
+
     return "\n".join(lines)
 
 

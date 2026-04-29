@@ -8,7 +8,7 @@ Used by the HubSpot leads + deals collectors at write time, by the reporter,
 and by the spike detector.
 
 ────────────────────────────────────────────────────────────────────────────
-HubSpot Lead-module → Contact-module property sync (verified by Amar):
+HubSpot Lead-module -> Contact-module property sync (verified by Amar):
 
 | Lead module property                          | Synced from Contact module |
 |-----------------------------------------------|----------------------------|
@@ -37,14 +37,14 @@ Resolver order (first hit wins):
   1. Explicit `qoyod_source` (HubSpot label like 'Google Ads')
 
   2. `lead_*_traffic_source` enum + drilldown disambiguation:
-     - If PAID_SEARCH and drilldown_1 contains "bing" → microsoft_ads
-       else → google_ads
-     - If PAID_SOCIAL → check drilldown_1 keywords
+     - If PAID_SEARCH and drilldown_1 contains "bing" -> microsoft_ads
+       else -> google_ads
+     - If PAID_SOCIAL -> check drilldown_1 keywords
        (meta / tiktok / snapchat / linkedin)
      - If ORGANIC_SEARCH or drilldown_1 == "Unknown keywords (SSL)"
-       → organic_search
-     - If ORGANIC_SOCIAL → organic_social
-     - If DIRECT_TRAFFIC → direct
+       -> organic_search
+     - If ORGANIC_SOCIAL -> organic_social
+     - If DIRECT_TRAFFIC -> direct
      - etc.
 
   3. Keyword pattern match against `lead_utm_campaign`
@@ -55,7 +55,7 @@ Resolver order (first hit wins):
   5. Keyword pattern match against `*_drilldown_1` and `*_drilldown_2`
      in case the campaign name lives there
 
-  6. None of the above → returns None.  Collector buckets it as 'Other'
+  6. None of the above -> returns None.  Collector buckets it as 'Other'
      (HubSpot's own classification) — NEVER silently as another channel.
 ────────────────────────────────────────────────────────────────────────────
 """
@@ -119,8 +119,8 @@ QOYOD_SOURCE_TO_CHANNEL: dict[str, str] = {
     "Google Ads":    "google_ads",
     "Meta Ads":      "meta",
     "Snapchat Ads":  "snapchat",
-    "Tiktok Ads":    "tiktok",
     "TikTok Ads":    "tiktok",
+    "Tiktok Ads":    "tiktok",   # actual HubSpot value (lowercase 'i') — must be last so reverse dict resolves here
     "LinkedIn Ads":  "linkedin",
     "Microsoft Ads": "microsoft_ads",
     # organic / direct / other
@@ -175,6 +175,7 @@ def resolve_channel(
     qoyod_source: str = "",
     campaign_name: str = "",
     lead_utm_campaign: str = "",
+    lead_utm_source: str = "",   # raw utm_source value (e.g. "tiktok", "meta")
     lead_original_traffic_source: str = "",
     lead_latest_traffic_source: str = "",
     lead_original_traffic_source_drilldown_1: str = "",
@@ -214,15 +215,21 @@ def resolve_channel(
             continue
 
         if bucket == "paid_search":
-            # 'bing' in any drilldown → Microsoft Ads, otherwise Google Ads
+            # 'bing' in any drilldown -> Microsoft Ads, otherwise Google Ads
             if any("bing" in _norm(d) for d in drilldowns):
                 return "microsoft_ads"
             return "google_ads"
 
         if bucket == "paid_social":
-            ch_kw = channel_from_keywords(*drilldowns, campaign_name,
-                                           lead_utm_audience, lead_utm_content,
-                                           lead_utm_medium)
+            # Check utm_source first (raw value like "tiktok"), then campaign
+            # name, then creative fields, then drilldowns.
+            ch_kw = channel_from_keywords(
+                lead_utm_source,
+                campaign_name,
+                lead_utm_content,
+                lead_utm_audience, lead_utm_medium,
+                *drilldowns,
+            )
             if ch_kw in ("meta", "tiktok", "snapchat", "linkedin"):
                 return ch_kw
             return "meta"  # Most paid_social is Meta in this account
@@ -240,17 +247,23 @@ def resolve_channel(
         if bucket == "offline":
             return "offline"
 
-    # 2b. Special: drilldown_1 == "Unknown keywords (SSL)" → organic search
+    # 2b. Special: drilldown_1 == "Unknown keywords (SSL)" -> organic search
     for d in drilldowns[:2]:  # only the _data_1 drilldowns carry this signal
         if d and d.strip() == SSL_UNKNOWN_KEYWORDS:
             return "organic_search"
 
     # 3-5. Keyword pattern match across every text signal we have.
-    # Order: campaign name first (most authoritative), then audience/content/
-    # medium, then drilldowns as last resort.
+    # Priority order (documented in module header):
+    #   a. utm_source (raw value — e.g. "tiktok", "meta")
+    #   b. utm_campaign / campaign_name (naming convention includes channel)
+    #   c. utm_content (creative naming often includes channel)
+    #   d. utm_audience, utm_medium (lower-confidence signals)
+    #   e. HubSpot drilldown_1 / drilldown_2 (last resort)
     ch = channel_from_keywords(
+        lead_utm_source,
         campaign_name,
-        lead_utm_audience, lead_utm_content, lead_utm_medium,
+        lead_utm_content,
+        lead_utm_audience, lead_utm_medium,
         *drilldowns,
     )
     return ch

@@ -79,7 +79,7 @@ def run_health_check() -> bool:
     print(f"\n{BOLD}  TikTok{RESET}")
     tt_token = env("TIKTOK_ACCESS_TOKEN")
     check("Access token",       bool(tt_token),
-          "present" if tt_token else "NOT SET — get from Ads Manager → Tools → API",
+          "present" if tt_token else "NOT SET — get from Ads Manager -> Tools -> API",
           warn=not tt_token)
     check("Ad account 2024",    bool(env("TIKTOK_AD_ACCOUNT_2024")), env("TIKTOK_AD_ACCOUNT_2024") or "missing")
     check("Ad account 2025",    bool(env("TIKTOK_AD_ACCOUNT_2025")), env("TIKTOK_AD_ACCOUNT_2025") or "missing")

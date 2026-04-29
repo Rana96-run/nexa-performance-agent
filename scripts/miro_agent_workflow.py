@@ -4,7 +4,7 @@ scripts/miro_agent_workflow.py
 Renders the Nexa Performance Agent flow as 4 VERTICAL COLUMNS.
 
     INPUTS              BRAIN              ACTIONS             OUTPUTS
-   (left → right flow; arrows show data movement between columns)
+   (left -> right flow; arrows show data movement between columns)
 
 Run with:
     python scripts/miro_agent_workflow.py
@@ -154,7 +154,7 @@ def build():
         x=COL_X["brain"], y=-800, w=BOX_W, h=BOX_H,
         fill="#ec4899", border="#9d174d", font_color="#ffffff", font_size=14)
     assistant = shape(
-        "🤖 TASK-FLOW (code)\nRoutes JSON →\nright Asana project + section",
+        "🤖 TASK-FLOW (code)\nRoutes JSON ->\nright Asana project + section",
         x=COL_X["brain"], y=-650, w=BOX_W, h=BOX_H,
         fill="#10b981", border="#047857", font_color="#ffffff", font_size=14)
 
@@ -194,25 +194,25 @@ def build():
         x=COL_X["outputs"], y=-650, w=BOX_W, h=BOX_H,
         fill="#fde68a", border="#a16207", font_size=14)
 
-    # ── Connections (left → right flow) ─────────────────────────────────────
-    # Each input feeds the brain (drawn as one arrow per input → analyst as
+    # ── Connections (left -> right flow) ─────────────────────────────────────
+    # Each input feeds the brain (drawn as one arrow per input -> analyst as
     # the visual anchor; clutter would result if every input touched all 3 roles)
     for src in in_ids:
         connect(src["id"], role_analyst["id"], "")
 
-    # 3 roles → assistant
+    # 3 roles -> assistant
     connect(role_buyer["id"],   assistant["id"], "JSON", "#0f172a")
     connect(role_analyst["id"], assistant["id"], "JSON", "#0f172a")
     connect(role_strat["id"],   assistant["id"], "JSON", "#0f172a")
 
-    # assistant → actions (3 fan-out arrows)
+    # assistant -> actions (3 fan-out arrows)
     connect(assistant["id"], direct["id"],   "execution_type=Direct", "#dc2626")
     connect(assistant["id"], approval["id"], "high-confidence",       "#d97706")
     connect(assistant["id"], notify["id"],   "summary",               "#16a34a")
     # autofix is webhook-driven, not via assistant — left without an arrow
     # to keep the diagram clean
 
-    # actions → outputs
+    # actions -> outputs
     connect(direct["id"],   out_asana["id"],     "logged",  "#475569")
     connect(approval["id"], out_slack["id"],     "request", "#475569")
     connect(notify["id"],   out_slack["id"],     "ping",    "#475569")

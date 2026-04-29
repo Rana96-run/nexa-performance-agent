@@ -40,7 +40,7 @@ def collect_and_write(days: int = None, incremental: bool = False):
         except Exception as e:
             print(f"[meta]   {account_id} currency lookup failed ({e}) — defaulting to SAR")
             native_cur = "SAR"
-        print(f"[meta]   account {account_id} native={native_cur} → converting to USD")
+        print(f"[meta]   account {account_id} native={native_cur} -> converting to USD")
         try:
             insights = account.get_insights(params={
                 "level": "campaign",

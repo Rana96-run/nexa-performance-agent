@@ -1,6 +1,6 @@
 """
-Microsoft Advertising (Bing Ads) → BigQuery collector.
-Pulls campaign-level performance reports → campaigns_daily.
+Microsoft Advertising (Bing Ads) -> BigQuery collector.
+Pulls campaign-level performance reports -> campaigns_daily.
 
 Requires MS_REFRESH_TOKEN in .env.
 Run `python collectors/microsoft_ads.py auth` once to get the token.
@@ -120,7 +120,7 @@ def _poll_report(access_token: str, request_id: str,
 
 
 def _download_and_parse(url: str) -> list[dict]:
-    """Download ZIP → extract CSV → parse rows."""
+    """Download ZIP -> extract CSV -> parse rows."""
     r = requests.get(url, timeout=60)
     rows = []
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
@@ -153,7 +153,7 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
     else:
         start = date(end.year, 1, 1)
 
-    print(f"[ms-bq] Window {start} → {end}")
+    print(f"[ms-bq] Window {start} -> {end}")
 
     request_id = _submit_report(access_token, start, end)
     if not request_id:

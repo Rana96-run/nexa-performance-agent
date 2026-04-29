@@ -25,7 +25,7 @@ SELECT channel AS paid_channel,
          WHEN 'google_ads' THEN 'Google Ads'
          WHEN 'meta'       THEN 'Meta Ads'
          WHEN 'snapchat'   THEN 'Snapchat'
-         WHEN 'tiktok'     THEN 'TikTok'
+         WHEN 'tiktok'     THEN 'Tiktok Ads'
          WHEN 'microsoft'  THEN 'Microsoft Ads'
        END AS qoyod_source
 FROM UNNEST(['google_ads','meta','snapchat','tiktok','microsoft']) AS channel
@@ -316,7 +316,7 @@ GROUP BY 1,2,3,4,5,6
 PAID_CHANNEL_CAMPAIGN_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_campaign_daily` AS
 WITH
-  -- Map our channel slug → the qoyod_source label HubSpot writes
+  -- Map our channel slug -> the qoyod_source label HubSpot writes
   channel_map AS (
     SELECT 'google_ads'    AS channel, 'Google Ads'    AS qoyod_source UNION ALL
     SELECT 'meta',                     'Meta Ads'                       UNION ALL

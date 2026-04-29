@@ -10,7 +10,7 @@ One-time setup:
   1. Enable "Google Drive API" in Google Cloud Console (same project as BQ).
   2. Find the service-account email in GOOGLE_APPLICATION_CREDENTIALS_JSON
      (field: client_email).
-  3. Share GDRIVE_REPORTS_FOLDER_ID folder with that email → Editor.
+  3. Share GDRIVE_REPORTS_FOLDER_ID folder with that email -> Editor.
 
 Env vars:
   GDRIVE_REPORTS_FOLDER_ID  — ID of the Drive folder where reports are saved.

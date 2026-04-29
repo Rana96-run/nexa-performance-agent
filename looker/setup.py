@@ -267,7 +267,7 @@ def print_datasource_urls():
     for table, label in views:
         print(f"  {label}")
         print(f"  Table: {table}\n")
-    print("→ In Looker Studio: Add data source → BigQuery → select each table above")
+    print("-> In Looker Studio: Add data source -> BigQuery -> select each table above")
     print("="*60)
 
 
@@ -508,7 +508,7 @@ def export_report_config():
     out_path = os.path.join(os.path.dirname(__file__), "report_config.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Report config saved → {out_path}")
+    print(f"\n✅ Report config saved -> {out_path}")
     return config
 
 

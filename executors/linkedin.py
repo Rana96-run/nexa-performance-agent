@@ -472,6 +472,70 @@ def list_lead_gen_forms() -> list[dict]:
     return forms
 
 
+def create_instant_form(
+    name: str,
+    questions: list[dict] | None = None,
+    privacy_url: str = "https://qoyod.com/privacy",
+    thank_you_message: str = "شكراً لك! سنتواصل معك قريباً",
+    locale_country: str = "SA",
+    locale_language: str = "ar",
+) -> str:
+    """
+    Create a LinkedIn Lead Gen Form via the Marketing API (/v2/leadGenForms).
+
+    The form URN returned can be passed to ``create_ad_lead_gen()`` as
+    ``lead_gen_form_urn``.
+
+    LinkedIn returns the new form ID in the ``X-RestLi-Id`` response header
+    (no JSON body on 201).  This function wraps it in a ``urn:li:leadGenForm:``
+    URN and returns that string.
+
+    Parameters
+    ----------
+    name             : Form name — e.g. "LinkedIn_LeadGen_AR_Invoice_Form".
+    questions        : List of question dicts. Each dict must contain a
+                       ``fieldType`` key. Supported types: FULL_NAME,
+                       PHONE_NUMBER, WORK_COMPANY, JOB_TITLE, EMAIL.
+                       Defaults to full name, phone number, company name,
+                       job title, and email.
+    privacy_url      : URL of the privacy policy page (required by LinkedIn).
+    thank_you_message: Body text shown on the post-submission confirmation.
+    locale_country   : ISO 3166-1 alpha-2 country code for the form locale
+                       (default "SA").
+    locale_language  : ISO 639-1 language code for the form locale
+                       (default "ar").
+
+    Returns
+    -------
+    str  — full lead gen form URN, e.g. ``urn:li:leadGenForm:123456789``.
+    """
+    if questions is None:
+        questions = [
+            {"fieldType": "FULL_NAME"},
+            {"fieldType": "PHONE_NUMBER"},
+            {"fieldType": "WORK_COMPANY"},
+            {"fieldType": "JOB_TITLE"},
+            {"fieldType": "EMAIL"},
+        ]
+
+    payload = {
+        "name":            name,
+        "locale":          {"country": locale_country, "language": locale_language},
+        "leadGenFormType": "SPONSORED_CONTENT",
+        "formElements":    questions,
+        "privacyPolicyUrl": privacy_url,
+        "thankYouPage": {
+            "message": thank_you_message,
+        },
+    }
+
+    r       = _post("/leadGenForms", payload)
+    form_id = r.get("_restli_id", "")
+    urn     = f"urn:li:leadGenForm:{form_id}"
+    print(f"[li] form created: {urn}")
+    return urn
+
+
 # ── Matched audiences (HubSpot lists → LinkedIn) ─────────────────────────────
 
 def list_matched_audiences() -> list[dict]:
@@ -490,6 +554,44 @@ def get_dmp_segments() -> list[dict]:
         "count":   100,
     })
     return r.get("elements", [])
+
+
+# ── Creatives / image library ─────────────────────────────────────────────────
+
+def list_creatives(limit: int = 20) -> list[dict]:
+    """
+    List image assets owned by the LinkedIn organization.
+    Uses GET /rest/images?q=owner&owner={org_urn}&count={limit}.
+    Returns list of {id, name, thumbnail_url}.
+    """
+    # Accept either LI_ORGANIZATION_URN (full URN) or LI_ORG_ID (bare numeric ID)
+    org_urn = _ORG_URN or os.getenv("LI_ORG_ID", "")
+    if org_urn and not org_urn.startswith("urn:"):
+        org_urn = f"urn:li:organization:{org_urn}"
+    if not org_urn:
+        raise ValueError("Neither LI_ORGANIZATION_URN nor LI_ORG_ID env var is set — needed for LinkedIn image library")
+
+    r = requests.get(
+        f"{_BASE}/images",
+        headers=_headers(),
+        params={"q": "owner", "owner": org_urn, "count": limit},
+        timeout=15,
+    )
+    r.raise_for_status()
+    data = r.json()
+    elements = data.get("elements", [])
+    results = []
+    for el in elements:
+        results.append({
+            "id":           el.get("id"),
+            "name":         el.get("title") or el.get("id", ""),
+            "thumbnail_url": (el.get("downloadUrl") or
+                              (el.get("originalImage") or {}).get("downloadUrl")),
+            "source":       "images",
+        })
+
+    print(f"[li] list_creatives -> {len(results)} assets (org={org_urn})")
+    return results
 
 
 # ── Targeting helpers ─────────────────────────────────────────────────────────

@@ -3,10 +3,10 @@ collectors/hubspot_webhook.py
 ==============================
 Flask Blueprint — receives HubSpot webhook events, acts on them in real time.
 
-Priority order (most → least important):
-  1. Lead module (0-136)  — lead.creation, lead.propertyChange → hs_pipeline_stage
-  2. Deal                 — deal.propertyChange → dealstage
-  3. Contact (fallback)   — contact.propertyChange → lifecyclestage / hs_lead_status
+Priority order (most -> least important):
+  1. Lead module (0-136)  — lead.creation, lead.propertyChange -> hs_pipeline_stage
+  2. Deal                 — deal.propertyChange -> dealstage
+  3. Contact (fallback)   — contact.propertyChange -> lifecyclestage / hs_lead_status
 
 The Lead module (0-136) is the primary CRM object used by the ops team.
 Qualification / disqualification is driven by hs_pipeline_stage labels

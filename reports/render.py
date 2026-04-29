@@ -272,6 +272,33 @@ tr:hover td { background: #f8fafc; }
 .chart-wrap { border-radius: var(--radius); overflow: hidden; min-height: 240px; }
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
 
+/* ── Cross-channel pie grid ── */
+#section-cross-channel { margin-bottom: 28px; }
+.pie-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 4px;
+}
+@media (max-width: 1100px) { .pie-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .pie-grid { grid-template-columns: 1fr; } }
+.pie-cell { min-height: 260px; }
+
+/* ── Collapsible disq-by-dim panels ── */
+.disq-dim-group { margin-top: 16px; }
+.disq-dim-toggle {
+  display: flex; align-items: center; gap: 6px;
+  background: #f8fafc; border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600;
+  color: var(--muted); width: 100%; text-align: left;
+  transition: background .15s;
+}
+.disq-dim-toggle:hover { background: #eef2ff; color: var(--accent); }
+.disq-dim-toggle .toggle-arrow { margin-left: auto; transition: transform .2s; }
+.disq-dim-toggle.open .toggle-arrow { transform: rotate(90deg); }
+.disq-dim-body { display: none; margin-top: 8px; }
+.disq-dim-body.open { display: block; }
+
 /* ── Loading overlay ── */
 #custom-loading { display: none; position: fixed; inset: 0;
                   background: rgba(255,255,255,.75); backdrop-filter: blur(2px);
@@ -337,6 +364,15 @@ const fmtUSD = v => {
 const fmtNum  = v => v == null ? '—' : Number(v).toLocaleString();
 const fmtPct  = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
 const fmtX    = v => v == null ? '—' : parseFloat(v).toFixed(2) + 'x';
+function fmtRoas(v) {
+  if (v == null || v === 0) return '<span style="color:var(--muted)">—</span>';
+  const n = parseFloat(v);
+  let style;
+  if (n >= 3)      style = 'background:#d1fae5;color:#065f46;border:1px solid #10b981';
+  else if (n >= 1) style = 'background:#fef9c3;color:#78350f;border:1px solid #f59e0b';
+  else             style = 'background:#fecaca;color:#7f1d1d;border:1px solid #ef4444';
+  return `<span class="zone-cell" style="${style}">${n.toFixed(2)}x</span>`;
+}
 const truncate = (s, n) => !s ? '—' : s.length > n ? s.slice(0, n) + '…' : s;
 
 const ZONE_CSS = {
@@ -425,7 +461,7 @@ const CAMP_COLS = [
   {key:'cpql',         label:'CPQL',        zone_key:'cpql_zone', zone_fmt:fmtUSD},
   {key:'deals',        label:'Deals',       fmt:fmtNum},
   {key:'deal_amount',  label:'Deal Amt',    fmt:fmtUSD},
-  {key:'roas',         label:'ROAS',        fmt:fmtX},
+  {key:'roas',         label:'ROAS',        fmt:fmtRoas},
 ];
 
 function utmCols(dimLabel) {
@@ -440,7 +476,7 @@ function utmCols(dimLabel) {
     {key:'cpql',        label:'CPQL',        zone_key:'cpql_zone', zone_fmt:fmtUSD},
     {key:'deals',       label:'Deals',       fmt:fmtNum},
     {key:'deal_amount', label:'Deal Amt',    fmt:fmtUSD},
-    {key:'roas',        label:'ROAS',        fmt:fmtX},
+    {key:'roas',        label:'ROAS',        fmt:fmtRoas},
   ];
 }
 
@@ -530,7 +566,24 @@ function renderChannel(ch) {
   setPanel(el, 'utm-audience', buildTable(ch.utm_audience, utmCols('Ad Group / Audience'), 'No audience data.'));
   setPanel(el, 'utm-content',  buildTable(ch.utm_content,  utmCols('Ad / Creative'),        'No creative data.'));
   setPanel(el, 'utm-term',     buildTable(ch.utm_term,     utmCols('Keyword'),               'No keyword data for this channel.'));
-  setPanel(el, 'disq',         disqTable(ch.disq_reasons));
+
+  // Disq panel: top-level reasons + per-dimension breakdowns
+  const disqHtml = [
+    disqTable(ch.disq_reasons),
+    ch.disq_by_campaign && Object.keys(ch.disq_by_campaign).length
+      ? '<h4 style="margin:20px 0 8px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Disq. by Campaign</h4>'
+        + disqByDimTable(ch.disq_by_campaign, 'Campaign')
+      : '',
+    ch.disq_by_adgroup && Object.keys(ch.disq_by_adgroup).length
+      ? '<h4 style="margin:20px 0 8px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Disq. by Ad Group</h4>'
+        + disqByDimTable(ch.disq_by_adgroup, 'Ad Group')
+      : '',
+    ch.disq_by_ad && Object.keys(ch.disq_by_ad).length
+      ? '<h4 style="margin:20px 0 8px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Disq. by Ad</h4>'
+        + disqByDimTable(ch.disq_by_ad, 'Ad')
+      : '',
+  ].join('');
+  setPanel(el, 'disq', disqHtml);
 }
 
 function renderAllChannels() {
@@ -609,6 +662,7 @@ function setWindow(w) {
     t.classList.toggle('active', t.dataset.w === w);
   });
   renderAllChannels();
+  renderCrossChannelPies();
 }
 
 // ── Preset date calculator ─────────────────────────────────────────────────
@@ -793,6 +847,133 @@ function buildActionsPanel() {
   });
 }
 
+// ── Cross-channel pie charts ───────────────────────────────────────────────
+function renderCrossChannelPies() {
+  if (!window.Plotly) return;
+  const chs = ((D.windows || {})[currentWindow]) || D.channels || [];
+  if (!chs.length) return;
+
+  const cfg = {responsive: true, displayModeBar: false};
+  const layout = (title) => ({
+    title: {text: title, font: {size: 13, family: '-apple-system,sans-serif'}, x: 0.5},
+    margin: {t: 40, r: 10, b: 10, l: 10},
+    height: 260,
+    paper_bgcolor: 'transparent',
+    showlegend: true,
+    legend: {orientation: 'h', y: -0.12, font: {size: 10}},
+  });
+
+  function pieTrace(labels, values, colors) {
+    return [{
+      type: 'pie',
+      labels,
+      values,
+      marker: {colors},
+      textinfo: 'percent',
+      hovertemplate: '<b>%{label}</b><br>%{value}<br>%{percent}<extra></extra>',
+      hole: 0.35,
+    }];
+  }
+
+  // Extract data per channel, skip zeros / nulls
+  const labels = [], colors = [], spend = [], leads = [], qualified = [], disqualified = [];
+  const roasLabels = [], roasColors = [], roasVals = [];
+  const cpqlLabels = [], cpqlColors = [], cpqlVals = [], cpqlWeights = [];
+
+  chs.forEach(ch => {
+    const k = ch.kpis || {};
+    const lbl = ch.label || ch.channel;
+    const col = ch.color || '#888';
+
+    if ((k.spend || 0) > 0) {
+      labels.push(lbl); colors.push(col); spend.push(+(k.spend || 0).toFixed(2));
+    }
+    if ((k.leads || 0) > 0) { leads.push(+(k.leads || 0)); }
+    if ((k.qualified || 0) > 0) { qualified.push(+(k.qualified || 0)); }
+    if ((k.disqualified || 0) > 0) { disqualified.push(+(k.disqualified || 0)); }
+
+    // ROAS: weighted average by spend — skip channels with 0 spend or no deals
+    if ((k.spend || 0) > 0 && k.roas != null && k.roas > 0) {
+      roasLabels.push(lbl); roasColors.push(col); roasVals.push(+(k.roas || 0).toFixed(3));
+    }
+    // CPQL: weighted average by qualified leads — skip channels with 0 qualified
+    if ((k.qualified || 0) > 0 && k.cpql != null) {
+      cpqlLabels.push(lbl); cpqlColors.push(col);
+      cpqlVals.push(+(k.cpql || 0).toFixed(2)); cpqlWeights.push(+(k.qualified || 0));
+    }
+  });
+
+  // Leads / qualified / disqualified share same channel order as spend where present
+  const leadLabels = [], leadColors = [];
+  const qualLabels = [], qualColors = [];
+  const disqLabels = [], disqColors = [];
+  chs.forEach(ch => {
+    const k = ch.kpis || {};
+    const lbl = ch.label || ch.channel;
+    const col = ch.color || '#888';
+    if ((k.leads || 0) > 0)        { leadLabels.push(lbl); leadColors.push(col); }
+    if ((k.qualified || 0) > 0)    { qualLabels.push(lbl); qualColors.push(col); }
+    if ((k.disqualified || 0) > 0) { disqLabels.push(lbl); disqColors.push(col); }
+  });
+
+  const empty = '<p style="color:var(--muted);padding:24px 0;text-align:center">No data for this window.</p>';
+
+  const plot = (id, title, lbl, vals, cols) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!vals.length) { el.innerHTML = empty; return; }
+    el.innerHTML = '';
+    Plotly.newPlot(el, pieTrace(lbl, vals, cols), layout(title), cfg);
+  };
+
+  plot('pie-cost',         'Cost (USD)',         labels,     spend,         colors);
+  plot('pie-leads',        'Leads',              leadLabels, leads,         leadColors);
+  plot('pie-qualified',    'Qualified Leads',    qualLabels, qualified,     qualColors);
+  plot('pie-disqualified', 'Disqualified Leads', disqLabels, disqualified,  disqColors);
+  plot('pie-roas',         'ROAS (by spend)',    roasLabels, roasVals,      roasColors);
+  plot('pie-cpql',         'CPQL (by leads)',    cpqlLabels, cpqlVals,      cpqlColors);
+}
+
+// ── Disq-by-dim collapsible table ─────────────────────────────────────────
+// data: { entity: [{reason, count, share}, ...], ... }
+function disqByDimTable(data, entityLabel) {
+  if (!data || !Object.keys(data).length) {
+    return '<p style="color:var(--muted);padding:8px 0">No breakdown data for this window.</p>';
+  }
+  let h = '';
+  Object.entries(data).forEach(([entity, reasons]) => {
+    const id = 'ddim-' + Math.random().toString(36).slice(2);
+    h += `<div class="disq-dim-group">
+      <button class="disq-dim-toggle" onclick="
+        this.classList.toggle('open');
+        this.nextElementSibling.classList.toggle('open');
+      ">
+        <span>${entity}</span>
+        <span style="margin-left:8px;color:#64748b;font-weight:400">(${reasons.length} reason${reasons.length!==1?'s':''})</span>
+        <span class="toggle-arrow">&#9658;</span>
+      </button>
+      <div class="disq-dim-body">
+        <div class="data-table-wrap"><table>
+          <thead><tr>
+            <th style="text-align:left">${entityLabel}</th>
+            <th style="text-align:left">Reason</th>
+            <th>Count</th><th>Share</th>
+          </tr></thead>
+          <tbody>`;
+    reasons.forEach(r => {
+      const pct = ((r.share || 0) * 100).toFixed(1);
+      h += `<tr>
+        <td style="text-align:left;color:var(--muted)">${entity}</td>
+        <td style="text-align:left">${r.reason}</td>
+        <td>${r.count}</td>
+        <td>${pct}%</td>
+      </tr>`;
+    });
+    h += `</tbody></table></div></div></div>`;
+  });
+  return h;
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   buildMetricToggles();
@@ -800,6 +981,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildChannelPager();
   renderAllChannels();
   renderTrends();
+  renderCrossChannelPies();
   buildActionsPanel();
   initScrollSpy();
 
@@ -954,6 +1136,7 @@ def _sidebar(channels: list[dict]) -> str:
   <div class="sidebar-section">Overview</div>
   <button class="nav-pill" data-target="section-hero">Hero KPIs</button>
   <button class="nav-pill" data-target="section-trends">Trends</button>
+  <button class="nav-pill" data-target="section-cross-channel">Cross-Channel</button>
   <button class="nav-pill" data-target="section-narrative">Summary</button>
   <div class="sidebar-section">Channels</div>
   {links}
@@ -1073,6 +1256,23 @@ def render_html(report: dict) -> str:
         <div class="card">
           <div class="card-header"><span class="card-title">Leads &amp; Avg CPL — 30d</span></div>
           <div class="card-body"><div class="chart-wrap" id="chart-leads"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cross-Channel Overview (pie charts, window-reactive) -->
+    <section id="section-cross-channel">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Cross-Channel Overview</span></div>
+        <div class="card-body">
+          <div class="pie-grid" id="pie-grid">
+            <div class="pie-cell" id="pie-cost"></div>
+            <div class="pie-cell" id="pie-leads"></div>
+            <div class="pie-cell" id="pie-qualified"></div>
+            <div class="pie-cell" id="pie-disqualified"></div>
+            <div class="pie-cell" id="pie-roas"></div>
+            <div class="pie-cell" id="pie-cpql"></div>
+          </div>
         </div>
       </div>
     </section>

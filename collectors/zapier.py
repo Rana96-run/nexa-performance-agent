@@ -2,10 +2,10 @@
 collectors/zapier.py
 ====================
 Monitors the Qoyod Zapier account and FIXES problems automatically:
-  - Errored zap runs  → auto-replayed immediately + Slack alert + Asana task
-  - On-hold tasks     → auto-resumed immediately + Slack alert
-  - Paused/disabled zaps that should be running → daily summary alert
-  - Persistent errors (failed >MAX_REPLAY_ATTEMPTS) → escalate to Asana
+  - Errored zap runs  -> auto-replayed immediately + Slack alert + Asana task
+  - On-hold tasks     -> auto-resumed immediately + Slack alert
+  - Paused/disabled zaps that should be running -> daily summary alert
+  - Persistent errors (failed >MAX_REPLAY_ATTEMPTS) -> escalate to Asana
 
 Two modes
 ---------
@@ -19,7 +19,7 @@ Two modes
 Zapier API
 ----------
 Base URL : https://api.zapier.com/v1
-Auth     : Bearer <ZAPIER_API_TOKEN>  (Settings → API → create token)
+Auth     : Bearer <ZAPIER_API_TOKEN>  (Settings -> API -> create token)
 Key endpoints:
   GET  /zaps                  list all zaps (name, is_enabled, status)
   GET  /zap-runs              run history (status: success|error|held|filtered)

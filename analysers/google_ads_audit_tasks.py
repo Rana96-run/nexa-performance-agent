@@ -74,9 +74,9 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         body = (f"Daily impression-share audit (last 14d). "
                 f"{len(is_findings)} campaigns flagged.\n\n"
                 f"**Rules:**\n"
-                f"- Lost-IS to BUDGET > 20% → scale candidate (raise budget)\n"
-                f"- Lost-IS to RANK > 30% → quality / bid issue (improve QS or raise bid)\n"
-                f"- IS > 80% → saturated (broaden keywords / new ad groups)\n\n")
+                f"- Lost-IS to BUDGET > 20% -> scale candidate (raise budget)\n"
+                f"- Lost-IS to RANK > 30% -> quality / bid issue (improve QS or raise bid)\n"
+                f"- IS > 80% -> saturated (broaden keywords / new ad groups)\n\n")
         if scale:
             body += f"### Scale candidates ({len(scale)})\n" + _is_table(scale) + "\n"
         if rank:
@@ -114,12 +114,12 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             body += f"### Review (QS < 5) — {len(review)} keywords\n" + _qs_table(review[:30]) + "\n"
 
         body += ("\n**How to improve QS:**\n"
-                 "1. **Ad relevance** below average → ad copy doesn't match the "
+                 "1. **Ad relevance** below average -> ad copy doesn't match the "
                  "keyword's intent. Rewrite ad headlines to include the keyword.\n"
-                 "2. **Landing page experience** below average → LP doesn't deliver "
+                 "2. **Landing page experience** below average -> LP doesn't deliver "
                  "what the ad promises. Either tighten LP copy or move keyword to "
                  "a more relevant ad group.\n"
-                 "3. **Expected CTR** below average → ad is not compelling. Try "
+                 "3. **Expected CTR** below average -> ad is not compelling. Try "
                  "stronger CTAs / new headline tests.")
 
         gid = create_task(
@@ -139,7 +139,7 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         body = (f"Daily search-terms audit (last 30d). {len(add_kw)} converting "
                 f"queries are NOT yet in our keyword list.\n\n"
                 f"**Rule:** Queries with ≥1 conversion that triggered our ads but "
-                f"aren't a keyword we bid on → add as EXACT or PHRASE match.\n\n"
+                f"aren't a keyword we bid on -> add as EXACT or PHRASE match.\n\n"
                 + _term_table(add_kw[:30], mode="add"))
         body += ("\n**Action:** Approve the additions and the Media Buyer will "
                  "create the keyword in the relevant ad group. (Adding new positive "
@@ -178,6 +178,30 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             action="exclude",
         )
         out.append((f"negatives ({len(add_neg)})", gid))
+
+    # ── 5. Non-converting keywords auto-paused ──────────────────────────────
+    kw_paused = audit.get("keywords_paused", [])
+    if kw_paused:
+        body = (f"**EXECUTED:** {len(kw_paused)} keywords auto-paused (7+ days, $4+ spend, 0 leads).\n\n"
+                f"| Keyword | Match | Campaign | Ad Group | Spend | Status |\n"
+                f"|---|---|---|---|---|---|\n")
+        for kw in kw_paused:
+            body += (f"| `{kw['keyword']}` | {kw['match_type']} | {kw['campaign']} | "
+                     f"{kw['ad_group']} | ${kw['spend']:.2f} | {kw['status']} |\n")
+        body += ("\n**Rule:** Keywords running 7+ days with spend > $4 and 0 HubSpot-qualified "
+                 "leads are paused automatically. Re-enable only after fixing match type or "
+                 "moving keyword to a more relevant ad group.")
+
+        gid = create_task(
+            title=f"EXECUTED: Auto-paused {len(kw_paused)} non-converting keyword(s) (7d, $4+)",
+            description=body,
+            project_key="optimization",
+            task_type="Direct Log",
+            channel="google_ads",
+            asset_level="keyword",
+            action="pause",
+        )
+        out.append((f"kw-auto-paused ({len(kw_paused)})", gid))
 
     return out
 

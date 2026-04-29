@@ -5,13 +5,13 @@ Polls both Slack channels every 60 seconds for messages that mention the
 bot. Parses the request, routes it to Claude, and replies in-thread.
 
 What it can do when mentioned:
-  @Nexa report [channel] [last N days]   → performance report
-  @Nexa brief [description]              → creative/campaign brief
-  @Nexa scaling strategy [campaign]      → data-backed scaling plan
-  @Nexa miro [what to diagram]           → Miro board update
-  @Nexa task [description]               → create Asana task directly
-  @Nexa past due                         → list overdue Asana tasks
-  @Nexa [anything else]                  → Nexa answers as the agent
+  @Nexa report [channel] [last N days]   -> performance report
+  @Nexa brief [description]              -> creative/campaign brief
+  @Nexa scaling strategy [campaign]      -> data-backed scaling plan
+  @Nexa miro [what to diagram]           -> Miro board update
+  @Nexa task [description]               -> create Asana task directly
+  @Nexa past due                         -> list overdue Asana tasks
+  @Nexa [anything else]                  -> Nexa answers as the agent
 
 Run alongside the operational scheduler. Requires the bot to have been
 added to both channels in Slack.

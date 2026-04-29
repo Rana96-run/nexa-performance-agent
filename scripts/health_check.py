@@ -63,8 +63,8 @@ def check_flask() -> tuple[bool, str]:
         import requests
         r = requests.get(f"{BASE_URL}/health", timeout=10)
         if r.status_code == 200 and r.json().get("status") == "ok":
-            return True, f"{BASE_URL}/health → OK"
-        return False, f"{BASE_URL}/health → HTTP {r.status_code}"
+            return True, f"{BASE_URL}/health -> OK"
+        return False, f"{BASE_URL}/health -> HTTP {r.status_code}"
     except Exception as e:
         return False, f"Flask unreachable: {e}"
 
@@ -79,8 +79,8 @@ def check_hubspot() -> tuple[bool, str]:
             timeout=10,
         )
         if r.status_code in (200, 404):
-            return True, "HubSpot API → OK"
-        return False, f"HubSpot API → HTTP {r.status_code}"
+            return True, "HubSpot API -> OK"
+        return False, f"HubSpot API -> HTTP {r.status_code}"
     except Exception as e:
         return False, f"HubSpot: {e}"
 
@@ -90,7 +90,7 @@ def check_bigquery() -> tuple[bool, str]:
         from collectors.bq_writer import get_client, PROJECT_ID
         client = get_client()
         list(client.query("SELECT 1").result())
-        return True, f"BigQuery → OK (project={PROJECT_ID})"
+        return True, f"BigQuery -> OK (project={PROJECT_ID})"
     except Exception as e:
         return False, f"BigQuery: {e}"
 
@@ -108,7 +108,7 @@ def check_google_ads() -> tuple[bool, str]:
         resp = svc.search_stream(customer_id=ids[0], query=q)
         for _ in resp:
             pass
-        return True, f"Google Ads → OK ({len(ids)} account(s))"
+        return True, f"Google Ads -> OK ({len(ids)} account(s))"
     except Exception as e:
         return False, f"Google Ads: {e}"
 
@@ -124,8 +124,8 @@ def check_meta() -> tuple[bool, str]:
         )
         d = r.json()
         if r.status_code == 200 and "id" in d:
-            return True, f"Meta API → OK (id={d['id']})"
-        return False, f"Meta API → {d.get('error', {}).get('message', 'unknown error')}"
+            return True, f"Meta API -> OK (id={d['id']})"
+        return False, f"Meta API -> {d.get('error', {}).get('message', 'unknown error')}"
     except Exception as e:
         return False, f"Meta: {e}"
 
@@ -135,7 +135,7 @@ def check_slack() -> tuple[bool, str]:
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN
         r = WebClient(token=SLACK_BOT_TOKEN).auth_test()
-        return True, f"Slack → OK (bot={r['user']})"
+        return True, f"Slack -> OK (bot={r['user']})"
     except Exception as e:
         return False, f"Slack: {e}"
 
@@ -153,8 +153,8 @@ def check_asana() -> tuple[bool, str]:
         )
         if r.status_code == 200:
             name = r.json().get("data", {}).get("name", "?")
-            return True, f"Asana → OK (user={name})"
-        return False, f"Asana → HTTP {r.status_code}"
+            return True, f"Asana -> OK (user={name})"
+        return False, f"Asana -> HTTP {r.status_code}"
     except Exception as e:
         return False, f"Asana: {e}"
 
@@ -164,8 +164,8 @@ def check_zapier_webhook() -> tuple[bool, str]:
         import requests
         r = requests.get(f"{BASE_URL}/webhooks/zapier", timeout=10)
         if r.status_code == 200:
-            return True, "/webhooks/zapier → OK"
-        return False, f"/webhooks/zapier → HTTP {r.status_code}"
+            return True, "/webhooks/zapier -> OK"
+        return False, f"/webhooks/zapier -> HTTP {r.status_code}"
     except Exception as e:
         return False, f"Zapier webhook: {e}"
 
@@ -175,8 +175,8 @@ def check_hubspot_webhook() -> tuple[bool, str]:
         import requests
         r = requests.get(f"{BASE_URL}/webhooks/hubspot", timeout=10)
         if r.status_code == 200:
-            return True, "/webhooks/hubspot → OK"
-        return False, f"/webhooks/hubspot → HTTP {r.status_code}"
+            return True, "/webhooks/hubspot -> OK"
+        return False, f"/webhooks/hubspot -> HTTP {r.status_code}"
     except Exception as e:
         return False, f"HubSpot webhook: {e}"
 
