@@ -395,50 +395,77 @@ def build_daily_summary_text(spikes: list | None = None,
 
 def build_recommendations_text(findings: list) -> str:
     """
-    Second Slack message: task count summary only (no campaign-by-campaign list).
-    Full details are in Asana. Approval requests go to #approvals separately.
+    Second Slack message: live task category summary from Asana.
 
-    Shows:
-      - Date range the data covers
-      - Last edit cutoff note (actions only taken if edit ≥ 7 days ago)
-      - Count breakdown by action type
+    Format per category:
+        <icon> *Category*   X done  /  Y pending
+
+    Data range and edit-guard note included at the top.
+    Falls back to findings-only counts if Asana query fails.
     """
-    if not findings:
-        return ""
-
-    actionable = [f for f in findings
-                  if f.get("action") not in ("monitor", "scale", "review_impression_share")]
-    if not actionable:
-        return ""
-
-    pause_n    = sum(1 for f in actionable if f.get("action") == "pause")
-    optimize_n = sum(1 for f in actionable if f.get("action") == "optimize")
-    drill_n    = sum(1 for f in actionable if f.get("action") == "drilldown")
-    junk_n     = sum(1 for f in actionable if f.get("junk_leads"))
-    aware_n    = sum(1 for f in findings   if f.get("is_awareness"))
-    held_n     = sum(1 for f in findings   if "HOLD" in (f.get("note") or ""))
-
-    # Date range from findings
-    date_from = next((f.get("date_from") for f in findings if f.get("date_from")), "")
-    date_to   = next((f.get("date_to")   for f in findings if f.get("date_to")),   "")
+    # Date range from current findings
+    date_from  = next((f.get("date_from") for f in findings if f.get("date_from")), "")
+    date_to    = next((f.get("date_to")   for f in findings if f.get("date_to")),   "")
     date_range = f"{date_from} to {date_to}" if date_from and date_to else ""
+    held_n     = sum(1 for f in findings if "HOLD" in (f.get("note") or ""))
 
-    lines = ["*Recommended actions* — full details in Asana, approval requests in #approvals"]
+    # ── Pull live counts from Asana ───────────────────────────────────────────
+    try:
+        from executors.asana_maintenance import (
+            get_task_category_summary, _CATEGORY_ORDER, _CATEGORY_ICON,
+        )
+        summary = get_task_category_summary(since_days=7)
+    except Exception as e:
+        print(f"[daily_summary] Asana category query failed, falling back: {e}")
+        summary = None
+
+    lines = ["*Performance Tasks — last 7 days*"]
     if date_range:
-        lines.append(f"  Data: {date_range}  |  Only acting on campaigns edited ≥7 days ago")
-    if pause_n:
-        lines.append(f"  :octagonal_sign: *{pause_n}* campaign(s) flagged for pause")
-    if drill_n:
-        lines.append(f"  :microscope: *{drill_n}* campaign(s) need ad/keyword drill-down first")
-    if junk_n:
-        lines.append(f"  :warning: *{junk_n}* campaign(s) with junk-leads pattern")
-    if optimize_n:
-        lines.append(f"  :mag: *{optimize_n}* campaign(s) need optimization review")
-    if aware_n:
-        lines.append(f"  :eyes: *{aware_n}* awareness/traffic campaign(s) — check impression share")
-    if held_n:
-        lines.append(f"  :hourglass: *{held_n}* campaign(s) on hold (edited < 7 days ago — recheck later)")
+        lines.append(f"  Data: {date_range}  |  Actions held for campaigns edited <7 days ago")
 
+    if summary:
+        # Show in defined order only — skip "Other" (older/unclassified tasks)
+        all_cats = _CATEGORY_ORDER
+        has_any  = False
+        for cat in all_cats:
+            if cat not in summary:
+                continue
+            counts  = summary[cat]
+            done    = counts.get("done", 0)
+            pending = counts.get("pending", 0)
+            if done == 0 and pending == 0:
+                continue
+            icon   = _CATEGORY_ICON.get(cat, ":clipboard:")
+            lines.append(
+                f"  {icon} *{cat}*   "
+                f"{done} done  /  {pending} pending"
+            )
+            has_any = True
+        if not has_any:
+            lines.append("  No performance tasks in the last 7 days.")
+    else:
+        # Fallback: derive from current run's findings
+        from executors.asana_maintenance import _CATEGORY_ICON
+        cats = {
+            "Scale":      sum(1 for f in findings if f.get("action") == "scale"),
+            "Pause":      sum(1 for f in findings if f.get("action") == "pause"),
+            "Drill-down": sum(1 for f in findings if f.get("action") == "drilldown"),
+            "Optimize":   sum(1 for f in findings if f.get("action") == "optimize"),
+            "Junk Leads": sum(1 for f in findings if f.get("junk_leads")),
+            "Awareness":  sum(1 for f in findings if f.get("is_awareness")),
+        }
+        for cat, n in cats.items():
+            if n:
+                icon = _CATEGORY_ICON.get(cat, ":clipboard:")
+                lines.append(f"  {icon} *{cat}*   0 done  /  {n} pending")
+
+    if held_n:
+        lines.append(f"  :hourglass: *{held_n}* task(s) on hold (campaign edited <7d ago)")
+
+    if len(lines) <= 2:
+        return ""
+
+    lines.append("_Full details in Asana · Approvals in #approvals_")
     return "\n".join(lines)
 
 

@@ -57,13 +57,13 @@ def _all_project_ids() -> list[str]:
 
 
 def _fetch_incomplete_tasks(client: asana.ApiClient, project_id: str) -> list[dict]:
-    """Return incomplete tasks for a project with gid, name, due_on, created_at."""
+    """Return incomplete tasks for a project."""
     try:
         api = asana.TasksApi(client)
         tasks = api.get_tasks_for_project(
             project_id,
             {
-                "completed_since": "now",   # only incomplete
+                "completed_since": "now",
                 "opt_fields": "gid,name,due_on,created_at,completed",
                 "limit": 100,
             }
@@ -72,6 +72,97 @@ def _fetch_incomplete_tasks(client: asana.ApiClient, project_id: str) -> list[di
     except AsanaApiException as e:
         print(f"[asana-maintenance] fetch tasks error for project {project_id}: {e}")
         return []
+
+
+def _fetch_all_tasks(client: asana.ApiClient, project_id: str,
+                     since_days: int = 7) -> list[dict]:
+    """Return both complete and incomplete tasks created within the last N days."""
+    try:
+        api  = asana.TasksApi(client)
+        since_dt = (datetime.now(_RIYADH) - timedelta(days=since_days)).strftime(
+            "%Y-%m-%dT00:00:00.000Z"
+        )
+        tasks = api.get_tasks_for_project(
+            project_id,
+            {
+                "completed_since": since_dt,
+                "opt_fields": "gid,name,due_on,created_at,completed,completed_at",
+                "limit": 100,
+            }
+        )
+        return list(tasks)
+    except AsanaApiException as e:
+        print(f"[asana-maintenance] fetch all tasks error for project {project_id}: {e}")
+        return []
+
+
+# ── Category classifier ───────────────────────────────────────────────────────
+
+# Maps keyword patterns (lowercase) → category label
+_CATEGORY_PATTERNS: list[tuple[str, str]] = [
+    ("scale",              "Scale"),
+    ("scaled",             "Scale"),
+    ("pause",              "Pause"),
+    ("paused",             "Pause"),
+    ("drill-down",         "Drill-down"),
+    ("drilldown",          "Drill-down"),
+    ("keyword",            "Drill-down"),
+    ("ad/keyword",         "Drill-down"),
+    ("impression share",   "Awareness"),
+    ("impressionshare",    "Awareness"),
+    ("websitetraffic",     "Awareness"),
+    ("website traffic",    "Awareness"),
+    ("awareness",          "Awareness"),
+    ("traffic",            "Awareness"),
+    ("junk-leads",         "Junk Leads"),
+    ("junk leads",         "Junk Leads"),
+    ("optimize",           "Optimize"),
+    ("cpql investigation", "Optimize"),
+    ("investigation",      "Optimize"),
+]
+
+_CATEGORY_ORDER = ["Scale", "Pause", "Drill-down", "Optimize", "Junk Leads", "Awareness"]
+_CATEGORY_ICON  = {
+    "Scale":      ":rocket:",
+    "Pause":      ":octagonal_sign:",
+    "Drill-down": ":microscope:",
+    "Optimize":   ":mag:",
+    "Junk Leads": ":warning:",
+    "Awareness":  ":eyes:",
+}
+
+
+def _classify_task(name: str) -> str:
+    """Return the category label for a task based on its title."""
+    lower = name.lower()
+    for pattern, label in _CATEGORY_PATTERNS:
+        if pattern in lower:
+            return label
+    return "Other"
+
+
+def get_task_category_summary(since_days: int = 7) -> dict[str, dict[str, int]]:
+    """
+    Query all optimization + daily projects for tasks created in the last
+    `since_days` days. Return a dict:
+        { category: { "done": int, "pending": int } }
+
+    Only includes categories that have at least one task.
+    """
+    client   = _get_client()
+    summary: dict[str, dict[str, int]] = {}
+
+    for project_id in _all_project_ids():
+        for task in _fetch_all_tasks(client, project_id, since_days=since_days):
+            cat      = _classify_task(task.get("name", ""))
+            done     = bool(task.get("completed"))
+            entry    = summary.setdefault(cat, {"done": 0, "pending": 0})
+            if done:
+                entry["done"]    += 1
+            else:
+                entry["pending"] += 1
+
+    return summary
 
 
 # ── 1. Overdue reminders ──────────────────────────────────────────────────────
@@ -113,15 +204,28 @@ def send_overdue_reminders(min_days_overdue: int = 1,
         print("[asana-maintenance] No overdue tasks.")
         return 0
 
-    # Sort: most overdue first
+    # Sort: most overdue first, then group by category
     overdue.sort(key=lambda t: t["days_late"], reverse=True)
 
-    lines = [f":alarm_clock: *{len(overdue)} Asana task(s) are overdue — please action or reschedule:*"]
+    # Group by category for the Slack message
+    by_cat: dict[str, list[dict]] = {}
     for t in overdue:
-        url = f"https://app.asana.com/0/{t['project']}/{t['gid']}"
-        lines.append(
-            f"  • {t['days_late']}d overdue — <{url}|{t['name'][:70]}> (was due {t['due_on']})"
-        )
+        cat = _classify_task(t["name"])
+        by_cat.setdefault(cat, []).append(t)
+
+    lines = [f":alarm_clock: *Overdue Asana Tasks — {len(overdue)} pending action*"]
+    for cat in _CATEGORY_ORDER + [c for c in by_cat if c not in _CATEGORY_ORDER]:
+        tasks = by_cat.get(cat)
+        if not tasks:
+            continue
+        icon = _CATEGORY_ICON.get(cat, ":clipboard:")
+        # Show category header with count
+        lines.append(f"\n  {icon} *{cat}*  ({len(tasks)} overdue)")
+        for t in tasks:
+            url = f"https://app.asana.com/0/{t['project']}/{t['gid']}"
+            lines.append(
+                f"    • {t['days_late']}d — <{url}|{t['name'][:60]}>"
+            )
     message = "\n".join(lines)
 
     if is_quiet():
