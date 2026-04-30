@@ -419,15 +419,16 @@ def build_recommendations_text(findings: list) -> str:
         print(f"[daily_summary] Asana category query failed, falling back: {e}")
         summary = None
 
-    lines = ["*Performance Tasks — last 7 days*"]
-    if date_range:
-        lines.append(f"  Data: {date_range}  |  Actions held for campaigns edited <7 days ago")
+    # Build compact category chips: icon+name ✓done ⏳pending
+    def _chip(icon: str, label: str, done: int, pending: int) -> str:
+        parts = []
+        if done:    parts.append(f"{done}✓")
+        if pending: parts.append(f"{pending}⏳")
+        return f"{icon} {label}: " + "  ".join(parts) if parts else ""
 
+    chips: list[str] = []
     if summary:
-        # Show in defined order only — skip "Other" (older/unclassified tasks)
-        all_cats = _CATEGORY_ORDER
-        has_any  = False
-        for cat in all_cats:
+        for cat in _CATEGORY_ORDER:
             if cat not in summary:
                 continue
             counts  = summary[cat]
@@ -435,37 +436,40 @@ def build_recommendations_text(findings: list) -> str:
             pending = counts.get("pending", 0)
             if done == 0 and pending == 0:
                 continue
-            icon   = _CATEGORY_ICON.get(cat, ":clipboard:")
-            lines.append(
-                f"  {icon} *{cat}*   "
-                f"{done} done  /  {pending} pending"
-            )
-            has_any = True
-        if not has_any:
-            lines.append("  No performance tasks in the last 7 days.")
+            icon = _CATEGORY_ICON.get(cat, ":clipboard:")
+            chips.append(_chip(icon, cat, done, pending))
     else:
-        # Fallback: derive from current run's findings
         from executors.asana_maintenance import _CATEGORY_ICON
-        cats = {
-            "Scale":      sum(1 for f in findings if f.get("action") == "scale"),
-            "Pause":      sum(1 for f in findings if f.get("action") == "pause"),
-            "Drill-down": sum(1 for f in findings if f.get("action") == "drilldown"),
-            "Optimize":   sum(1 for f in findings if f.get("action") == "optimize"),
-            "Junk Leads": sum(1 for f in findings if f.get("junk_leads")),
-            "Awareness":  sum(1 for f in findings if f.get("is_awareness")),
-        }
-        for cat, n in cats.items():
+        for cat, action_key, flag_key in [
+            ("Scale",      "scale",     None),
+            ("Pause",      "pause",     None),
+            ("Drill-down", "drilldown", None),
+            ("Optimize",   "optimize",  None),
+            ("Junk Leads", None,        "junk_leads"),
+            ("Awareness",  None,        "is_awareness"),
+        ]:
+            n = sum(1 for f in findings if (
+                (action_key and f.get("action") == action_key) or
+                (flag_key   and f.get(flag_key))
+            ))
             if n:
                 icon = _CATEGORY_ICON.get(cat, ":clipboard:")
-                lines.append(f"  {icon} *{cat}*   0 done  /  {n} pending")
+                chips.append(_chip(icon, cat, 0, n))
 
-    if held_n:
-        lines.append(f"  :hourglass: *{held_n}* task(s) on hold (campaign edited <7d ago)")
-
-    if len(lines) <= 2:
+    if not chips:
         return ""
 
-    lines.append("_Full details in Asana · Approvals in #approvals_")
+    # Line 1: header + date range
+    header = f"*Tasks (7d)*"
+    if date_range:
+        header += f"  _{date_range}_"
+    if held_n:
+        header += f"  :hourglass: {held_n} on hold"
+
+    # Line 2: all chips on one line, pipe-separated
+    chips_line = "  |  ".join(c for c in chips if c)
+
+    lines = [header, chips_line, "_Asana · #approvals_"]
     return "\n".join(lines)
 
 
