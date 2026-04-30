@@ -252,31 +252,178 @@ def _extract_tasks(cadence: str, results: list) -> tuple[list, list]:
 # Slack summary builder
 # ---------------------------------------------------------------------------
 
-def _build_slack_summary(cadence: str, results: list, task_count: int) -> str:
-    emoji = CADENCE_EMOJI.get(cadence, "📋")
-    today = date.today().strftime("%d %b %Y")
+def _build_action_lines(tasks: list, approvals: list) -> list[str]:
+    """
+    Spell out agent actions in full — no abbreviations (per CLAUDE.md).
+    Groups tasks by action type and describes what happened precisely.
+    """
+    scale_channels:    list[str] = []
+    pause_channels:    list[str] = []
+    junk_channels:     list[str] = []
+    optimize_channels: list[str] = []
+    negatives_count  = 0
+    kw_paused_count  = 0
+    is_flagged       = 0
+    qs_flagged       = 0
+    kw_expand        = 0
 
-    lines = [f"{emoji} *{cadence.title()} Performance Check — {today}*", ""]
+    for t in tasks:
+        action  = (t.get("action") or "").lower()
+        title   = (t.get("title") or "").lower()
+        channel = (t.get("channel") or t.get("title", "").split("—")[0].strip() or "")
 
-    for res in results:
-        role     = res["role"].replace("_", " ").title()
-        decision = res.get("decision") or {}
-        lines.append(f"*{role}*")
+        if action == "scale":
+            scale_channels.append(channel)
+        elif action == "pause":
+            pause_channels.append(channel)
+        elif "junk" in title or "junk-leads" in title:
+            junk_channels.append(channel)
+        elif action in ("optimize", "adjust", "recommend", "fix"):
+            optimize_channels.append(channel)
+        elif "negative keyword" in title or "negatives" in title:
+            negatives_count += 1
+        elif "impression share" in title or "impression-share" in title:
+            is_flagged += 1
+        elif "quality score" in title or "quality-score" in title:
+            qs_flagged += 1
+        elif "keyword expansion" in title or "search term" in title:
+            kw_expand += 1
+        elif "non-converting keyword" in title or "kw-auto-paused" in title:
+            kw_paused_count += 1
 
-        if decision.get("channel"):
-            lines.append(f"  • Channel: {decision['channel']}")
-        if decision.get("kpi") and decision.get("value"):
-            lines.append(f"  • {decision['kpi']}: {decision['value']} (threshold: {decision.get('threshold', 'N/A')})")
-        if decision.get("decision"):
-            lines.append(f"  • Decision: {decision['decision']}")
-        if decision.get("action") and decision["action"].lower() != "recommend":
-            lines.append(f"  • Action: {decision['action']}")
+    lines: list[str] = []
+
+    if scale_channels:
+        ch_str = ", ".join(scale_channels[:3])
+        lines.append(
+            f"  • Scaled {len(scale_channels)} campaign(s) +25% on {ch_str} "
+            f"(CPQL + CPL both in scale zone) — executed"
+        )
+    if pause_channels:
+        ch_str = ", ".join(pause_channels[:3])
+        lines.append(
+            f"  • Paused {len(pause_channels)} campaign(s) on {ch_str} "
+            f"(CPQL critical, minimum 14-day window met) — executed"
+        )
+    if junk_channels:
+        lines.append(
+            f"  • {len(junk_channels)} junk-leads alert(s) — "
+            f"low qualification rate despite low CPL"
+        )
+    if optimize_channels:
+        # deduplicate channels, preserve insertion order
+        seen: dict = {}
+        for ch in optimize_channels:
+            seen[ch] = None
+        ch_str = ", ".join(seen)
+        lines.append(
+            f"  • Optimization recommendations queued for {ch_str} — "
+            f"review Asana tasks and approve in #approvals"
+        )
+    if kw_paused_count:
+        lines.append(
+            f"  • Google Ads: {kw_paused_count} non-converting keyword(s) "
+            f"auto-paused (zero conversions after 14+ days) — executed"
+        )
+    if negatives_count:
+        lines.append(
+            f"  • Google Ads: {negatives_count} negative keyword(s) added "
+            f"from weekly search term review — executed"
+        )
+    if is_flagged:
+        lines.append(
+            f"  • Google Ads: Impression Share below threshold on "
+            f"{is_flagged} campaign(s) — budget increase task in Asana"
+        )
+    if qs_flagged:
+        lines.append(
+            f"  • Google Ads: Quality Score below threshold on "
+            f"{qs_flagged} keyword(s) — ad copy improvement task in Asana"
+        )
+    if kw_expand:
+        lines.append(
+            f"  • Google Ads: {kw_expand} search term(s) identified as "
+            f"converting — ready to promote to exact/phrase match keywords"
+        )
+
+    # Any approval-pending actions not covered above
+    pending_actions = [
+        (res.get("decision") or {}).get("action", "")
+        for res in approvals
+        if (res.get("decision") or {}).get("action", "").lower()
+        not in ("scale", "pause")
+    ]
+    if pending_actions:
+        uniq = list(dict.fromkeys(pending_actions))
+        lines.append(
+            f"  • {', '.join(a.title() for a in uniq if a)} action(s) "
+            f"pending your approval in #approvals"
+        )
+
+    return lines
+
+
+def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: list) -> str:
+    """
+    Build the main Slack summary per CLAUDE.md required format:
+      1. Dashboard URL (plain text — never a hyperlink)
+      2. 7-day headline totals (spend · leads · SQLs · CPL · CPQL)
+      3. Peak numbers: top + worst campaign per channel with CPQL
+      4. Agent actions spelled out in full (no abbreviations)
+      5. Asana task count + approval count
+    """
+    import os
+    from datetime import timedelta, timezone as _tz
+
+    riyadh   = _tz(timedelta(hours=3))
+    today_str = date.today().strftime("%d %b %Y")
+    emoji    = CADENCE_EMOJI.get(cadence, "📋")
+    domain   = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
+                or "nexa-web-production-c859.up.railway.app")
+    url      = f"https://{domain}/paid-performance/latest"
+
+    lines = [
+        f"{emoji} *{cadence.title()} Performance Check — {today_str}*",
+        f"Dashboard: {url}",
+        "",
+    ]
+
+    # ── 7-day headline totals from BQ ────────────────────────────────────────
+    try:
+        from notifications.daily_summary import _headline_numbers, _peak_numbers_lines
+        headline = _headline_numbers()
+        if headline:
+            h = headline["total"]
+            lines.append(
+                f"*7-day totals:*  "
+                f"Spend ${h['spend']:,}  ·  "
+                f"Leads {h['leads']}  ·  "
+                f"SQLs {h['qual']}  ·  "
+                f"CPL ${h['cpl']}  ·  "
+                f"CPQL ${h['cpql']}"
+            )
+        peak_lines = _peak_numbers_lines()
+        if peak_lines:
+            lines.append("*Peak numbers — top + worst per channel (CPQL):*")
+            lines.extend(peak_lines)
+        lines.append("")
+    except Exception as e:
+        print(f"[slack-summary] BQ headline/peak fetch skipped: {e}")
+
+    # ── Agent actions ────────────────────────────────────────────────────────
+    action_lines = _build_action_lines(tasks, approvals)
+    if action_lines:
+        lines.append("*Agent actions:*")
+        lines.extend(action_lines)
         lines.append("")
 
-    lines.append(f"✅ *{task_count} Asana task(s) created* — check your Asana inbox.")
-    if results and any((res.get("decision") or {}).get("action", "").lower()
-                       in {"pause","exclude","adjust","scale"} for res in results):
-        lines.append("⚠️  Approval requests sent to the approvals channel.")
+    # ── Footer ───────────────────────────────────────────────────────────────
+    lines.append(f"✅ *{len(tasks)} Asana task(s) created*")
+    if approvals:
+        lines.append(
+            f"⚠️  *{len(approvals)} approval request(s)* sent to "
+            f"<#{SLACK_CHANNEL_APPROVAL}>"
+        )
 
     return "\n".join(lines)
 
@@ -343,7 +490,7 @@ def run_cadence(cadence: str, force: bool = False):
     log.info(f"Asana batch complete: {created}/{len(tasks)} tasks created.")
 
     # 6. Post ONE combined Slack summary to notify channel
-    summary_text = _build_slack_summary(cadence, results, created)
+    summary_text = _build_slack_summary(cadence, results, tasks, approvals)
     send_summary(
         subject=f"{cadence.title()} check | {today}",
         body_text=summary_text,
@@ -373,6 +520,28 @@ def run_cadence(cadence: str, force: bool = False):
         log.info(f"Daily report rendered -> {path}")
     except Exception as e:
         log.warning(f"Daily report generation failed (non-fatal): {e}")
+
+    # 6c. Follow-up Slack message: task breakdown by category + #approvals reference.
+    #     Matches CLAUDE.md format: recommendations referencing Asana + #approvals.
+    try:
+        from notifications.daily_summary import build_recommendations_text
+        from notifications.notify import post_to_slack
+        # Build minimal findings from role results for build_recommendations_text()
+        findings = [
+            {
+                "action":     (res.get("decision") or {}).get("action", ""),
+                "junk_leads": "junk" in str(
+                    (res.get("decision") or {}).get("decision", "")
+                ).lower(),
+            }
+            for res in results
+        ]
+        rec_text = build_recommendations_text(findings)
+        if rec_text:
+            post_to_slack(rec_text, channel=SLACK_CHANNEL_NOTIFY)
+            log.info("Follow-up recommendations message posted to Slack.")
+    except Exception as e:
+        log.warning(f"Follow-up Slack message skipped (non-fatal): {e}")
 
     # 7. Handle high-confidence channel actions -> approval channel
     for res in approvals:

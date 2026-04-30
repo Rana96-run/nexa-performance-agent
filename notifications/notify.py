@@ -110,6 +110,16 @@ def send_approval_request(analysis: dict) -> dict:
     return {"slack_ts": ts, "email_sent": mailed, "channel_used": _label(ts, mailed)}
 
 
+def post_to_slack(text: str, channel: str | None = None) -> Optional[str]:
+    """
+    Post a plain-text message to Slack.
+    Defaults to SLACK_CHANNEL_NOTIFY if no channel is specified.
+    Returns the Slack message timestamp (ts) or None on failure.
+    """
+    target = channel or SLACK_CHANNEL_NOTIFY
+    return _slack_post(target, text)
+
+
 def _label(ts, mailed):
     if ts and mailed: return "both"
     if ts: return "slack"
