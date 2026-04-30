@@ -45,6 +45,7 @@ from config import NOTIFY_VIA, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL
 from executors import google_ads as gads_exec
 from executors import meta as meta_exec
 from executors.asana import create_task, ensure_channel_sections
+from executors.google_ads import list_search_terms, classify_search_terms, add_negative_keywords
 
 
 CADENCE_DAYS = {
@@ -293,6 +294,14 @@ def run_cadence(cadence: str, force: bool = False):
             log.info(f"Already ran {cadence} today — skipping. Use --force to override.")
             return
 
+    # 0. Weekly-only: search term review runs deterministically before LLM roles
+    if cadence == "weekly":
+        try:
+            st_summary = weekly_search_term_review()
+            log.info(f"Search term review: {st_summary}")
+        except Exception as e:
+            log.warning(f"Search term review failed (non-fatal): {e}")
+
     # 1. Collect data from ALL channels
     data = collect(cadence)
     channels_with_data = [k for k, v in data.items()
@@ -390,6 +399,140 @@ def run_cadence(cadence: str, force: bool = False):
         mark_analysis_done(cadence)
 
     log.info(f"{cadence} cadence complete — Tasks: {created}  Approvals: {len(approvals)}")
+
+
+# ---------------------------------------------------------------------------
+# Weekly search term review (deterministic — runs before role agents)
+# ---------------------------------------------------------------------------
+
+def weekly_search_term_review() -> dict:
+    """
+    Pull Google Ads search terms for last 7 days, auto-classify, and act:
+      - Negatives  → add immediately (no approval required)
+      - Converting → post to #approvals Slack channel for keyword addition
+      - Watch      → create Asana task for next week
+
+    Returns summary dict logged by the caller.
+    """
+    from notifications.notify import post_to_slack
+    today_str = str(date.today())
+
+    print("[search_terms] Starting weekly search term review...")
+    terms = list_search_terms(days=7)
+    if not terms:
+        print("[search_terms] No search terms returned — skipping.")
+        return {"terms": 0, "negatives_added": 0, "approvals_sent": 0}
+
+    buckets = classify_search_terms(terms)
+
+    negatives_added: list[str] = []
+    approvals_sent:  list[str] = []
+
+    # 1. Auto-add negatives (Direct — no approval)
+    # Group by campaign resource name so we batch per campaign
+    from collections import defaultdict
+    by_campaign: dict[str, list] = defaultdict(list)
+    for t in buckets["negative"]:
+        # Derive campaign resource name from ad_group_resource_name
+        # Format: customers/{cid}/adGroups/{agid} → customers/{cid}/campaigns/{cid}
+        ag_rn = t["ad_group_resource_name"]
+        cid   = ag_rn.split("/")[1]
+        cid_str = f"customers/{cid}"
+        by_campaign[cid_str].append(t["query"])
+
+    for campaign_prefix, queries in by_campaign.items():
+        # campaign_prefix is "customers/{cid}" — extract cid, pair with campaign_id
+        cid = campaign_prefix.split("/")[1]
+        # Find any term belonging to this customer to get a campaign_id
+        camp_rn = None
+        for t in buckets["negative"]:
+            ag_rn = t["ad_group_resource_name"]
+            if ag_rn.split("/")[1] == cid:
+                camp_rn = f"customers/{cid}/campaigns/{t['campaign_id']}"
+                break
+        if not camp_rn:
+            print(f"[search_terms] Could not resolve campaign resource for {campaign_prefix} — skipping")
+            continue
+        try:
+            add_negative_keywords(
+                campaign_resource_name=camp_rn,
+                keywords=queries,
+            )
+            negatives_added.extend(queries)
+            print(f"[search_terms] Added {len(queries)} negatives to campaign {camp_rn}")
+        except Exception as e:
+            print(f"[search_terms] Negative keyword error: {e}")
+
+    # 2. Post converting terms to #approvals
+    if buckets["convert"]:
+        lines = [f"*Google Ads — Weekly Search Term Review | {today_str}*",
+                 f"Found *{len(buckets['convert'])} converting search terms* to add as keywords.\n"]
+        for t in buckets["convert"]:
+            lines.append(
+                f"• `{t['query']}` — {t['clicks']} clicks, {t['conversions']:.0f} conv, "
+                f"${t['cost_usd']:.2f} spend | ad group: _{t['ad_group_name']}_"
+            )
+        lines.append(
+            f"\nReact ✅ to add these as EXACT match keywords to their respective ad groups. "
+            f"React ❌ to skip."
+        )
+        msg = "\n".join(lines)
+        try:
+            post_to_slack(msg, channel=SLACK_CHANNEL_APPROVAL)
+            approvals_sent = [t["query"] for t in buckets["convert"]]
+            print(f"[search_terms] Approval request sent for {len(approvals_sent)} converting terms.")
+        except Exception as e:
+            print(f"[search_terms] Slack approval post failed: {e}")
+
+    # 3. Create Asana task with full weekly summary
+    watch_lines  = [f"• `{t['query']}` — {t['clicks']} clicks, ${t['cost_usd']:.2f}" for t in buckets["watch"]]
+    neg_lines    = [f"• `{q}`" for q in negatives_added]
+    conv_lines   = [f"• `{t['query']}` — {t['conversions']:.0f} conv" for t in buckets["convert"]]
+
+    desc = "\n".join([
+        f"Weekly search term review — {today_str}",
+        f"Total terms pulled: {len(terms)}",
+        "",
+        f"NEGATIVES ADDED ({len(negatives_added)}) — executed automatically:",
+        *([f"  • {q}" for q in negatives_added] or ["  (none)"]),
+        "",
+        f"CONVERTING TERMS ({len(approvals_sent)}) — approval requested in #approvals:",
+        *([f"  • {t['query']} ({t['conversions']:.0f} conv, ${t['cost_usd']:.2f})" for t in buckets["convert"]] or ["  (none)"]),
+        "",
+        f"WATCH NEXT WEEK ({len(buckets['watch'])}):",
+        *([f"  • {t['query']} ({t['clicks']} clicks, ${t['cost_usd']:.2f})" for t in buckets["watch"]] or ["  (none)"]),
+        "",
+        "Created: " + today_str,
+        "Due: " + today_str,
+        "Priority: Medium",
+        "Type: Direct Log",
+        "Channel: google_ads",
+        "Asset level: keyword",
+        "Action: Weekly search term review executed",
+    ])
+
+    try:
+        create_task(
+            title=f"[Google Ads] Weekly search terms review — {today_str}",
+            description=desc,
+            project_key="daily_activity",
+            task_type="Keyword/Placement",
+            channel="google_ads",
+            asset_level="keyword",
+            action="review",
+        )
+        print(f"[search_terms] Asana task created.")
+    except Exception as e:
+        print(f"[search_terms] Asana task creation failed: {e}")
+
+    summary = {
+        "terms_pulled":     len(terms),
+        "negatives_added":  len(negatives_added),
+        "approvals_sent":   len(approvals_sent),
+        "watch":            len(buckets["watch"]),
+    }
+    print(f"[search_terms] Done: {summary}")
+    return summary
 
 
 # ---------------------------------------------------------------------------

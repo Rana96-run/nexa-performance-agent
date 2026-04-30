@@ -394,10 +394,15 @@ def create_full_campaign(
                 lead_gen_form_urn=lead_gen_form_urn,
             )
         else:
-            # Conversion / awareness — attach UTM URL to the post
+            # Conversion / awareness — sponsored content ads inherit the URL from the
+            # original organic post (share_urn). LinkedIn API does not support
+            # overriding the click URL on sponsored content ads via adCreatives.
+            # The UTM URL is returned in utm_mapping so the team can manually
+            # update the organic post before sponsoring, or use a UTM-tagged post.
             if landing_url:
                 utm_url = _build_utm_url(landing_url, campaign_name, adset_name, f"LinkedIn_{product}V1_{language}")
-                print(f"[li] UTM URL: {utm_url}")
+                print(f"[li] Target UTM URL (apply to organic post before sponsoring): {utm_url}")
+                result["utm_url_for_post"] = utm_url
             ad = create_ad_sponsored(
                 name=ad_name_raw,
                 adset_id=adset_id,

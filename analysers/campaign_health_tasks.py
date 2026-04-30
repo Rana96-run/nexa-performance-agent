@@ -20,8 +20,12 @@ import os
 from datetime import date, timedelta
 
 from analysers.campaign_health import audit_campaign_health
+from analysers.creative_performance import (
+    audit_creative_performance, format_creative_section,
+    audit_creative_by_campaign_type, format_creative_by_type_section,
+)
 from executors.asana import create_task
-from config import DAYS_FOR_PAUSE_DECISION
+from config import DAYS_FOR_PAUSE_DECISION, DRILL_DOWN_CPQL, DRILL_DOWN_CPL
 
 SCALE_PCT = 0.25   # always 25%
 
@@ -149,6 +153,22 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
     """
     if findings is None:
         findings = audit_campaign_health(days=days)
+
+    # ── Pre-publish gate: validate data before creating any tasks or Slack msgs ──
+    try:
+        from scripts.report_validator import pre_publish_gate
+        validation = pre_publish_gate(findings, days=days, post_slack_on_fail=True)
+        if not validation.ok:
+            print(f"[health-tasks] BLOCKED by validator: {len(validation.errors)} error(s). "
+                  f"No tasks or Slack messages will be published.")
+            print(validation.summary())
+            return [("validation-failed", None)]
+        if validation.warnings:
+            print(f"[health-tasks] Validator warnings (non-blocking):\n{validation.summary()}")
+    except Exception as e:
+        # Validator itself crashed — log but don't block the run
+        print(f"[health-tasks] Validator error (non-blocking): {e}")
+
     out: list[tuple[str, str | None]] = []
 
     scale_f      = [f for f in findings if f["action"] == "scale"]
@@ -218,6 +238,17 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
 
     # ── 3. Junk-leads alert ────────────────────────────────────────────────────
     if junk_f:
+        # Creative analysis: junk leads are often a creative-level problem
+        junk_creative_sections = []
+        for f in junk_f:
+            try:
+                cr = audit_creative_performance(campaign_name=f["campaign"], channel=f.get("channel"), days=30)
+                section = format_creative_section(cr)
+                if section:
+                    junk_creative_sections.append(section)
+            except Exception as e:
+                print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
+
         body = (
             f"**Junk-Leads Alert** — {len(junk_f)} campaign(s) with misleading low CPL.\n\n"
             f"These campaigns show a CPL in the scale zone but their CPQL and qual rate "
@@ -229,6 +260,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             f"- Landing page / form attracting non-ICP visitors\n"
             f"- UTM attribution gaps (leads attributed to wrong campaign)\n\n"
             + _campaign_table(junk_f)
+            + ("\n" + "\n".join(junk_creative_sections) if junk_creative_sections else "")
         )
         gid = create_task(
             title=f"Junk-Leads Alert: {len(junk_f)} campaign(s) with low CPL but poor CPQL",
@@ -284,6 +316,17 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 except Exception as e:
                     drill_table += f"\n_(Ad/keyword data not available yet for {campaign_name}: {e})_\n"
 
+            # Creative analysis per campaign in this drilldown group
+            drill_creative_sections = []
+            for f in ch_findings:
+                try:
+                    cr = audit_creative_performance(campaign_name=f["campaign"], channel=f.get("channel"), days=30)
+                    section = format_creative_section(cr)
+                    if section:
+                        drill_creative_sections.append(section)
+                except Exception as e:
+                    print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
+
             body = (
                 f"**Drill-down Analysis Required — {channel} — {date_range_str}**\n\n"
                 f"These campaigns have CPQL >${DRILL_DOWN_CPQL} AND CPL >${DRILL_DOWN_CPL} "
@@ -291,6 +334,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 + hierarchy + "\n"
                 + _campaign_table(ch_findings)
                 + ("\n\n**Ad / Keyword detail:**\n" + drill_table if drill_table.strip() else "")
+                + ("\n" + "\n".join(drill_creative_sections) if drill_creative_sections else "")
             )
             gid = create_task(
                 title=f"{channel.replace('_',' ').title()} — Drill-down: {len(ch_findings)} campaign(s) ({date_range_str})",
@@ -321,6 +365,17 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             date_to   = ch_findings[0].get("date_to", "")
             date_range_str = f"{date_from} to {date_to}" if date_from and date_to else f"last {days} days"
 
+            # Creative analysis: one call per campaign, append sections
+            opt_creative_sections = []
+            for f in ch_findings:
+                try:
+                    cr = audit_creative_performance(campaign_name=f["campaign"], channel=f.get("channel"), days=30)
+                    section = format_creative_section(cr)
+                    if section:
+                        opt_creative_sections.append(section)
+                except Exception as e:
+                    print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
+
             body = (
                 f"Campaign health audit — **{date_range_str}**\n"
                 f"Cost: channel source | Leads: HubSpot Lead Module\n"
@@ -331,7 +386,16 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 "- Poor qual rate: wrong audience or keyword intent\n"
                 "- High CPQL vs CPL: leads entering but not qualifying (LP or ICP mismatch)\n"
                 "- Missing UTM: HubSpot not receiving utm_campaign correctly\n"
+                + ("\n" + "\n".join(opt_creative_sections) if opt_creative_sections else "")
             )
+            # Append cross-type creative breakdown once per channel group
+            try:
+                by_type_result = audit_creative_by_campaign_type(days=30)
+                by_type_section = format_creative_by_type_section(by_type_result)
+                if by_type_section:
+                    body += by_type_section
+            except Exception as e:
+                print(f"[health-tasks] creative by-type analysis failed: {e}")
             gid = create_task(
                 title=f"{channel.replace('_',' ').title()} — {len(ch_findings)} campaigns: CPQL investigation ({days}d)",
                 description=body,

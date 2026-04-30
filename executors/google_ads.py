@@ -169,6 +169,9 @@ def set_campaign_budget(campaign_id: str | int, daily_budget_usd: float,
     return {"resource_name": r.results[0].resource_name}
 
 
+_VALID_BIDDING = ("TARGET_CPA", "MAXIMIZE_CONVERSIONS", "TARGET_ROAS", "MAXIMIZE_CONVERSION_VALUE")
+
+
 def create_campaign(
     name: str,
     daily_budget_usd: float,
@@ -540,11 +543,12 @@ def _build_utm_url(base_url: str, campaign_name: str,
         f"{base_url}{sep}"
         f"utm_source=google&utm_medium=cpc"
         f"&utm_campaign={campaign_name}"
+        f"&utm_audience={adgroup_name}"
         f"&utm_content={ad_name}"
     )
 
 
-_VALID_BIDDING = ("TARGET_CPA", "MAXIMIZE_CONVERSIONS", "TARGET_ROAS", "MAXIMIZE_CONVERSION_VALUE")
+# _VALID_BIDDING defined above near create_campaign — kept here as marker only
 
 
 def create_full_campaign(
@@ -739,3 +743,152 @@ def keyword_ideas(seed_keywords: list[str],
     ideas.sort(key=lambda x: x["avg_monthly"], reverse=True)
     print(f"[gads] keyword ideas: {len(ideas)} results")
     return ideas
+
+
+# ── Weekly search term review ─────────────────────────────────────────────────
+
+def list_search_terms(
+    days: int = 7,
+    customer_id: str = _DEFAULT_CID,
+    min_impressions: int = 1,
+) -> list[dict]:
+    """
+    Pull search terms report for the last `days` days.
+
+    Returns a list of dicts sorted by conversions desc, then cost desc:
+      {
+        query, impressions, clicks, conversions, cost_usd,
+        ctr, cvr, cpc_usd,
+        campaign_id, campaign_name,
+        ad_group_id, ad_group_name, ad_group_resource_name,
+      }
+
+    Usage in weekly cadence:
+      terms = list_search_terms(days=7)
+      # Converting: clicks>=3, conversions>=1  → add_keywords()
+      # Negatives : clearly off-topic           → add_negative_keywords()
+      # Watch     : clicks>=3, conv=0, cost<$10 → flag in Asana
+    """
+    client = get_client()
+    ga_svc = client.get_service("GoogleAdsService")
+
+    q = f"""
+        SELECT
+            search_term_view.search_term,
+            search_term_view.status,
+            campaign.id,
+            campaign.name,
+            ad_group.id,
+            ad_group.name,
+            ad_group.resource_name,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.conversions,
+            metrics.cost_micros,
+            metrics.ctr,
+            metrics.conversions_from_interactions_rate
+        FROM search_term_view
+        WHERE segments.date DURING LAST_{days}_DAYS
+          AND metrics.impressions >= {min_impressions}
+        ORDER BY metrics.conversions DESC, metrics.cost_micros DESC
+        LIMIT 500
+    """
+
+    rows = []
+    try:
+        for row in ga_svc.search(customer_id=customer_id, query=q):
+            stv = row.search_term_view
+            m   = row.metrics
+            rows.append({
+                "query":                   stv.search_term,
+                "status":                  stv.status.name,   # ADDED / EXCLUDED / NONE
+                "impressions":             m.impressions,
+                "clicks":                  m.clicks,
+                "conversions":             m.conversions,
+                "cost_usd":                m.cost_micros / 1e6,
+                "ctr":                     round(m.ctr, 4),
+                "cvr":                     round(m.conversions_from_interactions_rate, 4),
+                "cpc_usd":                 round(m.cost_micros / 1e6 / m.clicks, 2) if m.clicks else 0,
+                "campaign_id":             str(row.campaign.id),
+                "campaign_name":           row.campaign.name,
+                "ad_group_id":             str(row.ad_group.id),
+                "ad_group_name":           row.ad_group.name,
+                "ad_group_resource_name":  row.ad_group.resource_name,
+            })
+    except Exception as e:
+        print(f"[gads] list_search_terms error: {e}")
+
+    print(f"[gads] list_search_terms({days}d): {len(rows)} terms, "
+          f"{sum(r['conversions'] for r in rows):.0f} total conversions")
+    return rows
+
+
+def classify_search_terms(
+    terms: list[dict],
+    existing_keywords: list[str] | None = None,
+) -> dict:
+    """
+    Auto-classify search terms into action buckets.
+
+    Rules (matches weekly cadence in qoyod-paid-media-agent.md):
+      - convert:  clicks >= 3, conversions >= 1, not already a keyword
+      - negative: clearly irrelevant (job/career/free/competitor patterns)
+      - watch:    clicks >= 3, conversions == 0, cost_usd < 10
+      - ignore:   everything else (low traffic, already added)
+
+    Returns:
+      {
+        "convert":  [terms to add as keywords],
+        "negative": [terms to add as negatives],
+        "watch":    [terms to flag in Asana next week],
+        "ignore":   [skipped],
+      }
+    """
+    existing = {kw.lower().strip() for kw in (existing_keywords or [])}
+
+    _NEGATIVE_PATTERNS = [
+        "وظيفة", "وظائف", "توظيف", "مطلوب", "راتب",
+        "job", "jobs", "career", "hiring", "salary", "cv", "resume",
+        "مجاناً", "مجانا", "مجاني", "free", "تحميل", "download",
+        "شرح", "tutorial", "how to", "ما هو", "تعريف",
+        "quickbooks", "zoho", "odoo", "xero", "sage",    # competitors
+    ]
+
+    buckets: dict[str, list] = {"convert": [], "negative": [], "watch": [], "ignore": []}
+
+    for t in terms:
+        q_lower = t["query"].lower()
+
+        # Already excluded → skip
+        if t["status"] == "EXCLUDED":
+            buckets["ignore"].append(t)
+            continue
+
+        # Negative patterns
+        if any(pat in q_lower for pat in _NEGATIVE_PATTERNS):
+            buckets["negative"].append(t)
+            continue
+
+        # Already a keyword
+        if q_lower in existing:
+            buckets["ignore"].append(t)
+            continue
+
+        # Converting
+        if t["clicks"] >= 3 and t["conversions"] >= 1:
+            buckets["convert"].append(t)
+            continue
+
+        # Watch
+        if t["clicks"] >= 3 and t["conversions"] == 0 and t["cost_usd"] < 10:
+            buckets["watch"].append(t)
+            continue
+
+        buckets["ignore"].append(t)
+
+    print(f"[gads] classify_search_terms: "
+          f"{len(buckets['convert'])} convert, "
+          f"{len(buckets['negative'])} negative, "
+          f"{len(buckets['watch'])} watch, "
+          f"{len(buckets['ignore'])} ignore")
+    return buckets

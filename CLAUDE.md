@@ -12,6 +12,14 @@ before doing anything else:
    tasks (running a collector, checking creds, verifying BQ, Drive
    reads, OAuth, Meta probes).
 
+## Continuous learning (non-negotiable)
+
+You build on accumulated knowledge every session — never from scratch:
+- Before acting on any familiar topic, check `memory/` for existing context
+- When you discover something new (API trap, naming edge case, schema change), write it to `memory/08_pitfalls.md` immediately
+- When a task completes, close it in `memory/09_open_tasks.md` and update `memory/01_architecture.md` if the structure changed
+- Each session must leave the agent more capable than it arrived
+
 ## Pre-send review (non-negotiable)
 
 Before posting to Slack or creating Asana tasks, always verify:

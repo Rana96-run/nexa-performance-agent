@@ -31,6 +31,12 @@ import requests
 from dotenv import load_dotenv, set_key
 
 from executors.naming import prefixed as _naming_prefixed
+from config_creatives import (
+    SNAPCHAT_PIXEL_ID,
+    snapchat_form,
+    snapchat_account_key,
+    normalise_product,
+)
 
 load_dotenv(override=True)
 
@@ -57,6 +63,7 @@ def _refresh_token() -> str:
     r.raise_for_status()
     token = r.json()["access_token"]
     set_key(".env", "SNAPCHAT_ACCESS_TOKEN", token)
+    os.environ["SNAPCHAT_ACCESS_TOKEN"] = token   # update live process env
     return token
 
 
@@ -146,6 +153,109 @@ def best_account(campaign_name: str, days: int = 30) -> str:
     except Exception as e:
         print(f"[snap] best_account BQ query failed ({e}), using default")
     return _DEFAULT_ACCOUNT
+
+
+def best_audience(product: str | None = None, days: int = 30) -> dict:
+    """
+    Return the Snapchat targeting dict from the best-performing campaign
+    by CPQL (lowest) over the last N days, optionally filtered by product.
+
+    Strategy:
+      1. Query BQ for the Snapchat campaign with lowest CPQL
+      2. Look up its ad squad(s) via the Snapchat API
+      3. Return the targeting dict from the first active ad squad
+      4. Fall back to default SA targeting if BQ or API fails
+
+    Returns a Snapchat-compatible targeting dict ready for create_full_campaign().
+    """
+    _default = {
+        "geos": [{"country_code": "SA"}],
+        "demographics": [{"age_groups": ["18-24", "25-34", "35-49"]}],
+    }
+
+    try:
+        import os as _os
+        from google.cloud import bigquery as _bq
+        from google.oauth2 import service_account as _sa
+        from datetime import date as _date, timedelta as _td
+
+        project  = _os.getenv("BQ_PROJECT_ID")
+        dataset  = _os.getenv("BQ_DATASET", "qoyod_marketing")
+        key_path = _os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
+        creds    = _sa.Credentials.from_service_account_file(key_path)
+        client   = _bq.Client(project=project, credentials=creds)
+
+        since = (_date.today() - _td(days=days)).isoformat()
+
+        prod_filter = ""
+        if product:
+            prod_norm = normalise_product(product)
+            if prod_norm != "generic":
+                prod_filter = f"AND LOWER(c.campaign_name) LIKE '%{prod_norm}%'"
+
+        sql = f"""
+            WITH hs AS (
+              SELECT date, lead_utm_campaign,
+                     SUM(leads_qualified) AS sqls
+              FROM `{project}.{dataset}.hubspot_leads_module_daily`
+              GROUP BY date, lead_utm_campaign
+            )
+            SELECT
+              c.campaign_name,
+              SUM(c.spend)  AS spend,
+              SUM(hs.sqls)  AS sqls,
+              SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
+            FROM `{project}.{dataset}.campaigns_daily` c
+            LEFT JOIN hs ON c.date = hs.date
+              AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+            WHERE c.channel = 'snapchat'
+              AND c.date >= '{since}'
+              {prod_filter}
+            GROUP BY c.campaign_name
+            HAVING SUM(c.spend) >= 50 AND SUM(hs.sqls) > 0
+            ORDER BY cpql ASC
+            LIMIT 1
+        """
+        rows = list(client.query(sql).result())
+        if not rows:
+            print("[snap] best_audience: no qualifying Snapchat campaigns in BQ — using default targeting")
+            return _default
+
+        best_campaign = rows[0].campaign_name
+        cpql = float(rows[0].cpql or 0)
+        print(f"[snap] best_audience: '{best_campaign}' CPQL=${cpql:.0f} — pulling targeting")
+
+        # Find that campaign in the Snapchat API
+        for acct in [a for a in [_ACCOUNT_2025, _ACCOUNT_2024] if a]:
+            r = requests.get(
+                f"{_BASE}/adaccounts/{acct}/campaigns",
+                headers=_headers(), params={"limit": 50}, timeout=10
+            )
+            if not r.ok:
+                continue
+            camps = r.json().get("campaigns", [])
+            for c in camps:
+                camp = c.get("campaign", c)
+                if camp.get("name", "").lower() == best_campaign.lower():
+                    camp_id = camp.get("id")
+                    # Get its ad squads
+                    r2 = requests.get(
+                        f"{_BASE}/campaigns/{camp_id}/adsquads",
+                        headers=_headers(), timeout=10
+                    )
+                    if r2.ok:
+                        squads = r2.json().get("adsquads", [])
+                        for sq in squads:
+                            squad = sq.get("adsquad", sq)
+                            targeting = squad.get("targeting")
+                            if targeting:
+                                print(f"[snap] best_audience: using targeting from squad '{squad.get('name')}'")
+                                return targeting
+
+    except Exception as e:
+        print(f"[snap] best_audience failed ({e}) — using default targeting")
+
+    return _default
 
 
 # ── Campaign ──────────────────────────────────────────────────────────────────
@@ -393,12 +503,38 @@ def create_instant_form(
 
 def _build_utm_url(base_url: str, campaign_name: str,
                    squad_name: str, ad_name: str) -> str:
+    """
+    Build WEB_FORM landing URL with all UTM + HubSpot tracking parameters.
+
+    Snapchat dynamic macros (resolved at serve time by Snap):
+      utm_source    → {{site_source_name}}   always "snapchat"
+      utm_medium    → {{placement}}           e.g. "feed", "stories", "discover"
+      campaign_id   → {{campaign_id}}         numeric Snap campaign ID
+      ad_group_id   → {{ad_squad_id}}         numeric Snap ad squad ID
+      ad_id         → {{ad_id}}               numeric Snap ad ID
+
+    Name fields (set at creation — Snapchat has no name macros unlike Meta):
+      utm_campaign  → campaign_name           e.g. Snapchat_LeadGen_AR_Invoice_Interests
+      utm_audience  → squad_name              e.g. Snapchat_LeadGen_AR_Invoice_Interests
+      utm_content   → ad_name                 e.g. Snapchat_LeadGen_AR_InvoiceV1
+
+    NEVER remove or rename these — HubSpot lead module depends on all 8 parameters.
+    """
+    # NOTE: Snapchat only supports these dynamic macros:
+    #   {{campaign_id}}, {{ad_squad_id}}, {{ad_id}}
+    # It does NOT support {{site_source_name}} or {{placement}} — those are Meta-only.
+    # utm_source and utm_medium are hardcoded for Snap.
     sep = "&" if "?" in base_url else "?"
     return (
         f"{base_url}{sep}"
-        f"utm_source=snapchat&utm_medium=paid"
+        f"utm_source=snapchat"
+        f"&utm_medium=paid_social"
         f"&utm_campaign={campaign_name}"
+        f"&utm_audience={squad_name}"
         f"&utm_content={ad_name}"
+        f"&campaign_id={{{{campaign_id}}}}"
+        f"&ad_group_id={{{{ad_squad_id}}}}"
+        f"&ad_id={{{{ad_id}}}}"
     )
 
 
@@ -426,34 +562,56 @@ def create_full_campaign(
 
     bid_strategy : MAX_BID | TARGET_COST
     bid_usd      : target bid amount — Qoyod range $15-$17 (default $16)
-    ad_format    : INSTANT_FORM (Snap native lead form) | WEB_FORM (landing page with form)
-                   WEB_FORM requires landing_url; UTMs auto-appended.
+    ad_format    : INSTANT_FORM — uses correct lead gen form from config_creatives
+                                  (auto-selected by account + product)
+                 | WEB_FORM    — uses landing_url + Qoyod Self Service Pixel
+                                  (landing_url auto-populated from config_creatives
+                                   if not supplied)
+
+    targeting    : If None, pulled automatically from the best-performing
+                   Snapchat campaign by CPQL in BQ. Falls back to SA defaults.
 
     Naming (enforced automatically):
       Campaign : Snapchat_{campaign_type}_{language}_{product}_{audience_type}
       Ad Squad : same name
       Ad       : Snapchat_{product}V1_{language}
 
-    targeting defaults: Saudi Arabia, age 18-49.
-    Override with full Snapchat targeting dict.
-
-    Returns dict with campaign_id, squad_id, ad_id.
+    Returns dict with campaign_id, squad_id, ad_id, form/pixel info.
     """
-    # Enforce: Snapchat campaigns are always Lead Generation
+    from config_creatives import web_form_url as _web_form_url
+
+    # Validate inputs
     if bid_strategy not in ("MAX_BID", "TARGET_COST"):
         raise ValueError(f"bid_strategy must be MAX_BID or TARGET_COST, got {bid_strategy!r}")
     if not (15.0 <= bid_usd <= 17.0):
         raise ValueError(f"bid_usd must be $15-$17 (Qoyod range), got ${bid_usd}")
     if ad_format not in ("INSTANT_FORM", "WEB_FORM"):
         raise ValueError(f"ad_format must be INSTANT_FORM or WEB_FORM, got {ad_format!r}")
-    if ad_format == "WEB_FORM" and not landing_url:
-        raise ValueError("WEB_FORM ad_format requires a landing_url")
 
     result: dict = {}
     acct = account_id or best_account(
         _prefixed(f"{campaign_type}_{language}_{product}_{audience_type}")
     )
     full_name = f"{campaign_type}_{language}_{product}_{audience_type}"
+
+    # ── Resolve form / pixel based on ad_format ───────────────────────────────
+    if ad_format == "INSTANT_FORM":
+        form_info = snapchat_form(acct, product)
+        result["form_id"]   = form_info["id"]
+        result["form_name"] = form_info["name"]
+        print(f"[snap] Using lead gen form: {form_info['name']} ({form_info['id']})")
+    else:
+        # WEB_FORM: auto-populate landing URL from config if not provided
+        if not landing_url:
+            landing_url = _web_form_url(product)
+            print(f"[snap] Auto-selected landing URL for '{product}': {landing_url}")
+        result["pixel_id"]   = SNAPCHAT_PIXEL_ID
+        result["pixel_name"] = "Qoyod Self Service Pixel"
+        print(f"[snap] Using pixel: Qoyod Self Service Pixel ({SNAPCHAT_PIXEL_ID})")
+
+    # ── Resolve targeting from best-performing campaign if not supplied ────────
+    if targeting is None:
+        targeting = best_audience(product=product)
 
     # 1. Campaign — always LEAD_GENERATION
     camp = create_campaign(
@@ -469,10 +627,6 @@ def create_full_campaign(
     result["campaign_name"] = campaign_name
 
     # 2. Ad Squad — always LEAD_GENERATION optimization, MAX_BID or TARGET_COST
-    default_targeting = targeting or {
-        "geos": [{"country_code": "SA"}],
-        "demographics": [{"age_groups": ["18-24", "25-34", "35-49"]}],
-    }
     squad_payload: dict = {
         "name":               _prefixed(full_name),
         "campaign_id":        campaign_id,
@@ -482,7 +636,7 @@ def create_full_campaign(
         "optimization_goal":  "LEAD_GENERATION",
         "daily_budget_micro": int(daily_budget_usd * 1_000_000),
         "auto_bid":           False,
-        "targeting":          default_targeting,
+        "targeting":          targeting,
     }
     # Bidding: MAX_BID sets bid_micro; TARGET_COST sets target_bid_micro
     if bid_strategy == "MAX_BID":
@@ -509,8 +663,18 @@ def create_full_campaign(
         utm_url = _build_utm_url(landing_url, campaign_name, _prefixed(full_name), ad_name)
         print(f"[snap] WEB_FORM URL: {utm_url}")
         result["final_url"] = utm_url
+        # Attach pixel to ad squad for WEB_FORM conversion tracking
+        try:
+            current_squad = _get_one(f"/adsquads/{squad_id}")
+            current_squad["pixel_id"] = SNAPCHAT_PIXEL_ID
+            _put(f"/adaccounts/{acct}/adsquads",
+                 {"adsquads": [{"adsquad": current_squad}]})
+            print(f"[snap] Pixel attached to ad squad: {SNAPCHAT_PIXEL_ID}")
+        except Exception as e:
+            print(f"[snap] Pixel attach failed (non-fatal): {e}")
     else:
-        print(f"[snap] INSTANT_FORM — lead captured in-app via Snap Lead Gen Form")
+        form_id = result.get("form_id")
+        print(f"[snap] INSTANT_FORM — form: {result.get('form_name')} ({form_id})")
 
     ad = create_ad(
         adsquad_id=squad_id,
@@ -523,15 +687,28 @@ def create_full_campaign(
     result["ad_name"] = ad_name
 
     result["utm_mapping"] = {
-        "utm_source":   "snapchat",
-        "utm_medium":   "paid",
+        "utm_source":   "{{site_source_name}}",
+        "utm_medium":   "{{placement}}",
         "utm_campaign": campaign_name,
+        "utm_audience": _prefixed(full_name),
         "utm_content":  ad_name,
+        "campaign_id":  "{{campaign_id}}",
+        "ad_group_id":  "{{ad_squad_id}}",
+        "ad_id":        "{{ad_id}}",
     }
+    result["account_key"] = snapchat_account_key(acct)
+    result["account_id"]  = acct
+
     print(f"\n[snap] Full campaign setup complete:")
+    print(f"  Account   : {snapchat_account_key(acct)} ({acct})")
     print(f"  Campaign  : {campaign_name} (id={campaign_id})")
     print(f"  Ad Squad  : {squad_id} | {bid_strategy} ${bid_usd} | LEAD_GENERATION")
-    print(f"  Ad        : {ad_name} | {ad_format}")
+    if ad_format == "INSTANT_FORM":
+        print(f"  Form      : {result.get('form_name')} ({result.get('form_id')})")
+    else:
+        print(f"  Landing   : {result.get('final_url')}")
+        print(f"  Pixel     : Qoyod Self Service Pixel ({SNAPCHAT_PIXEL_ID})")
+    print(f"  Ad        : {ad_name}")
     return result
 
 

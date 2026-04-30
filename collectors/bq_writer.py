@@ -20,7 +20,7 @@ load_dotenv(override=True)   # always prefer .env over stale system env vars
 
 PROJECT_ID = os.getenv("BQ_PROJECT_ID")
 DATASET    = os.getenv("BQ_DATASET", "qoyod_marketing")
-LOCATION   = os.getenv("BQ_LOCATION", "europe-west1")
+LOCATION   = os.getenv("BQ_LOCATION", "me-central1")
 
 # Thresholds pulled from the central config — see config.py
 try:

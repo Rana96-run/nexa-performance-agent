@@ -87,6 +87,13 @@ def _validate_audience(audience: str, parts: list[str]) -> str:
                     f"Retargeting campaigns must not contain 'Prospecting' in the name. "
                     f"Got name parts: {parts}"
                 )
+    # Reject any audience not in the approved set
+    if audience not in _VALID_AUDIENCES:
+        raise ValueError(
+            f"'{audience}' is not a valid audience. "
+            f"Must be one of: {sorted(_VALID_AUDIENCES)}. "
+            f"Got name parts: {parts}"
+        )
     return audience
 
 

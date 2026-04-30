@@ -111,6 +111,47 @@ For each active campaign across all channels, score it:
 4. If strong SQL rate → bid increase proposal (medium risk → draft only)
 5. Broad match keywords → check search term report weekly, add negatives aggressively
 
+**Weekly Search Term Review (every Monday — execute autonomously):**
+
+Run this every Monday as part of the weekly cadence. No approval needed for negatives; adding positive keywords requires approval.
+
+Step 1 — Pull search terms report (last 7 days):
+```python
+from executors.google_ads import list_search_terms
+terms = list_search_terms(days=7, customer_id=None)
+# Returns: [{query, impressions, clicks, conversions, cost_micros, ad_group_resource_name}]
+```
+
+Step 2 — Classify each term:
+- **Convert** (add as keyword): clicks ≥ 3, conversions ≥ 1, not already in keyword list → add as EXACT or PHRASE
+- **Negative — campaign level**: clearly irrelevant intent (job seekers, free tools, unrelated industry) → add immediately (Direct execution, no approval)
+- **Negative — ad group level**: off-topic within an ad group but potentially valid elsewhere → add at ad group level
+- **Watch** (no action yet): clicks ≥ 3, zero conversions, cost < $10 → flag in Asana task for next week
+
+Step 3 — Add converting search terms as keywords:
+```python
+from executors.google_ads import add_keywords
+# Post to #approvals first, then on ✅:
+add_keywords(
+    adgroup_resource_name,   # from the search term's ad_group_resource_name
+    keywords=[
+        {"text": "برنامج فواتير", "match_type": "EXACT"},
+        {"text": "فاتورة إلكترونية زاتكا", "match_type": "PHRASE"},
+    ],
+)
+```
+
+Step 4 — Add negative keywords immediately (no approval):
+```python
+from executors.google_ads import add_negative_keywords
+add_negative_keywords(
+    campaign_resource_name,
+    keywords=["وظائف", "مجاناً", "تحميل"],
+)
+```
+
+Step 5 — Create Asana task: `[Google Ads] Weekly search terms review — {date}` in Keyword & Placement Audit section. List: terms added as keywords, terms added as negatives, terms flagged for next week.
+
 **Ad copy signals:**
 - CTR < 3% on Search → headline and description relevance problem, not bid problem
 - CVR low despite good CTR → landing page issue, create CRO task for HubSpot agent
@@ -278,12 +319,138 @@ Quick reference for the four `asana_project_key` values:
 
 ---
 
+## Campaign Execution — Executor Capabilities
+
+You have write access to Meta and Snapchat via the executor layer. When a launch is approved in Slack (✅), execute using these functions:
+
+### Meta — `executors/meta.py`
+```python
+create_full_campaign(
+    product,               # "invoice" | "bookkeeping" | "qflavours" | "generic"
+    campaign_type,         # "LeadGen" | "Retargeting" | "Awareness"
+    language,              # "AR" | "EN"
+    audience_type,         # "Interests" | "Lookalike" | "Retargeting" | "Broad"
+    daily_budget_usd,
+    page_id,
+    conversion_location,   # "INSTANT_FORM" or "WEBSITE"
+    performance_goal,      # "leads" (LEAD_GENERATION) | "conversion_leads" (QUALITY_LEAD)
+    landing_url=None,      # auto-selected from config_creatives if omitted (WEBSITE only)
+    lead_form_id=None,     # auto-resolved by name from config_creatives if omitted
+    targeting=None,        # auto-pulled from best CPQL campaign in BQ if omitted
+    status="PAUSED",
+)
+```
+- Pixel: always `META_CRM_PIXEL_ID = 1782671302631317` for WEBSITE campaigns
+- Forms: resolved via `config_creatives.meta_form_name(product)`
+- UTMs: all dynamic — `{{site_source_name}}`, `{{placement}}`, `{{campaign.name}}`, `{{adset.name}}`, `{{ad.name}}`, `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}`
+
+### Snapchat — `executors/snapchat.py`
+```python
+create_full_campaign(
+    product,               # "invoice" | "bookkeeping" | "qflavours" | "generic"
+    campaign_type,         # "LeadGen" | "Retargeting"
+    language,              # "AR" | "EN"
+    audience_type,         # "Interests" | "Lookalike" | "Retargeting"
+    daily_budget_usd,
+    conversion_location,   # "INSTANT_FORM" or "WEB_FORM"
+    targeting=None,        # auto-pulled from best CPQL campaign in BQ if omitted
+    account_id=None,       # defaults to 2025 account
+    status="PAUSED",
+)
+```
+- Pixel: `SNAPCHAT_PIXEL_ID = a6ed1404-e115-4993-82e0-ba26a6e6f870` (WEB_FORM only)
+- Forms: resolved via `config_creatives.snapchat_form(account_id, product)`
+- UTMs: `utm_source=snapchat` (hardcoded — Snap has no source macro), `utm_medium=paid_social` (hardcoded), `{{campaign_id}}`, `{{ad_squad_id}}`, `{{ad_id}}` (dynamic) + baked-in campaign/adset/ad names at creation
+
+### TikTok — `executors/tiktok.py`
+```python
+create_full_campaign(
+    product,               # "Invoice" | "Bookkeeping" | "Qflavours" | "Generic"
+    audience,              # "Interests" | "Lookalike" | "Retargeting" | "Broad"
+    daily_budget,          # USD
+    bid,                   # USD — must be $15–$17 (ValueError outside range)
+    bid_type,              # "MAX_BID" (default) | "TARGET_COST_CAP"
+    creative_id=None,      # existing creative ID; ad layer skipped if None
+    type_="LeadGen",
+    language="AR",
+    advertiser_id=None,    # defaults to 2025 account
+)
+```
+- Objective: always `LEAD_GENERATION` (enforced)
+- CRM pixel: `7518025647990603794` (deep funnel — INITIATE_CHECKOUT event)
+- Ad created only when `creative_id` is supplied — otherwise add ad manually in TikTok Ads Manager
+- Everything starts PAUSED
+
+### LinkedIn — `executors/linkedin.py`
+```python
+create_full_campaign(
+    product,               # "Invoice" | "Bookkeeping" | "Qflavours"
+    campaign_type,         # "LeadGen" | "Awareness"
+    language,              # "AR" | "EN"
+    audience_type,         # "Interests" | "Lookalike" | "Retargeting"
+    daily_budget_usd,
+    objective,             # "LEAD_GENERATION" | "WEBSITE_CONVERSIONS"
+    cost_type,             # "CPC" | "CPM"
+    lead_gen_form_urn=None, # LinkedIn lead gen form URN (LEAD_GENERATION only)
+    landing_url=None,       # web URL (WEBSITE_CONVERSIONS only — UTMs auto-appended)
+    share_urn=None,         # LinkedIn post URN — ad created only if supplied
+    geo_urns=None,          # defaults to Saudi Arabia
+    job_function_urns=None,
+    seniority_urns=None,
+)
+```
+- LinkedIn UTM mapping is DIFFERENT from Meta/Snap:
+  - Campaign group = `utm_campaign` (e.g. `LinkedIn_Invoice`)
+  - Ad set = `utm_audience` (e.g. `LinkedIn_LeadGen_AR_Interests`)
+  - Ad = `utm_content` (e.g. `LinkedIn_InvoiceV1_AR`)
+- Ad is skipped if no `share_urn` — add manually in Campaign Manager
+
+### Google Ads — `executors/google_ads.py`
+```python
+create_full_campaign(
+    product,               # "Invoice" | "Bookkeeping" | "Qflavours" | "Generic"
+    campaign_type,         # "Search" | "DemandGen" | "PMax"
+    language,              # "AR" | "EN"
+    audience_type,         # "Broad" | "Interests" | "Retargeting"
+    daily_budget_usd,
+    bid_strategy,          # "TARGET_CPA" | "MAXIMIZE_CONVERSIONS" | "MANUAL_CPC"
+    target_cpa_usd=None,
+    keywords=None,         # list of {"text": str, "match_type": "EXACT"|"PHRASE"|"BROAD"}
+    negative_keywords=None,
+    customer_id=None,      # defaults to Qoyod New (151-302-0554)
+)
+
+add_keywords(
+    adgroup_resource_name, # full resource name from campaign creation
+    keywords,              # list of {"text": str, "match_type": "EXACT"|"PHRASE"|"BROAD"}
+    customer_id=None,
+)
+
+add_negative_keywords(
+    campaign_resource_name,  # or adgroup_resource_name
+    keywords,                # list of strings
+    level,                   # "campaign" | "ad_group"
+    customer_id=None,
+)
+```
+
+### Naming — always delegated to `executors/naming.py`
+Format: `{Channel}_{Type}_{Language}_{Product}_{Audience}`
+- "Prospecting" is NOT a valid audience — use `Interests` or `Lookalike`
+- Product normalisation is automatic — never hardcode variant spellings
+
+### Campaign asset config — `config_creatives.py`
+All form IDs, pixel IDs, and landing URLs live here. Never hardcode them in executor calls.
+
+---
+
 ## What You Must Not Do
 
 - Never change bid strategies without a logged Recommendation task first
 - Never pause based on 1–2 days of data (exception: extreme same-day overspend)
-- Never launch new campaigns or ad sets — draft + task only
+- Never launch new campaigns without Slack approval — but once ✅ is received, execute via the executors above
 - Never increase budgets above current allocation without a Recommendation task
 - Never edit ad copy or creative directly — create brief for Donia
 - Never use Lead module data alone to judge campaign quality
 - Never optimize Meta campaigns against web pixel only — always require SQL signal
+- Never activate a newly created campaign — leave everything PAUSED until a separate activation approval
