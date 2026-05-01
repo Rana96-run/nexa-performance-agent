@@ -104,6 +104,17 @@ def _run_spike_detector() -> list:
         return []
 
 
+def _check_keyword_approvals():
+    """Check pending keyword approvals from previous nights and execute approved ones."""
+    try:
+        from executors.keyword_approval import check_and_execute_pending
+        result = check_and_execute_pending()
+        print(f"[ops-scheduler] Keyword approvals: {result}")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Keyword approval check failed (non-fatal): {e}")
+
+
 def _run_google_ads_audit() -> list:
     """Daily impression-share, quality-score, and search-terms audit.
     Creates Asana tasks with consolidated recommendations."""
@@ -172,6 +183,9 @@ def _nightly():
     # 3. Spike detector — returns list, folded into summary message.
     spikes = _run_spike_detector()
 
+    # 3b-pre. Check pending keyword approvals from previous nights and execute
+    _check_keyword_approvals()
+
     # 3b. Google Ads daily audit — IS, QS, search terms, keyword auto-pause -> Asana tasks
     audit_tasks = _run_google_ads_audit()
 
@@ -215,8 +229,10 @@ def _run_health_check():
 
 def run():
     schedule.every().day.at("00:00").do(_nightly)   # 03:00 Riyadh = 00:00 UTC
-    # Health check: every morning at 07:00 Riyadh (04:00 UTC) so Amar sees it at start of day
-    schedule.every().day.at("04:00").do(_run_health_check)
+    # Full audit every 6 hours: 03:00 / 09:00 / 15:00 / 21:00 Riyadh
+    # (00:00 / 06:00 / 12:00 / 18:00 UTC)
+    # The 00:00 slot is already covered by _nightly which embeds the startup check.
+    schedule.every(6).hours.do(_run_health_check)
 
     print("=" * 52)
     print("  Qoyod Operational Scheduler — LIVE")
@@ -224,7 +240,7 @@ def run():
     print("  Nightly  03:00 Riyadh (00:00 UTC)")
     print("  Weekly   added Mon nights")
     print("  Monthly  added on 1st of month")
-    print("  Health   07:00 Riyadh (04:00 UTC) — daily")
+    print("  Health   every 6h — Railway, listener, all APIs")
     print("  Manual:  python main.py on_demand")
     print("=" * 52)
 

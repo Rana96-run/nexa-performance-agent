@@ -1,4 +1,9 @@
+import json
+import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
+
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL
@@ -6,11 +11,53 @@ from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, SLACK_CHANNEL_NOTIFY, SLAC
 
 client = WebClient(token=SLACK_BOT_TOKEN)
 
+# ── Pending approval store ────────────────────────────────────────────────────
+# Persists ts → metadata so the events endpoint can look up what to execute.
 
-def post_approval_request(analysis: dict) -> str:
+_PENDING_FILE = Path(os.getenv("DATA_DIR", "/tmp")) / "pending_approvals.json"
+
+
+def _load_pending() -> dict:
+    if _PENDING_FILE.exists():
+        try:
+            return json.loads(_PENDING_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_pending(data: dict):
+    try:
+        _PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PENDING_FILE.write_text(json.dumps(data, indent=2))
+    except Exception as e:
+        print(f"[approval-store] write failed: {e}")
+
+
+def save_pending_approval(ts: str, metadata: dict):
+    """Persist approval message ts + execution metadata for later reaction lookup."""
+    data = _load_pending()
+    data[ts] = {**metadata, "posted_at": datetime.now(timezone.utc).isoformat()}
+    _save_pending(data)
+
+
+def remove_pending_approval(ts: str):
+    """Remove a resolved (approved/rejected) approval entry."""
+    data = _load_pending()
+    data.pop(ts, None)
+    _save_pending(data)
+
+
+def get_pending_approval(ts: str) -> dict | None:
+    return _load_pending().get(ts)
+
+
+def post_approval_request(analysis: dict, execution_metadata: dict | None = None) -> str:
     """
     Post Claude's decisions to Slack for approval — concise, scannable layout.
     Returns the message timestamp (ts) to track approval reaction.
+    execution_metadata: extra data (account_id, campaign_id, etc.) needed to
+    execute the action on approval. Persisted to pending_approvals.json.
     """
     from notifications.quiet import is_quiet, quiet_log
 
@@ -57,8 +104,7 @@ def post_approval_request(analysis: dict) -> str:
             blocks=blocks, text=fallback_text,
         )
         ts = response["ts"]
-        # Pre-add both reactions so the user just clicks an existing reaction
-        # (no need to search for emoji — just click the count)
+        # Pre-add both reactions so the user just clicks an existing one
         for emoji in ("white_check_mark", "x"):
             try:
                 client.reactions_add(
@@ -68,6 +114,17 @@ def post_approval_request(analysis: dict) -> str:
                 )
             except SlackApiError:
                 pass  # reaction already exists or missing scope — non-fatal
+
+        # Persist for the events endpoint to look up on reaction
+        meta = {
+            "action":    decision.get("action", ""),
+            "channel":   decision.get("channel", ""),
+            "campaign":  decision.get("campaign", ""),
+            "reason":    decision.get("reason", ""),
+        }
+        if execution_metadata:
+            meta.update(execution_metadata)
+        save_pending_approval(ts, meta)
         return ts
     except SlackApiError as e:
         print(f"Slack error: {e}")

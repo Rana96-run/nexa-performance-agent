@@ -21,7 +21,7 @@ import os
 from datetime import datetime, date
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, request, send_file, abort
+from flask import Flask, jsonify, redirect, request, send_file, abort, Response
 from collectors.hubspot_webhook import hubspot_bp
 from collectors.zapier_webhook import zapier_bp
 
@@ -420,6 +420,117 @@ def _build_section_for_range(channel_key, start, end, days, project, dataset, bq
         "ad_groups": {"available": False, "note": "adgroups_daily collector pending"},
         "ads":       {"available": False, "note": "ads_daily collector pending"},
     }
+
+
+# ─── Slack Events API ─────────────────────────────────────────────────────────
+
+def _verify_slack_signature(req) -> bool:
+    """Return True if the request has a valid Slack signature."""
+    import hashlib, hmac, time as _time
+    secret = os.getenv("SLACK_SIGNING_SECRET", "")
+    if not secret:
+        return True  # skip verification if not configured (dev mode)
+    ts = req.headers.get("X-Slack-Request-Timestamp", "")
+    sig = req.headers.get("X-Slack-Signature", "")
+    if not ts or not sig:
+        return False
+    if abs(_time.time() - float(ts)) > 300:
+        return False  # replay attack window
+    basestring = f"v0:{ts}:{req.get_data(as_text=True)}"
+    expected   = "v0=" + hmac.new(secret.encode(), basestring.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig)
+
+
+def _handle_reaction(event: dict):
+    """
+    Called in a background thread when a reaction is added to an approval message.
+    Looks up the ts in pending_approvals.json and posts a threaded confirmation.
+    """
+    reaction = event.get("reaction", "")
+    item     = event.get("item", {})
+    msg_ts   = item.get("ts", "")
+    channel  = item.get("channel", "")
+
+    if reaction not in ("white_check_mark", "x"):
+        return
+
+    try:
+        from notifications.slack import get_pending_approval, remove_pending_approval
+        from slack_sdk import WebClient
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
+        wc = WebClient(token=SLACK_BOT_TOKEN)
+        meta = get_pending_approval(msg_ts)
+        if not meta:
+            return  # not one of our approval messages
+
+        action   = meta.get("action", "")
+        camp     = meta.get("campaign", "")
+        ch       = meta.get("channel", "")
+        user     = event.get("user", "")
+
+        if reaction == "white_check_mark":
+            reply = (
+                f"✅ *Approved* by <@{user}>.\n"
+                f"Action: *{action}* · {ch} · `{camp}`\n"
+                f"Asana task updated. Proceed with optimization."
+            )
+            # If there's an Asana task GID, add a comment
+            asana_gid = meta.get("asana_gid", "")
+            if asana_gid:
+                try:
+                    import asana as asana_sdk
+                    cfg = asana_sdk.Configuration()
+                    cfg.access_token = os.getenv("ASANA_ACCESS_TOKEN", "")
+                    asana_client = asana_sdk.ApiClient(cfg)
+                    asana_sdk.StoriesApi(asana_client).create_story_for_task(
+                        asana_gid,
+                        {"data": {"text": f"[Nexa] Approved via #approvals by <@{user}>. Action: {action}"}},
+                    )
+                except Exception as e:
+                    print(f"[events] Asana comment failed: {e}")
+        else:
+            reply = (
+                f"❌ *Rejected* by <@{user}>.\n"
+                f"Action: *{action}* · {ch} · `{camp}` — no changes made."
+            )
+
+        wc.chat_postMessage(
+            channel=SLACK_CHANNEL_APPROVAL,
+            thread_ts=msg_ts,
+            text=reply,
+        )
+        remove_pending_approval(msg_ts)
+        print(f"[events] Approval {reaction} by {user} for {camp[:50]!r}")
+    except Exception as e:
+        print(f"[events] reaction handler error: {e}")
+
+
+@app.route("/slack/events", methods=["POST"])
+def slack_events():
+    """
+    Slack Events API endpoint.
+    1. URL verification (one-time during Events setup)
+    2. reaction_added on approval messages → approve/reject
+    """
+    payload = request.get_json(force=True) or {}
+    event_type = payload.get("type", "")
+
+    # URL verification must respond immediately — skip signature check for this type
+    if event_type == "url_verification":
+        return jsonify({"challenge": payload.get("challenge", "")})
+
+    # All other events require a valid signature
+    if not _verify_slack_signature(request):
+        return jsonify({"error": "invalid signature"}), 403
+
+    if event_type == "event_callback":
+        event = payload.get("event", {})
+        if event.get("type") == "reaction_added":
+            import threading
+            threading.Thread(target=_handle_reaction, args=(event,), daemon=True).start()
+
+    # Always respond 200 immediately (Slack requires < 3s)
+    return Response("", status=200)
 
 
 # ─── Entrypoint ───────────────────────────────────────────────────────────────

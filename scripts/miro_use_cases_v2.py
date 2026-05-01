@@ -127,7 +127,7 @@ USE_CASES = [
         "action":    "1. BQ refresh (10 collectors)\n2. Render HTML (20 sections)\n3. Upload to Drive\n4. Serve via /reports/latest",
         "image":     "07_dashboard.png",
         "result":    "Live dashboard\n4 channels, KPIs, charts,\nUTM tabs, dated archives",
-        "link":      "https://nexa-web-production-c859.up.railway.app/reports/latest",
+        "link":      "https://nexa-performance-agent.up.railway.app/reports/latest",
         "link_label": "open dashboard",
     },
     {

@@ -315,13 +315,13 @@ def _peak_numbers_lines() -> list[str]:
 
     lines = []
     for channel in sorted(by_channel):
-        d = by_channel[channel]
+        d     = by_channel[channel]
         best  = d.get("best",  "—")
         worst = d.get("worst", "—")
-        lines.append(f"  *{channel}*")
-        lines.append(f"    top:   {best}")
-        if best != worst:
-            lines.append(f"    worst: {worst}")
+        if best == worst:
+            lines.append(f"  *{channel}*  {best[:70]}")
+        else:
+            lines.append(f"  *{channel}*  top: {best[:50]}  ·  worst: {worst[:50]}")
     return lines
 
 
@@ -359,7 +359,7 @@ def build_daily_summary_text(spikes: list | None = None,
     riyadh = timezone(timedelta(hours=3))
     today_str = datetime.now(riyadh).strftime("%d %b %Y")
     domain = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
-              or "nexa-web-production-c859.up.railway.app")
+              or os.getenv("APP_DOMAIN", "nexa-performance-agent.up.railway.app"))
     url = f"https://{domain}/paid-performance/latest"
 
     counts = _asana_task_counts()
@@ -385,10 +385,8 @@ def build_daily_summary_text(spikes: list | None = None,
         lines.append("*Performance alerts vs 7d avg:*")
         lines.extend(spike_lines)
 
-    lines.append(f"Asana tasks created today: {counts['created_today']}")
-    if counts["pending_by_project"]:
-        for proj, n in counts["pending_by_project"]:
-            lines.append(f"  • {proj}: {n} pending")
+    total_pending = sum(n for _, n in counts["pending_by_project"])
+    lines.append(f"Asana: {counts['created_today']} created  ·  {total_pending} pending")
 
     return "\n".join(lines)
 

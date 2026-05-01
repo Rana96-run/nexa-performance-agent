@@ -329,7 +329,7 @@ def render_dashboard_preview(out_path: Path) -> Path:
     d.rounded_rectangle([(80, 8), (W - 16, 28)], radius=10, fill="#ffffff",
                          outline="#cbd5e1", width=1)
     d.text((90, 11),
-            "https://nexa-web-production-c859.up.railway.app/reports/latest",
+            "https://nexa-performance-agent.up.railway.app/reports/latest",
             font=_font(11), fill="#0f172a")
 
     # Title
@@ -530,7 +530,7 @@ def render_all() -> dict[str, Path]:
             "  • Meta       — $4,466  · 131 leads · CPL $34 · CPQL $86\n"
             "  • Snapchat   — $1,750  · 65 leads  · CPL $27 · CPQL $80\n\n"
             "14 tasks created. 2 anomalies detected. See dashboard:\n"
-            "https://nexa-web-production-c859.up.railway.app/reports/latest\n\n"
+            "https://nexa-performance-agent.up.railway.app/reports/latest\n\n"
             "— Nexa (auto-generated; reply to opt out)"
         ),
         out_path=OUT / "08_email.png",

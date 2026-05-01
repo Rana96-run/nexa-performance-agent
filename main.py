@@ -379,7 +379,7 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
     today_str = date.today().strftime("%d %b %Y")
     emoji    = CADENCE_EMOJI.get(cadence, "📋")
     domain   = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
-                or "nexa-web-production-c859.up.railway.app")
+                or os.getenv("APP_DOMAIN", "nexa-performance-agent.up.railway.app"))
     url      = f"https://{domain}/paid-performance/latest"
 
     lines = [
@@ -717,13 +717,13 @@ def execute_channel_action(decision: dict):
     if action.startswith("pause"):
         if "google" in channel:
             if "keyword" in entity and notes:
-                gads_exec.pause_keyword(notes)
+                gads_exec.set_keyword_status(notes, "PAUSED")
                 print(f"✅ Paused Google Ads keyword: {notes}")
             elif "ad" in entity and notes:
-                gads_exec.pause_ad(notes)
+                gads_exec.set_ad_status(notes, "PAUSED")
                 print(f"✅ Paused Google Ads ad: {notes}")
         elif "meta" in channel and notes:
-            meta_exec.pause_ad(notes)
+            meta_exec.set_ad_status(notes, "PAUSED")
             print(f"✅ Paused Meta ad: {notes}")
     else:
         print(f"Action '{action}' approved — Asana task is the execution record.")

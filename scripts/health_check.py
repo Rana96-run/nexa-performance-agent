@@ -181,18 +181,99 @@ def check_hubspot_webhook() -> tuple[bool, str]:
         return False, f"HubSpot webhook: {e}"
 
 
+def check_railway_deployment() -> tuple[bool, str]:
+    """
+    Verify the Railway deployment is healthy and GitHub source is connected.
+    Uses Railway's GraphQL API (requires RAILWAY_API_TOKEN env var).
+    Falls back to checking the /health endpoint age if token not available.
+    """
+    import requests
+    token = os.getenv("RAILWAY_API_TOKEN", "")
+    service_id = os.getenv("RAILWAY_SERVICE_ID", "")
+
+    if token and service_id:
+        try:
+            query = """
+            query($serviceId: String!) {
+              deployments(input: { serviceId: $serviceId }, first: 1) {
+                edges { node { status createdAt url } }
+              }
+            }
+            """
+            r = requests.post(
+                "https://backboard.railway.app/graphql/v2",
+                json={"query": query, "variables": {"serviceId": service_id}},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            if r.status_code != 200:
+                return False, f"Railway API -> HTTP {r.status_code}"
+            edges = r.json().get("data", {}).get("deployments", {}).get("edges", [])
+            if not edges:
+                return False, "Railway: no deployments found"
+            latest = edges[0]["node"]
+            status = latest.get("status", "UNKNOWN")
+            if status in ("SUCCESS", "ACTIVE"):
+                return True, f"Railway deployment -> {status}"
+            return False, f"Railway deployment -> {status} (check dashboard)"
+        except Exception as e:
+            return False, f"Railway API error: {e}"
+
+    # Fallback: just verify the app responds (Flask check already does this,
+    # but re-check here for a Railway-specific label in the report)
+    try:
+        r = requests.get(f"{BASE_URL}/health", timeout=10)
+        if r.status_code == 200:
+            return True, f"Railway app reachable (no API token for full check)"
+        return False, f"Railway app unreachable -> HTTP {r.status_code}"
+    except Exception as e:
+        return False, f"Railway app unreachable: {e}"
+
+
+def check_slack_listener() -> tuple[bool, str]:
+    """
+    Verify the Slack listener is alive by checking its log file for a recent
+    heartbeat (last write within 3 minutes). Falls back to process table.
+    """
+    import subprocess, time as _time
+    log_candidates = [
+        Path("logs/slack-listener.log"),
+        Path("/app/logs/slack-listener.log"),
+    ]
+    for log_path in log_candidates:
+        if log_path.exists():
+            age_s = _time.time() - log_path.stat().st_mtime
+            if age_s < 180:
+                return True, f"Slack listener log updated {int(age_s)}s ago"
+            return False, f"Slack listener log stale — last update {int(age_s//60)}m ago (process may be down)"
+
+    # Fallback: look for the process
+    try:
+        out = subprocess.check_output(
+            ["pgrep", "-f", "slack_listener"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if out:
+            return True, f"Slack listener process running (pid {out.split()[0]})"
+        return False, "Slack listener process NOT found — run: python slack_listener.py"
+    except Exception:
+        return False, "Could not verify Slack listener (pgrep unavailable)"
+
+
 # ─── Runner ────────────────────────────────────────────────────────────────────
 
 CHECKS = [
-    ("Flask",             check_flask),
-    ("HubSpot API",       check_hubspot),
-    ("BigQuery",          check_bigquery),
-    ("Google Ads",        check_google_ads),
-    ("Meta Ads",          check_meta),
-    ("Slack",             check_slack),
-    ("Asana",             check_asana),
-    ("Zapier webhook",    check_zapier_webhook),
-    ("HubSpot webhook",   check_hubspot_webhook),
+    ("Railway deployment", check_railway_deployment),
+    ("Slack listener",     check_slack_listener),
+    ("Flask",              check_flask),
+    ("HubSpot API",        check_hubspot),
+    ("BigQuery",           check_bigquery),
+    ("Google Ads",         check_google_ads),
+    ("Meta Ads",           check_meta),
+    ("Slack",              check_slack),
+    ("Asana",              check_asana),
+    ("Zapier webhook",     check_zapier_webhook),
+    ("HubSpot webhook",    check_hubspot_webhook),
 ]
 
 

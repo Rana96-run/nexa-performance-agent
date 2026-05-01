@@ -477,8 +477,14 @@ def _send_approval_requests(findings: list) -> None:
                 "confidence": f"qual rate {f.get('qual_rate', 0):.0f}%",
             }
         }
+        execution_metadata = {
+            "account_id":  f.get("account_id", ""),
+            "campaign_id": f.get("campaign_id", ""),
+            "asana_gid":   f.get("asana_gid",  ""),
+            "cpl":         cpl_str,
+        }
         try:
-            post_approval_request(analysis)
+            post_approval_request(analysis, execution_metadata=execution_metadata)
             print(f"[health-tasks] approval sent: {f.get('campaign', '')[:50]}")
         except Exception as e:
             print(f"[health-tasks] approval post failed: {e}")
