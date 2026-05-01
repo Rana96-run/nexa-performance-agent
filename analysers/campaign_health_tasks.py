@@ -462,6 +462,13 @@ def _send_approval_requests(findings: list) -> None:
         return
 
     for f in findings:
+        # Skip if there are no SQLs and no junk-leads flag — CPQL=N/A means
+        # we can't make a reliable optimize decision; don't create noise.
+        if not f.get("cpql") and f.get("qual_rate", 0) == 0 and not f.get("junk_leads"):
+            print(f"[health-tasks] approval skipped (no SQL data): "
+                  f"{f.get('campaign', '')[:60]}")
+            continue
+
         cpql_str = f"${f['cpql']:.2f}" if f.get("cpql") else "N/A"
         cpl_str  = f"${f['cpl']:.2f}"  if f.get("cpl")  else "N/A"
         tag      = "JUNK-LEADS" if f.get("junk_leads") else f["action"].upper()

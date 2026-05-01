@@ -489,16 +489,22 @@ def run_cadence(cadence: str, force: bool = False):
             created += 1
     log.info(f"Asana batch complete: {created}/{len(tasks)} tasks created.")
 
-    # 6. Post ONE combined Slack summary to notify channel
-    summary_text = _build_slack_summary(cadence, results, tasks, approvals)
-    send_summary(
-        subject=f"{cadence.title()} check | {today}",
-        body_text=summary_text,
-        event_type={"daily": "daily_summary", "weekly": "weekly_review",
-                    "monthly": "monthly_review", "quarterly": "monthly_review",
-                    "on_demand": "daily_summary"}.get(cadence, "daily_summary"),
-        meta={"Cadence": cadence, "Tasks": created, "Roles": len(results)},
-    )
+    # 6. Post Slack summary.
+    #    Daily cadence: operational_scheduler._post_report_ready() owns the channel
+    #    after the nightly cycle finishes — it has spike data, health findings, and
+    #    audit tasks that run_cadence() doesn't see.  Posting here too would flood
+    #    the channel with duplicates.  Non-daily cadences (weekly, monthly, quarterly)
+    #    still post here because _post_report_ready() is not called for them.
+    if cadence != "daily":
+        summary_text = _build_slack_summary(cadence, results, tasks, approvals)
+        send_summary(
+            subject=f"{cadence.title()} check | {today}",
+            body_text=summary_text,
+            event_type={"weekly": "weekly_review",
+                        "monthly": "monthly_review", "quarterly": "monthly_review",
+                        "on_demand": "daily_summary"}.get(cadence, "daily_summary"),
+            meta={"Cadence": cadence, "Tasks": created, "Roles": len(results)},
+        )
 
     # 6b. Generate the rendered daily report (Markdown -> HTML).
     #     Saved to reports/<date>.html + reports/latest.html so the team
@@ -520,28 +526,6 @@ def run_cadence(cadence: str, force: bool = False):
         log.info(f"Daily report rendered -> {path}")
     except Exception as e:
         log.warning(f"Daily report generation failed (non-fatal): {e}")
-
-    # 6c. Follow-up Slack message: task breakdown by category + #approvals reference.
-    #     Matches CLAUDE.md format: recommendations referencing Asana + #approvals.
-    try:
-        from notifications.daily_summary import build_recommendations_text
-        from notifications.notify import post_to_slack
-        # Build minimal findings from role results for build_recommendations_text()
-        findings = [
-            {
-                "action":     (res.get("decision") or {}).get("action", ""),
-                "junk_leads": "junk" in str(
-                    (res.get("decision") or {}).get("decision", "")
-                ).lower(),
-            }
-            for res in results
-        ]
-        rec_text = build_recommendations_text(findings)
-        if rec_text:
-            post_to_slack(rec_text, channel=SLACK_CHANNEL_NOTIFY)
-            log.info("Follow-up recommendations message posted to Slack.")
-    except Exception as e:
-        log.warning(f"Follow-up Slack message skipped (non-fatal): {e}")
 
     # 7. Handle high-confidence channel actions -> approval channel
     for res in approvals:
