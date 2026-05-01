@@ -448,6 +448,61 @@ def _verify_slack_signature(raw_body: bytes, headers) -> bool:
     return _hmac.compare_digest(expected, sig)
 
 
+def _handle_reaction(event: dict):
+    """
+    Called in a background thread when ✅ or ❌ is added to an approval message.
+    Looks up the ts in pending_approvals.json, executes if approved, then replies in thread.
+    """
+    reaction = event.get("reaction", "")
+    item     = event.get("item", {})
+    msg_ts   = item.get("ts", "")
+
+    if reaction not in ("white_check_mark", "x"):
+        return
+
+    try:
+        from notifications.slack import get_pending_approval, remove_pending_approval
+        from slack_sdk import WebClient
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
+        wc   = WebClient(token=SLACK_BOT_TOKEN)
+        meta = get_pending_approval(msg_ts)
+        if not meta:
+            return  # not one of our messages
+
+        action = meta.get("action", "")
+        camp   = meta.get("campaign", "") or ", ".join(meta.get("campaigns", [])[:3])
+        user   = event.get("user", "")
+
+        if reaction == "white_check_mark":
+            exec_result = _execute_approved_action(meta)
+            asana_gid   = meta.get("asana_gid", "")
+            if asana_gid:
+                try:
+                    import asana as asana_sdk
+                    cfg = asana_sdk.Configuration()
+                    cfg.access_token = os.getenv("ASANA_ACCESS_TOKEN", "")
+                    ac  = asana_sdk.ApiClient(cfg)
+                    asana_sdk.StoriesApi(ac).create_story_for_task(
+                        asana_gid,
+                        {"data": {"text": f"[Nexa] Approved by <@{user}>. Result: {exec_result}"}},
+                    )
+                except Exception as e:
+                    print(f"[events] Asana comment failed: {e}")
+            reply = f"✅ *Approved* by <@{user}>\n{exec_result}"
+        else:
+            reply = f"❌ *Rejected* by <@{user}>\n`{camp}` — no changes made."
+
+        wc.chat_postMessage(
+            channel=SLACK_CHANNEL_APPROVAL,
+            thread_ts=msg_ts,
+            text=reply,
+        )
+        remove_pending_approval(msg_ts)
+        print(f"[events] Reaction '{reaction}' by {user} for {camp[:50]!r}")
+    except Exception as e:
+        print(f"[events] reaction handler error: {e}")
+
+
 def _execute_approved_action(meta: dict) -> str:
     """
     Execute a scale or pause that was approved via yes/no reply.
@@ -595,10 +650,9 @@ def slack_events():
         event      = payload.get("event", {})
         event_kind = event.get("type", "")
 
-        # yes/no thread replies on approval messages
-        if event_kind == "message" and not event.get("bot_id"):
+        if event_kind == "reaction_added":
             import threading
-            threading.Thread(target=_handle_thread_reply, args=(event,), daemon=True).start()
+            threading.Thread(target=_handle_reaction, args=(event,), daemon=True).start()
 
     # Always respond 200 immediately (Slack requires < 3s)
     return Response("", status=200)

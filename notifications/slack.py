@@ -79,7 +79,7 @@ def post_action_approval(finding: dict, avg_spend: float | None = None) -> str |
             f"CPQL {cpql_str}  ·  CPL {cpl_str}  ·  qual rate {qual_str}{budget_line}\n"
             f"Both CPQL and CPL are in the scale zone and qual rate is healthy."
         )
-        reply_hint = "Reply *yes* to increase budget +25%, or *no* to skip."
+        reply_hint = "React :white_check_mark: to increase budget +25%, or :x: to skip."
     else:
         icon  = ":red_circle:"
         title = f"{icon} *Pause approval needed*"
@@ -88,7 +88,7 @@ def post_action_approval(finding: dict, avg_spend: float | None = None) -> str |
             f"CPQL {cpql_str}  ·  CPL {cpl_str}  ·  qual rate {qual_str}\n"
             f"Running 14+ days with CPQL above critical threshold."
         )
-        reply_hint = "Reply *yes* to pause this campaign, or *no* to skip."
+        reply_hint = "React :white_check_mark: to pause this campaign, or :x: to skip."
 
     full_text = f"{title}\n{body}\n{reply_hint}"
 
@@ -110,6 +110,11 @@ def post_action_approval(finding: dict, avg_spend: float | None = None) -> str |
             text=full_text,
         )
         ts = response["ts"]
+        for emoji in ("white_check_mark", "x"):
+            try:
+                client.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)
+            except SlackApiError:
+                pass
         save_pending_approval(ts, {
             "action":      action,
             "channel":     channel,
@@ -240,7 +245,7 @@ def post_approval_digest(findings: list[dict]) -> str | None:
         )
 
     body = "\n".join(rows)
-    footer = "Tasks created in Asana. Reply *yes* to acknowledge or add a comment to discuss."
+    footer = "Tasks created in Asana. React :white_check_mark: to acknowledge or :x: to dismiss."
     full_text = f"{header}\n{body}\n{footer}"
 
     if is_quiet():
