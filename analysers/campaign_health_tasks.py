@@ -452,49 +452,33 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
 
 def _send_approval_requests(findings: list) -> None:
     """
-    Post one approval request per finding to the Slack approval channel.
-    Non-blocking — does not wait for reaction.
+    Post ONE digest approval message for all findings to #approvals.
+    Findings with no SQL data (CPQL=N/A, qual_rate=0, no junk flag) are silently
+    dropped — no basis for a decision.
     """
     try:
-        from notifications.slack import post_approval_request
+        from notifications.slack import post_approval_digest
     except Exception as e:
         print(f"[health-tasks] approval import failed: {e}")
         return
 
-    for f in findings:
-        # Skip if there are no SQLs and no junk-leads flag — CPQL=N/A means
-        # we can't make a reliable optimize decision; don't create noise.
-        if not f.get("cpql") and f.get("qual_rate", 0) == 0 and not f.get("junk_leads"):
-            print(f"[health-tasks] approval skipped (no SQL data): "
-                  f"{f.get('campaign', '')[:60]}")
-            continue
+    # Filter out no-SQL findings
+    actionable = [
+        f for f in findings
+        if f.get("cpql") or f.get("qual_rate", 0) > 0 or f.get("junk_leads")
+    ]
+    skipped = len(findings) - len(actionable)
+    if skipped:
+        print(f"[health-tasks] {skipped} finding(s) skipped (no SQL data)")
+    if not actionable:
+        print("[health-tasks] no actionable findings — skipping approval digest")
+        return
 
-        cpql_str = f"${f['cpql']:.2f}" if f.get("cpql") else "N/A"
-        cpl_str  = f"${f['cpl']:.2f}"  if f.get("cpl")  else "N/A"
-        tag      = "JUNK-LEADS" if f.get("junk_leads") else f["action"].upper()
-        analysis = {
-            "decision": {
-                "action":    tag,
-                "channel":   f.get("channel", ""),
-                "campaign":  f.get("campaign", ""),
-                "kpi":       "CPQL",
-                "value":     cpql_str,
-                "threshold": "",
-                "reason":    f.get("note", "")[:200],
-                "confidence": f"qual rate {f.get('qual_rate', 0):.0f}%",
-            }
-        }
-        execution_metadata = {
-            "account_id":  f.get("account_id", ""),
-            "campaign_id": f.get("campaign_id", ""),
-            "asana_gid":   f.get("asana_gid",  ""),
-            "cpl":         cpl_str,
-        }
-        try:
-            post_approval_request(analysis, execution_metadata=execution_metadata)
-            print(f"[health-tasks] approval sent: {f.get('campaign', '')[:50]}")
-        except Exception as e:
-            print(f"[health-tasks] approval post failed: {e}")
+    try:
+        ts = post_approval_digest(actionable)
+        print(f"[health-tasks] approval digest posted ({len(actionable)} findings, ts={ts})")
+    except Exception as e:
+        print(f"[health-tasks] approval digest failed: {e}")
 
 
 if __name__ == "__main__":

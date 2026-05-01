@@ -378,10 +378,10 @@ FROM spend s
 LEFT JOIN channel_map cm  ON cm.channel = s.channel
 LEFT JOIN leads l         ON l.date = s.date
                          AND l.qoyod_source = cm.qoyod_source
-                         AND l.campaign_name = s.campaign_name
+                         AND LOWER(l.campaign_name) = LOWER(s.campaign_name)
 LEFT JOIN deals d         ON d.date = s.date
                          AND d.qoyod_source = cm.qoyod_source
-                         AND d.campaign_name = s.campaign_name
+                         AND LOWER(d.campaign_name) = LOWER(s.campaign_name)
 """
 
 
