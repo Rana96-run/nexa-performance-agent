@@ -385,8 +385,8 @@ def build_daily_summary_text(spikes: list | None = None,
         lines.append("*Performance alerts vs 7d avg:*")
         lines.extend(spike_lines)
 
-    total_pending = sum(n for _, n in counts["pending_by_project"])
-    lines.append(f"Asana: {counts['created_today']} created  ·  {total_pending} pending")
+    total_pending = sum(n for _, n in counts.get("pending_by_project", []))
+    lines.append(f"Asana: {counts.get('created_today', 0)} created  ·  {total_pending} pending")
 
     return "\n".join(lines)
 

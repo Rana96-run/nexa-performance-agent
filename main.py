@@ -394,13 +394,15 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
         headline = _headline_numbers()
         if headline:
             h = headline["total"]
+            cpl_str  = f"${h['cpl']:,}"  if h.get("cpl")  else "—"
+            cpql_str = f"${h['cpql']:,}" if h.get("cpql") else "—"
             lines.append(
                 f"*7-day totals:*  "
                 f"Spend ${h['spend']:,}  ·  "
                 f"Leads {h['leads']}  ·  "
                 f"SQLs {h['qual']}  ·  "
-                f"CPL ${h['cpl']}  ·  "
-                f"CPQL ${h['cpql']}"
+                f"CPL {cpl_str}  ·  "
+                f"CPQL {cpql_str}"
             )
         peak_lines = _peak_numbers_lines()
         if peak_lines:
