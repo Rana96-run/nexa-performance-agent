@@ -123,12 +123,12 @@ _CATEGORY_PATTERNS: list[tuple[str, str]] = [
 
 _CATEGORY_ORDER = ["Scale", "Pause", "Drill-down", "Optimize", "Junk Leads", "Awareness"]
 _CATEGORY_ICON  = {
-    "Scale":      ":rocket:",
-    "Pause":      ":octagonal_sign:",
-    "Drill-down": ":microscope:",
-    "Optimize":   ":mag:",
-    "Junk Leads": ":warning:",
-    "Awareness":  ":eyes:",
+    "Scale":      ":large_green_circle:",
+    "Pause":      ":red_circle:",
+    "Drill-down": ":large_orange_circle:",
+    "Optimize":   ":large_blue_circle:",
+    "Junk Leads": ":large_yellow_circle:",
+    "Awareness":  ":white_circle:",
 }
 
 

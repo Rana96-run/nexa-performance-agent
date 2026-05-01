@@ -229,7 +229,9 @@ def audit_search_terms(days: int = 30) -> dict:
         search_term_view.search_term,
         search_term_view.status,
         ad_group.name,
+        ad_group.resource_name,
         campaign.name,
+        campaign.resource_name,
         customer.currency_code,
         metrics.cost_micros,
         metrics.conversions,
@@ -257,26 +259,32 @@ def audit_search_terms(days: int = 30) -> dict:
             # 3a. Converting search terms NOT yet in the keyword list -> add
             if conv >= EXPANSION_MIN_CONV and status not in ("ADDED",):
                 add_kw.append({
-                    "channel":  "google_ads",
-                    "campaign": r.campaign.name,
-                    "ad_group": r.ad_group.name,
-                    "term":     term,
-                    "spend":    round(spend, 2),
-                    "clicks":   int(r.metrics.clicks),
-                    "conv":     conv,
-                    "status":   status,
-                    "cpa":      round(spend / conv, 0) if conv else None,
+                    "channel":           "google_ads",
+                    "customer_id":       cid,
+                    "campaign":          r.campaign.name,
+                    "campaign_resource": r.campaign.resource_name,
+                    "ad_group":          r.ad_group.name,
+                    "ad_group_resource": r.ad_group.resource_name,
+                    "term":              term,
+                    "spend":             round(spend, 2),
+                    "clicks":            int(r.metrics.clicks),
+                    "conv":              conv,
+                    "status":            status,
+                    "cpa":               round(spend / conv, 0) if conv else None,
                 })
             # 3b. Spending search terms with 0 conv NOT excluded -> negative candidate
             elif spend >= EXPANSION_MIN_SPEND and conv == 0 and status not in ("EXCLUDED",):
                 add_neg.append({
-                    "channel":  "google_ads",
-                    "campaign": r.campaign.name,
-                    "ad_group": r.ad_group.name,
-                    "term":     term,
-                    "spend":    round(spend, 2),
-                    "clicks":   int(r.metrics.clicks),
-                    "status":   status,
+                    "channel":           "google_ads",
+                    "customer_id":       cid,
+                    "campaign":          r.campaign.name,
+                    "campaign_resource": r.campaign.resource_name,
+                    "ad_group":          r.ad_group.name,
+                    "ad_group_resource": r.ad_group.resource_name,
+                    "term":              term,
+                    "spend":             round(spend, 2),
+                    "clicks":            int(r.metrics.clicks),
+                    "status":            status,
                 })
 
     add_kw.sort(key=lambda x: -x["conv"])

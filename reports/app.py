@@ -424,21 +424,28 @@ def _build_section_for_range(channel_key, start, end, days, project, dataset, bq
 
 # ─── Slack Events API ─────────────────────────────────────────────────────────
 
-def _verify_slack_signature(req) -> bool:
-    """Return True if the request has a valid Slack signature."""
-    import hashlib, hmac, time as _time
+def _verify_slack_signature(raw_body: bytes, headers) -> bool:
+    """
+    Verify Slack request signature using the raw body bytes.
+    Must receive raw body BEFORE any json parsing — calling get_json() first
+    consumes the stream and makes get_data() return empty, breaking the HMAC.
+    """
+    import hashlib, hmac as _hmac, time as _time
     secret = os.getenv("SLACK_SIGNING_SECRET", "")
     if not secret:
-        return True  # skip verification if not configured (dev mode)
-    ts = req.headers.get("X-Slack-Request-Timestamp", "")
-    sig = req.headers.get("X-Slack-Signature", "")
+        return True  # no secret configured — skip (dev / first-run)
+    ts  = headers.get("X-Slack-Request-Timestamp", "")
+    sig = headers.get("X-Slack-Signature", "")
     if not ts or not sig:
         return False
-    if abs(_time.time() - float(ts)) > 300:
-        return False  # replay attack window
-    basestring = f"v0:{ts}:{req.get_data(as_text=True)}"
-    expected   = "v0=" + hmac.new(secret.encode(), basestring.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig)
+    try:
+        if abs(_time.time() - float(ts)) > 300:
+            return False  # replay-attack window
+    except ValueError:
+        return False
+    basestring = f"v0:{ts}:{raw_body.decode('utf-8')}".encode()
+    expected   = "v0=" + _hmac.new(secret.encode(), basestring, hashlib.sha256).hexdigest()
+    return _hmac.compare_digest(expected, sig)
 
 
 def _handle_reaction(event: dict):
@@ -512,15 +519,22 @@ def slack_events():
     1. URL verification (one-time during Events setup)
     2. reaction_added on approval messages → approve/reject
     """
-    payload = request.get_json(force=True) or {}
+    import json as _json
+
+    # Read raw body ONCE — must happen before any get_json() call
+    raw_body = request.get_data()
+    try:
+        payload = _json.loads(raw_body) if raw_body else {}
+    except Exception:
+        payload = {}
     event_type = payload.get("type", "")
 
-    # URL verification must respond immediately — skip signature check for this type
+    # URL verification: respond immediately, no signature check needed
     if event_type == "url_verification":
         return jsonify({"challenge": payload.get("challenge", "")})
 
-    # All other events require a valid signature
-    if not _verify_slack_signature(request):
+    # All other events: verify signature using the already-read raw body
+    if not _verify_slack_signature(raw_body, request.headers):
         return jsonify({"error": "invalid signature"}), 403
 
     if event_type == "event_callback":

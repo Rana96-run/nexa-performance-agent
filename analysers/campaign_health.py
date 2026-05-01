@@ -115,8 +115,8 @@ def audit_campaign_health(
         SELECT
           c.channel,
           c.campaign_name,
-          c.account_id,
-          c.status,
+          MAX(c.account_id)                                                     AS account_id,
+          MAX(c.status)                                                         AS status,
           SUM(c.spend)                                                         AS spend,
           SUM(hs.leads)                                                        AS hs_leads,
           SUM(hs.sqls)                                                         AS sqls,
@@ -134,7 +134,7 @@ def audit_campaign_health(
           ON  LOWER(c.campaign_name) = LOWER(d.deal_utm_campaign)
         WHERE c.date >= '{since}'
           {channel_filter}
-        GROUP BY c.channel, c.campaign_name, c.account_id, c.status
+        GROUP BY c.channel, c.campaign_name
         HAVING SUM(c.spend) >= {min_spend}
         ORDER BY cpql ASC NULLS LAST
     """

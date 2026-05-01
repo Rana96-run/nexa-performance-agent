@@ -119,7 +119,13 @@ def route_request(clean_text: str) -> str:
         return handle_past_due()
     elif re.search(r"\breport\b", lower):
         return handle_report(clean_text)
+    elif re.search(r"\b(gtm|go.?to.?market|campaign.?plan|channel.?distribut|budget.?allocat|launch.?plan)\b", lower):
+        # Inter-agent GTM / launch plan → structured brief with BQ data
+        return handle_gtm_brief(clean_text)
     elif re.search(r"\bbrief\b", lower):
+        # Generic brief — check if it's a campaign brief with enough context
+        if re.search(r"\b(budget|channel|audience|product|invoice|bookkeeping|qflavours)\b", lower):
+            return handle_gtm_brief(clean_text)
         return handle_brief(clean_text)
     elif re.search(r"\bscal(e|ing)\b", lower):
         return handle_scaling(clean_text)
@@ -215,6 +221,280 @@ def handle_report(request: str) -> str:
         "report template and state what data is needed if not available."
     )
     return _ask_claude(prompt)
+
+
+def _bq_channel_cpql(days: int = 14) -> list[dict]:
+    """
+    Pull CPQL per channel from BQ (last N days).
+    Returns [{"channel": ..., "spend": ..., "sqls": ..., "cpql": ...}, ...]
+    sorted by cpql ascending (best first).  Returns [] on any error.
+    """
+    try:
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+        client = get_client()
+        rows = list(client.query(f"""
+            WITH hs AS (
+              SELECT date, lead_utm_campaign, SUM(leads_qualified) AS sqls
+              FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+              GROUP BY date, lead_utm_campaign
+            )
+            SELECT
+              c.channel,
+              ROUND(SUM(c.spend), 0)  AS spend,
+              SUM(hs.sqls)            AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)), 0) AS cpql
+            FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
+            LEFT JOIN hs ON c.date = hs.date
+                        AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+            WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days} DAY)
+              AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+            GROUP BY c.channel
+            HAVING SUM(c.spend) >= 50
+            ORDER BY cpql ASC NULLS LAST
+        """).result())
+        return [
+            {
+                "channel": r.channel,
+                "spend":   int(r.spend or 0),
+                "sqls":    int(r.sqls  or 0),
+                "cpql":    int(r.cpql)  if r.cpql is not None else None,
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[listener] BQ channel CPQL fetch failed: {e}")
+        return []
+
+
+# Channel defaults (used when BQ data is unavailable)
+_CHANNEL_DEFAULTS = [
+    {"channel": "google_ads",    "pct": 35, "ad_type": "Search"},
+    {"channel": "meta",          "pct": 30, "ad_type": "LeadGen"},
+    {"channel": "snapchat",      "pct": 15, "ad_type": "LeadGen"},
+    {"channel": "linkedin",      "pct": 12, "ad_type": "LeadGen"},
+    {"channel": "tiktok",        "pct":  8, "ad_type": "LeadGen"},
+]
+
+_CHANNEL_DISPLAY = {
+    "google_ads":    "Google Search",
+    "meta":          "Meta",
+    "snapchat":      "Snapchat",
+    "linkedin":      "LinkedIn",
+    "tiktok":        "TikTok",
+    "microsoft_ads": "Microsoft Ads",
+}
+
+_AUDIENCE_SETUP = {
+    "google_ads":    "Broad keywords + Competitor keywords (AR) | Maximize Conversions bidding",
+    "meta":          "Interests → Lookalike 3% → Retargeting | LeadGen form",
+    "snapchat":      "Interests (AR) + Lookalike | Lead Snap Ad",
+    "linkedin":      "Job function + Company size 10-500 | LeadGen form",
+    "tiktok":        "Interests AR + Lookalike | Spark Ad / Lead form",
+    "microsoft_ads": "Broad match + Competitor keywords | Maximize Conversions",
+}
+
+
+def _allocate_budget(total: float, bq_rows: list[dict]) -> list[dict]:
+    """
+    Allocate budget across channels.
+    If BQ data exists: weight inversely by CPQL (better CPQL → more budget).
+    Falls back to _CHANNEL_DEFAULTS if BQ is empty.
+    Returns [{"channel", "display", "pct", "budget", "cpql", "ad_type"}, ...]
+    """
+    if bq_rows:
+        # Only use channels that have CPQL data; cap at 5 channels
+        usable = [r for r in bq_rows if r["cpql"] and r["cpql"] > 0][:5]
+        if usable:
+            # Inverse-CPQL weighting: lower CPQL = higher weight
+            weights = [1 / r["cpql"] for r in usable]
+            total_w = sum(weights)
+            allocs = []
+            for r, w in zip(usable, weights):
+                pct    = round(w / total_w * 100)
+                budget = round(total * pct / 100)
+                ch     = r["channel"]
+                allocs.append({
+                    "channel": ch,
+                    "display": _CHANNEL_DISPLAY.get(ch, ch.title()),
+                    "pct":     pct,
+                    "budget":  budget,
+                    "cpql":    r["cpql"],
+                    "ad_type": "Search" if ch in ("google_ads", "microsoft_ads") else "LeadGen",
+                    "audience": _AUDIENCE_SETUP.get(ch, "—"),
+                })
+            return allocs
+
+    # Fallback: fixed defaults
+    allocs = []
+    for d in _CHANNEL_DEFAULTS:
+        ch = d["channel"]
+        allocs.append({
+            "channel":  ch,
+            "display":  _CHANNEL_DISPLAY.get(ch, ch.title()),
+            "pct":      d["pct"],
+            "budget":   round(total * d["pct"] / 100),
+            "cpql":     None,
+            "ad_type":  d["ad_type"],
+            "audience": _AUDIENCE_SETUP.get(ch, "—"),
+        })
+    return allocs
+
+
+def handle_gtm_brief(request: str) -> str:
+    """
+    Data-driven campaign brief for inter-agent GTM requests.
+
+    Extracts: product, budget, date range, language from the request text.
+    Pulls real CPQL per channel from BQ to allocate budget.
+    Generates campaign names via naming convention.
+    Creates an Asana task with the full brief.
+    """
+    # ── Parse key fields via Claude (lightweight) ─────────────────────────────
+    parse_prompt = (
+        f"Extract from this request (return JSON only, no markdown):\n"
+        f'Request: "{request}"\n\n'
+        f'Return exactly: {{"product": "...", "budget_usd": 0, "start_date": "YYYY-MM-DD", '
+        f'"end_date": "YYYY-MM-DD", "language": "AR|EN|AREN", "objective": "lead_gen|awareness|traffic", '
+        f'"notes": "..."}}\n'
+        f'product: normalize to Invoice/Bookkeeping/Qflavours/General or season name.\n'
+        f'If budget missing use 10000. If dates missing use next 30 days. '
+        f'If language missing use AR. If objective missing use lead_gen.'
+    )
+    try:
+        raw = _ask_claude(parse_prompt)
+        # Strip markdown fences if any
+        raw = re.sub(r"```[a-z]*\n?", "", raw).strip()
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = {}
+
+    product     = parsed.get("product", "Invoice")
+    budget_usd  = float(parsed.get("budget_usd") or 10000)
+    start_date  = parsed.get("start_date", "")
+    end_date    = parsed.get("end_date", "")
+    language    = parsed.get("language", "AR").upper()
+    objective   = parsed.get("objective", "lead_gen")
+    extra_notes = parsed.get("notes", "")
+
+    # Friendly date string
+    date_str = f"{start_date} → {end_date}" if start_date and end_date else "TBD"
+
+    # ── Pull live channel CPQL from BQ ────────────────────────────────────────
+    bq_rows = _bq_channel_cpql(days=14)
+    allocs  = _allocate_budget(budget_usd, bq_rows)
+
+    # ── Build channel distribution block ─────────────────────────────────────
+    icon_map = {"scale": ":large_green_circle:", "ok": ":large_blue_circle:",
+                "warn":  ":large_yellow_circle:", "": ":white_circle:"}
+    ch_lines = []
+    for a in allocs:
+        cpql_str = f" · CPQL ${a['cpql']}" if a["cpql"] else " · no data"
+        ch_lines.append(
+            f"  *{a['display']}*: {a['pct']}% · ${a['budget']:,}{cpql_str}"
+        )
+
+    # ── Generate campaign names (naming convention) ───────────────────────────
+    name_lines = []
+    for a in allocs:
+        ch      = a["channel"]
+        ad_type = a["ad_type"]
+        ch_prefix = {
+            "google_ads":    "Google",
+            "meta":          "Meta",
+            "snapchat":      "Snapchat",
+            "linkedin":      "LinkedIn",
+            "tiktok":        "TikTok",
+            "microsoft_ads": "Microsoft",
+        }.get(ch, ch.title())
+
+        if objective == "awareness":
+            audiences = ["ImpressionShare"]
+        elif ch == "google_ads":
+            audiences = ["Broad"]
+        elif ch == "linkedin":
+            audiences = ["Interests"]
+        else:
+            audiences = ["Interests", "Lookalike", "Retargeting"]
+
+        for aud in audiences:
+            name_lines.append(f"  `{ch_prefix}_{ad_type}_{language}_{product}_{aud}`")
+
+    # ── KPI targets ───────────────────────────────────────────────────────────
+    from config import CPQL_ACCEPTABLE, CPL_ACCEPTABLE, QUAL_RATE_TARGET, ROAS_GOOD
+    kpi_line = (f"CPQL ≤ ${CPQL_ACCEPTABLE:.0f}  ·  CPL ≤ ${CPL_ACCEPTABLE:.0f}  ·  "
+                f"Qual rate ≥ {int(QUAL_RATE_TARGET*100)}%  ·  ROAS ≥ {ROAS_GOOD}")
+
+    # ── Audience setup block ──────────────────────────────────────────────────
+    aud_lines = [f"  *{a['display']}*: {a['audience']}" for a in allocs]
+
+    # ── Compose Slack message ─────────────────────────────────────────────────
+    data_note = "(based on 14d CPQL from BQ)" if bq_rows else "(default allocation — no BQ data)"
+    budget_monthly = f"${budget_usd:,.0f}"
+
+    reply_lines = [
+        f":clipboard: *Campaign Brief — {product} · {language}*",
+        f"*Objective:* {'Lead Generation' if objective == 'lead_gen' else objective.title()}",
+        f"*Total Budget:* {budget_monthly}  ·  *Period:* {date_str}",
+        "",
+        f"*Channel Distribution* {data_note}",
+    ] + ch_lines + [
+        "",
+        "*Audience Setup:*",
+    ] + aud_lines + [
+        "",
+        "*Campaign Names (naming convention):*",
+    ] + name_lines + [
+        "",
+        f"*KPI Targets:*  {kpi_line}",
+    ]
+
+    if extra_notes:
+        reply_lines += ["", f"_Notes from GTM: {extra_notes}_"]
+
+    # ── Creative performance: pull best/worst across all campaigns for this product
+    try:
+        from analysers.creative_performance import audit_creative_performance, format_creative_slack
+        # Search by product keyword across all campaigns
+        cr = audit_creative_performance(campaign_name=None, days=30)
+        # Filter creatives whose utm_content name contains the product hint
+        product_lower = product.lower()
+        cr["creatives"] = [
+            c for c in cr.get("creatives", [])
+            if product_lower in c["utm_content"].lower()
+        ]
+        # Re-derive best/worst from filtered set
+        if cr["creatives"]:
+            cr["best"]  = sorted(cr["creatives"], key=lambda c: (-c["sqls"], -c["qual_rate"]))[:2]
+            cr["worst"] = sorted(cr["creatives"], key=lambda c: (-c["disquals"], c["qual_rate"]))[:1]
+            from analysers.creative_performance import _build_direction
+            cr["direction"] = _build_direction(cr["best"], cr["worst"], cr["creatives"])
+        creative_block = format_creative_slack(cr)
+        if creative_block:
+            reply_lines += ["", creative_block]
+    except Exception as e:
+        print(f"[listener] creative analysis in brief failed: {e}")
+
+    reply_text = "\n".join(reply_lines)
+
+    # ── Create Asana task with full brief ─────────────────────────────────────
+    try:
+        from executors.asana import create_task
+        asana_body = reply_text.replace("*", "").replace("`", "").replace(":clipboard:", "")
+        asana_body += f"\n\nSource request:\n{request[:500]}"
+        create_task(
+            title=f"Campaign Brief — {product} {language} {date_str}",
+            description=asana_body,
+            project_key="daily_activity",
+            task_type="Recommendation",
+            channel="all",
+            asset_level="campaign",
+            action="launch",
+        )
+        reply_text += "\n\n✅ _Asana task created with full brief._"
+    except Exception as e:
+        reply_text += f"\n\n⚠️ _Asana task creation failed: {e}_"
+
+    return reply_text
 
 
 def handle_brief(request: str) -> str:
@@ -487,7 +767,11 @@ def run():
                 except Exception:
                     pass
 
-                reply = route_request(clean)
+                try:
+                    reply = route_request(clean)
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    reply = f"⚠️ Nexa error: {e}"
                 post_reply(channel, ts, reply)
 
                 try:

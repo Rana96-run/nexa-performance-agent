@@ -134,16 +134,18 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         out.append((f"QS audit ({len(qs_findings)})", gid))
 
     # ── 3. Keyword expansion (add as keyword) ──────────────────────────────
-    add_kw = audit["keyword_expansion"]["add_as_keyword"]
+    add_kw  = audit["keyword_expansion"]["add_as_keyword"]
+    add_neg = audit["keyword_expansion"]["add_as_negative"]
+
     if add_kw:
         body = (f"Daily search-terms audit (last 30d). {len(add_kw)} converting "
                 f"queries are NOT yet in our keyword list.\n\n"
-                f"**Rule:** Queries with ≥1 conversion that triggered our ads but "
-                f"aren't a keyword we bid on -> add as EXACT or PHRASE match.\n\n"
+                f"**Rule:** Queries with >=1 conversion that triggered our ads but "
+                f"aren't a keyword we bid on -> add as EXACT match.\n\n"
                 + _term_table(add_kw[:30], mode="add"))
-        body += ("\n**Action:** Approve the additions and the Media Buyer will "
-                 "create the keyword in the relevant ad group. (Adding new positive "
-                 "keywords is approval-gated; only NEGATIVE adds are direct-execute.)")
+        body += ("\n**Action:** Slack approval request posted to #approvals. "
+                 "React ✅ to execute all additions or ❌ to skip. "
+                 "Negatives execute automatically (direct-execute).")
 
         gid = create_task(
             title=f"Google Ads — {len(add_kw)} new keyword candidates from search terms",
@@ -156,17 +158,24 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         )
         out.append((f"keyword expansion ({len(add_kw)})", gid))
 
+    # Post Slack approval for keyword candidates (+ direct-execute negatives)
+    if add_kw or add_neg:
+        try:
+            from executors.keyword_approval import post_keyword_approval
+            post_keyword_approval(add_kw=add_kw, add_neg=add_neg)
+        except Exception as e:
+            print(f"[audit-tasks] keyword approval post failed (non-fatal): {e}")
+
     # ── 4. Negative-keyword candidates ─────────────────────────────────────
-    add_neg = audit["keyword_expansion"]["add_as_negative"]
     if add_neg:
         body = (f"{len(add_neg)} search terms wasted $25+ each with 0 conversions "
                 f"and aren't yet excluded.\n\n"
                 f"**Rule:** Negative-keyword adds for clearly irrelevant queries are "
                 f"DIRECT-EXECUTE (no approval needed) per the Media Buyer playbook.\n\n"
                 + _term_table(add_neg[:50], mode="negative"))
-        body += ("\n**Action:** The agent will add these as negatives on the next "
-                 "nightly run once the executor lands. For now: review and approve "
-                 "in bulk, or add manually via Google Ads UI.")
+        body += ("\n**EXECUTED:** These are being added automatically as EXACT negatives "
+                 "at campaign level via `executors/keyword_approval.py`. "
+                 "No manual action needed — verify in Google Ads UI.")
 
         gid = create_task(
             title=f"Google Ads — Add {len(add_neg)} negative keywords (waste)",
