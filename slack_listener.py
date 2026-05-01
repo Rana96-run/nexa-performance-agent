@@ -467,7 +467,7 @@ def handle_gtm_brief(request: str) -> str:
             cr["best"]  = sorted(cr["creatives"], key=lambda c: (-c["sqls"], -c["qual_rate"]))[:2]
             cr["worst"] = sorted(cr["creatives"], key=lambda c: (-c["disquals"], c["qual_rate"]))[:1]
             from analysers.creative_performance import _build_direction
-            cr["direction"] = _build_direction(cr["best"], cr["worst"], cr["creatives"])
+            cr["direction"] = _build_direction(cr["best"], cr["worst"], "creative")
         creative_block = format_creative_slack(cr)
         if creative_block:
             reply_lines += ["", creative_block]
