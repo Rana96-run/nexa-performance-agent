@@ -52,6 +52,79 @@ def get_pending_approval(ts: str) -> dict | None:
     return _load_pending().get(ts)
 
 
+def post_action_approval(finding: dict, avg_spend: float | None = None) -> str | None:
+    """
+    Post ONE individual approval request for a scale or pause action.
+    Each campaign gets its own message so the user can reply yes/no per campaign.
+    Returns the Slack message ts, or None on failure.
+    """
+    from notifications.quiet import is_quiet, quiet_log
+
+    action   = finding.get("action", "").lower()
+    campaign = finding.get("campaign", "?")
+    channel  = finding.get("channel", "?")
+    cpql_str = f"${finding['cpql']:.0f}" if finding.get("cpql") else "N/A"
+    cpl_str  = f"${finding['cpl']:.0f}"  if finding.get("cpl")  else "N/A"
+    qual_str = f"{finding.get('qual_rate', 0):.0f}%"
+
+    if action == "scale":
+        icon   = ":large_green_circle:"
+        title  = f"{icon} *Scale approval needed*"
+        budget_line = ""
+        if avg_spend:
+            new_b = round(avg_spend * 1.25, 0)
+            budget_line = f"\nBudget: ~${avg_spend:.0f}/day  →  ~${new_b:.0f}/day  (+25%)"
+        body = (
+            f"Campaign: `{campaign}`\n"
+            f"CPQL {cpql_str}  ·  CPL {cpl_str}  ·  qual rate {qual_str}{budget_line}\n"
+            f"Both CPQL and CPL are in the scale zone and qual rate is healthy."
+        )
+        reply_hint = "Reply *yes* to increase budget +25%, or *no* to skip."
+    else:
+        icon  = ":red_circle:"
+        title = f"{icon} *Pause approval needed*"
+        body  = (
+            f"Campaign: `{campaign}`\n"
+            f"CPQL {cpql_str}  ·  CPL {cpl_str}  ·  qual rate {qual_str}\n"
+            f"Running 14+ days with CPQL above critical threshold."
+        )
+        reply_hint = "Reply *yes* to pause this campaign, or *no* to skip."
+
+    full_text = f"{title}\n{body}\n{reply_hint}"
+
+    if is_quiet():
+        quiet_log("action-approval", SLACK_CHANNEL_APPROVAL, full_text)
+        return None
+
+    try:
+        blocks = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": title}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": body}},
+            {"type": "context", "elements": [
+                {"type": "mrkdwn", "text": reply_hint},
+            ]},
+        ]
+        response = client.chat_postMessage(
+            channel=SLACK_CHANNEL_APPROVAL,
+            blocks=blocks,
+            text=full_text,
+        )
+        ts = response["ts"]
+        save_pending_approval(ts, {
+            "action":      action,
+            "channel":     channel,
+            "campaign":    campaign,
+            "campaign_id": finding.get("campaign_id", ""),
+            "account_id":  finding.get("account_id", ""),
+            "new_budget":  round(avg_spend * 1.25, 2) if avg_spend else None,
+            "asana_gid":   finding.get("asana_gid", ""),
+        })
+        return ts
+    except SlackApiError as e:
+        print(f"[action-approval] Slack error: {e}")
+        return None
+
+
 def post_approval_request(analysis: dict, execution_metadata: dict | None = None) -> str:
     """
     Post Claude's decisions to Slack for approval — concise, scannable layout.
@@ -167,7 +240,7 @@ def post_approval_digest(findings: list[dict]) -> str | None:
         )
 
     body = "\n".join(rows)
-    footer = "_Tasks created in Asana. React :white_check_mark: to acknowledge or reply to discuss._"
+    footer = "Tasks created in Asana. Reply *yes* to acknowledge or add a comment to discuss."
     full_text = f"{header}\n{body}\n{footer}"
 
     if is_quiet():
@@ -188,14 +261,8 @@ def post_approval_digest(findings: list[dict]) -> str | None:
             text=full_text,
         )
         ts = response["ts"]
-        try:
-            client.reactions_add(channel=SLACK_CHANNEL_APPROVAL,
-                                 name="white_check_mark", timestamp=ts)
-        except SlackApiError:
-            pass
-        # Persist the digest so reactions still get recorded
         save_pending_approval(ts, {
-            "action":   "digest",
+            "action":    "digest",
             "campaigns": [f.get("campaign", "") for f in findings],
         })
         return ts

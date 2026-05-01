@@ -178,63 +178,52 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
     junk_f       = [f for f in findings if f.get("junk_leads")]
     awareness_f  = [f for f in findings if f.get("is_awareness")]
 
-    # ── 1. Execute scale (+25%) ────────────────────────────────────────────────
+    # ── 1. Scale candidates — send for approval, do NOT auto-execute ─────────────
     if scale_f:
         for f in scale_f:
-            result = _scale_budget(f["channel"], f["campaign"],
-                                   f["account_id"], f.get("campaign_id"))
-            f["exec_result"] = result
-            print(f"[health-tasks] SCALE {f['campaign']}: {result}")
+            avg = _avg_daily_spend(f["channel"], f["campaign"], f["account_id"])
+            f["avg_spend"]  = avg
+            f["new_budget"] = round(avg * (1 + SCALE_PCT), 2) if avg else None
 
         body = (
-            f"Campaign health audit — last {days} days. "
-            f"**EXECUTED: budget +{SCALE_PCT*100:.0f}%**\n"
-            f"Cost: channel source | Leads: HubSpot Lead Module | "
-            f"Evaluation: CPQL first\n\n"
-            f"### Scaled campaigns ({len(scale_f)})\n"
-            + _campaign_table(scale_f, include_exec=True)
+            f"Campaign health audit — last {days} days.\n"
+            f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
+            f"### Scale candidates ({len(scale_f)}) — *awaiting approval*\n"
+            + _campaign_table(scale_f)
+            + "\nApprove in #approvals to execute the +25% budget increase."
         )
         gid = create_task(
-            title=f"EXECUTED: Scaled {len(scale_f)} campaign(s) +{SCALE_PCT*100:.0f}% ({days}d)",
+            title=f"PENDING APPROVAL: Scale {len(scale_f)} campaign(s) +{SCALE_PCT*100:.0f}% ({days}d)",
             description=body,
             project_key="optimization",
-            task_type="Direct Log",
+            task_type="Recommendation",
             channel="general",
             asset_level="campaign",
             action="scale",
         )
-        out.append((f"scale-executed ({len(scale_f)})", gid))
+        out.append((f"scale-pending ({len(scale_f)})", gid))
+        _send_action_approvals(scale_f)
 
-    # ── 2. Execute pause ───────────────────────────────────────────────────────
+    # ── 2. Pause candidates — send for approval, do NOT auto-execute ─────────────
     if pause_f:
-        for f in pause_f:
-            cid = f.get("campaign_id")
-            if cid:
-                result = _pause_campaign_exec(f["channel"], cid, f["account_id"])
-            else:
-                result = "No campaign_id in BQ — pause manually."
-            f["exec_result"] = result
-            print(f"[health-tasks] PAUSE {f['campaign']}: {result}")
-
         body = (
-            f"Campaign health audit — last {days} days. "
-            f"**EXECUTED: campaigns paused (CPQL critical)**\n"
-            f"Cost: channel source | Leads: HubSpot Lead Module | "
-            f"Evaluation: CPQL first\n\n"
-            f"### Paused campaigns ({len(pause_f)})\n"
-            + _campaign_table(pause_f, include_exec=True)
-            + "\nReview these campaigns — fix audience/creative/LP before reactivating."
+            f"Campaign health audit — last {days} days.\n"
+            f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
+            f"### Pause candidates ({len(pause_f)}) — *awaiting approval*\n"
+            + _campaign_table(pause_f)
+            + "\nApprove in #approvals to pause. Fix audience/creative/LP before reactivating."
         )
         gid = create_task(
-            title=f"EXECUTED: Paused {len(pause_f)} campaign(s) — CPQL critical ({days}d)",
+            title=f"PENDING APPROVAL: Pause {len(pause_f)} campaign(s) — CPQL critical ({days}d)",
             description=body,
             project_key="optimization",
-            task_type="Direct Log",
+            task_type="Recommendation",
             channel="general",
             asset_level="campaign",
             action="pause",
         )
-        out.append((f"pause-executed ({len(pause_f)})", gid))
+        out.append((f"pause-pending ({len(pause_f)})", gid))
+        _send_action_approvals(pause_f)
 
     # ── 3. Junk-leads alert ────────────────────────────────────────────────────
     if junk_f:
@@ -450,11 +439,30 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
     return out
 
 
+def _send_action_approvals(findings: list) -> None:
+    """
+    Post ONE individual Slack message per scale/pause finding.
+    Each gets its own yes/no reply thread so approvals are granular.
+    """
+    try:
+        from notifications.slack import post_action_approval
+    except Exception as e:
+        print(f"[health-tasks] approval import failed: {e}")
+        return
+
+    for f in findings:
+        try:
+            avg = f.get("avg_spend")
+            ts  = post_action_approval(f, avg_spend=avg)
+            print(f"[health-tasks] action approval posted: {f.get('campaign','')[:60]} ts={ts}")
+        except Exception as e:
+            print(f"[health-tasks] action approval failed: {e}")
+
+
 def _send_approval_requests(findings: list) -> None:
     """
-    Post ONE digest approval message for all findings to #approvals.
-    Findings with no SQL data (CPQL=N/A, qual_rate=0, no junk flag) are silently
-    dropped — no basis for a decision.
+    Post ONE digest message for optimize/junk/drilldown findings.
+    Findings with no SQL data (CPQL=N/A, qual_rate=0, no junk flag) are dropped.
     """
     try:
         from notifications.slack import post_approval_digest
@@ -462,7 +470,6 @@ def _send_approval_requests(findings: list) -> None:
         print(f"[health-tasks] approval import failed: {e}")
         return
 
-    # Filter out no-SQL findings
     actionable = [
         f for f in findings
         if f.get("cpql") or f.get("qual_rate", 0) > 0 or f.get("junk_leads")
@@ -476,9 +483,9 @@ def _send_approval_requests(findings: list) -> None:
 
     try:
         ts = post_approval_digest(actionable)
-        print(f"[health-tasks] approval digest posted ({len(actionable)} findings, ts={ts})")
+        print(f"[health-tasks] review digest posted ({len(actionable)} findings, ts={ts})")
     except Exception as e:
-        print(f"[health-tasks] approval digest failed: {e}")
+        print(f"[health-tasks] review digest failed: {e}")
 
 
 if __name__ == "__main__":

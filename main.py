@@ -296,54 +296,46 @@ def _build_action_lines(tasks: list, approvals: list) -> list[str]:
     if scale_channels:
         ch_str = ", ".join(scale_channels[:3])
         lines.append(
-            f"  • Scaled {len(scale_channels)} campaign(s) +25% on {ch_str} "
-            f"(CPQL + CPL both in scale zone) — executed"
+            f"  • Scale {len(scale_channels)} campaign(s) +25% on {ch_str} "
+            f"(CPQL + CPL in scale zone) — sent to #approvals"
         )
     if pause_channels:
         ch_str = ", ".join(pause_channels[:3])
         lines.append(
-            f"  • Paused {len(pause_channels)} campaign(s) on {ch_str} "
-            f"(CPQL critical, minimum 14-day window met) — executed"
+            f"  • Pause {len(pause_channels)} campaign(s) on {ch_str} "
+            f"(CPQL critical, 14-day window met) — sent to #approvals"
         )
     if junk_channels:
         lines.append(
-            f"  • {len(junk_channels)} junk-leads alert(s) — "
-            f"low qualification rate despite low CPL"
+            f"  • {len(junk_channels)} junk-leads alert(s): cheap CPL but low qual rate — sent to #approvals"
         )
     if optimize_channels:
-        # deduplicate channels, preserve insertion order
         seen: dict = {}
         for ch in optimize_channels:
             seen[ch] = None
         ch_str = ", ".join(seen)
         lines.append(
-            f"  • Optimization recommendations queued for {ch_str} — "
-            f"review Asana tasks and approve in #approvals"
+            f"  • CPQL investigation needed on {ch_str} — sent to #approvals"
         )
     if kw_paused_count:
         lines.append(
-            f"  • Google Ads: {kw_paused_count} non-converting keyword(s) "
-            f"auto-paused (zero conversions after 14+ days) — executed"
+            f"  • Google Ads: {kw_paused_count} non-converting keyword(s) flagged — sent to #approvals"
         )
     if negatives_count:
         lines.append(
-            f"  • Google Ads: {negatives_count} negative keyword(s) added "
-            f"from weekly search term review — executed"
+            f"  • Google Ads: {negatives_count} negative keyword(s) ready to add — sent to #approvals"
         )
     if is_flagged:
         lines.append(
-            f"  • Google Ads: Impression Share below threshold on "
-            f"{is_flagged} campaign(s) — budget increase task in Asana"
+            f"  • Google Ads: Impression Share low on {is_flagged} campaign(s) — Asana task created"
         )
     if qs_flagged:
         lines.append(
-            f"  • Google Ads: Quality Score below threshold on "
-            f"{qs_flagged} keyword(s) — ad copy improvement task in Asana"
+            f"  • Google Ads: Quality Score issues on {qs_flagged} keyword(s) — Asana task created"
         )
     if kw_expand:
         lines.append(
-            f"  • Google Ads: {kw_expand} search term(s) identified as "
-            f"converting — ready to promote to exact/phrase match keywords"
+            f"  • Google Ads: {kw_expand} converting search term(s) ready to promote to keywords"
         )
 
     # Any approval-pending actions not covered above

@@ -169,30 +169,64 @@ def _extract_n(label: str) -> str:
     return ""
 
 
+def _overdue_task_count() -> int:
+    """Return count of incomplete Asana tasks whose due date has passed."""
+    try:
+        import asana
+        from executors.asana_maintenance import _get_client, _all_project_ids
+        from datetime import date as _date
+        client = _get_client()
+        today  = _date.today()
+        count  = 0
+        for pid in _all_project_ids():
+            try:
+                api   = asana.TasksApi(client)
+                tasks = api.get_tasks_for_project(
+                    pid,
+                    {"completed_since": "now", "opt_fields": "due_on,completed", "limit": 100},
+                )
+                for t in tasks:
+                    due = t.get("due_on")
+                    if due and not t.get("completed"):
+                        try:
+                            if _date.fromisoformat(due) < today:
+                                count += 1
+                        except ValueError:
+                            pass
+            except Exception:
+                pass
+        return count
+    except Exception:
+        return 0
+
+
 def _agent_actions_lines(audit_tasks: list, health_tasks: list) -> list[str]:
     """
-    Summarise what the agent actually did tonight in 1–6 bullet lines.
-    Both lists are [(label, gid), ...].  Action type is inferred from label.
+    What was sent to #approvals tonight — one line per action type.
+    Nothing is described as "executed" since all actions require approval first.
     """
     lines = []
 
     # ── Campaign health (all channels) ────────────────────────────────────────
-    scaled   = [t for t in health_tasks if str(t[0]).startswith("scale-executed")]
-    paused   = [t for t in health_tasks if str(t[0]).startswith("pause-executed")]
+    scale    = [t for t in health_tasks if str(t[0]).startswith("scale-pending")]
+    pause    = [t for t in health_tasks if str(t[0]).startswith("pause-pending")]
     junk     = [t for t in health_tasks if "junk-leads" in str(t[0])]
     optimize = [t for t in health_tasks if str(t[0]).startswith("optimize")]
+    drilldown= [t for t in health_tasks if str(t[0]).startswith("drilldown")]
 
-    if scaled:
-        n = _extract_n(scaled[0][0])
-        lines.append(f"  • Scaled {n} campaign(s) +25% (CPQL + CPL both in scale zone) — executed")
-    if paused:
-        n = _extract_n(paused[0][0])
-        lines.append(f"  • Paused {n} campaign(s) (CPQL critical) — executed")
+    if scale:
+        n = _extract_n(scale[0][0])
+        lines.append(f"  • Scale {n} campaign(s) +25% — sent to #approvals")
+    if pause:
+        n = _extract_n(pause[0][0])
+        lines.append(f"  • Pause {n} campaign(s) (CPQL critical) — sent to #approvals")
     if junk:
         n = _extract_n(junk[0][0])
-        lines.append(f"  • {n} junk-leads alert(s) — low qual rate despite cheap CPL")
+        lines.append(f"  • {n} junk-leads alert(s) — low qual rate despite cheap CPL — sent to #approvals")
     if optimize:
-        lines.append(f"  • {len(optimize)} channel(s) have optimization recommendations in Asana")
+        lines.append(f"  • {len(optimize)} channel(s) flagged for CPQL investigation — sent to #approvals")
+    if drilldown:
+        lines.append(f"  • {len(drilldown)} drill-down analysis task(s) created in Asana")
 
     # ── Google Ads audit ──────────────────────────────────────────────────────
     kw_paused = [t for t in audit_tasks if "kw-auto-paused" in str(t[0])]
@@ -201,15 +235,16 @@ def _agent_actions_lines(audit_tasks: list, health_tasks: list) -> list[str]:
     qs_audit  = [t for t in audit_tasks if str(t[0]).startswith("QS audit")]
     kw_expand = [t for t in audit_tasks if str(t[0]).startswith("keyword expansion")]
 
-    gads_parts = []
-    if is_audit:  gads_parts.append(f"Impression Share flagged {_extract_n(is_audit[0][0])} campaigns")
-    if qs_audit:  gads_parts.append(f"Quality Score flagged {_extract_n(qs_audit[0][0])} keywords")
-    if kw_expand: gads_parts.append(f"{_extract_n(kw_expand[0][0])} search terms ready to add as keywords")
-    if negatives: gads_parts.append(f"{_extract_n(negatives[0][0])} negative keywords to add")
-    if kw_paused: gads_parts.append(f"{_extract_n(kw_paused[0][0])} non-converting keywords auto-paused — executed")
-    if gads_parts:
-        for part in gads_parts:
-            lines.append(f"  • Google Ads: {part}")
+    if kw_paused:
+        lines.append(f"  • Google Ads: {_extract_n(kw_paused[0][0])} non-converting keywords — sent to #approvals")
+    if negatives:
+        lines.append(f"  • Google Ads: {_extract_n(negatives[0][0])} negative keywords ready to add — sent to #approvals")
+    if is_audit:
+        lines.append(f"  • Google Ads: Impression Share below threshold on {_extract_n(is_audit[0][0])} campaigns")
+    if qs_audit:
+        lines.append(f"  • Google Ads: Quality Score issues on {_extract_n(qs_audit[0][0])} keywords")
+    if kw_expand:
+        lines.append(f"  • Google Ads: {_extract_n(kw_expand[0][0])} search terms ready to promote to keywords")
 
     return lines
 
@@ -355,38 +390,50 @@ def _spike_lines(spikes: list) -> list[str]:
 def build_daily_summary_text(spikes: list | None = None,
                               audit_tasks: list | None = None,
                               health_tasks: list | None = None) -> str:
-    """One short Slack message string. Markdown."""
-    riyadh = timezone(timedelta(hours=3))
+    """Clean, human-readable daily summary for #notify."""
+    riyadh    = timezone(timedelta(hours=3))
     today_str = datetime.now(riyadh).strftime("%d %b %Y")
-    domain = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
-              or os.getenv("APP_DOMAIN", "nexa-performance-agent.up.railway.app"))
+    domain    = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
+                 or os.getenv("APP_DOMAIN", "nexa-performance-agent.up.railway.app"))
     url = f"https://{domain}/paid-performance/latest"
 
-    counts = _asana_task_counts()
+    counts       = _asana_task_counts()
     action_lines = _agent_actions_lines(audit_tasks or [], health_tasks or [])
     peak_lines   = _peak_numbers_lines()
     spike_lines  = _spike_lines(spikes or [])
+    overdue      = _overdue_task_count()
 
-    # Dashboard URL always visible as plain text
     lines = [
         f"*Daily Report — {today_str}*",
         f"Dashboard: {url}",
+        "",
     ]
 
+    # ── Performance numbers ───────────────────────────────────────────────────
     if peak_lines:
-        lines.append("*Peak numbers (7d CPQL):*")
+        lines.append("*Performance — last 7 days*")
         lines.extend(peak_lines)
+        lines.append("")
 
-    if action_lines:
-        lines.append("*Agent actions:*")
-        lines.extend(action_lines)
-
+    # ── Alerts ───────────────────────────────────────────────────────────────
     if spike_lines:
-        lines.append("*Performance alerts vs 7d avg:*")
+        lines.append("*Alerts vs 7-day average*")
         lines.extend(spike_lines)
+        lines.append("")
 
+    # ── What was sent to approvals ────────────────────────────────────────────
+    if action_lines:
+        lines.append("*Sent to #approvals for your decision*")
+        lines.extend(action_lines)
+        lines.append("")
+
+    # ── Asana summary ────────────────────────────────────────────────────────
+    new_tasks     = counts.get("created_today", 0)
     total_pending = sum(n for _, n in counts.get("pending_by_project", []))
-    lines.append(f"Asana: {counts.get('created_today', 0)} created  ·  {total_pending} pending")
+    asana_line    = f"*Asana:* {new_tasks} new task(s) created  ·  {total_pending} pending"
+    if overdue:
+        asana_line += f"  ·  {overdue} overdue (need new due date)"
+    lines.append(asana_line)
 
     return "\n".join(lines)
 

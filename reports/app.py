@@ -448,68 +448,122 @@ def _verify_slack_signature(raw_body: bytes, headers) -> bool:
     return _hmac.compare_digest(expected, sig)
 
 
-def _handle_reaction(event: dict):
+def _execute_approved_action(meta: dict) -> str:
     """
-    Called in a background thread when a reaction is added to an approval message.
-    Looks up the ts in pending_approvals.json and posts a threaded confirmation.
+    Execute a scale or pause that was approved via yes/no reply.
+    Returns a human-readable result string.
     """
-    reaction = event.get("reaction", "")
-    item     = event.get("item", {})
-    msg_ts   = item.get("ts", "")
-    channel  = item.get("channel", "")
+    action      = meta.get("action", "").lower()
+    channel     = meta.get("channel", "")
+    campaign    = meta.get("campaign", "")
+    campaign_id = meta.get("campaign_id", "")
+    account_id  = meta.get("account_id", "")
+    new_budget  = meta.get("new_budget")
 
-    if reaction not in ("white_check_mark", "x"):
-        return
+    if action == "scale":
+        if not campaign_id or not new_budget:
+            return f"Could not execute — missing campaign_id or budget. Scale `{campaign}` manually to ${new_budget:.0f}/day." if new_budget else f"Scale `{campaign}` manually (+25%)."
+        try:
+            if channel == "google_ads":
+                from executors.google_ads import set_campaign_budget
+                set_campaign_budget(campaign_id, new_budget, customer_id=account_id)
+            elif channel == "meta":
+                from executors.meta import update_campaign_budget
+                update_campaign_budget(campaign_id, new_budget)
+            elif channel == "snapchat":
+                from executors.snapchat import set_campaign_budget
+                set_campaign_budget(campaign_id, new_budget, account_id=account_id)
+            elif channel == "tiktok":
+                from executors.tiktok import set_campaign_budget
+                set_campaign_budget(campaign_id, new_budget, advertiser_id=account_id)
+            else:
+                return f"Channel `{channel}` not supported for auto-scale. Set budget to ${new_budget:.0f}/day manually."
+            return f"Budget increased to ${new_budget:.0f}/day (+25%). Done."
+        except Exception as e:
+            return f"Scale execution failed: {e}. Set to ${new_budget:.0f}/day manually."
+
+    elif action == "pause":
+        if not campaign_id:
+            return f"Could not execute — no campaign_id. Pause `{campaign}` manually."
+        try:
+            if channel == "google_ads":
+                from executors.google_ads import pause_campaign
+                pause_campaign(campaign_id, customer_id=account_id)
+            elif channel == "meta":
+                from executors.meta import pause_campaign
+                pause_campaign(campaign_id)
+            elif channel == "snapchat":
+                from executors.snapchat import pause_campaign
+                pause_campaign(campaign_id, account_id=account_id)
+            elif channel == "tiktok":
+                from executors.tiktok import pause_campaign
+                pause_campaign(campaign_id, advertiser_id=account_id)
+            else:
+                return f"Channel `{channel}` not supported for auto-pause. Pause `{campaign}` manually."
+            return f"Campaign paused. Done."
+        except Exception as e:
+            return f"Pause execution failed: {e}. Pause `{campaign}` manually."
+
+    return "Acknowledged — Asana tasks updated."
+
+
+def _handle_thread_reply(event: dict):
+    """
+    Called in a background thread when a message is posted in the approval channel.
+    Looks for yes/no replies to pending approval messages and executes accordingly.
+    """
+    # Only process thread replies (has thread_ts and it differs from the message ts)
+    thread_ts = event.get("thread_ts", "")
+    msg_ts    = event.get("ts", "")
+    if not thread_ts or thread_ts == msg_ts:
+        return  # top-level message, not a reply
+
+    text = (event.get("text") or "").strip().lower()
+    if text not in ("yes", "no"):
+        return  # not a yes/no reply
 
     try:
         from notifications.slack import get_pending_approval, remove_pending_approval
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
-        wc = WebClient(token=SLACK_BOT_TOKEN)
-        meta = get_pending_approval(msg_ts)
+        wc   = WebClient(token=SLACK_BOT_TOKEN)
+        meta = get_pending_approval(thread_ts)
         if not meta:
             return  # not one of our approval messages
 
-        action   = meta.get("action", "")
-        camp     = meta.get("campaign", "")
-        ch       = meta.get("channel", "")
-        user     = event.get("user", "")
+        action = meta.get("action", "")
+        camp   = meta.get("campaign", "") or ", ".join(meta.get("campaigns", [])[:3])
+        user   = event.get("user", "")
 
-        if reaction == "white_check_mark":
-            reply = (
-                f"✅ *Approved* by <@{user}>.\n"
-                f"Action: *{action}* · {ch} · `{camp}`\n"
-                f"Asana task updated. Proceed with optimization."
-            )
-            # If there's an Asana task GID, add a comment
+        if text == "yes":
+            exec_result = _execute_approved_action(meta)
+            # Add Asana comment if gid is stored
             asana_gid = meta.get("asana_gid", "")
             if asana_gid:
                 try:
                     import asana as asana_sdk
                     cfg = asana_sdk.Configuration()
                     cfg.access_token = os.getenv("ASANA_ACCESS_TOKEN", "")
-                    asana_client = asana_sdk.ApiClient(cfg)
-                    asana_sdk.StoriesApi(asana_client).create_story_for_task(
+                    ac  = asana_sdk.ApiClient(cfg)
+                    asana_sdk.StoriesApi(ac).create_story_for_task(
                         asana_gid,
-                        {"data": {"text": f"[Nexa] Approved via #approvals by <@{user}>. Action: {action}"}},
+                        {"data": {"text": f"[Nexa] Approved by <@{user}>. Result: {exec_result}"}},
                     )
                 except Exception as e:
                     print(f"[events] Asana comment failed: {e}")
+            reply = f"✅ *Approved* by <@{user}>\n{exec_result}"
         else:
-            reply = (
-                f"❌ *Rejected* by <@{user}>.\n"
-                f"Action: *{action}* · {ch} · `{camp}` — no changes made."
-            )
+            reply = f"❌ *Skipped* by <@{user}>\n`{camp}` — no changes made."
 
         wc.chat_postMessage(
             channel=SLACK_CHANNEL_APPROVAL,
-            thread_ts=msg_ts,
+            thread_ts=thread_ts,
             text=reply,
         )
-        remove_pending_approval(msg_ts)
-        print(f"[events] Approval {reaction} by {user} for {camp[:50]!r}")
+        remove_pending_approval(thread_ts)
+        print(f"[events] Reply '{text}' by {user} for {camp[:50]!r}")
     except Exception as e:
-        print(f"[events] reaction handler error: {e}")
+        print(f"[events] thread reply handler error: {e}")
 
 
 @app.route("/slack/events", methods=["POST"])
@@ -538,10 +592,13 @@ def slack_events():
         return jsonify({"error": "invalid signature"}), 403
 
     if event_type == "event_callback":
-        event = payload.get("event", {})
-        if event.get("type") == "reaction_added":
+        event      = payload.get("event", {})
+        event_kind = event.get("type", "")
+
+        # yes/no thread replies on approval messages
+        if event_kind == "message" and not event.get("bot_id"):
             import threading
-            threading.Thread(target=_handle_reaction, args=(event,), daemon=True).start()
+            threading.Thread(target=_handle_thread_reply, args=(event,), daemon=True).start()
 
     # Always respond 200 immediately (Slack requires < 3s)
     return Response("", status=200)
