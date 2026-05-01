@@ -181,6 +181,31 @@ def check_hubspot_webhook() -> tuple[bool, str]:
         return False, f"HubSpot webhook: {e}"
 
 
+def check_conversion_tracking() -> tuple[bool, str]:
+    """
+    Verify at least one active Google Ads conversion action exists.
+    A missing or broken conversion action means the agent is optimising blind.
+    """
+    try:
+        from executors.google_ads import get_client
+        from config import GOOGLE_ADS_CUSTOMER_ID
+        client = get_client()
+        ga_svc = client.get_service("GoogleAdsService")
+        cid = GOOGLE_ADS_CUSTOMER_ID.replace("-", "")
+        q = """
+            SELECT conversion_action.name, conversion_action.status
+            FROM conversion_action
+            WHERE conversion_action.status = 'ENABLED'
+            LIMIT 10
+        """
+        active = [row.conversion_action.name for row in ga_svc.search(customer_id=cid, query=q)]
+        if active:
+            return True, f"{len(active)} active conversion action(s): {', '.join(active[:3])}"
+        return False, "No active conversion actions in Google Ads — agent optimising blind"
+    except Exception as e:
+        return False, f"Conversion tracking check: {e}"
+
+
 def check_railway_deployment() -> tuple[bool, str]:
     """
     Verify the Railway deployment is healthy and GitHub source is connected.
@@ -263,17 +288,18 @@ def check_slack_listener() -> tuple[bool, str]:
 # ─── Runner ────────────────────────────────────────────────────────────────────
 
 CHECKS = [
-    ("Railway deployment", check_railway_deployment),
-    ("Slack listener",     check_slack_listener),
-    ("Flask",              check_flask),
-    ("HubSpot API",        check_hubspot),
-    ("BigQuery",           check_bigquery),
-    ("Google Ads",         check_google_ads),
-    ("Meta Ads",           check_meta),
-    ("Slack",              check_slack),
-    ("Asana",              check_asana),
-    ("Zapier webhook",     check_zapier_webhook),
-    ("HubSpot webhook",    check_hubspot_webhook),
+    ("Railway deployment",    check_railway_deployment),
+    ("Slack listener",        check_slack_listener),
+    ("Flask",                 check_flask),
+    ("HubSpot API",           check_hubspot),
+    ("BigQuery",              check_bigquery),
+    ("Google Ads",            check_google_ads),
+    ("Conversion tracking",   check_conversion_tracking),
+    ("Meta Ads",              check_meta),
+    ("Slack",                 check_slack),
+    ("Asana",                 check_asana),
+    ("Zapier webhook",        check_zapier_webhook),
+    ("HubSpot webhook",       check_hubspot_webhook),
 ]
 
 

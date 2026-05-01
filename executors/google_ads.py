@@ -595,6 +595,26 @@ def create_full_campaign(
     result: dict = {}
     cid = customer_id or best_customer(_prefixed(f"{campaign_type}_{language}_{product}_{audience_type}"))
 
+    # Auto-research keywords for Search campaigns when none supplied
+    if advertising_channel == "SEARCH" and not keywords:
+        print(f"[gads] No keywords provided — researching from product: {product!r}")
+        try:
+            lang_code = "ar" if language.lower() == "ar" else "en"
+            seeds = [product.lower()]
+            if lang_code == "ar":
+                seeds += [f"{product.lower()} برنامج", f"{product.lower()} نظام"]
+            ideas = keyword_ideas(seed_keywords=seeds, language=lang_code, customer_id=cid)
+            keywords = [
+                {"text": idea["keyword"], "match_type": "EXACT"}
+                for idea in ideas[:15]
+                if idea["avg_monthly"] > 0
+            ] or [{"text": product.lower(), "match_type": "BROAD"}]
+            result["keywords_researched"] = True
+            result["keyword_ideas_count"] = len(ideas)
+            print(f"[gads] Auto-selected {len(keywords)} keywords from {len(ideas)} ideas")
+        except Exception as e:
+            print(f"[gads] Keyword research failed — proceeding without: {e}")
+
     # 1. Campaign
     camp_name = f"{campaign_type}_{language}_{product}_{audience_type}"
     camp = create_campaign(
