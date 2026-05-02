@@ -41,12 +41,12 @@ _REFRESH_STATUS: dict = {"running": False, "started_at": None,
 
 
 def _do_refresh(days: int | None, backfill: bool):
-    """Run refresh + regen, recording status to _REFRESH_STATUS for polling."""
-    import threading
+    """
+    Run BQ refresh, recording status to _REFRESH_STATUS for polling.
+    HTML report generation removed — Hex dashboard replaces it.
+    """
     from datetime import datetime as _dt
     from reporting_scheduler import run_refresh
-    from claude.reporter import assemble_report_data
-    from reports.render import save_report
 
     _REFRESH_STATUS.update({
         "running": True, "started_at": _dt.utcnow().isoformat() + "Z",
@@ -57,15 +57,9 @@ def _do_refresh(days: int | None, backfill: bool):
             results = run_refresh(days=days)
         else:
             results = run_refresh(incremental=not backfill)
-        report = assemble_report_data(
-            cadence="on_demand", role_results=[], tasks_created=[],
-            approvals_pending=[], permalink="/reports/latest",
-        )
-        save_report(report)
         _REFRESH_STATUS["result"] = {
             "collectors": {k: ("ok" if v[0] else "fail") for k, v in results.items()},
-            "channels": [c.get("channel") for c in report.get("channels", [])],
-            "trends_rows": len(report.get("trends_30d", [])),
+            "note": "HTML report deprecated — view dashboard at Hex DASHBOARD_URL",
         }
     except Exception as e:
         import traceback; traceback.print_exc()
