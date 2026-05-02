@@ -312,9 +312,11 @@ def build_daily_summary_text(spikes: list | None = None,
     """Clean, human-readable daily summary for #notify."""
     riyadh    = timezone(timedelta(hours=3))
     today_str = datetime.now(riyadh).strftime("%d %b %Y")
-    domain    = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
-                 or os.getenv("APP_DOMAIN", "nexa-performance-agent.up.railway.app"))
-    url = f"https://{domain}/paid-performance/latest"
+    # Dashboard URL = Hex published app (replaces the deprecated Flask HTML report)
+    url = os.getenv(
+        "DASHBOARD_URL",
+        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
+    )
 
     counts       = _asana_task_counts()
     action_lines = _agent_actions_lines(audit_tasks or [], health_tasks or [])

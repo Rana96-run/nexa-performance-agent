@@ -29,7 +29,16 @@ SELECT channel AS paid_channel,
          WHEN 'microsoft'      THEN 'Microsoft Ads'
          WHEN 'linkedin'       THEN 'LinkedIn Ads'
          WHEN 'organic_search' THEN 'Organic Search'
-       END AS qoyod_source
+       END AS qoyod_source,
+       CASE channel
+         WHEN 'google_ads'     THEN 'Google Ads'
+         WHEN 'meta'           THEN 'Meta Ads'
+         WHEN 'snapchat'       THEN 'Snapchat Ads'
+         WHEN 'tiktok'         THEN 'TikTok Ads'
+         WHEN 'microsoft'      THEN 'Microsoft Ads'
+         WHEN 'linkedin'       THEN 'LinkedIn Ads'
+         WHEN 'organic_search' THEN 'Organic Search'
+       END AS display_name
 FROM UNNEST(['google_ads','meta','snapchat','tiktok','microsoft','linkedin','organic_search']) AS channel
 """
 

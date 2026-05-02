@@ -370,9 +370,11 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
     riyadh   = _tz(timedelta(hours=3))
     today_str = date.today().strftime("%d %b %Y")
     emoji    = CADENCE_EMOJI.get(cadence, "📋")
-    domain   = (os.getenv("RAILWAY_PUBLIC_DOMAIN")
-                or os.getenv("APP_DOMAIN", "nexa-performance-agent.up.railway.app"))
-    url      = f"https://{domain}/paid-performance/latest"
+    # Dashboard URL = Hex published app (replaces deprecated Flask HTML report)
+    url = os.getenv(
+        "DASHBOARD_URL",
+        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
+    )
 
     lines = [
         f"{emoji} *{cadence.title()} Performance Check — {today_str}*",
@@ -502,26 +504,11 @@ def run_cadence(cadence: str, force: bool = False):
             meta={"Cadence": cadence, "Tasks": created, "Roles": len(results)},
         )
 
-    # 6b. Generate the rendered daily report (Markdown -> HTML).
-    #     Saved to reports/<date>.html + reports/latest.html so the team
-    #     has a permalink. Failure here must not break the cadence.
-    try:
-        from claude.reporter import assemble_report_data
-        from reports.render import save_report
-        report = assemble_report_data(
-            cadence=cadence,
-            role_results=results,
-            tasks_created=[t["title"] for t in tasks],
-            approvals_pending=[
-                {"role": r["role"], "decision": r.get("decision") or {}}
-                for r in approvals
-            ],
-            permalink="/paid-performance/latest",
-        )
-        path = save_report(report)
-        log.info(f"Daily report rendered -> {path}")
-    except Exception as e:
-        log.warning(f"Daily report generation failed (non-fatal): {e}")
+    # 6b. HTML report generation DISABLED.
+    #     The Hex published app replaces the Flask HTML report.
+    #     Slack messages now link to the Hex dashboard via DASHBOARD_URL env.
+    #     Re-enable only if Hex becomes unavailable.
+    log.info("HTML report generation skipped — using Hex dashboard via DASHBOARD_URL")
 
     # 7. Handle high-confidence channel actions -> approval channel
     for res in approvals:
