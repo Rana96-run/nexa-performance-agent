@@ -251,7 +251,7 @@ def _peak_numbers_lines() -> list[str]:
               GROUP BY date, lead_utm_campaign
             )
             SELECT
-              c.channel,
+              COALESCE(m.display_name, c.channel)                            AS channel,
               ROUND(SUM(c.spend), 0)                                         AS spend,
               COALESCE(SUM(hs.leads), 0)                                     AS leads,
               COALESCE(SUM(hs.sqls), 0)                                      AS sqls,
@@ -259,10 +259,12 @@ def _peak_numbers_lines() -> list[str]:
             FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
             LEFT JOIN hs ON c.date = hs.date
                         AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+            LEFT JOIN `{PROJECT_ID}.{DATASET}.v_channel_key_map` m
+                   ON c.channel = m.paid_channel
             WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
               AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
               AND c.spend > 0
-            GROUP BY c.channel
+            GROUP BY 1
             ORDER BY spend DESC
         """).result())
     except Exception as e:
