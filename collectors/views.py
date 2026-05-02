@@ -22,13 +22,15 @@ CHANNEL_MAP_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.v_channel_key_map` AS
 SELECT channel AS paid_channel,
        CASE channel
-         WHEN 'google_ads' THEN 'Google Ads'
-         WHEN 'meta'       THEN 'Meta Ads'
-         WHEN 'snapchat'   THEN 'Snapchat'
-         WHEN 'tiktok'     THEN 'Tiktok Ads'
-         WHEN 'microsoft'  THEN 'Microsoft Ads'
+         WHEN 'google_ads'     THEN 'Google Ads'
+         WHEN 'meta'           THEN 'Meta Ads'
+         WHEN 'snapchat'       THEN 'Snapchat Ads'
+         WHEN 'tiktok'         THEN 'Tiktok Ads'
+         WHEN 'microsoft'      THEN 'Microsoft Ads'
+         WHEN 'linkedin'       THEN 'LinkedIn Ads'
+         WHEN 'organic_search' THEN 'Organic Search'
        END AS qoyod_source
-FROM UNNEST(['google_ads','meta','snapchat','tiktok','microsoft']) AS channel
+FROM UNNEST(['google_ads','meta','snapchat','tiktok','microsoft','linkedin','organic_search']) AS channel
 """
 
 
@@ -87,12 +89,12 @@ deals AS (
   GROUP BY 1,2
 )
 SELECT
-  s.date,
-  s.channel,
-  s.spend,
+  COALESCE(s.date, l.date, d.date)             AS date,
+  COALESCE(s.channel, l.channel, d.channel)    AS channel,
+  COALESCE(s.spend, 0)                         AS spend,
   s.impressions,
   s.clicks,
-  SAFE_DIVIDE(s.clicks, s.impressions) * 100 AS ctr,
+  SAFE_DIVIDE(s.clicks, s.impressions) * 100   AS ctr,
   s.platform_leads,
   s.platform_conversions,
   COALESCE(l.hs_leads, 0)        AS hs_leads,
@@ -136,9 +138,12 @@ SELECT
     WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) <= 80 THEN 'warning'
     ELSE 'pause_zone'
   END AS cpql_zone
+-- FULL OUTER JOIN so lead-only channels (e.g. Organic Search, no spend)
+-- still appear in the dashboard with NULL CPL/CPQL/ROAS instead of being dropped.
 FROM spend s
-LEFT JOIN leads l ON s.date = l.date AND s.channel = l.channel
-LEFT JOIN deals d ON s.date = d.date AND s.channel = d.channel
+FULL OUTER JOIN leads l ON s.date = l.date AND s.channel = l.channel
+LEFT JOIN deals d ON COALESCE(s.date, l.date) = d.date
+                 AND COALESCE(s.channel, l.channel) = d.channel
 """
 
 
