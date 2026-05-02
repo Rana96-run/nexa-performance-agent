@@ -53,24 +53,27 @@ def _get_report(advertiser_id: str, start: date, end: date) -> list[dict]:
     all_rows: list[dict] = []
     page = 1
     while True:
-        body = {
+        # TikTok Marketing API v1.3 requires GET with JSON-encoded list params,
+        # not POST with JSON body. POST returns HTTP 405 Method Not Allowed.
+        import json as _json
+        params = {
             "advertiser_id": advertiser_id,
             "report_type":   "BASIC",
-            "dimensions":    ["campaign_id", "stat_time_day"],
+            "dimensions":    _json.dumps(["campaign_id", "stat_time_day"]),
             "data_level":    "AUCTION_CAMPAIGN",
-            "lifetime":      False,
+            "lifetime":      "false",
             "start_date":    str(start),
             "end_date":      str(end),
-            "metrics": [
+            "metrics": _json.dumps([
                 "spend", "impressions", "clicks", "ctr",
                 "conversion", "cost_per_conversion",
                 "campaign_name",
-            ],
+            ]),
             "page_size": PAGE_SIZE,
             "page":      page,
         }
-        r = requests.post(f"{BASE}/report/integrated/get/",
-                          headers=_headers(), json=body, timeout=30)
+        r = requests.get(f"{BASE}/report/integrated/get/",
+                         headers=_headers(), params=params, timeout=30)
         if r.status_code >= 400:
             print(f"[tiktok-bq] report {r.status_code} (page {page}): {r.text[:200]}")
             break
