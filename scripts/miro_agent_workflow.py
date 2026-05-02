@@ -1,12 +1,11 @@
 """
 scripts/miro_agent_workflow.py
 ===============================
-Renders the Nexa Performance Agent flow as 4 VERTICAL COLUMNS.
+Qoyod Performance Agent — simplified 4-column architecture.
 
-    INPUTS              BRAIN              ACTIONS             OUTPUTS
-   (left -> right flow; arrows show data movement between columns)
+    INPUTS  →  BRAIN  →  ACTIONS  →  OUTPUTS
 
-Run with:
+Run:
     python scripts/miro_agent_workflow.py
 """
 from __future__ import annotations
@@ -14,6 +13,7 @@ from __future__ import annotations
 import os
 import time
 import requests
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,7 +33,7 @@ def _post(path, payload):
 
 def _delete_all_existing():
     deleted = 0
-    for kind in ("connectors", "shapes", "sticky_notes", "cards", "texts", "frames"):
+    for kind in ("connectors", "shapes", "sticky_notes", "cards", "texts", "frames", "images"):
         cursor = None
         while True:
             url = f"{BASE}/{kind}?limit=50"
@@ -54,7 +54,7 @@ def _delete_all_existing():
 
 
 def shape(text_content, x, y, w=300, h=120, fill="#dbeafe", border="#2563eb",
-          font_color="#0f172a", font_size=15):
+          font_color="#0f172a", font_size=14):
     return _post("/shapes", {
         "data": {"content": text_content, "shape": "round_rectangle"},
         "style": {
@@ -67,7 +67,7 @@ def shape(text_content, x, y, w=300, h=120, fill="#dbeafe", border="#2563eb",
     })
 
 
-def text(content, x, y, w=400, font=24, color="#0f172a", align="center"):
+def label(content, x, y, w=340, font=13, color="#64748b", align="center"):
     return _post("/texts", {
         "data": {"content": content},
         "style": {"fontSize": str(font), "color": color, "textAlign": align},
@@ -76,152 +76,175 @@ def text(content, x, y, w=400, font=24, color="#0f172a", align="center"):
     })
 
 
-def connect(from_id, to_id, label="", color="#475569"):
+def connect(from_id, to_id, lbl="", color="#94a3b8"):
     if not from_id or not to_id:
         return None
     return _post("/connectors", {
         "startItem": {"id": from_id},
         "endItem":   {"id": to_id},
-        "captions":  [{"content": label}] if label else [],
-        "style": {"strokeColor": color, "strokeWidth": "3"},
+        "captions":  [{"content": lbl}] if lbl else [],
+        "style": {"strokeColor": color, "strokeWidth": "2"},
     })
 
-
-# ─── Build ────────────────────────────────────────────────────────────────────
 
 def build():
     _delete_all_existing()
 
-    # ── Layout constants ────────────────────────────────────────────────────
-    # 4 columns × ~400px apart
-    COL_X = {
-        "inputs":  -1100,
-        "brain":   -350,
-        "actions":  400,
-        "outputs": 1150,
-    }
-    BOX_W = 320     # all boxes same width for tidy column edges
-    BOX_H = 120     # all boxes same height; long content can wrap
+    # ── Layout ─────────────────────────────────────────────────────────────────
+    CX = {"inputs": -1050, "brain": -250, "actions": 500, "outputs": 1250}
+    W  = 310
+    H  = 115
+    G  = 35       # gap between rows
+    TOP = -900
 
-    # Title above the columns
-    text("**Nexa — Performance Agent**", x=25, y=-1500, w=900, font=40)
-    text("Runs autonomously every night at 03:00 Riyadh",
-         x=25, y=-1430, w=900, font=18, color="#64748b")
+    # ── Title ──────────────────────────────────────────────────────────────────
+    _post("/texts", {
+        "data": {"content": "<b>Qoyod Performance Agent</b>"},
+        "style": {"fontSize": "36", "color": "#0f172a", "textAlign": "center"},
+        "position": {"x": 100, "y": -1120, "origin": "center"},
+        "geometry": {"width": 900},
+    })
+    _post("/texts", {
+        "data": {"content": "Runs nightly 03:00 Riyadh  ·  Nothing executes without human ✅"},
+        "style": {"fontSize": "15", "color": "#64748b", "textAlign": "center"},
+        "position": {"x": 100, "y": -1065, "origin": "center"},
+        "geometry": {"width": 1000},
+    })
 
-    # Column headers
-    text("INPUTS",   x=COL_X["inputs"],  y=-1280, w=320, font=24, color="#1e40af")
-    text("Data the agent reads",
-         x=COL_X["inputs"],  y=-1240, w=320, font=13, color="#64748b")
+    # ── Column headers ─────────────────────────────────────────────────────────
+    headers = [
+        ("inputs",  "INPUTS",   "What the agent reads",           "#1e40af"),
+        ("brain",   "BRAIN",    "Claude + code router",           "#7c3aed"),
+        ("actions", "ACTIONS",  "What the agent does",            "#15803d"),
+        ("outputs", "OUTPUTS",  "Where things land",              "#0f172a"),
+    ]
+    for col, title, sub, color in headers:
+        _post("/texts", {
+            "data": {"content": f"<b>{title}</b>"},
+            "style": {"fontSize": "20", "color": color, "textAlign": "center"},
+            "position": {"x": CX[col], "y": TOP - 100, "origin": "center"},
+            "geometry": {"width": W},
+        })
+        label(sub, CX[col], TOP - 68, w=W, font=12)
 
-    text("BRAIN",    x=COL_X["brain"],   y=-1280, w=320, font=24, color="#7c3aed")
-    text("3 Claude roles + 1 code assistant",
-         x=COL_X["brain"],   y=-1240, w=320, font=13, color="#64748b")
-
-    text("ACTIONS",  x=COL_X["actions"], y=-1280, w=320, font=24, color="#15803d")
-    text("What the agent does",
-         x=COL_X["actions"], y=-1240, w=320, font=13, color="#64748b")
-
-    text("OUTPUTS",  x=COL_X["outputs"], y=-1280, w=320, font=24, color="#0f172a")
-    text("Where things land",
-         x=COL_X["outputs"], y=-1240, w=320, font=13, color="#64748b")
-
-    # ── Column 1: INPUTS (5 boxes stacked vertically) ───────────────────────
-    inputs_data = [
-        ("Ad Platforms\nGoogle · Meta · Snap · TikTok\nLinkedIn · Microsoft", "#dbeafe", "#1e40af"),
-        ("HubSpot CRM\nLeads · Deals · Webhooks",                              "#fecaca", "#991b1b"),
-        ("BigQuery\nReporting layer",                                          "#fde68a", "#a16207"),
-        ("Google Drive\nMedia Planning · Social Analysis",                     "#a7f3d0", "#047857"),
-        ("Anthropic Claude API\n(reasoning)",                                  "#f9a8d4", "#9d174d"),
+    # ── INPUTS — 5 nodes ───────────────────────────────────────────────────────
+    in_data = [
+        ("Ad Platforms\nGoogle · Meta · Snapchat\nTikTok · LinkedIn · Microsoft",
+         "#dbeafe", "#1e40af"),
+        ("Adspirer MCP\nExecution API\nBudget · pause · keyword mutations",
+         "#e0f2fe", "#0369a1"),
+        ("HubSpot CRM\nLeads · Deals · Webhooks\nRead-only by default",
+         "#fecaca", "#991b1b"),
+        ("BigQuery\nCross-channel data layer\ncampaigns_daily · leads · deals",
+         "#fde68a", "#a16207"),
+        ("Anthropic Claude API\nReasoning engine\nclaude-sonnet-4-6",
+         "#f9a8d4", "#9d174d"),
     ]
     in_ids = []
-    y = -1100
-    for txt, fill, border in inputs_data:
-        in_ids.append(shape(txt, COL_X["inputs"], y, w=BOX_W, h=BOX_H,
-                            fill=fill, border=border, font_size=14))
-        y += BOX_H + 30   # gap between rows
+    for i, (txt, fill, border) in enumerate(in_data):
+        n = shape(txt, CX["inputs"], TOP + i * (H + G), w=W, h=H,
+                  fill=fill, border=border, font_size=13)
+        in_ids.append(n)
 
-    # ── Column 2: BRAIN (4 boxes — 3 roles + assistant) ─────────────────────
-    role_buyer = shape(
-        "🎯 MEDIA BUYER\nDaily pauses · scaling\nBudget · creative QA",
-        x=COL_X["brain"], y=-1100, w=BOX_W, h=BOX_H,
-        fill="#3b82f6", border="#1e3a8a", font_color="#ffffff", font_size=14)
-    role_analyst = shape(
-        "📊 ANALYST\nTrend & anomaly\nLead-quality drift",
-        x=COL_X["brain"], y=-950, w=BOX_W, h=BOX_H,
-        fill="#8b5cf6", border="#5b21b6", font_color="#ffffff", font_size=14)
-    role_strat = shape(
-        "🧭 STRATEGIST\nWeekly+ scale plans\nCreative briefs",
-        x=COL_X["brain"], y=-800, w=BOX_W, h=BOX_H,
-        fill="#ec4899", border="#9d174d", font_color="#ffffff", font_size=14)
-    assistant = shape(
-        "🤖 TASK-FLOW (code)\nRoutes JSON ->\nright Asana project + section",
-        x=COL_X["brain"], y=-650, w=BOX_W, h=BOX_H,
-        fill="#10b981", border="#047857", font_color="#ffffff", font_size=14)
+    # ── BRAIN — 2 nodes ────────────────────────────────────────────────────────
+    # Collapse Media Buyer + Analyst + Strategist into one Analysis node
+    brain_mid = TOP + 1.5 * (H + G)   # vertically centred in the input span
 
-    # ── Column 3: ACTIONS (4 boxes) ─────────────────────────────────────────
-    direct = shape(
-        "DIRECT\n(auto-execute)\nPause ad · keyword\nExclude placement",
-        x=COL_X["actions"], y=-1100, w=BOX_W, h=BOX_H,
-        fill="#fee2e2", border="#991b1b", font_size=14)
-    approval = shape(
-        "APPROVAL ✅\nScale budget · adjust bids\nPause campaign\nLaunch new audience",
-        x=COL_X["actions"], y=-950, w=BOX_W, h=BOX_H,
-        fill="#fef3c7", border="#92400e", font_size=14)
-    notify = shape(
-        "NOTIFY\nDaily report URL\nSpike alerts\nAsana task links",
-        x=COL_X["actions"], y=-800, w=BOX_W, h=BOX_H,
-        fill="#dcfce7", border="#15803d", font_size=14)
-    autofix = shape(
-        "AUTO-FIX (Zapier)\nReplay errors\nResume held tasks\nDisable broken Zaps",
-        x=COL_X["actions"], y=-650, w=BOX_W, h=BOX_H,
-        fill="#ede9fe", border="#5b21b6", font_size=14)
+    analysis = shape(
+        "🧠 ANALYSIS (Claude)\nCPQL/CPL health · anomaly detection\nAudit · weekly plans · creative",
+        CX["brain"], brain_mid - (H + G) // 2,
+        w=W, h=H + 20, fill="#7c3aed", border="#4c1d95",
+        font_color="#ffffff", font_size=13)
 
-    # ── Column 4: OUTPUTS (4 boxes) ─────────────────────────────────────────
-    out_asana = shape(
-        "ASANA\nDaily Activity (6 projects)\nOptimization (7 channels)\nSeasonal (5 campaigns)",
-        x=COL_X["outputs"], y=-1100, w=BOX_W, h=BOX_H,
-        fill="#fbcfe8", border="#9f1239", font_size=14)
+    task_flow = shape(
+        "🤖 TASK-FLOW (code)\nRoutes findings → Asana + #approvals\nNever auto-executes",
+        CX["brain"], brain_mid + (H + G) // 2 + 20,
+        w=W, h=H, fill="#0f172a", border="#0f172a",
+        font_color="#ffffff", font_size=13)
+
+    # ── ACTIONS — 3 nodes ──────────────────────────────────────────────────────
+    act_top = TOP + 0.3 * (H + G)
+
+    approval_req = shape(
+        "APPROVAL REQUEST\nScale/pause → 1 batch msg\nOptimize/junk/drill → 1 digest\nMax 2 msgs to #approvals",
+        CX["actions"], act_top,
+        w=W, h=H + 20, fill="#fef3c7", border="#92400e", font_size=13)
+
+    execute = shape(
+        "EXECUTE ON ✅\nUser reaction → executor\nScale +25% · Pause campaign\nAsana task updated",
+        CX["actions"], act_top + (H + G) + 20,
+        w=W, h=H + 10, fill="#dcfce7", border="#15803d", font_size=13)
+
+    notify_box = shape(
+        "NOTIFY\n1 message → #notify\nPerformance · Alerts\n#approvals summary · Asana counts",
+        CX["actions"], act_top + 2 * (H + G) + 30,
+        w=W, h=H + 10, fill="#e0e7ff", border="#4338ca", font_size=13)
+
+    # ── OUTPUTS — 4 nodes ──────────────────────────────────────────────────────
+    out_top = TOP + 0.3 * (H + G)
+
     out_slack = shape(
-        "SLACK\n#notify · 03:30 daily report\n#approval · ✅/❌ reactions",
-        x=COL_X["outputs"], y=-950, w=BOX_W, h=BOX_H,
-        fill="#bfdbfe", border="#1e40af", font_size=14)
-    out_dashboard = shape(
-        "HTML DASHBOARD\nreports/latest\n(persisted to Drive)",
-        x=COL_X["outputs"], y=-800, w=BOX_W, h=BOX_H,
-        fill="#bbf7d0", border="#15803d", font_size=14)
+        "SLACK\n#notify  max 1 msg/night\n#approvals  max 2 msgs/night\n✅/❌ reactions trigger execution",
+        CX["outputs"], out_top,
+        w=W, h=H + 10, fill="#bfdbfe", border="#1e40af", font_size=13)
+
+    out_asana = shape(
+        "ASANA\nPENDING APPROVAL task titles\n6 projects · 7 channels\nOverdue count tracked daily",
+        CX["outputs"], out_top + (H + G) + 10,
+        w=W, h=H + 10, fill="#fbcfe8", border="#9f1239", font_size=13)
+
+    out_dash = shape(
+        "HTML DASHBOARD\n/paid-performance/latest\nGoogle Drive (persistent)\nCustom date-range API",
+        CX["outputs"], out_top + 2 * (H + G) + 20,
+        w=W, h=H + 10, fill="#bbf7d0", border="#15803d", font_size=13)
+
     out_bq = shape(
-        "BIGQUERY\ncampaigns_daily · leads · deals\nrefreshed nightly",
-        x=COL_X["outputs"], y=-650, w=BOX_W, h=BOX_H,
-        fill="#fde68a", border="#a16207", font_size=14)
+        "BIGQUERY\ncampaigns_daily · leads · deals\nCase-insensitive UTM join\nRefreshed nightly",
+        CX["outputs"], out_top + 3 * (H + G) + 30,
+        w=W, h=H, fill="#fde68a", border="#a16207", font_size=13)
 
-    # ── Connections (left -> right flow) ─────────────────────────────────────
-    # Each input feeds the brain (drawn as one arrow per input -> analyst as
-    # the visual anchor; clutter would result if every input touched all 3 roles)
+    # ── Connections ────────────────────────────────────────────────────────────
+    # All inputs → analysis
     for src in in_ids:
-        connect(src["id"], role_analyst["id"], "")
+        connect(src["id"], analysis["id"], color="#94a3b8")
 
-    # 3 roles -> assistant
-    connect(role_buyer["id"],   assistant["id"], "JSON", "#0f172a")
-    connect(role_analyst["id"], assistant["id"], "JSON", "#0f172a")
-    connect(role_strat["id"],   assistant["id"], "JSON", "#0f172a")
+    # analysis → task-flow
+    connect(analysis["id"], task_flow["id"], "findings", "#7c3aed")
 
-    # assistant -> actions (3 fan-out arrows)
-    connect(assistant["id"], direct["id"],   "execution_type=Direct", "#dc2626")
-    connect(assistant["id"], approval["id"], "high-confidence",       "#d97706")
-    connect(assistant["id"], notify["id"],   "summary",               "#16a34a")
-    # autofix is webhook-driven, not via assistant — left without an arrow
-    # to keep the diagram clean
+    # task-flow → actions
+    connect(task_flow["id"], approval_req["id"], "scale/pause/optimize", "#d97706")
+    connect(task_flow["id"], notify_box["id"],   "summary",              "#4338ca")
 
-    # actions -> outputs
-    connect(direct["id"],   out_asana["id"],     "logged",  "#475569")
-    connect(approval["id"], out_slack["id"],     "request", "#475569")
-    connect(notify["id"],   out_slack["id"],     "ping",    "#475569")
-    connect(notify["id"],   out_dashboard["id"], "URL",     "#475569")
-    connect(notify["id"],   out_asana["id"],     "tasks",   "#475569")
-    connect(autofix["id"],  out_slack["id"],     "diag",    "#475569")
+    # approval_req → slack (#approvals)
+    connect(approval_req["id"], out_slack["id"], "posts to #approvals", "#d97706")
 
-    print("[miro] Done.")
-    print(f"        https://miro.com/app/board/{BOARD}")
+    # slack ✅ → execute
+    connect(out_slack["id"], execute["id"], "✅ reaction", "#16a34a")
+
+    # execute → adspirer (calls back)
+    connect(execute["id"], in_ids[1]["id"], "calls executor", "#0369a1")
+
+    # execute → asana
+    connect(execute["id"], out_asana["id"], "updates task", "#9f1239")
+
+    # notify → slack + dashboard
+    connect(notify_box["id"], out_slack["id"],  "1 msg to #notify", "#4338ca")
+    connect(notify_box["id"], out_dash["id"],   "dashboard URL",    "#15803d")
+    connect(notify_box["id"], out_asana["id"],  "task counts",      "#9f1239")
+
+    # bigquery feeds analysis
+    connect(in_ids[3]["id"], analysis["id"], "reads", "#a16207")
+
+    print("[miro] Main flow done. Rebuilding use cases...")
+
+    # Always rebuild use cases immediately after — flow script clears the whole board
+    import subprocess, sys
+    subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "miro_use_cases_v2.py")],
+        check=True,
+    )
+
+    print(f"[miro] Board fully rebuilt: https://miro.com/app/board/{BOARD}")
 
 
 if __name__ == "__main__":

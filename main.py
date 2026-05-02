@@ -450,14 +450,16 @@ def run_cadence(cadence: str, force: bool = False):
                           and (v.get("campaigns") or v.get("ads"))]
     log.info(f"Data collected from: {', '.join(channels_with_data)}")
 
-    # 2. Run all role agents (cadence context passed for deeper weekly/monthly analysis)
+    # 2. Run role agents — daily has none (deterministic analysers handle it),
+    #    strategist runs weekly/monthly/quarterly/on_demand.
     log.info(f"Running role agents for cadence={cadence}")
     results = run_trigger(cadence, data)
-    if not results:
-        log.warning(f"No role results returned — nothing to act on.")
-        return
+    if results:
+        log.info(f"{len(results)} role result(s) returned")
+    else:
+        log.info(f"No role agents for cadence={cadence} — deterministic analysers handle decisions")
 
-    # 3. Extract all tasks and approvals from all roles at once
+    # 3. Extract tasks and approvals from role results (empty list is fine)
     tasks, approvals = _extract_tasks(cadence, results)
 
     # 4. Ensure Asana channel sections exist (fast no-op if already created)
@@ -534,14 +536,7 @@ def run_cadence(cadence: str, force: bool = False):
         else:
             print(f"[approval] No Slack ts — manual approval via Asana task.")
 
-    # 8. Zapier health check — runs alongside daily cadence
-    try:
-        from collectors.zapier import run_check as zapier_check
-        zapier_check(since_hours=26, create_tasks=True)  # 26h covers any drift
-    except Exception as e:
-        log.warning(f"Zapier check failed (non-fatal): {e}")
-
-    # 9. Mark cadence complete
+    # 8. Mark cadence complete
     if cadence != "on_demand":
         mark_analysis_done(cadence)
 

@@ -140,6 +140,17 @@ def audit_campaign_health(
     """
 
     rows = list(client.query(sql).result())
+
+    # Pre-fetch IS data from Google Ads API once — used to route awareness campaigns.
+    # Keyed by lowercase campaign name. Non-Google channels won't appear here.
+    _is_cache: dict = {}
+    try:
+        from analysers.google_ads_audit import audit_impression_share
+        for f in audit_impression_share(days=days):
+            _is_cache[f["campaign"].lower()] = f
+    except Exception as _e:
+        print(f"[health] IS cache fetch skipped: {_e}")
+
     findings = []
     for r in rows:
         cpql_z = _cpql_zone(r.cpql)
@@ -169,41 +180,61 @@ def audit_campaign_health(
         is_qflavours = "qflavours" in r.campaign_name.lower()
 
         # ── Awareness / traffic / reach campaigns ─────────────────────────────
-        # Primary KPI: impression share (≥ 25% = healthy).
-        # Leads are not expected — do NOT evaluate CPQL/CPL for these.
+        # Primary KPI: Search Impression Share + Lost IS metrics, not leads.
+        # Route: Lost-IS-Budget high → scale | Lost-IS-Rank high → optimize
+        #        IS healthy (no finding) → monitor | non-Google → optimize (manual check)
         if is_awareness:
-            action = "review_impression_share"
-            note   = (
-                "Awareness/traffic campaign — leads not the primary KPI. "
-                "Check impression share in platform (target ≥ 25%). "
-                "Optimize for reach, frequency, and brand recall. "
-                "If impression share < 25%, raise budget or widen targeting."
-            )
+            is_rec = _is_cache.get(r.campaign_name.lower())
+            if is_rec:
+                if is_rec["verdict"] == "scale-budget-candidate":
+                    action = "scale"
+                    note   = (
+                        f"Lost IS (Budget) = {is_rec['is_lost_budget']*100:.0f}% — "
+                        f"campaign is ranking but budget-capped. "
+                        f"Raise daily budget to capture more impressions."
+                    )
+                else:
+                    action = "optimize"
+                    note   = is_rec["action"]
+            elif r.channel == "google_ads":
+                action = "monitor"
+                note   = "Awareness campaign — IS healthy, no budget/rank loss detected."
+            else:
+                action = "optimize"
+                note   = (
+                    "Awareness/traffic campaign — check platform-native reach/IS metrics. "
+                    "Target: impression share ≥ 25%, frequency ≤ 3. CPQL/CPL not applicable."
+                )
+            if action == "monitor":
+                continue   # healthy awareness — no task needed
             findings.append({
-                "channel":        r.channel,
-                "campaign":       r.campaign_name,
-                "account_id":     r.account_id,
-                "status":         r.status,
-                "days":           days,
-                "date_from":      since,
-                "date_to":        today.isoformat(),
-                "last_updated":   "awareness",
+                "channel":         r.channel,
+                "campaign":        r.campaign_name,
+                "account_id":      r.account_id,
+                "status":          r.status,
+                "days":            days,
+                "date_from":       since,
+                "date_to":         today.isoformat(),
+                "last_updated":    "awareness",
                 "days_since_edit": 999,
-                "spend":          round(r.spend or 0, 2),
-                "hs_leads":       int(r.hs_leads or 0),
-                "sqls":           int(r.sqls or 0),
-                "cpl":            None,
-                "cpql":           None,
-                "qual_rate":      0.0,
-                "roas":           round(roas, 2),
-                "cpql_zone":      "awareness",
-                "cpl_zone":       "awareness",
-                "junk_leads":     False,
-                "is_awareness":   True,
-                "is_qflavours":   False,
-                "roas_override":  False,
-                "action":         action,
-                "note":           note,
+                "spend":           round(r.spend or 0, 2),
+                "hs_leads":        int(r.hs_leads or 0),
+                "sqls":            int(r.sqls or 0),
+                "cpl":             None,
+                "cpql":            None,
+                "qual_rate":       0.0,
+                "roas":            round(roas, 2),
+                "cpql_zone":       "awareness",
+                "cpl_zone":        "awareness",
+                "junk_leads":      False,
+                "is_awareness":    True,
+                "is_qflavours":    False,
+                "roas_override":   False,
+                "action":          action,
+                "note":            note,
+                "is_share":        is_rec.get("is_share") if is_rec else None,
+                "is_lost_budget":  is_rec.get("is_lost_budget") if is_rec else None,
+                "is_lost_rank":    is_rec.get("is_lost_rank") if is_rec else None,
             })
             continue
 

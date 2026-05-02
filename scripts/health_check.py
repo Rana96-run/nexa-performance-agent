@@ -17,7 +17,6 @@ What it checks:
   - Meta Ads API (validates token)
   - Slack bot token (auth.test)
   - Asana token (users/me)
-  - Zapier webhook endpoint (GET /webhooks/zapier)
 
 Env vars needed: same as normal agent. RAILWAY_PUBLIC_DOMAIN is auto-set
 by Railway; falls back to localhost for local runs.
@@ -159,16 +158,6 @@ def check_asana() -> tuple[bool, str]:
         return False, f"Asana: {e}"
 
 
-def check_zapier_webhook() -> tuple[bool, str]:
-    try:
-        import requests
-        r = requests.get(f"{BASE_URL}/webhooks/zapier", timeout=10)
-        if r.status_code == 200:
-            return True, "/webhooks/zapier -> OK"
-        return False, f"/webhooks/zapier -> HTTP {r.status_code}"
-    except Exception as e:
-        return False, f"Zapier webhook: {e}"
-
 
 def check_hubspot_webhook() -> tuple[bool, str]:
     try:
@@ -188,10 +177,10 @@ def check_conversion_tracking() -> tuple[bool, str]:
     """
     try:
         from executors.google_ads import get_client
-        from config import GOOGLE_ADS_CUSTOMER_ID
+        from config import GOOGLE_ADS_CONFIG
         client = get_client()
         ga_svc = client.get_service("GoogleAdsService")
-        cid = GOOGLE_ADS_CUSTOMER_ID.replace("-", "")
+        cid = GOOGLE_ADS_CONFIG["customer_id"].replace("-", "")
         q = """
             SELECT conversion_action.name, conversion_action.status
             FROM conversion_action
@@ -257,32 +246,33 @@ def check_railway_deployment() -> tuple[bool, str]:
 
 def check_slack_listener() -> tuple[bool, str]:
     """
-    Verify the Slack listener is alive by checking its log file for a recent
-    heartbeat (last write within 3 minutes). Falls back to process table.
+    Verify the Slack events endpoint (/slack/events) is reachable and
+    that the bot can call auth.test (token valid + bot online).
+    This is what actually handles ✅/❌ reactions on Railway.
     """
-    import subprocess, time as _time
-    log_candidates = [
-        Path("logs/slack-listener.log"),
-        Path("/app/logs/slack-listener.log"),
-    ]
-    for log_path in log_candidates:
-        if log_path.exists():
-            age_s = _time.time() - log_path.stat().st_mtime
-            if age_s < 180:
-                return True, f"Slack listener log updated {int(age_s)}s ago"
-            return False, f"Slack listener log stale — last update {int(age_s//60)}m ago (process may be down)"
-
-    # Fallback: look for the process
+    import requests as _req
+    # 1. Check the /slack/events webhook endpoint
     try:
-        out = subprocess.check_output(
-            ["pgrep", "-f", "slack_listener"],
-            stderr=subprocess.DEVNULL,
-        ).decode().strip()
-        if out:
-            return True, f"Slack listener process running (pid {out.split()[0]})"
-        return False, "Slack listener process NOT found — run: python slack_listener.py"
-    except Exception:
-        return False, "Could not verify Slack listener (pgrep unavailable)"
+        r = _req.get(f"{BASE_URL}/slack/events", timeout=10)
+        # Flask returns 405 Method Not Allowed for GET (it only accepts POST) — that means it's up
+        if r.status_code in (200, 405):
+            events_ok = True
+        else:
+            events_ok = False
+    except Exception as e:
+        return False, f"Slack events endpoint unreachable: {e}"
+
+    # 2. Verify bot token is valid
+    try:
+        from slack_sdk import WebClient
+        from config import SLACK_BOT_TOKEN
+        info = WebClient(token=SLACK_BOT_TOKEN).auth_test()
+        bot = info.get("user", "?")
+        if events_ok:
+            return True, f"Slack listener OK — bot={bot}, /slack/events reachable"
+        return False, f"Bot token valid (bot={bot}) but /slack/events returned HTTP {r.status_code}"
+    except Exception as e:
+        return False, f"Slack bot token invalid: {e}"
 
 
 # ─── Runner ────────────────────────────────────────────────────────────────────
@@ -298,7 +288,6 @@ CHECKS = [
     ("Meta Ads",              check_meta),
     ("Slack",                 check_slack),
     ("Asana",                 check_asana),
-    ("Zapier webhook",        check_zapier_webhook),
     ("HubSpot webhook",       check_hubspot_webhook),
 ]
 

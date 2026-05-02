@@ -202,161 +202,80 @@ def _overdue_task_count() -> int:
 
 def _agent_actions_lines(audit_tasks: list, health_tasks: list) -> list[str]:
     """
-    What was sent to #approvals tonight — one line per action type.
-    Nothing is described as "executed" since all actions require approval first.
+    What was sent to #approvals tonight — category × count only, no campaign names.
+    Counts use len() directly since tasks are now one-per-campaign.
     """
-    lines = []
+    parts = []
 
-    # ── Campaign health (all channels) ────────────────────────────────────────
-    scale    = [t for t in health_tasks if str(t[0]).startswith("scale-pending")]
-    pause    = [t for t in health_tasks if str(t[0]).startswith("pause-pending")]
-    junk     = [t for t in health_tasks if "junk-leads" in str(t[0])]
-    optimize = [t for t in health_tasks if str(t[0]).startswith("optimize")]
-    drilldown= [t for t in health_tasks if str(t[0]).startswith("drilldown")]
+    scale     = sum(1 for t in health_tasks if str(t[0]).startswith("scale-pending"))
+    pause     = sum(1 for t in health_tasks if str(t[0]).startswith("pause-pending"))
+    junk      = sum(1 for t in health_tasks if "junk-leads" in str(t[0]))
+    optimize  = sum(1 for t in health_tasks if str(t[0]).startswith("optimize"))
+    drilldown = sum(1 for t in health_tasks if str(t[0]).startswith("drilldown"))
 
-    if scale:
-        n = _extract_n(scale[0][0])
-        lines.append(f"  • Scale {n} campaign(s) +25% — sent to #approvals")
-    if pause:
-        n = _extract_n(pause[0][0])
-        lines.append(f"  • Pause {n} campaign(s) (CPQL critical) — sent to #approvals")
-    if junk:
-        n = _extract_n(junk[0][0])
-        lines.append(f"  • {n} junk-leads alert(s) — low qual rate despite cheap CPL — sent to #approvals")
-    if optimize:
-        lines.append(f"  • {len(optimize)} channel(s) flagged for CPQL investigation — sent to #approvals")
-    if drilldown:
-        lines.append(f"  • {len(drilldown)} drill-down analysis task(s) created in Asana")
+    if scale:     parts.append(f"Scale ×{scale}")
+    if pause:     parts.append(f"Pause ×{pause}")
+    if junk:      parts.append(f"Junk ×{junk}")
+    if optimize:  parts.append(f"Optimize ×{optimize}")
+    if drilldown: parts.append(f"Drill-down ×{drilldown}")
 
-    # ── Google Ads audit ──────────────────────────────────────────────────────
-    kw_paused = [t for t in audit_tasks if "kw-auto-paused" in str(t[0])]
-    negatives = [t for t in audit_tasks if str(t[0]).startswith("negatives")]
-    is_audit  = [t for t in audit_tasks if str(t[0]).startswith("IS audit")]
-    qs_audit  = [t for t in audit_tasks if str(t[0]).startswith("QS audit")]
-    kw_expand = [t for t in audit_tasks if str(t[0]).startswith("keyword expansion")]
+    kw_paused = sum(1 for t in audit_tasks if "kw-auto-paused" in str(t[0]))
+    negatives = sum(1 for t in audit_tasks if str(t[0]).startswith("negatives"))
+    is_audit  = sum(1 for t in audit_tasks if str(t[0]).startswith("IS audit"))
+    qs_audit  = sum(1 for t in audit_tasks if str(t[0]).startswith("QS audit"))
+    kw_expand = sum(1 for t in audit_tasks if str(t[0]).startswith("keyword expansion"))
 
-    if kw_paused:
-        lines.append(f"  • Google Ads: {_extract_n(kw_paused[0][0])} non-converting keywords — sent to #approvals")
-    if negatives:
-        lines.append(f"  • Google Ads: {_extract_n(negatives[0][0])} negative keywords ready to add — sent to #approvals")
-    if is_audit:
-        lines.append(f"  • Google Ads: Impression Share below threshold on {_extract_n(is_audit[0][0])} campaigns")
-    if qs_audit:
-        lines.append(f"  • Google Ads: Quality Score issues on {_extract_n(qs_audit[0][0])} keywords")
-    if kw_expand:
-        lines.append(f"  • Google Ads: {_extract_n(kw_expand[0][0])} search terms ready to promote to keywords")
+    if kw_paused: parts.append(f"KW pause ×{kw_paused}")
+    if negatives: parts.append(f"Negatives ×{negatives}")
+    if is_audit:  parts.append(f"IS ×{is_audit}")
+    if qs_audit:  parts.append(f"QS ×{qs_audit}")
+    if kw_expand: parts.append(f"KW expand ×{kw_expand}")
 
-    return lines
+    return ["  " + "  ·  ".join(parts)] if parts else []
 
 
 def _peak_numbers_lines() -> list[str]:
-    """
-    For each active channel, show the best campaign (lowest CPQL) and
-    worst campaign (highest CPQL) over the last 7 days.
-    Campaigns with no SQLs are excluded from best; worst shows N/A CPQL if no SQLs.
-    """
+    """Channel-level spend / leads / CPQL for last 7 days. No campaign names."""
     try:
         from collectors.bq_writer import get_client, PROJECT_ID, DATASET
     except Exception:
         return []
     try:
         client = get_client()
-        # Per-campaign CPQL over last 7d, pre-aggregating HubSpot to avoid fan-out
         rows = list(client.query(f"""
             WITH hs AS (
               SELECT date, lead_utm_campaign,
+                     SUM(leads_total)     AS leads,
                      SUM(leads_qualified) AS sqls
               FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
               GROUP BY date, lead_utm_campaign
-            ),
-            camp AS (
-              SELECT
-                c.channel,
-                c.campaign_name,
-                SUM(c.spend) AS spend,
-                SUM(hs.sqls) AS sqls,
-                SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
-              FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
-              LEFT JOIN hs
-                ON c.date = hs.date
-               AND LOWER(CASE WHEN c.channel = 'linkedin'
-                              THEN IFNULL(c.campaign_group_name, c.campaign_name)
-                              ELSE c.campaign_name END) = LOWER(hs.lead_utm_campaign)
-              WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
-                AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-              GROUP BY c.channel, c.campaign_name
-              HAVING SUM(c.spend) >= 20
-            ),
-            ranked AS (
-              SELECT *,
-                ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql ASC NULLS LAST)  AS rn_best,
-                ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql DESC NULLS FIRST) AS rn_worst
-              FROM camp
             )
-            SELECT channel, campaign_name, spend, sqls, cpql,
-                   rn_best, rn_worst
-            FROM ranked
-            WHERE rn_best = 1 OR rn_worst = 1
-            ORDER BY channel, rn_best
+            SELECT
+              c.channel,
+              ROUND(SUM(c.spend), 0)                                         AS spend,
+              COALESCE(SUM(hs.leads), 0)                                     AS leads,
+              COALESCE(SUM(hs.sqls), 0)                                      AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)), 0)  AS cpql
+            FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
+            LEFT JOIN hs ON c.date = hs.date
+                        AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+            WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+              AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+              AND c.spend > 0
+            GROUP BY c.channel
+            ORDER BY spend DESC
         """).result())
     except Exception as e:
-        err = str(e)
-        if "campaign_group_name not found" in err:
-            # Column added recently — retry without LinkedIn-specific join
-            try:
-                rows = list(client.query(f"""
-                    WITH hs AS (
-                      SELECT date, lead_utm_campaign, SUM(leads_qualified) AS sqls
-                      FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-                      GROUP BY date, lead_utm_campaign
-                    ),
-                    camp AS (
-                      SELECT c.channel, c.campaign_name,
-                             SUM(c.spend) AS spend, SUM(hs.sqls) AS sqls,
-                             SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
-                      FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
-                      LEFT JOIN hs ON c.date = hs.date
-                                  AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
-                      WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
-                        AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-                      GROUP BY c.channel, c.campaign_name HAVING SUM(c.spend) >= 20
-                    ),
-                    ranked AS (
-                      SELECT *, ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql ASC NULLS LAST) AS rn_best,
-                                ROW_NUMBER() OVER (PARTITION BY channel ORDER BY cpql DESC NULLS FIRST) AS rn_worst
-                      FROM camp
-                    )
-                    SELECT channel, campaign_name, spend, sqls, cpql, rn_best, rn_worst
-                    FROM ranked WHERE rn_best = 1 OR rn_worst = 1 ORDER BY channel
-                """).result())
-            except Exception as e2:
-                print(f"[daily-summary] peak_numbers fallback also failed: {e2}")
-                return []
-        else:
-            print(f"[daily-summary] peak_numbers BQ query failed: {e}")
-            return []
+        print(f"[daily-summary] peak_numbers BQ query failed: {e}")
+        return []
 
-    # Group into {channel: {best, worst}}
-    from collections import defaultdict
-    by_channel: dict = defaultdict(dict)
-    for r in rows:
-        name  = r.campaign_name or ""
-        cpql  = f"${r.cpql:.0f}" if r.cpql else "no SQLs"
-        label = f"{name} · CPQL {cpql}"
-        if r.rn_best == 1:
-            by_channel[r.channel]["best"] = label
-        if r.rn_worst == 1:
-            by_channel[r.channel]["worst"] = label
-
+    # channel totals — no campaign names
     lines = []
-    for channel in sorted(by_channel):
-        d     = by_channel[channel]
-        best  = d.get("best",  "—")
-        worst = d.get("worst", "—")
-        if best == worst:
-            lines.append(f"  *{channel}*  {best[:70]}")
-        else:
-            lines.append(f"  *{channel}*  top: {best[:50]}  ·  worst: {worst[:50]}")
+    for r in rows:
+        spend_s = f"${int(r.spend):,}"
+        leads_s = str(int(r.leads)) if r.leads else "0"
+        cpql_s  = f"CPQL ${int(r.cpql)}" if r.cpql else "no SQLs"
+        lines.append(f"  *{r.channel}*  {spend_s}  ·  {leads_s} leads  ·  {cpql_s}")
     return lines
 
 
@@ -403,36 +322,31 @@ def build_daily_summary_text(spikes: list | None = None,
     spike_lines  = _spike_lines(spikes or [])
     overdue      = _overdue_task_count()
 
-    lines = [
-        f"*Daily Report — {today_str}*",
-        f"Dashboard: {url}",
-        "",
-    ]
+    lines = [f"*{today_str}  ·  <{url}|Dashboard>*", ""]
 
-    # ── Performance numbers ───────────────────────────────────────────────────
+    # ── Performance — channel totals, no campaign names ───────────────────────
     if peak_lines:
-        lines.append("*Performance — last 7 days*")
+        lines.append("*7d Performance*")
         lines.extend(peak_lines)
         lines.append("")
 
     # ── Alerts ───────────────────────────────────────────────────────────────
     if spike_lines:
-        lines.append("*Alerts vs 7-day average*")
+        lines.append("*Alerts*")
         lines.extend(spike_lines)
         lines.append("")
 
-    # ── What was sent to approvals ────────────────────────────────────────────
+    # ── What was sent to approvals — category × count only ───────────────────
     if action_lines:
-        lines.append("*Sent to #approvals for your decision*")
-        lines.extend(action_lines)
+        lines.append("*→ #approvals*  " + action_lines[0].strip())
         lines.append("")
 
-    # ── Asana summary ────────────────────────────────────────────────────────
+    # ── Asana one-liner ───────────────────────────────────────────────────────
     new_tasks     = counts.get("created_today", 0)
     total_pending = sum(n for _, n in counts.get("pending_by_project", []))
-    asana_line    = f"*Asana:* {new_tasks} new task(s) created  ·  {total_pending} pending"
+    asana_line    = f"*Asana:*  {new_tasks} new  ·  {total_pending} pending"
     if overdue:
-        asana_line += f"  ·  {overdue} overdue (need new due date)"
+        asana_line += f"  ·  {overdue} overdue"
     lines.append(asana_line)
 
     return "\n".join(lines)

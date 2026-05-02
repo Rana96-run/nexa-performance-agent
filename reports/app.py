@@ -23,12 +23,10 @@ from pathlib import Path
 
 from flask import Flask, jsonify, redirect, request, send_file, abort, Response
 from collectors.hubspot_webhook import hubspot_bp
-from collectors.zapier_webhook import zapier_bp
 
 REPORTS_DIR = Path(__file__).parent
 app = Flask(__name__)
 app.register_blueprint(hubspot_bp)
-app.register_blueprint(zapier_bp)
 
 
 # ─── Static report pages ──────────────────────────────────────────────────────
@@ -470,24 +468,32 @@ def _handle_reaction(event: dict):
             return  # not one of our messages
 
         action = meta.get("action", "")
-        camp   = meta.get("campaign", "") or ", ".join(meta.get("campaigns", [])[:3])
+        # Build a human-readable label for the reaction reply
+        if action == "batch_scale_pause":
+            findings = meta.get("findings", [])
+            camp = f"{len(findings)} campaign(s)"
+        else:
+            camp = meta.get("campaign", "") or ", ".join(meta.get("campaigns", [])[:3])
         user   = event.get("user", "")
 
         if reaction == "white_check_mark":
             exec_result = _execute_approved_action(meta)
-            asana_gid   = meta.get("asana_gid", "")
-            if asana_gid:
+            # Update Asana for each finding in a batch, or the single asana_gid
+            gids = [f.get("asana_gid") for f in meta.get("findings", []) if f.get("asana_gid")]
+            if not gids and meta.get("asana_gid"):
+                gids = [meta["asana_gid"]]
+            for gid in gids:
                 try:
                     import asana as asana_sdk
                     cfg = asana_sdk.Configuration()
                     cfg.access_token = os.getenv("ASANA_ACCESS_TOKEN", "")
                     ac  = asana_sdk.ApiClient(cfg)
                     asana_sdk.StoriesApi(ac).create_story_for_task(
-                        asana_gid,
-                        {"data": {"text": f"[Nexa] Approved by <@{user}>. Result: {exec_result}"}},
+                        gid,
+                        {"data": {"text": f"[Nexa] Approved by <@{user}>. Result: {exec_result[:200]}"}},
                     )
                 except Exception as e:
-                    print(f"[events] Asana comment failed: {e}")
+                    print(f"[events] Asana comment failed for {gid}: {e}")
             reply = f"✅ *Approved* by <@{user}>\n{exec_result}"
         else:
             reply = f"❌ *Rejected* by <@{user}>\n`{camp}` — no changes made."
@@ -558,6 +564,13 @@ def _execute_approved_action(meta: dict) -> str:
             return f"Campaign paused. Done."
         except Exception as e:
             return f"Pause execution failed: {e}. Pause `{campaign}` manually."
+
+    elif action == "batch_scale_pause":
+        results = []
+        for f in meta.get("findings", []):
+            sub = _execute_approved_action(f)
+            results.append(f"`{f.get('campaign', '?')}`: {sub}")
+        return "\n".join(results) if results else "Nothing to execute."
 
     return "Acknowledged — Asana tasks updated."
 

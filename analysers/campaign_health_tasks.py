@@ -171,110 +171,95 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
 
     out: list[tuple[str, str | None]] = []
 
-    scale_f      = [f for f in findings if f["action"] == "scale"]
-    pause_f      = [f for f in findings if f["action"] == "pause"]
-    optimize_f   = [f for f in findings if f["action"] == "optimize"]
-    drilldown_f  = [f for f in findings if f["action"] == "drilldown"]
-    junk_f       = [f for f in findings if f.get("junk_leads")]
-    awareness_f  = [f for f in findings if f.get("is_awareness")]
+    scale_f     = [f for f in findings if f["action"] == "scale"]
+    pause_f     = [f for f in findings if f["action"] == "pause"]
+    optimize_f  = [f for f in findings if f["action"] == "optimize"]
+    drilldown_f = [f for f in findings if f["action"] == "drilldown"]
+    # Junk leads are a sub-type of pause — merge into pause bucket.
+    # Add any junk campaigns not already in pause_f (junk_leads CAN appear in optimize_f too).
+    pause_names = {f["campaign"] for f in pause_f}
+    junk_extra  = [f for f in findings if f.get("junk_leads") and f["campaign"] not in pause_names]
+    pause_f     = pause_f + junk_extra
 
-    # ── 1. Scale candidates — send for approval, do NOT auto-execute ─────────────
+    # ── 1. Scale candidates — one task per campaign ────────────────────────────
     if scale_f:
         for f in scale_f:
             avg = _avg_daily_spend(f["channel"], f["campaign"], f["account_id"])
             f["avg_spend"]  = avg
             f["new_budget"] = round(avg * (1 + SCALE_PCT), 2) if avg else None
 
-        body = (
-            f"Campaign health audit — last {days} days.\n"
-            f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
-            f"### Scale candidates ({len(scale_f)}) — *awaiting approval*\n"
-            + _campaign_table(scale_f)
-            + "\nApprove in #approvals to execute the +25% budget increase."
-        )
-        gid = create_task(
-            title=f"PENDING APPROVAL: Scale {len(scale_f)} campaign(s) +{SCALE_PCT*100:.0f}% ({days}d)",
-            description=body,
-            project_key="optimization",
-            task_type="Recommendation",
-            channel="general",
-            asset_level="campaign",
-            action="scale",
-        )
-        out.append((f"scale-pending ({len(scale_f)})", gid))
-        _send_action_approvals(scale_f)
+            if f.get("is_awareness"):
+                lost_bud = f.get("is_lost_budget")
+                awareness_note = (
+                    f"\n⚠️ **Awareness campaign** — Lost IS (Budget) = {lost_bud*100:.0f}%. "
+                    f"Budget is the bottleneck; raising it will capture more impressions.\n"
+                    if lost_bud is not None else
+                    "\n⚠️ **Awareness campaign** — confirm IS metrics in platform before raising budget.\n"
+                )
+            else:
+                awareness_note = ""
+            body = (
+                f"Campaign health audit — last {days} days.\n"
+                f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
+                f"### Scale candidate — *awaiting approval*\n"
+                + _campaign_table([f])
+                + awareness_note
+                + "\nApprove in #approvals to execute the +25% budget increase."
+            )
+            gid = create_task(
+                title=f"PENDING APPROVAL: Scale — {f['campaign']} +{SCALE_PCT*100:.0f}% ({days}d)",
+                description=body,
+                project_key="optimization",
+                task_type="Recommendation",
+                channel=f.get("channel", "general"),
+                asset_level="campaign",
+                action="scale",
+            )
+            out.append((f"scale-pending {f['campaign']}", gid))
 
-    # ── 2. Pause candidates — send for approval, do NOT auto-execute ─────────────
+    # ── 2. Pause candidates (+ junk leads) — one task per campaign ────────────
     if pause_f:
-        body = (
-            f"Campaign health audit — last {days} days.\n"
-            f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
-            f"### Pause candidates ({len(pause_f)}) — *awaiting approval*\n"
-            + _campaign_table(pause_f)
-            + "\nApprove in #approvals to pause. Fix audience/creative/LP before reactivating."
-        )
-        gid = create_task(
-            title=f"PENDING APPROVAL: Pause {len(pause_f)} campaign(s) — CPQL critical ({days}d)",
-            description=body,
-            project_key="optimization",
-            task_type="Recommendation",
-            channel="general",
-            asset_level="campaign",
-            action="pause",
-        )
-        out.append((f"pause-pending ({len(pause_f)})", gid))
-        _send_action_approvals(pause_f)
+        for f in pause_f:
+            if f.get("junk_leads"):
+                title = f"PENDING APPROVAL: Pause — {f['campaign']} — Junk Leads ({days}d)"
+                reason = (
+                    "CPL looks cheap but qual rate is low — leads are not converting to SQLs. "
+                    "Do NOT scale on CPL alone. Fix audience, creative, or LP before any budget change."
+                )
+            else:
+                title = f"PENDING APPROVAL: Pause — {f['campaign']} — CPQL critical ({days}d)"
+                reason = "Fix audience/creative/LP before reactivating."
+            body = (
+                f"Campaign health audit — last {days} days.\n"
+                f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
+                f"### Pause candidate — *awaiting approval*\n"
+                + _campaign_table([f])
+                + f"\n{reason}\nApprove in #approvals to pause."
+            )
+            gid = create_task(
+                title=title,
+                description=body,
+                project_key="optimization",
+                task_type="Recommendation",
+                channel=f.get("channel", "general"),
+                asset_level="campaign",
+                action="pause",
+            )
+            out.append((f"pause-pending {f['campaign']}", gid))
 
-    # ── 3. Junk-leads alert ────────────────────────────────────────────────────
-    if junk_f:
-        # Creative analysis: junk leads are often a creative-level problem
-        junk_creative_sections = []
-        for f in junk_f:
-            try:
-                cr = audit_creative_performance(campaign_name=f["campaign"], channel=f.get("channel"), days=30)
-                section = format_creative_section(cr)
-                if section:
-                    junk_creative_sections.append(section)
-            except Exception as e:
-                print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
+    # ── Nightly approvals digest sent ONCE at the end (after all blocks) ─────
+    # Collected here; posted below after review_items are built.
 
-        body = (
-            f"**Junk-Leads Alert** — {len(junk_f)} campaign(s) with misleading low CPL.\n\n"
-            f"These campaigns show a CPL in the scale zone but their CPQL and qual rate "
-            f"are in the pause/warning zone. This means: leads are cheap but most don't "
-            f"qualify. **Do not scale on CPL alone.**\n\n"
-            f"Root causes to investigate:\n"
-            f"- Wrong audience pulling unqualified traffic\n"
-            f"- Keyword intent mismatch (informational vs transactional)\n"
-            f"- Landing page / form attracting non-ICP visitors\n"
-            f"- UTM attribution gaps (leads attributed to wrong campaign)\n\n"
-            + _campaign_table(junk_f)
-            + ("\n" + "\n".join(junk_creative_sections) if junk_creative_sections else "")
-        )
-        gid = create_task(
-            title=f"Junk-Leads Alert: {len(junk_f)} campaign(s) with low CPL but poor CPQL",
-            description=body,
-            project_key="optimization",
-            task_type="Recommendation",
-            channel="general",
-            asset_level="campaign",
-            action="optimize",
-        )
-        out.append((f"junk-leads-alert ({len(junk_f)})", gid))
-
-    # ── 4. Drill-down analysis tasks ──────────────────────────────────────────
+    # ── 3. Drill-down analysis tasks — one task per campaign ──────────────────
     if drilldown_f:
         from analysers.ad_drilldown import get_ad_drilldown_table, get_keyword_drilldown_table
 
-        by_channel: dict[str, list[dict]] = {}
         for f in drilldown_f:
-            by_channel.setdefault(f["channel"], []).append(f)
-
-        for channel, ch_findings in by_channel.items():
-            date_from = ch_findings[0].get("date_from", "")
-            date_to   = ch_findings[0].get("date_to", "")
+            channel = f["channel"]
+            date_from = f.get("date_from", "")
+            date_to   = f.get("date_to", "")
             date_range_str = f"{date_from} to {date_to}" if date_from and date_to else f"last {days} days"
-            ch_type = ch_findings[0].get("drilldown_channel_type", "social")
+            ch_type = f.get("drilldown_channel_type", "social")
 
             if ch_type == "search":
                 hierarchy = (
@@ -293,40 +278,33 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                     "3. **Campaign** — pause only after confirming all ad sets are underperforming\n"
                 )
 
-            # Pull actual ad/keyword data from BQ if available
             drill_table = ""
-            for f in ch_findings:
-                campaign_name = f.get("campaign", "")
-                try:
-                    if ch_type == "search":
-                        drill_table += get_keyword_drilldown_table(channel, campaign_name, days)
-                    else:
-                        drill_table += get_ad_drilldown_table(channel, campaign_name, days)
-                except Exception as e:
-                    drill_table += f"\n_(Ad/keyword data not available yet for {campaign_name}: {e})_\n"
+            try:
+                if ch_type == "search":
+                    drill_table = get_keyword_drilldown_table(channel, f["campaign"], days)
+                else:
+                    drill_table = get_ad_drilldown_table(channel, f["campaign"], days)
+            except Exception as e:
+                drill_table = f"\n_(Ad/keyword data not available: {e})_\n"
 
-            # Creative analysis per campaign in this drilldown group
-            drill_creative_sections = []
-            for f in ch_findings:
-                try:
-                    cr = audit_creative_performance(campaign_name=f["campaign"], channel=f.get("channel"), days=30)
-                    section = format_creative_section(cr)
-                    if section:
-                        drill_creative_sections.append(section)
-                except Exception as e:
-                    print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
+            creative_section = ""
+            try:
+                cr = audit_creative_performance(campaign_name=f["campaign"], channel=channel, days=30)
+                creative_section = format_creative_section(cr) or ""
+            except Exception as e:
+                print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
 
             body = (
                 f"**Drill-down Analysis Required — {channel} — {date_range_str}**\n\n"
-                f"These campaigns have CPQL >${DRILL_DOWN_CPQL} AND CPL >${DRILL_DOWN_CPL} "
-                f"for {days} days. Do NOT pause at campaign level yet.\n\n"
+                f"CPQL >${DRILL_DOWN_CPQL} AND CPL >${DRILL_DOWN_CPL} for {days} days. "
+                f"Do NOT pause at campaign level yet.\n\n"
                 + hierarchy + "\n"
-                + _campaign_table(ch_findings)
+                + _campaign_table([f])
                 + ("\n\n**Ad / Keyword detail:**\n" + drill_table if drill_table.strip() else "")
-                + ("\n" + "\n".join(drill_creative_sections) if drill_creative_sections else "")
+                + (f"\n{creative_section}" if creative_section else "")
             )
             gid = create_task(
-                title=f"{channel.replace('_',' ').title()} — Drill-down: {len(ch_findings)} campaign(s) ({date_range_str})",
+                title=f"{channel.replace('_',' ').title()} — Drill-down: {f['campaign']} ({date_range_str})",
                 description=body,
                 project_key="optimization",
                 task_type="Recommendation",
@@ -334,59 +312,68 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 asset_level="ad" if ch_type == "social" else "keyword",
                 action="optimize",
             )
-            out.append((f"drilldown {channel} ({len(ch_findings)})", gid))
-        _send_approval_requests(drilldown_f)
+            out.append((f"drilldown {channel} {f['campaign']}", gid))
 
-    # ── 5. Optimize (investigate) + send approval request to Slack ────────────
-    if optimize_f or junk_f:
-        # Send one approval request per finding that needs human review
-        approval_items = optimize_f + [f for f in junk_f if f not in optimize_f]
-        _send_approval_requests(approval_items)
+    # ── 5. Optimize (investigate) — one task per campaign ────────────────────
+    #    Includes awareness campaigns routed here (action="optimize") — they get
+    #    an IS-review body instead of CPQL investigation.
 
     if optimize_f:
-        by_channel: dict[str, list[dict]] = {}
         for f in optimize_f:
-            by_channel.setdefault(f["channel"], []).append(f)
-
-        for channel, ch_findings in by_channel.items():
-            # Date range from first finding
-            date_from = ch_findings[0].get("date_from", "")
-            date_to   = ch_findings[0].get("date_to", "")
+            channel = f["channel"]
+            date_from = f.get("date_from", "")
+            date_to   = f.get("date_to", "")
             date_range_str = f"{date_from} to {date_to}" if date_from and date_to else f"last {days} days"
 
-            # Creative analysis: one call per campaign, append sections
-            opt_creative_sections = []
-            for f in ch_findings:
+            creative_section = ""
+            if not f.get("is_awareness"):
                 try:
-                    cr = audit_creative_performance(campaign_name=f["campaign"], channel=f.get("channel"), days=30)
-                    section = format_creative_section(cr)
-                    if section:
-                        opt_creative_sections.append(section)
+                    cr = audit_creative_performance(campaign_name=f["campaign"], channel=channel, days=30)
+                    creative_section = format_creative_section(cr) or ""
                 except Exception as e:
                     print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
+
+            if f.get("is_awareness"):
+                section_title = f"### {channel} — Awareness / IS Review"
+                is_pct     = f"{f['is_share']*100:.0f}%" if f.get("is_share") is not None else "N/A"
+                lost_bud   = f"{f['is_lost_budget']*100:.0f}%" if f.get("is_lost_budget") is not None else "N/A"
+                lost_rank  = f"{f['is_lost_rank']*100:.0f}%" if f.get("is_lost_rank") is not None else "N/A"
+                is_metrics = (
+                    f"IS: {is_pct} | Lost (Budget): {lost_bud} | Lost (Rank): {lost_rank}\n\n"
+                    if f.get("is_share") is not None else ""
+                )
+                investigation = (
+                    f"**Awareness / traffic campaign — primary KPI is impression share.**\n\n"
+                    + is_metrics
+                    + "Checklist:\n"
+                    "- If Lost IS (Budget) > 20%: raise daily budget\n"
+                    "- If Lost IS (Rank) > 30%: improve Quality Score or raise bids\n"
+                    "- If IS > 80%: broaden keywords / add new ad groups\n"
+                    "- If frequency > 3: refresh creatives to avoid ad fatigue\n"
+                    "- Ensure `utm_source=paid_social&utm_medium=cpm` so brand-lift is tracked\n"
+                )
+                task_title = f"{channel.replace('_',' ').title()} — IS Review: {f['campaign']} ({days}d)"
+            else:
+                section_title = f"### {channel} — CPQL investigation"
+                investigation = (
+                    "**Common causes:**\n"
+                    "- Poor qual rate: wrong audience or keyword intent\n"
+                    "- High CPQL vs CPL: leads entering but not qualifying (LP or ICP mismatch)\n"
+                    "- Missing UTM: HubSpot not receiving utm_campaign correctly\n"
+                )
+                task_title = f"{channel.replace('_',' ').title()} — CPQL investigation: {f['campaign']} ({days}d)"
 
             body = (
                 f"Campaign health audit — **{date_range_str}**\n"
                 f"Cost: channel source | Leads: HubSpot Lead Module\n"
                 f"⚠️ Actions only applied to campaigns last edited ≥7 days ago.\n\n"
-                f"### {channel} — {len(ch_findings)} campaigns need CPQL investigation\n"
-                + _campaign_table(ch_findings)
-                + "\n**Common causes:**\n"
-                "- Poor qual rate: wrong audience or keyword intent\n"
-                "- High CPQL vs CPL: leads entering but not qualifying (LP or ICP mismatch)\n"
-                "- Missing UTM: HubSpot not receiving utm_campaign correctly\n"
-                + ("\n" + "\n".join(opt_creative_sections) if opt_creative_sections else "")
+                + section_title + "\n"
+                + _campaign_table([f])
+                + f"\n{investigation}"
+                + (f"\n{creative_section}" if creative_section else "")
             )
-            # Append cross-type creative breakdown once per channel group
-            try:
-                by_type_result = audit_creative_by_campaign_type(days=30)
-                by_type_section = format_creative_by_type_section(by_type_result)
-                if by_type_section:
-                    body += by_type_section
-            except Exception as e:
-                print(f"[health-tasks] creative by-type analysis failed: {e}")
             gid = create_task(
-                title=f"{channel.replace('_',' ').title()} — {len(ch_findings)} campaigns: CPQL investigation ({days}d)",
+                title=task_title,
                 description=body,
                 project_key="optimization",
                 task_type="Recommendation",
@@ -394,98 +381,33 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 asset_level="campaign",
                 action="optimize",
             )
-            out.append((f"optimize {channel} ({len(ch_findings)})", gid))
+            out.append((f"optimize {channel} {f['campaign']}", gid))
 
-    # ── 6. Awareness / traffic / reach campaigns ──────────────────────────────
-    if awareness_f:
-        by_channel: dict[str, list[dict]] = {}
-        for f in awareness_f:
-            by_channel.setdefault(f["channel"], []).append(f)
-
-        for channel, ch_findings in by_channel.items():
-            rows = ""
-            for f in ch_findings:
-                rows += (f"| {f['campaign']} | ${f['spend']:.0f} | "
-                         f"{f['hs_leads']} | {f.get('status','')} | "
-                         f"Check impression share ≥ 25% in platform |\n")
-
-            body = (
-                f"**Awareness / Traffic Campaign Review — last {days} days**\n\n"
-                f"These campaigns are NOT evaluated on leads. "
-                f"Primary KPI: **impression share ≥ 25%**.\n\n"
-                f"| Campaign | Spend | Impressions (leads) | Status | Action |\n"
-                f"|---|---|---|---|---|\n"
-                + rows
-                + "\n**Optimization checklist:**\n"
-                "- Check impression share in platform — target ≥ 25%\n"
-                "- If IS < 25%: raise daily budget or broaden targeting\n"
-                "- If frequency > 3: refresh creatives to avoid ad fatigue\n"
-                "- If CTR < 0.5%: test new creatives / headlines\n"
-                "- Review audience overlap with performance campaigns\n"
-                "- Ensure UTM source/medium are set (`utm_source=paid_social&utm_medium=cpm`) "
-                "so brand-lift can be tracked in HubSpot\n"
-            )
-            gid = create_task(
-                title=f"{channel.replace('_',' ').title()} — Impression Share & Traffic Review ({days}d)",
-                description=body,
-                project_key="optimization",
-                task_type="Recommendation",
-                channel=channel,
-                asset_level="campaign",
-                action="optimize",
-            )
-            out.append((f"awareness-review {channel} ({len(ch_findings)})", gid))
+    # ── ONE #approvals message covering everything ────────────────────────────
+    review_items: list[dict] = []
+    for f in drilldown_f + optimize_f + junk_f:
+        if f not in review_items:
+            review_items.append(f)
+    _send_nightly_digest(scale_f, pause_f, review_items)
 
     return out
 
 
-def _send_action_approvals(findings: list) -> None:
+def _send_nightly_digest(scale_findings: list, pause_findings: list, review_findings: list) -> None:
     """
-    Post ONE individual Slack message per scale/pause finding.
-    Each gets its own yes/no reply thread so approvals are granular.
+    Post THE ONE #approvals message for the night.
+    Covers scale + pause (executable on ✅) + optimize/junk/drilldown (review summary).
     """
-    try:
-        from notifications.slack import post_action_approval
-    except Exception as e:
-        print(f"[health-tasks] approval import failed: {e}")
+    if not scale_findings and not pause_findings and not review_findings:
         return
-
-    for f in findings:
-        try:
-            avg = f.get("avg_spend")
-            ts  = post_action_approval(f, avg_spend=avg)
-            print(f"[health-tasks] action approval posted: {f.get('campaign','')[:60]} ts={ts}")
-        except Exception as e:
-            print(f"[health-tasks] action approval failed: {e}")
-
-
-def _send_approval_requests(findings: list) -> None:
-    """
-    Post ONE digest message for optimize/junk/drilldown findings.
-    Findings with no SQL data (CPQL=N/A, qual_rate=0, no junk flag) are dropped.
-    """
     try:
-        from notifications.slack import post_approval_digest
+        from notifications.slack import post_nightly_approvals_digest
+        ts = post_nightly_approvals_digest(scale_findings, pause_findings, review_findings)
+        print(f"[health-tasks] nightly digest posted "
+              f"(scale={len(scale_findings)}, pause={len(pause_findings)}, "
+              f"review={len(review_findings)}, ts={ts})")
     except Exception as e:
-        print(f"[health-tasks] approval import failed: {e}")
-        return
-
-    actionable = [
-        f for f in findings
-        if f.get("cpql") or f.get("qual_rate", 0) > 0 or f.get("junk_leads")
-    ]
-    skipped = len(findings) - len(actionable)
-    if skipped:
-        print(f"[health-tasks] {skipped} finding(s) skipped (no SQL data)")
-    if not actionable:
-        print("[health-tasks] no actionable findings — skipping approval digest")
-        return
-
-    try:
-        ts = post_approval_digest(actionable)
-        print(f"[health-tasks] review digest posted ({len(actionable)} findings, ts={ts})")
-    except Exception as e:
-        print(f"[health-tasks] review digest failed: {e}")
+        print(f"[health-tasks] nightly digest failed: {e}")
 
 
 if __name__ == "__main__":

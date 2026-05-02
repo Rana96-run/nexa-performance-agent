@@ -52,63 +52,72 @@ def get_pending_approval(ts: str) -> dict | None:
     return _load_pending().get(ts)
 
 
-def post_action_approval(finding: dict, avg_spend: float | None = None) -> str | None:
+def post_nightly_approvals_digest(
+    scale_findings: list,
+    pause_findings: list,
+    review_findings: list,
+) -> str | None:
     """
-    Post ONE individual approval request for a scale or pause action.
-    Each campaign gets its own message so the user can reply yes/no per campaign.
+    THE ONE #approvals message per night.
+
+    Covers everything in a single post:
+      - Scale candidates  (✅ executes +25% budget)
+      - Pause candidates  (✅ executes pause)
+      - Review summary    (optimize / junk / drilldown — tasks already in Asana)
+
+    ✅ = execute all scale + pause actions  ·  ❌ = skip all
     Returns the Slack message ts, or None on failure.
     """
     from notifications.quiet import is_quiet, quiet_log
 
-    action   = finding.get("action", "").lower()
-    campaign = finding.get("campaign", "?")
-    channel  = finding.get("channel", "?")
-    cpql_str = f"${finding['cpql']:.0f}" if finding.get("cpql") else "N/A"
-    cpl_str  = f"${finding['cpl']:.0f}"  if finding.get("cpl")  else "N/A"
-    qual_str = f"{finding.get('qual_rate', 0):.0f}%"
+    if not scale_findings and not pause_findings and not review_findings:
+        return None
 
-    if action == "scale":
-        icon   = ":large_green_circle:"
-        title  = f"{icon} *Scale approval needed*"
-        budget_line = ""
-        if avg_spend:
-            new_b = round(avg_spend * 1.25, 0)
-            budget_line = f"\nBudget: ~${avg_spend:.0f}/day  →  ~${new_b:.0f}/day  (+25%)"
-        body = (
-            f"Campaign: `{campaign}`\n"
-            f"CPQL {cpql_str}  ·  CPL {cpl_str}  ·  qual rate {qual_str}{budget_line}\n"
-            f"Both CPQL and CPL are in the scale zone and qual rate is healthy."
-        )
-        reply_hint = "React :white_check_mark: to increase budget +25%, or :x: to skip."
+    today = datetime.now(timezone.utc).strftime("%b %-d")
+    lines = [f":arrows_counterclockwise: *Nightly approvals — {today}*"]
+
+    executable_findings = []
+
+    if scale_findings:
+        lines.append("\n*Scale ↑* (+25% budget)")
+        for f in scale_findings:
+            cpql  = f"CPQL ${f['cpql']:.0f}" if f.get("cpql") else "CPQL N/A"
+            avg   = f.get("avg_spend")
+            new_b = f.get("new_budget")
+            budget = f"  ·  ${avg:.0f}→${new_b:.0f}/day" if avg and new_b else ""
+            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}{budget}")
+        executable_findings.extend(scale_findings)
+
+    if pause_findings:
+        lines.append("\n*Pause ⏸*")
+        for f in pause_findings:
+            cpql = f"CPQL ${f['cpql']:.0f}" if f.get("cpql") else "CPQL N/A"
+            qual = f"{f.get('qual_rate', 0):.0f}%"
+            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}  ·  qual {qual}")
+        executable_findings.extend(pause_findings)
+
+    if review_findings:
+        # Summarise review items — counts only, no names (tasks are in Asana)
+        counts: dict[str, int] = {}
+        for f in review_findings:
+            tag = "Junk" if f.get("junk_leads") else f.get("action", "?").title()
+            counts[tag] = counts.get(tag, 0) + 1
+        review_line = "  ·  ".join(f"{tag} ×{n}" for tag, n in sorted(counts.items()))
+        lines.append(f"\n*Review → Asana*  {review_line}")
+
+    if executable_findings:
+        lines.append("\nReact :white_check_mark: to execute scale/pause  ·  :x: to skip all")
     else:
-        icon  = ":red_circle:"
-        title = f"{icon} *Pause approval needed*"
-        body  = (
-            f"Campaign: `{campaign}`\n"
-            f"CPQL {cpql_str}  ·  CPL {cpl_str}  ·  qual rate {qual_str}\n"
-            f"Running 14+ days with CPQL above critical threshold."
-        )
-        reply_hint = "React :white_check_mark: to pause this campaign, or :x: to skip."
+        lines.append("\nReact :white_check_mark: to acknowledge  ·  :x: to dismiss")
 
-    full_text = f"{title}\n{body}\n{reply_hint}"
+    full_text = "\n".join(lines)
 
     if is_quiet():
-        quiet_log("action-approval", SLACK_CHANNEL_APPROVAL, full_text)
+        quiet_log("nightly-approvals-digest", SLACK_CHANNEL_APPROVAL, full_text)
         return None
 
     try:
-        blocks = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": title}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": body}},
-            {"type": "context", "elements": [
-                {"type": "mrkdwn", "text": reply_hint},
-            ]},
-        ]
-        response = client.chat_postMessage(
-            channel=SLACK_CHANNEL_APPROVAL,
-            blocks=blocks,
-            text=full_text,
-        )
+        response = client.chat_postMessage(channel=SLACK_CHANNEL_APPROVAL, text=full_text)
         ts = response["ts"]
         for emoji in ("white_check_mark", "x"):
             try:
@@ -116,18 +125,29 @@ def post_action_approval(finding: dict, avg_spend: float | None = None) -> str |
             except SlackApiError:
                 pass
         save_pending_approval(ts, {
-            "action":      action,
-            "channel":     channel,
-            "campaign":    campaign,
-            "campaign_id": finding.get("campaign_id", ""),
-            "account_id":  finding.get("account_id", ""),
-            "new_budget":  round(avg_spend * 1.25, 2) if avg_spend else None,
-            "asana_gid":   finding.get("asana_gid", ""),
+            "action":   "batch_scale_pause",
+            "findings": [
+                {
+                    "action":      f.get("action"),
+                    "channel":     f.get("channel"),
+                    "campaign":    f.get("campaign"),
+                    "campaign_id": f.get("campaign_id", ""),
+                    "account_id":  f.get("account_id", ""),
+                    "new_budget":  f.get("new_budget"),
+                    "asana_gid":   f.get("asana_gid", ""),
+                }
+                for f in executable_findings
+            ],
         })
         return ts
     except SlackApiError as e:
-        print(f"[action-approval] Slack error: {e}")
+        print(f"[nightly-approvals-digest] Slack error: {e}")
         return None
+
+
+# Keep old names as aliases so any external callers don't break silently.
+def post_scale_pause_digest(scale_findings: list, pause_findings: list) -> str | None:
+    return post_nightly_approvals_digest(scale_findings, pause_findings, [])
 
 
 def post_approval_request(analysis: dict, execution_metadata: dict | None = None) -> str:
@@ -210,6 +230,11 @@ def post_approval_request(analysis: dict, execution_metadata: dict | None = None
 
 
 def post_approval_digest(findings: list[dict]) -> str | None:
+    """Deprecated alias — use post_nightly_approvals_digest."""
+    return post_nightly_approvals_digest([], [], findings)
+
+
+def _post_approval_digest_real(findings: list[dict]) -> str | None:
     """
     Post ONE compact digest message for a batch of optimize/junk/drilldown findings.
     One message instead of N — keeps #approvals scannable.

@@ -39,34 +39,25 @@ def _post_report_ready(spikes: list | None = None,
                        audit_tasks: list | None = None,
                        health_tasks: list | None = None,
                        health_findings: list | None = None):
-    """Post two Slack messages:
-    1. Main: report link + peak numbers + agent actions + task counts
-    2. Follow-up: recommended actions per campaign (summarised, one line each)
-    """
+    """Post ONE Slack message to #notify: report link + performance + alerts + actions + Asana."""
     try:
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
         from notifications.quiet import is_quiet, quiet_log
-        from notifications.daily_summary import build_daily_summary_text, build_recommendations_text
+        from notifications.daily_summary import build_daily_summary_text
 
-        main_text = build_daily_summary_text(
+        text = build_daily_summary_text(
             spikes=spikes or [],
             audit_tasks=audit_tasks or [],
             health_tasks=health_tasks or [],
         )
-        rec_text = build_recommendations_text(health_findings or [])
 
         if is_quiet():
-            quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, main_text)
-            if rec_text:
-                quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, rec_text)
+            quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, text)
             return
 
-        client = WebClient(token=SLACK_BOT_TOKEN)
-        client.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=main_text)
-        if rec_text:
-            client.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=rec_text)
-        print(f"[ops-scheduler] Posted daily summary + recommendations to Slack")
+        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=text)
+        print(f"[ops-scheduler] Posted daily summary to Slack")
     except Exception as e:
         print(f"[ops-scheduler] Daily summary post failed (non-fatal): {e}")
 
@@ -146,29 +137,9 @@ def _run_campaign_health() -> tuple[list, list]:
         return [], []
 
 
-def _post_run_started():
-    """Post a short 'run started' notice to the notify channel."""
-    try:
-        from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
-        from notifications.quiet import is_quiet, quiet_log
-        from datetime import datetime, timezone, timedelta
-        _RIYADH = timezone(timedelta(hours=3))
-        ts = datetime.now(_RIYADH).strftime("%H:%M")
-        msg = f":arrows_counterclockwise: *Nexa agent running* — {ts} Riyadh | collecting data..."
-        if is_quiet():
-            quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, msg)
-            return
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=SLACK_CHANNEL_NOTIFY, text=msg
-        )
-    except Exception as e:
-        print(f"[ops-scheduler] run-start notification failed: {e}")
-
 
 def _nightly():
     """One combined nightly run — chains weekly/monthly/quarterly where applicable."""
-    _post_run_started()
 
     # 1. Refresh BigQuery once so the dashboard + report read fresh data.
     _refresh_bigquery()

@@ -28,14 +28,17 @@ ROLE_FILES = {
     "daily_report":          ["qoyod-daily-report.md"],
 }
 
-# Which roles Nexa invokes per trigger cadence (Claude calls only — the task
-# flow assistant runs deterministically in code after all roles finish).
+# Which roles Nexa invokes per trigger cadence.
+# media_buyer and paid_media_analyst removed from daily: their decisions are
+# fully covered by campaign_health_tasks.py + spike_detector.py + google_ads_audit_tasks.py
+# (verified: 0 role-sourced tasks in last 7 days vs 41 deterministic tasks).
+# Strategist kept for weekly/monthly — qualitative planning has no code equivalent.
 TRIGGER_ROUTES = {
-    "daily":     ["media_buyer", "paid_media_analyst"],
-    "weekly":    ["media_buyer", "paid_media_analyst", "paid_media_strategist"],
-    "monthly":   ["paid_media_analyst", "paid_media_strategist"],
-    "quarterly": ["paid_media_analyst", "paid_media_strategist"],
-    "on_demand": ["media_buyer", "paid_media_strategist"],
+    "daily":     [],
+    "weekly":    ["paid_media_strategist"],
+    "monthly":   ["paid_media_strategist"],
+    "quarterly": ["paid_media_strategist"],
+    "on_demand": ["paid_media_strategist"],
 }
 
 
