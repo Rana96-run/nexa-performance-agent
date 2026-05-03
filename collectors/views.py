@@ -436,17 +436,33 @@ ALL_VIEWS = [
     ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
 ]
 
+# Sub-campaign views (adset / ad / keyword grain).
+# Defined in bq_writer.py alongside their table schemas.
+# Imported here so refresh_all_views() keeps them in sync automatically.
+def _sub_campaign_views():
+    from collectors.bq_writer import (
+        V_ADSET_PERFORMANCE_SQL,
+        V_AD_PERFORMANCE_SQL,
+        V_KEYWORD_PERFORMANCE_SQL,
+    )
+    return [
+        ("v_adset_performance",   V_ADSET_PERFORMANCE_SQL),
+        ("v_ad_performance",      V_AD_PERFORMANCE_SQL),
+        ("v_keyword_performance", V_KEYWORD_PERFORMANCE_SQL),
+    ]
+
 
 def refresh_all_views():
     client = get_client()
-    for name, sql in ALL_VIEWS:
+    all_views = ALL_VIEWS + _sub_campaign_views()
+    for name, sql in all_views:
         try:
             client.query(sql).result()
             print(f"[views] OK: {name}")
         except Exception as e:
             print(f"[views] FAIL: {name}: {e}")
             raise
-    print(f"[views] Refreshed {len(ALL_VIEWS)} views.")
+    print(f"[views] Refreshed {len(all_views)} views.")
 
 
 if __name__ == "__main__":
