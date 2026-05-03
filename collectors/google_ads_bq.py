@@ -1,7 +1,10 @@
 """
 Google Ads -> BigQuery collector.
-Pulls per-day per-campaign metrics for ALL ad accounts under the MCC
-(list in GOOGLE_ADS_CUSTOMER_IDS), writes to campaigns_daily.
+Pulls per-day metrics at campaign / ad-group / keyword grain.
+
+  collect_and_write()          -> campaigns_daily
+  collect_adgroups_and_write() -> adsets_daily
+  collect_keywords_and_write() -> keywords_daily
 """
 import os
 from datetime import date, timedelta, datetime, timezone
@@ -27,27 +30,28 @@ def _customer_ids():
     return [c.strip().replace("-", "") for c in raw.split(",") if c.strip()]
 
 
-def collect_and_write(days: int = None, incremental: bool = False):
-    """
-    incremental=True -> last 2 days (scheduled 12h runs)
-    days=N            -> last N days
-    default           -> YTD
-    """
-    client = _client()
-    ga = client.get_service("GoogleAdsService")
-
-    end = date.today() - timedelta(days=1)  # Google Ads data is T-1
+def _date_window(days, incremental):
+    end = date.today() - timedelta(days=1)   # Google Ads is T-1
     if incremental:
         start = end - timedelta(days=2)
     elif days:
         start = end - timedelta(days=days - 1)
     else:
         start = date(end.year, 1, 1)
+    return start, end
+
+
+# ── Campaign level ────────────────────────────────────────────────────────────
+
+def collect_and_write(days: int = None, incremental: bool = False):
+    """Campaign grain → campaigns_daily."""
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
 
     query = f"""
         SELECT
             customer.id,
-            customer.descriptive_name,
             customer.currency_code,
             campaign.id,
             campaign.name,
@@ -63,38 +67,37 @@ def collect_and_write(days: int = None, incremental: bool = False):
         WHERE segments.date BETWEEN '{start}' AND '{end}'
     """
 
-    now = datetime.now(timezone.utc).isoformat()
+    now  = datetime.now(timezone.utc).isoformat()
     rows = []
     accounts = _customer_ids()
-    print(f"[google_ads] Window {start} -> {end} across {len(accounts)} account(s)")
+    print(f"[google_ads] campaigns {start} -> {end} | {len(accounts)} account(s)")
     for cid in accounts:
         count = 0
         try:
-            search_results = ga.search(customer_id=cid, query=query)
-            for r in search_results:
+            for r in ga.search(customer_id=cid, query=query):
                 spend_native = r.metrics.cost_micros / 1_000_000
                 native_cur   = normalize_currency(r.customer.currency_code)
                 spend        = to_usd(spend_native, native_cur)
                 conv         = r.metrics.conversions
                 rows.append({
-                    "date":           str(r.segments.date),
-                    "channel":        "google_ads",
-                    "account_id":     cid,
-                    "campaign_id":    str(r.campaign.id),
-                    "campaign_name":  r.campaign.name,
-                    "status":         r.campaign.status.name,
-                    "objective":      r.campaign.advertising_channel_type.name,
-                    "spend":          round(spend, 2),
-                    "impressions":    int(r.metrics.impressions),
-                    "clicks":         int(r.metrics.clicks),
-                    "ctr":            round(r.metrics.ctr * 100, 4),
-                    "leads":          int(conv),
-                    "conversions":    float(conv),
-                    "cpl":            round(spend / conv, 2) if conv > 0 else None,
-                    "currency":       "USD",
-                    "spend_native":   round(spend_native, 2),
+                    "date":            str(r.segments.date),
+                    "channel":         "google_ads",
+                    "account_id":      cid,
+                    "campaign_id":     str(r.campaign.id),
+                    "campaign_name":   r.campaign.name,
+                    "status":          r.campaign.status.name,
+                    "objective":       r.campaign.advertising_channel_type.name,
+                    "spend":           round(spend, 2),
+                    "impressions":     int(r.metrics.impressions),
+                    "clicks":          int(r.metrics.clicks),
+                    "ctr":             round(r.metrics.ctr * 100, 4),
+                    "leads":           int(conv),
+                    "conversions":     float(conv),
+                    "cpl":             round(spend / conv, 2) if conv > 0 else None,
+                    "currency":        "USD",
+                    "spend_native":    round(spend_native, 2),
                     "currency_native": native_cur,
-                    "updated_at":     now,
+                    "updated_at":      now,
                 })
                 count += 1
         except Exception as e:
@@ -105,8 +108,162 @@ def collect_and_write(days: int = None, incremental: bool = False):
                        key_fields=["date", "channel", "campaign_id"])
 
 
+# ── Ad Group level → adsets_daily ─────────────────────────────────────────────
+
+def collect_adgroups_and_write(days: int = None, incremental: bool = False):
+    """Ad group grain → adsets_daily. Same credentials, same API call."""
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
+
+    query = f"""
+        SELECT
+            customer.id,
+            customer.currency_code,
+            campaign.id,
+            campaign.name,
+            ad_group.id,
+            ad_group.name,
+            ad_group.status,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.clicks,
+            metrics.impressions,
+            metrics.ctr,
+            segments.date
+        FROM ad_group
+        WHERE segments.date BETWEEN '{start}' AND '{end}'
+          AND campaign.status != 'REMOVED'
+          AND ad_group.status != 'REMOVED'
+    """
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+    accounts = _customer_ids()
+    print(f"[google_ads] adgroups {start} -> {end} | {len(accounts)} account(s)")
+    for cid in accounts:
+        count = 0
+        try:
+            for r in ga.search(customer_id=cid, query=query):
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
+                conv         = r.metrics.conversions
+                rows.append({
+                    "date":          str(r.segments.date),
+                    "channel":       "google_ads",
+                    "account_id":    cid,
+                    "campaign_id":   str(r.campaign.id),
+                    "campaign_name": r.campaign.name,
+                    "adset_id":      str(r.ad_group.id),
+                    "adset_name":    r.ad_group.name,
+                    "status":        r.ad_group.status.name,
+                    "spend":         round(spend, 2),
+                    "impressions":   int(r.metrics.impressions),
+                    "clicks":        int(r.metrics.clicks),
+                    "ctr":           round(r.metrics.ctr * 100, 4),
+                    "leads":         int(conv),
+                    "conversions":   float(conv),
+                    "currency":      "USD",
+                    "updated_at":    now,
+                })
+                count += 1
+        except Exception as e:
+            print(f"[google_ads]   adgroups account {cid} error: {e}")
+        print(f"[google_ads]   adgroups account {cid}: {count} rows")
+
+    return upsert_rows("adsets_daily", rows,
+                       key_fields=["date", "channel", "adset_id"])
+
+
+# ── Keyword level → keywords_daily ────────────────────────────────────────────
+
+def collect_keywords_and_write(days: int = None, incremental: bool = False):
+    """Keyword grain → keywords_daily. Same credentials, same API call."""
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
+
+    query = f"""
+        SELECT
+            customer.id,
+            customer.currency_code,
+            campaign.id,
+            campaign.name,
+            ad_group.id,
+            ad_group.name,
+            ad_group_criterion.criterion_id,
+            ad_group_criterion.keyword.text,
+            ad_group_criterion.keyword.match_type,
+            ad_group_criterion.status,
+            ad_group_criterion.quality_info.quality_score,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.clicks,
+            metrics.impressions,
+            metrics.ctr,
+            metrics.average_cpc,
+            segments.date
+        FROM keyword_view
+        WHERE segments.date BETWEEN '{start}' AND '{end}'
+          AND ad_group_criterion.type = 'KEYWORD'
+          AND campaign.status != 'REMOVED'
+          AND ad_group.status != 'REMOVED'
+    """
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+    accounts = _customer_ids()
+    print(f"[google_ads] keywords {start} -> {end} | {len(accounts)} account(s)")
+    for cid in accounts:
+        count = 0
+        try:
+            for r in ga.search(customer_id=cid, query=query):
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
+                avg_cpc_native = r.metrics.average_cpc / 1_000_000
+                avg_cpc        = to_usd(avg_cpc_native, native_cur)
+                conv           = r.metrics.conversions
+                qs             = r.ad_group_criterion.quality_info.quality_score
+                rows.append({
+                    "date":          str(r.segments.date),
+                    "channel":       "google_ads",
+                    "account_id":    cid,
+                    "campaign_id":   str(r.campaign.id),
+                    "campaign_name": r.campaign.name,
+                    "adgroup_id":    str(r.ad_group.id),
+                    "adgroup_name":  r.ad_group.name,
+                    "keyword_id":    str(r.ad_group_criterion.criterion_id),
+                    "keyword_text":  r.ad_group_criterion.keyword.text,
+                    "match_type":    r.ad_group_criterion.keyword.match_type.name,
+                    "status":        r.ad_group_criterion.status.name,
+                    "quality_score": int(qs) if qs else None,
+                    "spend":         round(spend, 2),
+                    "impressions":   int(r.metrics.impressions),
+                    "clicks":        int(r.metrics.clicks),
+                    "ctr":           round(r.metrics.ctr * 100, 4),
+                    "avg_cpc":       round(avg_cpc, 4),
+                    "conversions":   float(conv),
+                    "currency":      "USD",
+                    "updated_at":    now,
+                })
+                count += 1
+        except Exception as e:
+            print(f"[google_ads]   keywords account {cid} error: {e}")
+        print(f"[google_ads]   keywords account {cid}: {count} rows")
+
+    return upsert_rows("keywords_daily", rows,
+                       key_fields=["date", "channel", "adgroup_id", "keyword_id"])
+
+
 if __name__ == "__main__":
     import sys
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    n = collect_and_write(days=days)
-    print(f"Google Ads backfill complete: {n} rows")
+    cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
+    days = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    if cmd in ("all", "campaigns"):
+        print(f"campaigns: {collect_and_write(days=days)} rows")
+    if cmd in ("all", "adgroups"):
+        print(f"adgroups:  {collect_adgroups_and_write(days=days)} rows")
+    if cmd in ("all", "keywords"):
+        print(f"keywords:  {collect_keywords_and_write(days=days)} rows")

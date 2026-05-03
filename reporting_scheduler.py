@@ -40,21 +40,26 @@ COLLECTORS = [
     # Direct collectors below serve as fallback if Windsor key is missing.
     ("windsor",         windsor_bq.collect_and_write),
 
-    # ── Direct collectors — active only if Windsor doesn't cover the channel
-    #    or WINDSOR_API_KEY is not set. They will be skipped gracefully when
-    #    their own tokens are expired (they print a warning and return 0).
+    # ── Campaign-level direct collectors ──────────────────────────────────────
     ("google_ads",      google_ads_bq.collect_and_write),
     ("meta",            meta_bq.collect_and_write),
     ("snapchat",        snap_bq.collect_and_write),
     ("tiktok",          tiktok_bq.collect_and_write),
     ("microsoft_ads",   microsoft_ads_bq.collect_and_write),
-    # Organic (skip gracefully if creds missing)
+    # Organic
     ("meta_organic",    meta_organic_bq.collect_and_write),
     ("youtube",         youtube_bq.collect_and_write),
     ("linkedin",        linkedin_bq.collect_and_write),
     # CRM
     ("hubspot_leads",   hubspot_leads_bq.collect_and_write),
     ("hubspot_deals",   hubspot_deals_bq.collect_and_write),
+
+    # ── Sub-campaign collectors (adset / ad / keyword grain) ──────────────────
+    # These use the same API credentials — no new infrastructure needed.
+    ("google_ads_adgroups",  google_ads_bq.collect_adgroups_and_write),
+    ("google_ads_keywords",  google_ads_bq.collect_keywords_and_write),
+    ("meta_adsets",          meta_bq.collect_adsets_and_write),
+    ("meta_ads",             meta_bq.collect_ads_and_write),
 ]
 
 
