@@ -26,6 +26,7 @@ from analysers.creative_performance import (
 )
 from executors.asana import create_task
 from config import DAYS_FOR_PAUSE_DECISION, DRILL_DOWN_CPQL, DRILL_DOWN_CPL
+from logs.activity_logger import log_activity_async
 
 SCALE_PCT = 0.25   # always 25%
 
@@ -365,6 +366,13 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 action="scale",
             )
             out.append((f"scale-pending {f['campaign']}", gid))
+            log_activity_async(
+                role="pause_watcher", action="scale_task_created",
+                status="pending_approval",
+                channel=f.get("channel"), campaign_name=f.get("campaign"),
+                details={"avg_spend": f.get("avg_spend"), "new_budget": f.get("new_budget"),
+                         "cpql": f.get("cpql"), "asana_gid": gid},
+            )
 
     # ── 2. Pause candidates (+ junk leads) — one task per campaign ────────────
     if pause_f:
@@ -414,6 +422,14 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 action="pause",
             )
             out.append((f"pause-pending {f['campaign']}", gid))
+            log_activity_async(
+                role="pause_watcher",
+                action="junk_leads_task_created" if f.get("junk_leads") else "pause_task_created",
+                status="pending_approval",
+                channel=f.get("channel"), campaign_name=f.get("campaign"),
+                details={"junk_leads": f.get("junk_leads"), "qual_rate": f.get("qual_rate"),
+                         "cpql": f.get("cpql"), "asana_gid": gid},
+            )
 
     # ── Nightly approvals digest sent ONCE at the end (after all blocks) ─────
     # Collected here; posted below after review_items are built.
@@ -481,6 +497,12 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 action="optimize",
             )
             out.append((f"drilldown {channel} {f['campaign']}", gid))
+            log_activity_async(
+                role="pause_watcher", action="drilldown_task_created",
+                status="pending_approval",
+                channel=channel, campaign_name=f.get("campaign"),
+                details={"cpql": f.get("cpql"), "cpl": f.get("cpl"), "asana_gid": gid},
+            )
 
     # ── 5. Optimize (investigate) — one task per campaign ────────────────────
     #    Includes awareness campaigns routed here (action="optimize") — they get
@@ -550,6 +572,13 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 action="optimize",
             )
             out.append((f"optimize {channel} {f['campaign']}", gid))
+            log_activity_async(
+                role="pause_watcher", action="optimize_task_created",
+                status="pending_approval",
+                channel=channel, campaign_name=f.get("campaign"),
+                details={"cpql": f.get("cpql"), "cpl": f.get("cpl"),
+                         "is_awareness": f.get("is_awareness"), "asana_gid": gid},
+            )
 
     # ── ONE #approvals message covering everything ────────────────────────────
     review_items: list[dict] = []
@@ -574,6 +603,12 @@ def _send_nightly_digest(scale_findings: list, pause_findings: list, review_find
         print(f"[health-tasks] nightly digest posted "
               f"(scale={len(scale_findings)}, pause={len(pause_findings)}, "
               f"review={len(review_findings)}, ts={ts})")
+        log_activity_async(
+            role="daily_digest", action="posted_approvals_digest",
+            status="success",
+            details={"scale": len(scale_findings), "pause": len(pause_findings),
+                     "review": len(review_findings), "slack_ts": ts},
+        )
     except Exception as e:
         print(f"[health-tasks] nightly digest failed: {e}")
 

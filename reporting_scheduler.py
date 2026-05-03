@@ -28,6 +28,7 @@ except ImportError:
     _HAS_AIRBYTE = False
 from notifications.notify import send_heartbeat
 from logs.logger import get_logger, setup_global_logging
+from logs.activity_logger import log_activity_async
 
 setup_global_logging("bq-refresh")  # captures every print() into logs/
 log = get_logger("bq-refresh")
@@ -130,6 +131,22 @@ def run_refresh(incremental: bool = True, days: int | None = None):
                        detail=detail, duration_s=elapsed)
     except Exception as e:
         log.warning(f"heartbeat emit failed: {e}")
+
+    # ── Activity log ──────────────────────────────────────────────────────────
+    log_activity_async(
+        role="bq_refresh",
+        action="refresh_complete",
+        status=status,
+        details={
+            "mode":         mode,
+            "collectors_ok":  ok_items,
+            "collectors_failed": bad_items,
+            "total_rows":   total_rows,
+        },
+        rows_affected=total_rows,
+        duration_s=elapsed,
+    )
+
     return results
 
 

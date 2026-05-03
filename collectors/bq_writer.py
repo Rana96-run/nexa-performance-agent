@@ -154,23 +154,43 @@ KEYWORDS_DAILY_SCHEMA = [
     bigquery.SchemaField("updated_at",      "TIMESTAMP"),
 ]
 
+ACTIVITY_LOG_SCHEMA = [
+    # Core identity
+    bigquery.SchemaField("activity_id",    "STRING",    mode="REQUIRED"),  # UUID
+    bigquery.SchemaField("ts",             "TIMESTAMP", mode="REQUIRED"),  # when it ran
+    bigquery.SchemaField("session_id",     "STRING"),                      # groups one agent run
+    # What ran
+    bigquery.SchemaField("role",           "STRING"),   # daily_digest | bq_refresh | pause_watcher | junk_leads | slack_poster | asana_creator | airbyte_normalizer
+    bigquery.SchemaField("action",         "STRING"),   # posted_digest | paused_campaign | created_task | refreshed_views …
+    bigquery.SchemaField("status",         "STRING"),   # success | failed | skipped | pending_approval | approved | rejected
+    # Context
+    bigquery.SchemaField("channel",        "STRING"),   # nullable — google_ads / meta / …
+    bigquery.SchemaField("campaign_name",  "STRING"),   # nullable
+    bigquery.SchemaField("details",        "STRING"),   # JSON blob — flexible payload
+    # Metrics
+    bigquery.SchemaField("rows_affected",  "INT64"),    # nullable
+    bigquery.SchemaField("duration_s",     "FLOAT64"),  # nullable
+]
+
 TABLES = {
-    "campaigns_daily":  CAMPAIGNS_DAILY_SCHEMA,
-    "adsets_daily":     ADSETS_DAILY_SCHEMA,
-    "ads_daily":        ADS_DAILY_SCHEMA,
-    "keywords_daily":   KEYWORDS_DAILY_SCHEMA,
+    "campaigns_daily":     CAMPAIGNS_DAILY_SCHEMA,
+    "adsets_daily":        ADSETS_DAILY_SCHEMA,
+    "ads_daily":           ADS_DAILY_SCHEMA,
+    "keywords_daily":      KEYWORDS_DAILY_SCHEMA,
     "hubspot_leads_daily": HUBSPOT_LEADS_DAILY_SCHEMA,
+    "agent_activity_log":  ACTIVITY_LOG_SCHEMA,
 }
 
 
 # ---------- BOOTSTRAP ----------
 
 TABLE_CLUSTERS = {
-    "campaigns_daily":    ["channel", "campaign_id"],
-    "adsets_daily":       ["channel", "campaign_id", "adset_id"],
-    "ads_daily":          ["channel", "campaign_id", "ad_id"],
-    "keywords_daily":     ["channel", "campaign_id", "adgroup_id"],
-    "hubspot_leads_daily": ["qoyod_source"],
+    "campaigns_daily":     ["channel", "campaign_id"],
+    "adsets_daily":        ["channel", "campaign_id", "adset_id"],
+    "ads_daily":           ["channel", "campaign_id", "ad_id"],
+    "keywords_daily":      ["channel", "campaign_id", "adgroup_id"],
+    "hubspot_leads_daily":  ["qoyod_source"],
+    "agent_activity_log":  ["role", "status"],
 }
 
 
@@ -186,12 +206,16 @@ def ensure_dataset_and_tables():
         print(f"[ERROR] Could not create dataset: {e}")
         raise
 
+    # Tables that partition on TIMESTAMP field "ts" instead of DATE "date"
+    _TS_PARTITIONED = {"agent_activity_log"}
+
     for table_name, schema in TABLES.items():
         table_id = f"{PROJECT_ID}.{DATASET}.{table_name}"
         table = bigquery.Table(table_id, schema=schema)
+        partition_field = "ts" if table_name in _TS_PARTITIONED else "date"
         table.time_partitioning = bigquery.TimePartitioning(
             type_=bigquery.TimePartitioningType.DAY,
-            field="date",
+            field=partition_field,
         )
         if table_name in TABLE_CLUSTERS:
             table.clustering_fields = TABLE_CLUSTERS[table_name]
