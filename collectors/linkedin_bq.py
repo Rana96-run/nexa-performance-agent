@@ -212,8 +212,107 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
                        key_fields=["date", "channel", "campaign_id"])
 
 
+# ── Ad Set level → adsets_daily ──────────────────────────────────────────────
+
+def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int:
+    """
+    LinkedIn Campaign grain → adsets_daily.
+
+    LinkedIn UTM hierarchy:
+      Campaign Group  = utm_campaign  → stored as campaign_id
+      Campaign        = utm_audience  → stored as adset_id
+    """
+    if not TOKEN or not AD_ACCT_URN:
+        print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping adsets")
+        return 0
+
+    end = date.today()
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    print(f"[li-bq] adsets window {start} -> {end}")
+
+    native_cur = _account_currency()
+
+    try:
+        group_names = _list_campaign_groups()
+        campaigns   = _list_campaigns(group_names)
+        analytics   = _fetch_analytics(start, end)  # pivot=CAMPAIGN — same data
+    except Exception as e:
+        print(f"[li-bq] adsets API error: {e}")
+        return 0
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+
+    for el in analytics:
+        pivot_vals = el.get("pivotValues", [])
+        camp_urn   = pivot_vals[0] if pivot_vals else ""
+        meta       = campaigns.get(camp_urn, {})
+
+        dr = el.get("dateRange", {}).get("start", {})
+        if not dr:
+            continue
+        try:
+            day = date(dr["year"], dr["month"], dr["day"]).isoformat()
+        except (KeyError, ValueError):
+            continue
+
+        try:
+            spend_native = float(el.get("costInLocalCurrency") or 0)
+        except (TypeError, ValueError):
+            spend_native = 0.0
+        spend  = to_usd(spend_native, native_cur)
+        clicks = int(el.get("clicks") or 0)
+        impr   = int(el.get("impressions") or 0)
+        try:
+            leads = int(float(el.get("externalWebsiteConversions") or 0))
+        except (TypeError, ValueError):
+            leads = 0
+        ctr = round(clicks / impr * 100, 4) if impr else 0.0
+
+        # Campaign Group URN: derive from campaign meta
+        group_urn  = ""
+        group_name = meta.get("group_name", "")
+        # Reconstruct group URN by reversing the group_names dict
+        for urn, name in group_names.items():
+            if name == group_name:
+                group_urn = urn
+                break
+
+        rows.append({
+            "date":          day,
+            "channel":       "linkedin",
+            "account_id":    AD_ACCT_URN,
+            "campaign_id":   group_urn or camp_urn,   # Campaign Group = utm_campaign
+            "campaign_name": group_name,
+            "adset_id":      camp_urn,                # Campaign = utm_audience
+            "adset_name":    meta.get("name", camp_urn),
+            "status":        meta.get("status", ""),
+            "spend":         round(spend, 2),
+            "impressions":   impr,
+            "clicks":        clicks,
+            "ctr":           ctr,
+            "leads":         leads,
+            "conversions":   float(leads),
+            "currency":      "USD",
+            "updated_at":    now,
+        })
+
+    print(f"[li-bq] adsets: {len(rows)} rows across {len(campaigns)} campaigns")
+    return upsert_rows("adsets_daily", rows,
+                       key_fields=["date", "channel", "adset_id"])
+
+
 if __name__ == "__main__":
     import sys
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    n = collect_and_write(days=days)
-    print(f"LinkedIn BQ complete: {n} rows")
+    cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
+    days = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    if cmd in ("all", "campaigns"):
+        print(f"campaigns: {collect_and_write(days=days)} rows")
+    if cmd in ("all", "adsets"):
+        print(f"adsets:    {collect_adsets_and_write(days=days)} rows")

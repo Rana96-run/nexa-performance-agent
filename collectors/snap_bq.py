@@ -229,8 +229,133 @@ def collect_and_write(days: int = None, incremental: bool = False):
                        key_fields=["date", "channel", "campaign_id"])
 
 
+# ── Ad Squad level → adsets_daily ────────────────────────────────────────────
+
+def _list_adsquads(token: str, ad_account_id: str) -> dict:
+    """Return {adsquad_id: {name, campaign_id, status}} for the account."""
+    r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/adsquads",
+                     headers=_headers(token), timeout=15)
+    if r.status_code >= 400:
+        print(f"[snap]   adsquads {r.status_code}: {r.text[:160]}")
+        return {}
+    out = {}
+    for item in r.json().get("adsquads", []):
+        sq = item.get("adsquad", {})
+        out[sq["id"]] = {
+            "name":        sq.get("name", ""),
+            "campaign_id": sq.get("campaign_id", ""),
+            "status":      sq.get("status", ""),
+        }
+    return out
+
+
+def _adsquad_stats_single_call(token: str, adsquad_id: str,
+                                start: date, end: date, tz_name: str,
+                                fields: str = SNAP_STATS_FIELDS) -> list:
+    end_exclusive = end + timedelta(days=1)
+    params = {
+        "granularity": "DAY",
+        "start_time":  _day_start_iso(start, tz_name),
+        "end_time":    _day_start_iso(end_exclusive, tz_name),
+        "fields":      fields,
+    }
+    r = requests.get(f"{BASE}/adsquads/{adsquad_id}/stats",
+                     headers=_headers(token), params=params, timeout=30)
+    if r.status_code >= 400 and fields != SNAP_STATS_FIELDS_SAFE:
+        body = r.text.lower()
+        if "field" in body or ("unsupported" in body and "granularity" not in body):
+            params["fields"] = SNAP_STATS_FIELDS_SAFE
+            r = requests.get(f"{BASE}/adsquads/{adsquad_id}/stats",
+                             headers=_headers(token), params=params, timeout=30)
+    if r.status_code >= 400:
+        print(f"[snap]   adsquad stats {r.status_code} for {adsquad_id}: {r.text[:120]}")
+        return []
+    series = r.json().get("timeseries_stats", [])
+    if not series:
+        return []
+    return series[0].get("timeseries_stat", {}).get("timeseries", [])
+
+
+def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int:
+    """Ad Squad grain → adsets_daily. Same token as campaign collector."""
+    token = _refresh_access_token()
+
+    end = date.today()
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+    accounts = _ad_accounts()
+    print(f"[snap] adsets window {start} -> {end} across {len(accounts)} account(s)")
+
+    for acct in accounts:
+        meta    = _get_account(token, acct)
+        cur     = normalize_currency(meta.get("currency"))
+        tz      = meta.get("timezone") or "UTC"
+        campaigns = _list_campaigns(token, acct)
+        adsquads  = _list_adsquads(token, acct)
+        acct_count = 0
+
+        for sq_id, sq in adsquads.items():
+            camp_id = sq.get("campaign_id", "")
+            camp    = campaigns.get(camp_id, {})
+            for cs, ce in _date_chunks(start, end, max_days=30):
+                pts = _adsquad_stats_single_call(token, sq_id, cs, ce, tz)
+                for pt in pts:
+                    stats        = pt.get("stats", {})
+                    spend_micro  = float(stats.get("spend", 0) or 0)
+                    spend_native = spend_micro / 1_000_000
+                    spend        = to_usd(spend_native, cur)
+                    impressions  = int(stats.get("impressions", 0) or 0)
+                    clicks       = int(stats.get("swipes", 0) or 0)
+                    conversions_total = (
+                        int(stats.get("conversion_sign_ups", 0) or 0)
+                        + int(stats.get("conversion_purchases", 0) or 0)
+                        + int(stats.get("conversion_add_cart", 0) or 0)
+                        + int(stats.get("conversion_save", 0) or 0)
+                        + int(stats.get("conversion_start_checkout", 0) or 0)
+                        + int(stats.get("conversion_subscribe", 0) or 0)
+                        + int(stats.get("conversion_app_installs", 0) or 0)
+                    )
+                    ctr = (clicks / impressions * 100) if impressions else 0.0
+                    d   = (pt.get("start_time") or "")[:10]
+                    if not d:
+                        continue
+                    rows.append({
+                        "date":          d,
+                        "channel":       "snapchat",
+                        "account_id":    acct,
+                        "campaign_id":   camp_id,
+                        "campaign_name": camp.get("name"),
+                        "adset_id":      sq_id,
+                        "adset_name":    sq.get("name"),
+                        "status":        sq.get("status"),
+                        "spend":         round(spend, 2),
+                        "impressions":   impressions,
+                        "clicks":        clicks,
+                        "ctr":           round(ctr, 4),
+                        "leads":         0,
+                        "conversions":   float(conversions_total),
+                        "currency":      "USD",
+                        "updated_at":    now,
+                    })
+                    acct_count += 1
+        print(f"[snap]   adsets account {acct}: {acct_count} rows across {len(adsquads)} ad squads")
+
+    return upsert_rows("adsets_daily", rows,
+                       key_fields=["date", "channel", "adset_id"])
+
+
 if __name__ == "__main__":
     import sys
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    n = collect_and_write(days=days)
-    print(f"Snapchat backfill complete: {n} rows")
+    cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
+    days = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    if cmd in ("all", "campaigns"):
+        print(f"campaigns: {collect_and_write(days=days)} rows")
+    if cmd in ("all", "adsets"):
+        print(f"adsets:    {collect_adsets_and_write(days=days)} rows")

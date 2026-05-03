@@ -1,6 +1,9 @@
 """
 TikTok Ads -> BigQuery collector.
-Pulls per-campaign stats from all TikTok ad accounts -> campaigns_daily.
+
+  collect_and_write()        -> campaigns_daily
+  collect_adgroups_and_write() -> adsets_daily  (AUCTION_ADGROUP level)
+  collect_ads_and_write()    -> ads_daily       (AUCTION_AD level)
 
 Auth: TIKTOK_ACCESS_TOKEN in .env (long-lived token from Ads Manager).
 """
@@ -47,7 +50,9 @@ def _advertiser_currency(advertiser_id: str) -> str:
     return "SAR"
 
 
-def _get_report(advertiser_id: str, start: date, end: date) -> list[dict]:
+def _get_report(advertiser_id: str, start: date, end: date,
+                data_level: str = "AUCTION_CAMPAIGN",
+                dimensions: list | None = None) -> list[dict]:
     """Fetch paginated report rows for one advertiser account."""
     PAGE_SIZE = 1000
     all_rows: list[dict] = []
@@ -56,11 +61,12 @@ def _get_report(advertiser_id: str, start: date, end: date) -> list[dict]:
         # TikTok Marketing API v1.3 requires GET with JSON-encoded list params,
         # not POST with JSON body. POST returns HTTP 405 Method Not Allowed.
         import json as _json
+        _dims = dimensions or ["campaign_id", "stat_time_day"]
         params = {
             "advertiser_id": advertiser_id,
             "report_type":   "BASIC",
-            "dimensions":    _json.dumps(["campaign_id", "stat_time_day"]),
-            "data_level":    "AUCTION_CAMPAIGN",
+            "dimensions":    _json.dumps(_dims),
+            "data_level":    data_level,
             "lifetime":      "false",
             "start_date":    str(start),
             "end_date":      str(end),
@@ -150,8 +156,131 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
                        key_fields=["date", "channel", "campaign_id"])
 
 
+# ── Ad Group level → adsets_daily ────────────────────────────────────────────
+
+def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> int:
+    """Ad group grain → adsets_daily. Same token, AUCTION_ADGROUP level."""
+    if not ACCESS_TOKEN:
+        print("[tiktok-bq] TIKTOK_ACCESS_TOKEN not set — skipping adgroups")
+        return 0
+
+    end = date.today() - timedelta(days=1)
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+
+    for account_id in _ad_accounts():
+        native_cur  = _advertiser_currency(account_id)
+        report_rows = _get_report(
+            account_id, start, end,
+            data_level="AUCTION_ADGROUP",
+            dimensions=["campaign_id", "adgroup_id", "stat_time_day"],
+        )
+        for row in report_rows:
+            dims    = row.get("dimensions", {})
+            metrics = row.get("metrics", {})
+            day     = (dims.get("stat_time_day") or "")[:10]
+            if not day:
+                continue
+            spend_native = float(metrics.get("spend", 0) or 0)
+            spend        = to_usd(spend_native, native_cur)
+            rows.append({
+                "date":          day,
+                "channel":       "tiktok",
+                "account_id":    account_id,
+                "campaign_id":   str(dims.get("campaign_id", "")),
+                "campaign_name": metrics.get("campaign_name"),
+                "adset_id":      str(dims.get("adgroup_id", "")),
+                "adset_name":    metrics.get("adgroup_name"),
+                "status":        None,
+                "spend":         round(spend, 2),
+                "impressions":   int(metrics.get("impressions", 0) or 0),
+                "clicks":        int(metrics.get("clicks", 0) or 0),
+                "ctr":           float(metrics.get("ctr", 0) or 0),
+                "leads":         int(metrics.get("conversion", 0) or 0),
+                "conversions":   float(metrics.get("conversion", 0) or 0),
+                "currency":      "USD",
+                "updated_at":    now,
+            })
+        print(f"[tiktok-bq] adgroups account {account_id}: {len(report_rows)} rows")
+
+    return upsert_rows("adsets_daily", rows,
+                       key_fields=["date", "channel", "adset_id"])
+
+
+# ── Ad level → ads_daily ──────────────────────────────────────────────────────
+
+def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
+    """Ad grain → ads_daily. Same token, AUCTION_AD level."""
+    if not ACCESS_TOKEN:
+        print("[tiktok-bq] TIKTOK_ACCESS_TOKEN not set — skipping ads")
+        return 0
+
+    end = date.today() - timedelta(days=1)
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+
+    for account_id in _ad_accounts():
+        native_cur  = _advertiser_currency(account_id)
+        report_rows = _get_report(
+            account_id, start, end,
+            data_level="AUCTION_AD",
+            dimensions=["campaign_id", "adgroup_id", "ad_id", "stat_time_day"],
+        )
+        for row in report_rows:
+            dims    = row.get("dimensions", {})
+            metrics = row.get("metrics", {})
+            day     = (dims.get("stat_time_day") or "")[:10]
+            if not day:
+                continue
+            spend_native = float(metrics.get("spend", 0) or 0)
+            spend        = to_usd(spend_native, native_cur)
+            rows.append({
+                "date":          day,
+                "channel":       "tiktok",
+                "account_id":    account_id,
+                "campaign_id":   str(dims.get("campaign_id", "")),
+                "campaign_name": metrics.get("campaign_name"),
+                "adset_id":      str(dims.get("adgroup_id", "")),
+                "adset_name":    metrics.get("adgroup_name"),
+                "ad_id":         str(dims.get("ad_id", "")),
+                "ad_name":       metrics.get("ad_name"),
+                "status":        None,
+                "spend":         round(spend, 2),
+                "impressions":   int(metrics.get("impressions", 0) or 0),
+                "clicks":        int(metrics.get("clicks", 0) or 0),
+                "ctr":           float(metrics.get("ctr", 0) or 0),
+                "leads":         int(metrics.get("conversion", 0) or 0),
+                "conversions":   float(metrics.get("conversion", 0) or 0),
+                "currency":      "USD",
+                "updated_at":    now,
+            })
+        print(f"[tiktok-bq] ads account {account_id}: {len(report_rows)} rows")
+
+    return upsert_rows("ads_daily", rows,
+                       key_fields=["date", "channel", "ad_id"])
+
+
 if __name__ == "__main__":
     import sys
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    n = collect_and_write(days=days)
-    print(f"TikTok BQ complete: {n} rows")
+    cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
+    days = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    if cmd in ("all", "campaigns"):
+        print(f"campaigns: {collect_and_write(days=days)} rows")
+    if cmd in ("all", "adgroups"):
+        print(f"adgroups:  {collect_adgroups_and_write(days=days)} rows")
+    if cmd in ("all", "ads"):
+        print(f"ads:       {collect_ads_and_write(days=days)} rows")
