@@ -15,6 +15,23 @@ the fix, not just the symptom.
   `WHERE date >= CURRENT_DATE() - INTERVAL 7 DAY` in a view definition; use
   it in queries, or pass params.
 
+## Microsoft Ads OAuth
+
+- **Work accounts (Azure AD) are blocked.** Signing in with `@qoyod.com`
+  (work account) returns `AADSTS650052` (no service principal in tenant)
+  or `AADSTS65002` (first-party preauthorization required). Microsoft only
+  preauthorizes their own apps + approved partners — there is no admin-
+  consent workaround for customer-registered apps.
+- **Fix: use a personal Microsoft account.** Rana already has a personal
+  MS account using `rana.khalid@qoyod.com` (separate identity from the
+  work account — Microsoft allows both with the same email). The OAuth
+  picker shows both; pick "Personal account – Created by you".
+- **Endpoint must be `/consumers/`** in `scripts/microsoft_oauth.py` —
+  `/common/` lets Azure route to the work account and fail. The script
+  is hard-coded to consumers.
+- **Redirect URI must match Azure exactly.** Registered:
+  `http://localhost:8080/ms-ads/callback` (not `/microsoft/callback`).
+
 ## HubSpot
 
 - **10,000-result hard cap on Search API.** After `after=10000` returns 400.
@@ -84,16 +101,27 @@ IG insights:
 - **Access tokens: 60 days. Refresh tokens: 365 days.** Use
   `scripts/linkedin_refresh.py --write-env` weekly. Silent expiry = silent
   collector failure (returns 0 rows, no exception).
-- **Header `LinkedIn-Version: 202410`** required on every call. Without it
-  you get versioning errors.
+- **Header `LinkedIn-Version: 202502`** required on every call (bump ~twice/year).
+  Versions 202410 and 202504 are retired → 426 NONEXISTENT_VERSION.
+- **DO NOT send `X-Restli-Protocol-Version: 2.0.0` with v202502.** This header
+  causes 400 "Projected field not present in schema CampaignGroupV4/CampaignV8/
+  AdAnalyticsV6" on every endpoint. Remove it entirely — v202502 works correctly
+  without it.
+- **DO NOT pass `fields=` projection params** on `adCampaignGroups`, `adCampaigns`,
+  or `adAnalytics` calls. They are rejected when Restli 2.0 header is absent.
+  Return full objects and read what you need from the response.
+- **Campaigns must use the account-scoped URL:**
+  `/rest/adAccounts/{acct_id}/adCampaigns` — NOT `/rest/adCampaigns`.
+  The global endpoint needs `search.account.values[0]` param which conflicts
+  with removing the Restli 2.0 header. Account-scoped URL needs only `q=search`.
 - **`adAnalytics` has pivot-explosion limits.** Requesting `pivot=CREATIVE`
   with wide date range paginates slowly — keep windows ≤ 7 days.
 - **Lead Gen Forms bypass UTMs.** Leads from LinkedIn native forms land in
   HubSpot with `qoyod_source='LinkedIn'` but `utm_campaign=NULL`. They'll
   bucket into `__no_utm__`. Real fix: pull `/rest/leadFormResponses` and
   join by `form_id → campaign_id`.
-- **Campaign names aren't on `adAnalytics`.** Must bulk-fetch via
-  `/rest/adCampaigns?ids=List(urn:li:sponsoredCampaign:123,...)` and join.
+- **Campaign names aren't on `adAnalytics`.** Must bulk-fetch via account-scoped
+  `/rest/adAccounts/{acct_id}/adCampaigns` and join.
 
 ## Snapchat (extended)
 
@@ -163,6 +191,25 @@ IG insights:
 - A "qualified lead" = `leads_qualified` from the HubSpot Lead Module (object
   `0-136`). CPQL = spend / qualified leads. Never compute CPQL from
   contact-stage data.
+
+## UTM → BQ field mapping (universal across all channels)
+
+Every platform's data is stored with the following UTM-aligned field names.
+Never use platform-specific names directly in BQ schemas or views.
+
+| UTM param     | BQ field name  | Platform examples                             |
+|---------------|----------------|-----------------------------------------------|
+| utm_source    | channel        | "google_ads", "meta", "snapchat", "tiktok"    |
+| utm_campaign  | campaign_name  | Campaign / Campaign Group (LinkedIn)           |
+| utm_audience  | adset_name     | Ad Set / Ad Group / Ad Squad / Campaign (LI)  |
+| utm_content   | ad_name        | Ad / Creative                                 |
+| utm_term      | keyword_text   | Keyword (Google, Microsoft Ads)               |
+| utm_medium    | placement      | Placement / Form name                         |
+| utm_keyword   | keyword_text   | Same as utm_term — platform call it this way  |
+
+LinkedIn-specific: Campaign Group = utm_campaign (stored as `campaign_id`),
+Campaign = utm_audience (stored as `adset_id`). The campaign collector writes
+at group level for campaigns_daily; adsets collector remaps campaign→adset.
 
 ## TikTok
 

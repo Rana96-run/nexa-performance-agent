@@ -21,11 +21,14 @@ AD_ACCT_URN = os.getenv("LI_AD_ACCOUNT_URN", "")
 
 def _headers() -> dict:
     return {
-        "Authorization":             f"Bearer {TOKEN}",
+        "Authorization":  f"Bearer {TOKEN}",
         # LinkedIn rolls API versions monthly; their N-12 retirement window
         # means we need to bump this roughly twice a year.  Current Apr 2026.
-        "LinkedIn-Version":          "202502",
-        "X-Restli-Protocol-Version": "2.0.0",
+        "LinkedIn-Version": "202502",
+        # NOTE: X-Restli-Protocol-Version: 2.0.0 intentionally REMOVED.
+        # With v202502 it causes 400 "Projected field not present in schema"
+        # errors on every field-projection call.  Without it all endpoints
+        # return 200 correctly.
     }
 
 
@@ -52,7 +55,7 @@ def _list_campaign_groups() -> dict:
     acct_id = AD_ACCT_URN.rsplit(":", 1)[-1]
     r = requests.get(f"{BASE}/adAccounts/{acct_id}/adCampaignGroups",
                      headers=_headers(),
-                     params={"q": "search", "fields": "id,name"},
+                     params={"q": "search"},
                      timeout=15)
     if r.status_code >= 400:
         print(f"[li-bq] campaign groups {r.status_code}: {r.text[:200]}")
@@ -73,13 +76,12 @@ def _list_campaigns(group_names: dict) -> dict:
     """
     if not AD_ACCT_URN:
         return {}
+    acct_id = AD_ACCT_URN.rsplit(":", 1)[-1]
     params = {
-        "q":                         "search",
-        "search.account.values[0]":  AD_ACCT_URN,
-        "fields":                    "id,name,status,objectiveType,campaignGroup",
+        "q": "search",
     }
-    r = requests.get(f"{BASE}/adCampaigns", headers=_headers(),
-                     params=params, timeout=15)
+    r = requests.get(f"{BASE}/adAccounts/{acct_id}/adCampaigns",
+                     headers=_headers(), params=params, timeout=15)
     if r.status_code >= 400:
         print(f"[li-bq] campaigns {r.status_code}: {r.text[:200]}")
         return {}
@@ -114,11 +116,6 @@ def _fetch_analytics(start: date, end: date) -> list[dict]:
         "dateRange.end.day":     end.day,
         "dateRange.end.month":   end.month,
         "dateRange.end.year":    end.year,
-        "fields": (
-            "dateRange,impressions,clicks,"
-            "costInLocalCurrency,externalWebsiteConversions,"
-            "pivotValues"
-        ),
     }
     r = requests.get(f"{BASE}/adAnalytics", headers=_headers(),
                      params=params, timeout=30)
