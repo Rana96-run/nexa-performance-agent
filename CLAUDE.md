@@ -147,6 +147,16 @@ Format them as:
 
 This keeps decisions in memory before they become bugs, not after.
 
+## Always choose simpler and sustainable (non-negotiable)
+
+Before building anything new, ask: does a tool already in use solve this?
+
+- **Use what exists** — Hex is the dashboard (not Streamlit). Railway hosts the agent (not Replit). HubSpot holds leads (not a custom DB).
+- **No new infrastructure** unless the existing tool genuinely can't do it.
+- **Prefer editing over rebuilding** — update a Hex cell before writing a new page; update a BQ view before adding a new collector.
+- **If two options exist**, pick the one with fewer moving parts, fewer credentials to manage, and fewer things that can break.
+- **Call it out** — if asked to build something that already exists elsewhere in the stack, say so and propose the simpler path instead.
+
 ## When unsure
 
 - **Ask Amar in Slack** rather than invent data or guess a field name — **only after searching memory/ first**
