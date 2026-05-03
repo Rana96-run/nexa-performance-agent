@@ -406,19 +406,11 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
     except Exception as e:
         print(f"[slack-summary] BQ headline/peak fetch skipped: {e}")
 
-    # ── Agent actions ────────────────────────────────────────────────────────
-    action_lines = _build_action_lines(tasks, approvals)
-    if action_lines:
-        lines.append("*Agent actions:*")
-        lines.extend(action_lines)
-        lines.append("")
-
-    # ── Footer ───────────────────────────────────────────────────────────────
-    lines.append(f"✅ *{len(tasks)} Asana task(s) created*")
+    # ── Footer — Asana task count only; details stay in Asana ───────────────
+    lines.append(f"*Asana:*  {len(tasks)} task(s) created")
     if approvals:
         lines.append(
-            f"⚠️  *{len(approvals)} approval request(s)* sent to "
-            f"<#{SLACK_CHANNEL_APPROVAL}>"
+            f"*→ #approvals:*  {len(approvals)} action(s) pending"
         )
 
     return "\n".join(lines)

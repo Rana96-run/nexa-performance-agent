@@ -213,34 +213,18 @@ def send_overdue_reminders(min_days_overdue: int = 1,
         cat = _classify_task(t["name"])
         by_cat.setdefault(cat, []).append(t)
 
-    lines = [f":alarm_clock: *Overdue Asana Tasks — {len(overdue)} pending action*"]
+    # Log overdue tasks to console only — do NOT post to Slack.
+    # Overdue task counts surface in the main #notify daily summary (Asana line).
+    # Individual task links stay inside Asana; Slack stays clean (2 messages/night).
     for cat in _CATEGORY_ORDER + [c for c in by_cat if c not in _CATEGORY_ORDER]:
         tasks = by_cat.get(cat)
         if not tasks:
             continue
-        icon = _CATEGORY_ICON.get(cat, ":clipboard:")
-        # Show category header with count
-        lines.append(f"\n  {icon} *{cat}*  ({len(tasks)} overdue)")
+        print(f"[asana-maintenance] overdue: {cat} × {len(tasks)}")
         for t in tasks:
-            url = f"https://app.asana.com/0/{t['project']}/{t['gid']}"
-            lines.append(
-                f"    • {t['days_late']}d — <{url}|{t['name'][:60]}>"
-            )
-    message = "\n".join(lines)
+            print(f"  {t['days_late']}d  {t['name'][:80]}")
 
-    if is_quiet():
-        quiet_log("asana-maintenance", SLACK_CHANNEL_NOTIFY, message)
-        print(f"[asana-maintenance] {len(overdue)} overdue tasks (quiet mode).")
-        return len(overdue)
-
-    try:
-        from slack_sdk import WebClient
-        wc = WebClient(token=SLACK_BOT_TOKEN)
-        wc.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=message)
-        print(f"[asana-maintenance] Reminder sent: {len(overdue)} overdue tasks.")
-    except Exception as e:
-        print(f"[asana-maintenance] Slack reminder failed: {e}")
-
+    print(f"[asana-maintenance] {len(overdue)} overdue task(s) — logged only, no Slack post.")
     return len(overdue)
 
 

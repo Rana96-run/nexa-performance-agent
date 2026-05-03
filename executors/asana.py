@@ -12,11 +12,23 @@ import asana
 from asana.rest import ApiException as AsanaApiException
 from config import (
     ASANA_TOKEN, ASANA_PROJECTS, ASANA_ASSIGNEE_GID,
+    ASANA_ASSIGNEE_GOOGLE_ADS_GID, ASANA_ASSIGNEE_DEFAULT_GID,
     ASANA_CHANNEL_LABELS, ASANA_ASSET_LEVEL_LABELS, ASANA_CHANNEL_ASSET_MATRIX,
     ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS, ASANA_SEASONAL_PROJECTS,
     ASANA_ACTIVE_SEASONAL,
     asana_section_name,
 )
+
+
+def _assignee_for_channel(channel: str) -> str:
+    """
+    Google Ads tasks → Rana Khalid
+    Everything else  → Donia Mohamed
+    """
+    ch = (channel or "").lower().replace(" ", "_").replace("-", "_")
+    if ch in ("google_ads", "google ads"):
+        return ASANA_ASSIGNEE_GOOGLE_ADS_GID
+    return ASANA_ASSIGNEE_DEFAULT_GID or ASANA_ASSIGNEE_GID
 from cache.cache_manager import task_is_new, record_task, get_task_gid
 
 # Action -> priority label (shown in task footer)
@@ -219,8 +231,9 @@ def create_task(
         "projects": [project_id],
         "due_on":   due_date,
     }
-    if ASANA_ASSIGNEE_GID:
-        task_data["assignee"] = ASANA_ASSIGNEE_GID
+    assignee_gid = _assignee_for_channel(channel)
+    if assignee_gid:
+        task_data["assignee"] = assignee_gid
 
     # Section routing — for Optimization projects, route into the
     # asset-level section (e.g. "Campaign", "Ad Set / Group", "Audience").

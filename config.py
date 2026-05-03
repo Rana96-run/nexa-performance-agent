@@ -42,7 +42,13 @@ NOTIFY_VIA = os.getenv("NOTIFY_VIA", "email").lower()
 
 # Asana
 ASANA_TOKEN        = os.getenv("ASANA_ACCESS_TOKEN")
-ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # default assignee (media buyer GID)
+ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # legacy fallback (not used if channel-specific set)
+
+# Per-channel assignees:
+#   Google Ads tasks → Rana Khalid (rana.khalid@qoyod.com)
+#   All other tasks  → Donia Mohamed (dmohamed@qoyod.com)
+ASANA_ASSIGNEE_GOOGLE_ADS_GID = os.getenv("ASANA_ASSIGNEE_GOOGLE_ADS_GID", "1208007704598388")
+ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1211896896006183")
 ASANA_PROJECTS = {
     "daily_activity": os.getenv("ASANA_PROJECT_DAILY_ACTIVITY") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY"),
     "optimization": os.getenv("ASANA_PROJECT_OPTIMIZATION") or os.getenv("ASANA_PORTFOLIO_OPTIMIZATION"),

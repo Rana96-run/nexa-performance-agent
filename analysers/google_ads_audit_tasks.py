@@ -73,19 +73,70 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
 
         body = (f"Daily impression-share audit (last 14d). "
                 f"{len(is_findings)} campaigns flagged.\n\n"
-                f"**Rules:**\n"
-                f"- Lost-IS to BUDGET > 20% -> scale candidate (raise budget)\n"
-                f"- Lost-IS to RANK > 30% -> quality / bid issue (improve QS or raise bid)\n"
-                f"- IS > 80% -> saturated (broaden keywords / new ad groups)\n\n")
+                f"**IS = share of auctions your ads actually appeared in.**\n"
+                f"Lost-Budget = Google stopped showing ads because daily budget ran out.\n"
+                f"Lost-Rank = Google ranked your ad too low to show (QS × bid insufficient).\n\n")
+
         if scale:
-            body += f"### Scale candidates ({len(scale)})\n" + _is_table(scale) + "\n"
+            body += f"### 📉 Lost to BUDGET — {len(scale)} campaign(s)\n"
+            body += _is_table(scale) + "\n"
+            body += (
+                "**Root causes to investigate before touching budget:**\n"
+                "1. **Dayparting drain** — Run an hourly impression report. "
+                "If budget is exhausted by noon, split into two budget cycles or use "
+                "shared budget + ad scheduling to concentrate spend in peak-conversion hours.\n"
+                "2. **Match-type waste** — If Broad or BMM keywords are present, check "
+                "the search terms report. If > 30% of spend goes to irrelevant queries, "
+                "add negatives first — this frees budget for winning auctions.\n"
+                "3. **Bid strategy conflict** — If on Target CPA with a very low target, "
+                "Google caps bids to meet the target, exhausting budget in low-competition "
+                "slots before peak hours. Try raising target CPA by 15% and re-evaluate.\n"
+                "4. **ROAS/CPL validation before scaling** — Only raise budget if this "
+                "campaign has CPQL ≤ account target (check Asana KPI board). "
+                "If CPQL is above target, scaling wastes money — fix lead quality first.\n"
+                "5. **Impression Share bid strategy** — For campaigns with strong CPLs, "
+                "switch to Target Impression Share (Absolute Top 50–70%) to let Google "
+                "auto-bid for visibility without manual budget guessing.\n\n"
+            )
+
         if rank:
-            body += f"### Rank issues ({len(rank)})\n" + _is_table(rank) + "\n"
+            body += f"### 🎯 Lost to RANK — {len(rank)} campaign(s)\n"
+            body += _is_table(rank) + "\n"
+            body += (
+                "**Lost-Rank is a Quality Score problem, not a budget problem.**\n"
+                "Raising bid helps short-term but costs more — fix QS first:\n"
+                "1. **Ad relevance below average** → Headlines don't match the keyword's "
+                "intent. Add the exact keyword into H1/H2 of the ad. Create tighter ad "
+                "groups (1-3 keywords per group — SKAGs) so every ad is hyper-relevant.\n"
+                "2. **Landing page experience below average** → LP doesn't deliver what "
+                "the ad promises. Check: does the LP headline match the ad CTA? "
+                "Is the form above the fold on mobile? Page load > 3s kills LP score — "
+                "run PageSpeed Insights and fix the top 3 issues.\n"
+                "3. **Expected CTR below average** → Ad copy isn't compelling. "
+                "Actions: add a number ('Get a quote in 2 minutes'), urgency "
+                "('Limited offer — expires this week'), or social proof "
+                "('Trusted by 10,000+ businesses'). Test RSA with pinned H1.\n"
+                "4. **Ad extensions gap** — Missing extensions reduce predicted CTR. "
+                "Ensure all campaigns have: Sitelinks (≥4), Callouts (≥4), "
+                "Structured Snippets, and a Call extension if applicable.\n"
+                "5. **Bid floor** — After QS fixes, if rank IS is still low after 7d, "
+                "raise CPC bids by 20% on the specific ad groups with rank issues only.\n\n"
+            )
+
         if saturated:
-            body += f"### Saturated ({len(saturated)})\n" + _is_table(saturated) + "\n"
-        body += ("\n**Action:** Budget changes are approval-gated. Open the channel "
-                 "optimization board, review, and approve the bid/budget mutations "
-                 "in the Slack approval channel.")
+            body += f"### ✅ Saturated (IS > 80%) — {len(saturated)} campaign(s)\n"
+            body += _is_table(saturated) + "\n"
+            body += (
+                "**Campaign is winning most auctions it's eligible for — expand the pool:**\n"
+                "1. Add new keyword themes from the search terms report (converting queries "
+                "not yet in the keyword list → add as exact match).\n"
+                "2. Duplicate the ad group and test Phrase match on top performers.\n"
+                "3. Add RLSA bid adjustments to increase bids for website visitors.\n"
+                "4. Test new geographic areas if the product has national reach.\n\n"
+            )
+
+        body += ("**Approval:** Budget/bid changes are routed to #approvals. "
+                 "QS / ad copy / LP fixes can be executed directly without approval.")
 
         gid = create_task(
             title=f"Google Ads — Impression-share audit ({len(is_findings)} campaigns)",
