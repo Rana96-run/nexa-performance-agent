@@ -88,29 +88,77 @@ HUBSPOT_LEADS_DAILY_SCHEMA = [
     bigquery.SchemaField("updated_at", "TIMESTAMP"),
 ]
 
-ADS_DAILY_SCHEMA = [
-    bigquery.SchemaField("date", "DATE", mode="REQUIRED"),
-    bigquery.SchemaField("channel", "STRING", mode="REQUIRED"),
-    bigquery.SchemaField("campaign_id", "STRING"),
+ADSETS_DAILY_SCHEMA = [
+    bigquery.SchemaField("date",          "DATE",      mode="REQUIRED"),
+    bigquery.SchemaField("channel",       "STRING",    mode="REQUIRED"),
+    bigquery.SchemaField("account_id",    "STRING"),
+    bigquery.SchemaField("campaign_id",   "STRING",    mode="REQUIRED"),
     bigquery.SchemaField("campaign_name", "STRING"),
-    bigquery.SchemaField("adset_id", "STRING"),
-    bigquery.SchemaField("adset_name", "STRING"),
-    bigquery.SchemaField("ad_id", "STRING", mode="REQUIRED"),
-    bigquery.SchemaField("ad_name", "STRING"),
-    bigquery.SchemaField("status", "STRING"),
-    bigquery.SchemaField("spend", "FLOAT64"),
-    bigquery.SchemaField("impressions", "INT64"),
-    bigquery.SchemaField("clicks", "INT64"),
-    bigquery.SchemaField("ctr", "FLOAT64"),
-    bigquery.SchemaField("leads", "INT64"),
-    bigquery.SchemaField("cpl", "FLOAT64"),
-    bigquery.SchemaField("frequency", "FLOAT64"),
-    bigquery.SchemaField("updated_at", "TIMESTAMP"),
+    bigquery.SchemaField("adset_id",      "STRING",    mode="REQUIRED"),
+    bigquery.SchemaField("adset_name",    "STRING"),
+    bigquery.SchemaField("status",        "STRING"),
+    bigquery.SchemaField("spend",         "FLOAT64"),
+    bigquery.SchemaField("impressions",   "INT64"),
+    bigquery.SchemaField("clicks",        "INT64"),
+    bigquery.SchemaField("ctr",           "FLOAT64"),
+    bigquery.SchemaField("leads",         "INT64"),     # platform-reported
+    bigquery.SchemaField("conversions",   "FLOAT64"),
+    bigquery.SchemaField("frequency",     "FLOAT64"),   # Meta/Snap only
+    bigquery.SchemaField("currency",      "STRING"),
+    bigquery.SchemaField("updated_at",    "TIMESTAMP"),
+]
+
+ADS_DAILY_SCHEMA = [
+    bigquery.SchemaField("date",          "DATE",      mode="REQUIRED"),
+    bigquery.SchemaField("channel",       "STRING",    mode="REQUIRED"),
+    bigquery.SchemaField("account_id",    "STRING"),
+    bigquery.SchemaField("campaign_id",   "STRING"),
+    bigquery.SchemaField("campaign_name", "STRING"),
+    bigquery.SchemaField("adset_id",      "STRING"),
+    bigquery.SchemaField("adset_name",    "STRING"),
+    bigquery.SchemaField("ad_id",         "STRING",    mode="REQUIRED"),
+    bigquery.SchemaField("ad_name",       "STRING"),
+    bigquery.SchemaField("status",        "STRING"),
+    bigquery.SchemaField("spend",         "FLOAT64"),
+    bigquery.SchemaField("impressions",   "INT64"),
+    bigquery.SchemaField("clicks",        "INT64"),
+    bigquery.SchemaField("ctr",           "FLOAT64"),
+    bigquery.SchemaField("leads",         "INT64"),
+    bigquery.SchemaField("conversions",   "FLOAT64"),
+    bigquery.SchemaField("frequency",     "FLOAT64"),
+    bigquery.SchemaField("currency",      "STRING"),
+    bigquery.SchemaField("updated_at",    "TIMESTAMP"),
+]
+
+KEYWORDS_DAILY_SCHEMA = [
+    # Google Ads + Microsoft Ads only
+    bigquery.SchemaField("date",            "DATE",    mode="REQUIRED"),
+    bigquery.SchemaField("channel",         "STRING",  mode="REQUIRED"),
+    bigquery.SchemaField("account_id",      "STRING"),
+    bigquery.SchemaField("campaign_id",     "STRING",  mode="REQUIRED"),
+    bigquery.SchemaField("campaign_name",   "STRING"),
+    bigquery.SchemaField("adgroup_id",      "STRING",  mode="REQUIRED"),
+    bigquery.SchemaField("adgroup_name",    "STRING"),
+    bigquery.SchemaField("keyword_id",      "STRING"),
+    bigquery.SchemaField("keyword_text",    "STRING"),  # the actual keyword
+    bigquery.SchemaField("match_type",      "STRING"),  # EXACT / PHRASE / BROAD
+    bigquery.SchemaField("status",          "STRING"),
+    bigquery.SchemaField("spend",           "FLOAT64"),
+    bigquery.SchemaField("impressions",     "INT64"),
+    bigquery.SchemaField("clicks",          "INT64"),
+    bigquery.SchemaField("ctr",             "FLOAT64"),
+    bigquery.SchemaField("avg_cpc",         "FLOAT64"),
+    bigquery.SchemaField("conversions",     "FLOAT64"),
+    bigquery.SchemaField("quality_score",   "INT64"),   # Google Ads only (1-10)
+    bigquery.SchemaField("currency",        "STRING"),
+    bigquery.SchemaField("updated_at",      "TIMESTAMP"),
 ]
 
 TABLES = {
-    "campaigns_daily": CAMPAIGNS_DAILY_SCHEMA,
-    "ads_daily": ADS_DAILY_SCHEMA,
+    "campaigns_daily":  CAMPAIGNS_DAILY_SCHEMA,
+    "adsets_daily":     ADSETS_DAILY_SCHEMA,
+    "ads_daily":        ADS_DAILY_SCHEMA,
+    "keywords_daily":   KEYWORDS_DAILY_SCHEMA,
     "hubspot_leads_daily": HUBSPOT_LEADS_DAILY_SCHEMA,
 }
 
@@ -119,7 +167,9 @@ TABLES = {
 
 TABLE_CLUSTERS = {
     "campaigns_daily":    ["channel", "campaign_id"],
+    "adsets_daily":       ["channel", "campaign_id", "adset_id"],
     "ads_daily":          ["channel", "campaign_id", "ad_id"],
+    "keywords_daily":     ["channel", "campaign_id", "adgroup_id"],
     "hubspot_leads_daily": ["qoyod_source"],
 }
 
@@ -593,77 +643,250 @@ FROM combined
 
 V_ADSET_PERFORMANCE_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_adset_performance` AS
--- Ad set / Ad group level: channel + campaign + utm_audience grain
--- Used by Channel Deep Dive ad-sets tab
+-- Adset/AdGroup level: spend + impressions + clicks from adsets_daily (platform),
+-- leads/SQLs/disqual from HubSpot, deals/closed-won/ROAS from hubspot_deals_daily.
+-- Falls back to UTM-proxy spend when adsets_daily has no rows yet.
+-- Ad set / Ad group level performance.
+-- Spend/impressions/clicks come from adsets_daily (real platform data via Airbyte).
+-- Leads/SQLs come from utm_paid_attribution_daily (HubSpot utm_audience match).
+-- Falls back to UTM-proxy spend when adsets_daily has no row for that adset.
+WITH platform AS (
+  SELECT date, channel, campaign_name,
+    adset_name AS utm_audience,
+    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
+  FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
+  GROUP BY 1, 2, 3, 4
+),
+hubspot AS (
+  SELECT date, channel, utm_campaign, utm_audience,
+    SUM(leads) AS leads,
+    SUM(leads_qualified) AS leads_qualified,
+    SUM(leads_disqualified) AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+  WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
+  GROUP BY 1, 2, 3, 4
+),
+deals AS (
+  SELECT date, qoyod_source AS channel, deal_utm_campaign AS utm_campaign,
+    deal_utm_audience AS utm_audience,
+    SUM(deals_total) AS deals,
+    SUM(deals_won) AS deals_won,
+    SUM(amount_won) AS revenue_won
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+  WHERE deal_utm_audience IS NOT NULL
+  GROUP BY 1, 2, 3, 4
+),
+utmproxy AS (
+  SELECT date, channel, utm_campaign, utm_audience, SUM(spend) AS spend
+  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+  WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
+  GROUP BY 1, 2, 3, 4
+)
 SELECT
-  date,
-  channel,
-  channel_name,
-  utm_campaign,
-  utm_audience,
-  SUM(spend)             AS spend,
-  SUM(leads)             AS leads,
-  SUM(leads_qualified)   AS leads_qualified,
-  SUM(leads_disqualified) AS leads_disqualified,
-  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0))           AS CPL,
-  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS CPQL,
-  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads), 0)) AS qual_rate
-FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-WHERE utm_campaign != '__no_utm__'
-  AND utm_audience IS NOT NULL
-GROUP BY 1, 2, 3, 4, 5
+  COALESCE(p.date, h.date)                AS date,
+  COALESCE(p.channel, h.channel)          AS channel,
+  CASE COALESCE(p.channel, h.channel)
+    WHEN 'google_ads'    THEN 'Google Ads'
+    WHEN 'meta'          THEN 'Meta Ads'
+    WHEN 'snapchat'      THEN 'Snapchat Ads'
+    WHEN 'tiktok'        THEN 'TikTok Ads'
+    WHEN 'linkedin'      THEN 'LinkedIn Ads'
+    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
+    ELSE COALESCE(p.channel, h.channel)
+  END                                      AS channel_name,
+  COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
+  COALESCE(p.utm_audience, h.utm_audience)  AS utm_audience,
+  COALESCE(p.spend, u.spend, 0)             AS spend,
+  COALESCE(p.impressions, 0)                AS impressions,
+  COALESCE(p.clicks, 0)                     AS clicks,
+  COALESCE(h.leads, 0)                      AS leads,
+  COALESCE(h.leads_qualified, 0)            AS leads_qualified,
+  COALESCE(h.leads_disqualified, 0)         AS leads_disqualified,
+  COALESCE(d.deals, 0)                      AS deals,
+  COALESCE(d.deals_won, 0)                  AS deals_won,
+  COALESCE(d.revenue_won, 0)                AS revenue_won,
+  -- Ratios
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))                     AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))                  AS disq_rate,
+  -- Cost metrics
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))            AS CPL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0))  AS CPQL,
+  -- ROAS = revenue_won / spend
+  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))      AS ROAS,
+  IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
+FROM platform p
+FULL OUTER JOIN hubspot h
+  ON p.date = h.date AND p.channel = h.channel
+  AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
+LEFT JOIN utmproxy u
+  ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
+LEFT JOIN deals d
+  ON COALESCE(p.date, h.date) = d.date
+  AND COALESCE(p.channel, h.channel) = d.channel
+  AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(d.utm_audience))
 """
 
 
 V_AD_PERFORMANCE_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_ad_performance` AS
--- Ad / Creative level: channel + campaign + utm_audience + utm_content grain
--- Used by Channel Deep Dive ads/creatives tab
+-- Ad/Creative level: spend+impressions+clicks from ads_daily,
+-- leads/SQLs/disqual from HubSpot, deals/closed-won/ROAS from deals.
+WITH platform AS (
+  SELECT date, channel, campaign_name, adset_name, ad_name AS utm_content,
+    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
+  FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+  GROUP BY 1, 2, 3, 4, 5
+),
+hubspot AS (
+  SELECT date, channel, utm_campaign, utm_audience, utm_content,
+    SUM(leads) AS leads,
+    SUM(leads_qualified) AS leads_qualified,
+    SUM(leads_disqualified) AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+  WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
+  GROUP BY 1, 2, 3, 4, 5
+),
+deals AS (
+  SELECT date, qoyod_source AS channel,
+    deal_utm_campaign AS utm_campaign,
+    deal_utm_content AS utm_content,
+    SUM(deals_total) AS deals,
+    SUM(deals_won) AS deals_won,
+    SUM(amount_won) AS revenue_won
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+  WHERE deal_utm_content IS NOT NULL
+  GROUP BY 1, 2, 3, 4
+),
+utmproxy AS (
+  SELECT date, channel, utm_campaign, utm_audience, utm_content, SUM(spend) AS spend
+  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+  WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
+  GROUP BY 1, 2, 3, 4, 5
+)
 SELECT
-  date,
-  channel,
-  channel_name,
-  utm_campaign,
-  utm_audience,
-  utm_content,
-  SUM(spend)             AS spend,
-  SUM(leads)             AS leads,
-  SUM(leads_qualified)   AS leads_qualified,
-  SUM(leads_disqualified) AS leads_disqualified,
-  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0))           AS CPL,
-  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS CPQL,
-  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads), 0)) AS qual_rate
-FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-WHERE utm_campaign != '__no_utm__'
-  AND utm_content IS NOT NULL
-GROUP BY 1, 2, 3, 4, 5, 6
+  COALESCE(p.date, h.date)                  AS date,
+  COALESCE(p.channel, h.channel)            AS channel,
+  CASE COALESCE(p.channel, h.channel)
+    WHEN 'google_ads'    THEN 'Google Ads'
+    WHEN 'meta'          THEN 'Meta Ads'
+    WHEN 'snapchat'      THEN 'Snapchat Ads'
+    WHEN 'tiktok'        THEN 'TikTok Ads'
+    WHEN 'linkedin'      THEN 'LinkedIn Ads'
+    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
+    ELSE COALESCE(p.channel, h.channel)
+  END                                        AS channel_name,
+  COALESCE(p.campaign_name, h.utm_campaign)  AS utm_campaign,
+  COALESCE(p.adset_name, h.utm_audience)     AS utm_audience,
+  COALESCE(p.utm_content, h.utm_content)     AS utm_content,
+  COALESCE(p.spend, u.spend, 0)              AS spend,
+  COALESCE(p.impressions, 0)                 AS impressions,
+  COALESCE(p.clicks, 0)                      AS clicks,
+  COALESCE(h.leads, 0)                       AS leads,
+  COALESCE(h.leads_qualified, 0)             AS leads_qualified,
+  COALESCE(h.leads_disqualified, 0)          AS leads_disqualified,
+  COALESCE(d.deals, 0)                       AS deals,
+  COALESCE(d.deals_won, 0)                   AS deals_won,
+  COALESCE(d.revenue_won, 0)                 AS revenue_won,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))                    AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))                 AS disq_rate,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))           AS CPL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0)) AS CPQL,
+  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS ROAS,
+  IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                        AS data_source
+FROM platform p
+FULL OUTER JOIN hubspot h
+  ON p.date = h.date AND p.channel = h.channel
+  AND LOWER(TRIM(p.utm_content)) = LOWER(TRIM(h.utm_content))
+LEFT JOIN utmproxy u
+  ON h.date = u.date AND h.channel = u.channel AND h.utm_content = u.utm_content
+LEFT JOIN deals d
+  ON COALESCE(p.date, h.date) = d.date
+  AND COALESCE(p.channel, h.channel) = d.channel
+  AND LOWER(TRIM(COALESCE(p.utm_content, h.utm_content))) = LOWER(TRIM(d.utm_content))
 """
 
 
 V_KEYWORD_PERFORMANCE_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_keyword_performance` AS
--- Keyword level: Google Ads only, channel + campaign + utm_term grain
--- utm_term carries the keyword value for Google Search campaigns
+-- Keyword level: Google Ads + Microsoft Ads.
+-- Spend/impressions/clicks/QS from keywords_daily; leads/deals from HubSpot.
+WITH platform AS (
+  SELECT date, channel, campaign_name, adgroup_name, keyword_text AS utm_term,
+    match_type,
+    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
+    SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr,
+    AVG(quality_score) AS quality_score
+  FROM `{PROJECT_ID}.{DATASET}.keywords_daily`
+  GROUP BY 1, 2, 3, 4, 5, 6
+),
+hubspot AS (
+  SELECT date, channel, utm_campaign, utm_audience, utm_term,
+    SUM(leads) AS leads,
+    SUM(leads_qualified) AS leads_qualified,
+    SUM(leads_disqualified) AS leads_disqualified,
+    ANY_VALUE(match_method) AS match_method
+  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+  WHERE channel IN ('google_ads', 'microsoft_ads')
+    AND utm_term IS NOT NULL AND utm_campaign != '__no_utm__'
+  GROUP BY 1, 2, 3, 4, 5
+),
+deals AS (
+  SELECT date, qoyod_source AS channel,
+    deal_utm_campaign AS utm_campaign,
+    deal_utm_term AS utm_term,
+    SUM(deals_total) AS deals,
+    SUM(deals_won) AS deals_won,
+    SUM(amount_won) AS revenue_won
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+  WHERE deal_utm_term IS NOT NULL
+  GROUP BY 1, 2, 3, 4
+),
+utmproxy AS (
+  SELECT date, channel, utm_campaign, utm_term, SUM(spend) AS spend
+  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+  WHERE utm_term IS NOT NULL AND utm_campaign != '__no_utm__'
+  GROUP BY 1, 2, 3, 4
+)
 SELECT
-  date,
-  channel,
-  channel_name,
-  utm_campaign,
-  utm_term,
-  SUM(spend)             AS spend,
-  SUM(leads)             AS leads,
-  SUM(leads_qualified)   AS leads_qualified,
-  SUM(leads_disqualified) AS leads_disqualified,
-  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0))           AS CPL,
-  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS CPQL,
-  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads), 0)) AS qual_rate,
-  -- Show most common match method for this keyword row
-  ANY_VALUE(match_method) AS match_method
-FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-WHERE channel = 'google_ads'
-  AND utm_term IS NOT NULL
-  AND utm_campaign != '__no_utm__'
-GROUP BY 1, 2, 3, 4, 5
+  COALESCE(p.date, h.date)                  AS date,
+  COALESCE(p.channel, h.channel)            AS channel,
+  CASE COALESCE(p.channel, h.channel)
+    WHEN 'google_ads'    THEN 'Google Ads'
+    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
+    ELSE COALESCE(p.channel, h.channel)
+  END                                        AS channel_name,
+  COALESCE(p.campaign_name, h.utm_campaign)  AS utm_campaign,
+  COALESCE(p.adgroup_name, h.utm_audience)   AS utm_audience,
+  COALESCE(p.utm_term, h.utm_term)           AS utm_term,
+  p.match_type,
+  p.quality_score,
+  COALESCE(p.spend, u.spend, 0)              AS spend,
+  COALESCE(p.impressions, 0)                 AS impressions,
+  COALESCE(p.clicks, 0)                      AS clicks,
+  COALESCE(p.ctr, 0)                         AS ctr,
+  COALESCE(h.leads, 0)                       AS leads,
+  COALESCE(h.leads_qualified, 0)             AS leads_qualified,
+  COALESCE(h.leads_disqualified, 0)          AS leads_disqualified,
+  COALESCE(d.deals, 0)                       AS deals,
+  COALESCE(d.deals_won, 0)                   AS deals_won,
+  COALESCE(d.revenue_won, 0)                 AS revenue_won,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))                    AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))                 AS disq_rate,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))           AS CPL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0)) AS CPQL,
+  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS ROAS,
+  COALESCE(h.match_method, 'utm_proxy')      AS match_method,
+  IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                        AS data_source
+FROM platform p
+FULL OUTER JOIN hubspot h
+  ON p.date = h.date AND p.channel = h.channel
+  AND LOWER(TRIM(p.utm_term)) = LOWER(TRIM(h.utm_term))
+LEFT JOIN utmproxy u
+  ON h.date = u.date AND h.channel = u.channel AND h.utm_term = u.utm_term
+LEFT JOIN deals d
+  ON COALESCE(p.date, h.date) = d.date
+  AND COALESCE(p.channel, h.channel) = d.channel
+  AND LOWER(TRIM(COALESCE(p.utm_term, h.utm_term))) = LOWER(TRIM(d.utm_term))
 """
 
 

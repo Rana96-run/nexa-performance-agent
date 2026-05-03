@@ -382,26 +382,221 @@ def normalize_microsoft(client: bigquery.Client) -> int:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+# ── Sub-campaign level MERGEs ─────────────────────────────────────────────────
+
+MERGE_ADSETS_SQL = """
+MERGE `{project}.{dataset}.adsets_daily` T
+USING ({select_sql}) S
+ON  T.date = S.date AND T.channel = S.channel AND T.adset_id = S.adset_id
+WHEN MATCHED THEN UPDATE SET
+  campaign_id=S.campaign_id, campaign_name=S.campaign_name, adset_name=S.adset_name,
+  status=S.status, spend=S.spend, impressions=S.impressions, clicks=S.clicks,
+  ctr=S.ctr, leads=S.leads, conversions=S.conversions, frequency=S.frequency,
+  currency=S.currency, updated_at=S.updated_at
+WHEN NOT MATCHED THEN INSERT (
+  date,channel,account_id,campaign_id,campaign_name,adset_id,adset_name,
+  status,spend,impressions,clicks,ctr,leads,conversions,frequency,currency,updated_at
+) VALUES (
+  S.date,S.channel,S.account_id,S.campaign_id,S.campaign_name,S.adset_id,S.adset_name,
+  S.status,S.spend,S.impressions,S.clicks,S.ctr,S.leads,S.conversions,S.frequency,S.currency,S.updated_at
+)
+"""
+
+MERGE_ADS_SQL = """
+MERGE `{project}.{dataset}.ads_daily` T
+USING ({select_sql}) S
+ON  T.date = S.date AND T.channel = S.channel AND T.ad_id = S.ad_id
+WHEN MATCHED THEN UPDATE SET
+  campaign_id=S.campaign_id, campaign_name=S.campaign_name, adset_id=S.adset_id,
+  adset_name=S.adset_name, ad_name=S.ad_name, status=S.status,
+  spend=S.spend, impressions=S.impressions, clicks=S.clicks, ctr=S.ctr,
+  leads=S.leads, conversions=S.conversions, frequency=S.frequency,
+  currency=S.currency, updated_at=S.updated_at
+WHEN NOT MATCHED THEN INSERT (
+  date,channel,account_id,campaign_id,campaign_name,adset_id,adset_name,
+  ad_id,ad_name,status,spend,impressions,clicks,ctr,leads,conversions,
+  frequency,currency,updated_at
+) VALUES (
+  S.date,S.channel,S.account_id,S.campaign_id,S.campaign_name,S.adset_id,S.adset_name,
+  S.ad_id,S.ad_name,S.status,S.spend,S.impressions,S.clicks,S.ctr,S.leads,S.conversions,
+  S.frequency,S.currency,S.updated_at
+)
+"""
+
+MERGE_KEYWORDS_SQL = """
+MERGE `{project}.{dataset}.keywords_daily` T
+USING ({select_sql}) S
+ON  T.date = S.date AND T.channel = S.channel
+AND T.adgroup_id = S.adgroup_id AND T.keyword_id = S.keyword_id
+WHEN MATCHED THEN UPDATE SET
+  campaign_id=S.campaign_id, campaign_name=S.campaign_name,
+  adgroup_name=S.adgroup_name, keyword_text=S.keyword_text, match_type=S.match_type,
+  status=S.status, spend=S.spend, impressions=S.impressions, clicks=S.clicks,
+  ctr=S.ctr, avg_cpc=S.avg_cpc, conversions=S.conversions,
+  quality_score=S.quality_score, currency=S.currency, updated_at=S.updated_at
+WHEN NOT MATCHED THEN INSERT (
+  date,channel,account_id,campaign_id,campaign_name,adgroup_id,adgroup_name,
+  keyword_id,keyword_text,match_type,status,spend,impressions,clicks,ctr,
+  avg_cpc,conversions,quality_score,currency,updated_at
+) VALUES (
+  S.date,S.channel,S.account_id,S.campaign_id,S.campaign_name,S.adgroup_id,S.adgroup_name,
+  S.keyword_id,S.keyword_text,S.match_type,S.status,S.spend,S.impressions,S.clicks,S.ctr,
+  S.avg_cpc,S.conversions,S.quality_score,S.currency,S.updated_at
+)
+"""
+
+
+def normalize_google_ads_adgroups(client: bigquery.Client) -> int:
+    table = "google_ads_ad_group_performance_report"
+    if not _table_exists(client, RAW, table):
+        print(f"  [airbyte-norm] google_ads adgroups: {table} not found — skipping")
+        return 0
+    select = f"""
+    SELECT
+      PARSE_DATE('%Y-%m-%d', segments_date)                AS date,
+      'google_ads'                                         AS channel,
+      CAST(customer_id AS STRING)                          AS account_id,
+      CAST(campaign_id AS STRING)                          AS campaign_id,
+      campaign_name                                        AS campaign_name,
+      CAST(ad_group_id AS STRING)                          AS adset_id,
+      ad_group_name                                        AS adset_name,
+      UPPER(ad_group_status)                               AS status,
+      ROUND(COALESCE(metrics_cost_micros,0)/1000000.0, 4)  AS spend,
+      COALESCE(metrics_impressions, 0)                     AS impressions,
+      COALESCE(metrics_clicks, 0)                          AS clicks,
+      SAFE_DIVIDE(COALESCE(metrics_clicks,0), NULLIF(metrics_impressions,0)) AS ctr,
+      COALESCE(CAST(metrics_conversions AS INT64), 0)      AS leads,
+      COALESCE(metrics_conversions, 0)                     AS conversions,
+      NULL                                                 AS frequency,
+      'USD'                                                AS currency,
+      CURRENT_TIMESTAMP()                                  AS updated_at
+    FROM `{PROJECT}.{RAW}.{table}`
+    WHERE segments_date IS NOT NULL AND ad_group_id IS NOT NULL
+    """
+    return _run(client, MERGE_ADSETS_SQL.format(project=PROJECT, dataset=DATASET, select_sql=select), "google_ads_adgroups")
+
+
+def normalize_google_ads_keywords(client: bigquery.Client) -> int:
+    table = "google_ads_keyword_report"
+    if not _table_exists(client, RAW, table):
+        print(f"  [airbyte-norm] google_ads keywords: {table} not found — skipping")
+        return 0
+    select = f"""
+    SELECT
+      PARSE_DATE('%Y-%m-%d', segments_date)                  AS date,
+      'google_ads'                                           AS channel,
+      CAST(customer_id AS STRING)                            AS account_id,
+      CAST(campaign_id AS STRING)                            AS campaign_id,
+      campaign_name                                          AS campaign_name,
+      CAST(ad_group_id AS STRING)                            AS adgroup_id,
+      ad_group_name                                          AS adgroup_name,
+      CAST(ad_group_criterion_criterion_id AS STRING)        AS keyword_id,
+      ad_group_criterion_keyword_text                        AS keyword_text,
+      ad_group_criterion_keyword_match_type                  AS match_type,
+      UPPER(ad_group_criterion_status)                       AS status,
+      ROUND(COALESCE(metrics_cost_micros,0)/1000000.0, 4)    AS spend,
+      COALESCE(metrics_impressions, 0)                       AS impressions,
+      COALESCE(metrics_clicks, 0)                            AS clicks,
+      SAFE_DIVIDE(COALESCE(metrics_clicks,0), NULLIF(metrics_impressions,0)) AS ctr,
+      SAFE_DIVIDE(COALESCE(metrics_cost_micros,0)/1000000.0, NULLIF(metrics_clicks,0)) AS avg_cpc,
+      COALESCE(metrics_conversions, 0)                       AS conversions,
+      CAST(metrics_search_rank_lost_impression_share AS INT64) AS quality_score,
+      'USD'                                                  AS currency,
+      CURRENT_TIMESTAMP()                                    AS updated_at
+    FROM `{PROJECT}.{RAW}.{table}`
+    WHERE segments_date IS NOT NULL AND ad_group_criterion_criterion_id IS NOT NULL
+    """
+    return _run(client, MERGE_KEYWORDS_SQL.format(project=PROJECT, dataset=DATASET, select_sql=select), "google_ads_keywords")
+
+
+def normalize_meta_adsets(client: bigquery.Client) -> int:
+    table = "facebook_ads_insights"   # with adset breakdown enabled in Airbyte
+    if not _table_exists(client, RAW, table):
+        return 0
+    select = f"""
+    SELECT
+      PARSE_DATE('%Y-%m-%d', date_start)          AS date,
+      'meta'                                      AS channel,
+      CAST(account_id AS STRING)                  AS account_id,
+      CAST(campaign_id AS STRING)                 AS campaign_id,
+      campaign_name                               AS campaign_name,
+      CAST(adset_id AS STRING)                    AS adset_id,
+      adset_name                                  AS adset_name,
+      'ACTIVE'                                    AS status,
+      ROUND(CAST(spend AS FLOAT64), 4)             AS spend,
+      CAST(impressions AS INT64)                  AS impressions,
+      CAST(clicks AS INT64)                       AS clicks,
+      SAFE_DIVIDE(CAST(clicks AS FLOAT64), NULLIF(CAST(impressions AS FLOAT64),0)) AS ctr,
+      0                                           AS leads,
+      0                                           AS conversions,
+      CAST(frequency AS FLOAT64)                  AS frequency,
+      'USD'                                       AS currency,
+      CURRENT_TIMESTAMP()                         AS updated_at
+    FROM `{PROJECT}.{RAW}.{table}`
+    WHERE date_start IS NOT NULL AND adset_id IS NOT NULL
+    """
+    return _run(client, MERGE_ADSETS_SQL.format(project=PROJECT, dataset=DATASET, select_sql=select), "meta_adsets")
+
+
+def normalize_meta_ads(client: bigquery.Client) -> int:
+    table = "facebook_ads_insights"
+    if not _table_exists(client, RAW, table):
+        return 0
+    select = f"""
+    SELECT
+      PARSE_DATE('%Y-%m-%d', date_start)          AS date,
+      'meta'                                      AS channel,
+      CAST(account_id AS STRING)                  AS account_id,
+      CAST(campaign_id AS STRING)                 AS campaign_id,
+      campaign_name                               AS campaign_name,
+      CAST(adset_id AS STRING)                    AS adset_id,
+      adset_name                                  AS adset_name,
+      CAST(ad_id AS STRING)                       AS ad_id,
+      ad_name                                     AS ad_name,
+      'ACTIVE'                                    AS status,
+      ROUND(CAST(spend AS FLOAT64), 4)             AS spend,
+      CAST(impressions AS INT64)                  AS impressions,
+      CAST(clicks AS INT64)                       AS clicks,
+      SAFE_DIVIDE(CAST(clicks AS FLOAT64), NULLIF(CAST(impressions AS FLOAT64),0)) AS ctr,
+      0                                           AS leads,
+      0                                           AS conversions,
+      CAST(frequency AS FLOAT64)                  AS frequency,
+      'USD'                                       AS currency,
+      CURRENT_TIMESTAMP()                         AS updated_at
+    FROM `{PROJECT}.{RAW}.{table}`
+    WHERE date_start IS NOT NULL AND ad_id IS NOT NULL
+    """
+    return _run(client, MERGE_ADS_SQL.format(project=PROJECT, dataset=DATASET, select_sql=select), "meta_ads")
+
+
 def run_all_normalizations() -> dict[str, int]:
     """
     Run all channel normalizations. Called from reporting_scheduler.py
     after Airbyte sync completes (or on a schedule matching Airbyte's sync).
     Returns dict of channel → rows merged.
     """
-    print(f"[airbyte-norm] Starting normalization → {PROJECT}.{DATASET}.campaigns_daily")
+    print(f"[airbyte-norm] Starting normalization → {PROJECT}.{DATASET}")
     client = _client()
 
     results = {
-        "google_ads":    normalize_google_ads(client),
-        "meta":          normalize_meta(client),
-        "snapchat":      normalize_snapchat(client),
-        "tiktok":        normalize_tiktok(client),
-        "linkedin":      normalize_linkedin(client),
-        "microsoft_ads": normalize_microsoft(client),
+        # Campaign level
+        "google_ads":            normalize_google_ads(client),
+        "meta":                  normalize_meta(client),
+        "snapchat":              normalize_snapchat(client),
+        "tiktok":                normalize_tiktok(client),
+        "linkedin":              normalize_linkedin(client),
+        "microsoft_ads":         normalize_microsoft(client),
+        # Adset/AdGroup level
+        "google_ads_adgroups":   normalize_google_ads_adgroups(client),
+        "meta_adsets":           normalize_meta_adsets(client),
+        # Ad/Creative level
+        "meta_ads":              normalize_meta_ads(client),
+        # Keyword level
+        "google_ads_keywords":   normalize_google_ads_keywords(client),
     }
 
     total = sum(results.values())
-    print(f"[airbyte-norm] Done — {total} total rows merged across {len(results)} channels")
+    print(f"[airbyte-norm] Done — {total} total rows merged across all levels")
     return results
 
 
