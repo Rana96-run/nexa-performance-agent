@@ -121,6 +121,17 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## Done this session (2026-05-03)
+
+- [x] **Slack cleanup** — stopped verbose "Agent actions" from posting to #notify; only category × count in summary
+- [x] **Overdue task Slack blast removed** — `asana_maintenance.py` now logs overdue tasks to console only (no Slack post)
+- [x] **Per-channel assignees** — Google Ads tasks → Rana Khalid (GID 1208007704598388); all others → Donia Mohamed (GID 1211896896006183)
+- [x] **Morning status task disabled** — `nexa-morning-status` scheduled task disabled (was posting unwanted Slack message with old dashboard URL)
+- [x] **Old HTML report routes removed** — `/paid-performance/latest`, `/reports/latest`, `/paid-performance/<date>`, `/reports/<date>` now 301-redirect to Hex dashboard; `/api/regenerate` deleted
+- [x] **Session learning hook** — `session_start_review.py` now reads the most recent session transcript summary so each session starts from where the last left off
+- [x] **Deep IS recommendations** — `google_ads_audit_tasks.py` now provides root-cause playbook (dayparting, match-type waste, QS components, extensions, LP experience) instead of "raise budget"
+- [x] **Hex dashboard as canonical** — DASHBOARD_URL env var → Hex; old Railway HTML URL decommissioned everywhere
+
 ## Done this session (for audit trail)
 
 - [x] **Campaign naming enforcement** — `executors/naming.py` with product aliases, audience validation, LinkedIn UTM mapping

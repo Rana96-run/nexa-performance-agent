@@ -106,94 +106,24 @@ def refresh_status():
     return jsonify(_REFRESH_STATUS)
 
 
-@app.route("/api/regenerate", methods=["POST", "GET"])
-def regenerate():
-    """
-    Regenerate the daily HTML report on demand using current BigQuery data.
-    Light-weight (no Claude calls — just data fetch + render).
-    Auth: pass ?token=<REGEN_TOKEN> matching the env var, OR if not set, allow.
-    """
-    expected = os.getenv("REGEN_TOKEN")
-    if expected and request.args.get("token") != expected:
-        return jsonify({"error": "unauthorized"}), 401
 
-    try:
-        from claude.reporter import assemble_report_data
-        from reports.render import save_report
-
-        report = assemble_report_data(
-            cadence="on_demand",
-            role_results=[],
-            tasks_created=[],
-            approvals_pending=[],
-            permalink="/paid-performance/latest",
-        )
-        path = save_report(report)
-        return jsonify({
-            "ok": True,
-            "saved_to": str(path),
-            "channels": [c.get("channel") for c in report.get("channels", [])],
-            "windows": list((report.get("windows") or {}).keys()),
-            "trends_rows": len(report.get("trends_30d", [])),
-        })
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+_HEX_DASHBOARD = (
+    os.getenv(
+        "DASHBOARD_URL",
+        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/"
+        "Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
+    )
+)
 
 
 @app.route("/")
-def root():
-    return redirect("/paid-performance/latest")
-
-
-# ── New canonical URL (/paid-performance/) ────────────────────────────────────
 @app.route("/paid-performance/latest")
-@app.route("/reports/latest")   # backward-compat redirect kept alive
-def latest():
-    """
-    Serve the most recent dashboard.
-
-    Strategy: Drive is the source of truth (Railway containers are ephemeral
-    so local /app/reports/latest.html can be wiped on restart).  We try
-    Drive FIRST and fall back to local only if Drive is unavailable.
-    """
-    # 1. Drive (always-fresh — uploaded by every save_report() call)
-    try:
-        from collectors.drive_writer import load_report_from_drive
-        html = load_report_from_drive()
-        if html:
-            from flask import Response
-            return Response(html, mimetype="text/html")
-    except Exception as e:
-        print(f"[app] Drive fetch failed (falling back to local): {e}")
-
-    # 2. Local file fallback
-    f = REPORTS_DIR / "latest.html"
-    if f.exists():
-        return send_file(f, mimetype="text/html")
-
-    abort(404, "No report available. Run: python main.py daily")
-
-
 @app.route("/paid-performance/<report_date>")
-@app.route("/reports/<report_date>")   # backward-compat
-def dated(report_date: str):
-    # Accept both "2026-04-25" and "2026-04-25.html"
-    name = report_date if report_date.endswith(".html") else f"{report_date}.html"
-    f = REPORTS_DIR / name
-    if f.exists():
-        return send_file(f, mimetype="text/html")
-    # Fall back to Drive
-    date_key = name.replace(".html", "")
-    try:
-        from collectors.drive_writer import load_report_from_drive
-        html = load_report_from_drive(date_key)
-        if html:
-            from flask import Response
-            return Response(html, mimetype="text/html")
-    except Exception as e:
-        print(f"[app] Drive fallback failed for {date_key}: {e}")
-    abort(404, f"No report for {report_date}")
+@app.route("/reports/latest")
+@app.route("/reports/<report_date>")
+def dashboard_redirect(**kwargs):
+    """All old HTML report URLs → Hex dashboard (permanent redirect)."""
+    return redirect(_HEX_DASHBOARD, code=301)
 
 
 # ─── Custom date-range API ────────────────────────────────────────────────────
