@@ -111,9 +111,22 @@ All executors delegate to `executors/naming.py::prefixed()` — never bypass it.
 
 See `memory/05_scheduler.md`.
 
+## Before asking a question (non-negotiable)
+
+Before asking Amar anything, exhaust the knowledge base first:
+
+1. Check `memory/00_index.md` — find the relevant memory file and read it
+2. Check `memory/08_pitfalls.md` — the answer may already be documented as a known trap
+3. Check `memory/01_architecture.md` — for schema, table names, field names
+4. Search the codebase with Grep for the symbol, field, or pattern in question
+5. Check `.claude/skills/README.md` — there may be a recipe for it
+
+Only ask Amar **after all of the above have been checked and found no answer**.
+When you do ask, state what you already checked so the answer can be written back to memory.
+
 ## When unsure
 
-- **Ask Amar in Slack** rather than invent data or guess a field name
+- **Ask Amar in Slack** rather than invent data or guess a field name — **only after searching memory/ first**
 - **Add to `memory/08_pitfalls.md`** the moment a new API trap is
   discovered — one line, include the fix
 - **Add to `memory/09_open_tasks.md`** for work that spans sessions
