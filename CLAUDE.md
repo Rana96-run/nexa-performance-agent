@@ -124,6 +124,16 @@ Before asking Amar anything, exhaust the knowledge base first:
 Only ask Amar **after all of the above have been checked and found no answer**.
 When you do ask, state what you already checked so the answer can be written back to memory.
 
+When raising a question, also include **3 follow-up questions** — things that
+are likely to break or become ambiguous in future edits related to the same area.
+Format them as:
+> **While we're here — 3 things that may break later:**
+> 1. …
+> 2. …
+> 3. …
+
+This keeps decisions in memory before they become bugs, not after.
+
 ## When unsure
 
 - **Ask Amar in Slack** rather than invent data or guess a field name — **only after searching memory/ first**
