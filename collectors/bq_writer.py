@@ -323,12 +323,360 @@ GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
 """
 
 
+UTM_PAID_ATTRIBUTION_VIEW_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily` AS
+-- ─────────────────────────────────────────────────────────────────────────────
+-- utm_paid_attribution_daily
+-- Joins paid spend (campaign grain from campaigns_daily) to HubSpot leads
+-- at the campaign / adset / ad / keyword grain.
+--
+-- Dual-match strategy (07_attribution.md):
+--   A. exact: LOWER(TRIM(utm_campaign)) = LOWER(TRIM(campaign_name))
+--   B. slug:  slugify both sides and compare
+-- Spend is proportionally distributed from campaign to adset/ad grain.
+-- Unattributed leads (click-ID attributed but no UTM) appear as __no_utm__.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Helper: slugify a string
+-- (lowercase → collapse non-alphanum runs → strip leading/trailing _)
+WITH
+
+-- 1. HubSpot: aggregate at full UTM grain (all 4 levels)
+hs_full AS (
+  SELECT
+    date,
+    qoyod_source,
+    lead_utm_campaign,
+    lead_utm_audience,
+    lead_utm_content,
+    lead_utm_term,
+    SUM(leads_total)        AS leads,
+    SUM(leads_qualified)    AS leads_qualified,
+    SUM(leads_disqualified) AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_utm_campaign IS NOT NULL
+    AND TRIM(lead_utm_campaign) != ''
+  GROUP BY 1, 2, 3, 4, 5, 6
+),
+
+-- 2. HubSpot: channel totals (authoritative, from qoyod_source)
+hs_channel_total AS (
+  SELECT
+    date,
+    qoyod_source,
+    SUM(leads_total) AS channel_leads_total
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  GROUP BY 1, 2
+),
+
+-- 3. HubSpot: campaign-level totals (to calculate proportional spend distribution)
+hs_campaign_total AS (
+  SELECT
+    date,
+    qoyod_source,
+    lead_utm_campaign,
+    SUM(leads_total) AS campaign_leads_total
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_utm_campaign IS NOT NULL
+    AND TRIM(lead_utm_campaign) != ''
+  GROUP BY 1, 2, 3
+),
+
+-- 4. Spend: sum to campaign grain (one row per date + channel + campaign_name)
+spend_campaign AS (
+  SELECT
+    date,
+    channel,
+    -- LinkedIn: campaign_group_name is the utm_campaign level
+    CASE WHEN channel = 'linkedin'
+         THEN COALESCE(campaign_group_name, campaign_name)
+         ELSE campaign_name
+    END AS campaign_name,
+    SUM(spend) AS spend
+  FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+  GROUP BY 1, 2, 3
+),
+
+-- 5. Map channel slug → qoyod_source display name (matches HubSpot)
+channel_name_map AS (
+  SELECT channel_slug, qoyod_source_name FROM UNNEST([
+    STRUCT('google_ads'    AS channel_slug, 'Google Ads'     AS qoyod_source_name),
+    STRUCT('meta'          AS channel_slug, 'Meta Ads'       AS qoyod_source_name),
+    STRUCT('snapchat'      AS channel_slug, 'Snapchat Ads'   AS qoyod_source_name),
+    STRUCT('tiktok'        AS channel_slug, 'TikTok Ads'     AS qoyod_source_name),
+    STRUCT('linkedin'      AS channel_slug, 'LinkedIn Ads'   AS qoyod_source_name),
+    STRUCT('microsoft_ads' AS channel_slug, 'Microsoft Ads'  AS qoyod_source_name),
+    STRUCT('microsoft'     AS channel_slug, 'Microsoft Ads'  AS qoyod_source_name),
+    STRUCT('youtube'       AS channel_slug, 'YouTube Ads'    AS qoyod_source_name),
+    STRUCT('organic_search'AS channel_slug, 'Organic Search' AS qoyod_source_name)
+  ])
+),
+
+-- 6. HubSpot full grain + join to spend via dual-strategy matcher
+attributed AS (
+  SELECT
+    hf.date,
+    hf.qoyod_source,
+    COALESCE(cnm_exact.channel_slug, cnm_slug.channel_slug) AS channel,
+    hf.lead_utm_campaign                                     AS utm_campaign,
+    hf.lead_utm_audience                                     AS utm_audience,
+    hf.lead_utm_content                                      AS utm_content,
+    hf.lead_utm_term                                         AS utm_term,
+    hf.leads,
+    hf.leads_qualified,
+    hf.leads_disqualified,
+    -- Campaign total leads for proportional spend calc
+    hct.campaign_leads_total,
+    -- Spend: try exact match first, then slug match
+    COALESCE(sp_exact.spend, sp_slug.spend)                  AS spend_campaign,
+    CASE
+      WHEN sp_exact.spend IS NOT NULL THEN 'exact'
+      WHEN sp_slug.spend  IS NOT NULL THEN 'slug'
+      ELSE 'unattributed'
+    END AS match_method
+  FROM hs_full hf
+
+  -- Campaign-level totals for proportional distribution
+  LEFT JOIN hs_campaign_total hct
+    ON  hf.date                = hct.date
+    AND hf.qoyod_source        = hct.qoyod_source
+    AND hf.lead_utm_campaign   = hct.lead_utm_campaign
+
+  -- Reverse-map qoyod_source → channel slug for spend join
+  LEFT JOIN channel_name_map cnm_exact
+    ON LOWER(TRIM(hf.qoyod_source)) = LOWER(TRIM(cnm_exact.qoyod_source_name))
+  LEFT JOIN channel_name_map cnm_slug
+    ON REGEXP_REPLACE(REGEXP_REPLACE(LOWER(TRIM(hf.qoyod_source)), r'[^a-z0-9]+', '_'), r'^_+|_+$', '')
+     = REGEXP_REPLACE(REGEXP_REPLACE(LOWER(TRIM(cnm_slug.qoyod_source_name)), r'[^a-z0-9]+', '_'), r'^_+|_+$', '')
+
+  -- Strategy A: exact spend match
+  LEFT JOIN spend_campaign sp_exact
+    ON  hf.date = sp_exact.date
+    AND COALESCE(cnm_exact.channel_slug, cnm_slug.channel_slug) = sp_exact.channel
+    AND LOWER(TRIM(hf.lead_utm_campaign)) = LOWER(TRIM(sp_exact.campaign_name))
+
+  -- Strategy B: slug spend match (only used when exact fails)
+  LEFT JOIN spend_campaign sp_slug
+    ON  sp_exact.spend IS NULL
+    AND hf.date = sp_slug.date
+    AND COALESCE(cnm_exact.channel_slug, cnm_slug.channel_slug) = sp_slug.channel
+    AND REGEXP_REPLACE(REGEXP_REPLACE(LOWER(TRIM(hf.lead_utm_campaign)), r'[^a-z0-9]+', '_'), r'^_+|_+$', '')
+      = REGEXP_REPLACE(REGEXP_REPLACE(LOWER(TRIM(sp_slug.campaign_name)),  r'[^a-z0-9]+', '_'), r'^_+|_+$', '')
+),
+
+-- 7. Compute proportionally distributed spend
+attributed_with_spend AS (
+  SELECT
+    date,
+    qoyod_source,
+    channel,
+    utm_campaign,
+    utm_audience,
+    utm_content,
+    utm_term,
+    leads,
+    leads_qualified,
+    leads_disqualified,
+    match_method,
+    -- Distribute campaign spend proportionally by leads at this grain
+    SAFE_DIVIDE(
+      spend_campaign * leads,
+      NULLIF(campaign_leads_total, 0)
+    ) AS spend
+  FROM attributed
+),
+
+-- 8. UTM-attributed leads per channel+date (to compute unattributed gap)
+hs_utm_channel_total AS (
+  SELECT
+    date,
+    qoyod_source,
+    SUM(leads_total) AS utm_leads_total
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_utm_campaign IS NOT NULL
+    AND TRIM(lead_utm_campaign) != ''
+  GROUP BY 1, 2
+),
+
+-- 9. Unattributed bucket: channel_total - utm_total per date+channel
+unattributed AS (
+  SELECT
+    hct.date,
+    hct.qoyod_source,
+    cnm.channel_slug                                         AS channel,
+    '__no_utm__'                                             AS utm_campaign,
+    CAST(NULL AS STRING)                                     AS utm_audience,
+    CAST(NULL AS STRING)                                     AS utm_content,
+    CAST(NULL AS STRING)                                     AS utm_term,
+    GREATEST(0, hct.channel_leads_total - COALESCE(uct.utm_leads_total, 0)) AS leads,
+    CAST(0 AS INT64)                                         AS leads_qualified,
+    CAST(0 AS INT64)                                         AS leads_disqualified,
+    CAST(NULL AS FLOAT64)                                    AS spend,
+    'unattributed'                                           AS match_method
+  FROM hs_channel_total hct
+  LEFT JOIN hs_utm_channel_total uct
+    ON  hct.date          = uct.date
+    AND hct.qoyod_source  = uct.qoyod_source
+  LEFT JOIN channel_name_map cnm
+    ON LOWER(TRIM(hct.qoyod_source)) = LOWER(TRIM(cnm.qoyod_source_name))
+  -- Only emit if there's an actual gap
+  WHERE (hct.channel_leads_total - COALESCE(uct.utm_leads_total, 0)) > 0
+),
+
+-- 10. Final union of attributed + unattributed
+combined AS (
+  SELECT
+    date,
+    qoyod_source,
+    channel,
+    utm_campaign,
+    utm_audience,
+    utm_content,
+    utm_term,
+    leads,
+    leads_qualified,
+    leads_disqualified,
+    spend,
+    match_method
+  FROM attributed_with_spend
+
+  UNION ALL
+
+  SELECT
+    date,
+    qoyod_source,
+    channel,
+    utm_campaign,
+    utm_audience,
+    utm_content,
+    utm_term,
+    leads,
+    leads_qualified,
+    leads_disqualified,
+    spend,
+    match_method
+  FROM unattributed
+)
+
+-- Final output with derived metrics
+SELECT
+  date,
+  channel,
+  -- Display name
+  CASE channel
+    WHEN 'google_ads'     THEN 'Google Ads'
+    WHEN 'meta'           THEN 'Meta Ads'
+    WHEN 'snapchat'       THEN 'Snapchat Ads'
+    WHEN 'tiktok'         THEN 'TikTok Ads'
+    WHEN 'linkedin'       THEN 'LinkedIn Ads'
+    WHEN 'microsoft_ads'  THEN 'Microsoft Ads'
+    WHEN 'microsoft'      THEN 'Microsoft Ads'
+    WHEN 'youtube'        THEN 'YouTube Ads'
+    WHEN 'organic_search' THEN 'Organic Search'
+    ELSE INITCAP(REPLACE(COALESCE(channel, qoyod_source, 'unknown'), '_', ' '))
+  END AS channel_name,
+  utm_campaign,
+  utm_audience,
+  utm_content,
+  utm_term,
+  COALESCE(spend, 0.0)                                     AS spend,
+  COALESCE(leads, 0)                                       AS leads,
+  COALESCE(leads_qualified, 0)                             AS leads_qualified,
+  COALESCE(leads_disqualified, 0)                          AS leads_disqualified,
+  SAFE_DIVIDE(COALESCE(spend, 0.0), NULLIF(leads, 0))      AS CPL,
+  SAFE_DIVIDE(COALESCE(spend, 0.0), NULLIF(leads_qualified, 0)) AS CPQL,
+  SAFE_DIVIDE(leads_qualified, NULLIF(leads, 0))           AS qual_rate,
+  match_method
+FROM combined
+"""
+
+
+V_ADSET_PERFORMANCE_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_adset_performance` AS
+-- Ad set / Ad group level: channel + campaign + utm_audience grain
+-- Used by Channel Deep Dive ad-sets tab
+SELECT
+  date,
+  channel,
+  channel_name,
+  utm_campaign,
+  utm_audience,
+  SUM(spend)             AS spend,
+  SUM(leads)             AS leads,
+  SUM(leads_qualified)   AS leads_qualified,
+  SUM(leads_disqualified) AS leads_disqualified,
+  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0))           AS CPL,
+  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS CPQL,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads), 0)) AS qual_rate
+FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+WHERE utm_campaign != '__no_utm__'
+  AND utm_audience IS NOT NULL
+GROUP BY 1, 2, 3, 4, 5
+"""
+
+
+V_AD_PERFORMANCE_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_ad_performance` AS
+-- Ad / Creative level: channel + campaign + utm_audience + utm_content grain
+-- Used by Channel Deep Dive ads/creatives tab
+SELECT
+  date,
+  channel,
+  channel_name,
+  utm_campaign,
+  utm_audience,
+  utm_content,
+  SUM(spend)             AS spend,
+  SUM(leads)             AS leads,
+  SUM(leads_qualified)   AS leads_qualified,
+  SUM(leads_disqualified) AS leads_disqualified,
+  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0))           AS CPL,
+  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS CPQL,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads), 0)) AS qual_rate
+FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+WHERE utm_campaign != '__no_utm__'
+  AND utm_content IS NOT NULL
+GROUP BY 1, 2, 3, 4, 5, 6
+"""
+
+
+V_KEYWORD_PERFORMANCE_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_keyword_performance` AS
+-- Keyword level: Google Ads only, channel + campaign + utm_term grain
+-- utm_term carries the keyword value for Google Search campaigns
+SELECT
+  date,
+  channel,
+  channel_name,
+  utm_campaign,
+  utm_term,
+  SUM(spend)             AS spend,
+  SUM(leads)             AS leads,
+  SUM(leads_qualified)   AS leads_qualified,
+  SUM(leads_disqualified) AS leads_disqualified,
+  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0))           AS CPL,
+  SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS CPQL,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads), 0)) AS qual_rate,
+  -- Show most common match method for this keyword row
+  ANY_VALUE(match_method) AS match_method
+FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
+WHERE channel = 'google_ads'
+  AND utm_term IS NOT NULL
+  AND utm_campaign != '__no_utm__'
+GROUP BY 1, 2, 3, 4, 5
+"""
+
+
 def create_views():
     client = get_client()
     for sql, name in [
-        (CAMPAIGN_PERFORMANCE_VIEW_SQL,     "campaign_performance"),
-        (LEAD_UTM_PERFORMANCE_VIEW_SQL,     "lead_utm_performance"),
-        (LEAD_FUNNEL_BY_PIPELINE_VIEW_SQL,  "lead_funnel_by_pipeline"),
+        (CAMPAIGN_PERFORMANCE_VIEW_SQL,       "campaign_performance"),
+        (LEAD_UTM_PERFORMANCE_VIEW_SQL,       "lead_utm_performance"),
+        (LEAD_FUNNEL_BY_PIPELINE_VIEW_SQL,    "lead_funnel_by_pipeline"),
+        (UTM_PAID_ATTRIBUTION_VIEW_SQL,       "utm_paid_attribution_daily"),
+        (V_ADSET_PERFORMANCE_SQL,             "v_adset_performance"),
+        (V_AD_PERFORMANCE_SQL,                "v_ad_performance"),
+        (V_KEYWORD_PERFORMANCE_SQL,           "v_keyword_performance"),
     ]:
         client.query(sql).result()
         print(f"[OK] View {name} created.")

@@ -112,22 +112,11 @@ st.divider()
 st.markdown("""
 **Pages available in the sidebar:**
 
-📊 **Overview**
-- **1 · Paid Overview** — channel scorecards, campaign leaderboard, spend vs leads trend
-- **2 · Organic Overview** — organic leads by source, funnel, top content
-
-📡 **Channel Deep Dives** — each has: Summary · Campaigns · Ad Groups/Sets · Ads/Creatives (+ Keywords for Google)
-- **3 · Google Ads** 🔵
-- **4 · Meta Ads** 🟦
-- **5 · Snapchat Ads** 🟡
-- **6 · TikTok Ads** ⬛
-- **7 · LinkedIn Ads** 🔷
-- **8 · Microsoft Ads** 🟩
-
-🔬 **Analysis**
-- **9 · Leads Funnel** — qualification funnel, disqual reasons, pipeline split
-- **10 · Insights & Recommendations** — automated pause / scale / optimize signals
-
-🎨 **Creative**
-- **11 · Active Ads Preview** — live ads with rendered previews (Meta iframe / Snap / TikTok) + 14-day CPL/CPQL per ad
+- **Overview** — channel scorecards, campaign leaderboard, spend vs leads trend
+- **1 · Google Ads** 🔵 — Campaigns · Ad Groups · Ads · Keywords
+- **2 · Meta Ads** 🟦 — Campaigns · Ad Sets · Ads
+- **3 · Snapchat Ads** 🟡 — Campaigns · Ad Sets · Ads
+- **4 · TikTok Ads** ⬛ — Campaigns · Ad Sets · Ads
+- **5 · LinkedIn Ads** 🔷 — Campaigns · Ad Sets · Ads
+- **6 · Microsoft Ads** 🟩 — Campaigns · Ad Groups · Ads
 """)

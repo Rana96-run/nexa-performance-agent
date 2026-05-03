@@ -95,13 +95,26 @@ prev AS (
 )
 SELECT
   c.channel,
+  -- ── Human-readable channel label (used as display name in dashboards) ──────
+  CASE c.channel
+    WHEN 'google_ads'     THEN 'Google Ads'
+    WHEN 'meta'           THEN 'Meta Ads'
+    WHEN 'snapchat'       THEN 'Snapchat Ads'
+    WHEN 'tiktok'         THEN 'TikTok Ads'
+    WHEN 'linkedin'       THEN 'LinkedIn Ads'
+    WHEN 'microsoft_ads'  THEN 'Microsoft Ads'
+    WHEN 'youtube'        THEN 'YouTube Ads'
+    WHEN 'organic_search' THEN 'Organic Search'
+    ELSE INITCAP(REPLACE(c.channel, '_', ' '))
+  END AS channel_name,
   ROUND(c.spend,0)       AS spend_7d,
   c.leads                AS leads_7d,
   c.sqls                 AS sqls_7d,
   c.disqualified         AS disqualified_7d,
-  ROUND(c.cpl,2)         AS cpl_7d,
-  ROUND(c.cpql,2)        AS cpql_7d,
-  ROUND(c.qual_rate,1)   AS qual_rate_pct,
+  -- ── Metrics with clean names for dashboard column headers ─────────────────
+  ROUND(c.cpl,2)         AS CPL,
+  ROUND(c.cpql,2)        AS CPQL,
+  ROUND(c.qual_rate,1)   AS Qual_Rate_Pct,
   ROUND(c.roas,2)        AS roas_7d,
   -- Lead Pipeline columns
   c.leads_acct           AS leads_accounting_7d,
@@ -341,10 +354,10 @@ def export_report_config():
                         "title": "Channel KPIs + WoW",
                         "columns": [
                             "channel", "spend_7d", "leads_7d", "sqls_7d",
-                            "cpl_7d", "cpql_7d", "qual_rate_pct", "roas_7d",
+                            "CPL", "CPQL", "Qual_Rate_Pct", "roas_7d",
                             "cpl_wow_delta", "cpql_wow_delta", "cpl_status"
                         ],
-                        "heatmap_cols": ["cpl_7d", "cpql_7d"],
+                        "heatmap_cols": ["CPL", "CPQL"],
                         "color_rules": {
                             "cpl_status": {
                                 "Scale 🚀":      "#00C48C",
@@ -384,8 +397,8 @@ def export_report_config():
                         "type": "scatter_plot",
                         "source": "v_channel_scorecard",
                         "title": "CPL vs Qualification Rate",
-                        "x": "cpl_7d",
-                        "y": "qual_rate_pct",
+                        "x": "CPL",
+                        "y": "Qual_Rate_Pct",
                         "size": "spend_7d",
                         "color": "channel",
                         "tooltip": ["channel", "spend_7d", "leads_7d"],
@@ -483,7 +496,7 @@ def export_report_config():
                         "type": "scorecard_row",
                         "source": "v_channel_scorecard",
                         "filter_by": "channel",
-                        "cards": ["spend_7d","leads_7d","sqls_7d","cpl_7d","cpql_7d","roas_7d"],
+                        "cards": ["spend_7d","leads_7d","sqls_7d","CPL","CPQL","roas_7d"],
                     },
                     {
                         "type": "time_series",

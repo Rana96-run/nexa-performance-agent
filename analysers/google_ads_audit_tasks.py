@@ -16,47 +16,70 @@ from analysers.google_ads_audit import run_full_audit
 from executors.asana import create_task
 
 
-def _is_table(findings: list[dict]) -> str:
+def _is_card(findings: list[dict]) -> str:
     if not findings:
         return ""
-    body = "| Spend | IS | Lost-Budget | Lost-Rank | Verdict | Campaign |\n"
-    body += "|---|---|---|---|---|---|\n"
-    for f in findings:
-        body += (f"| ${f['spend']:.0f} | {f['is_share']*100:.0f}% | "
-                 f"{f['is_lost_budget']*100:.0f}% | {f['is_lost_rank']*100:.0f}% | "
-                 f"**{f['verdict']}** | {f['campaign']} |\n")
-    return body
+    cards = []
+    for i, f in enumerate(findings, 1):
+        header = f"**[{i}/{len(findings)}]**\n" if len(findings) > 1 else ""
+        cards.append(
+            f"{header}"
+            f"**Campaign:**      {f['campaign']}\n"
+            f"**Spend:**         ${f['spend']:.0f}\n"
+            f"**IS:**            {f['is_share']*100:.0f}%\n"
+            f"**Lost (Budget):** {f['is_lost_budget']*100:.0f}%\n"
+            f"**Lost (Rank):**   {f['is_lost_rank']*100:.0f}%\n"
+            f"**Verdict:**       {f['verdict']}"
+        )
+    return "\n\n---\n\n".join(cards) + "\n"
 
 
-def _qs_table(findings: list[dict]) -> str:
+def _qs_card(findings: list[dict]) -> str:
     if not findings:
         return ""
-    body = "| QS | Spend | Ad-Relevance | LP-Experience | Expected-CTR | Keyword | Campaign |\n"
-    body += "|---|---|---|---|---|---|---|\n"
-    for f in findings:
-        body += (f"| **{f['quality_score']}** | ${f['spend']:.0f} | "
-                 f"{f['ad_relevance']} | {f['landing_page_experience']} | "
-                 f"{f['expected_ctr']} | `{f['keyword']}` | {f['campaign']} |\n")
-    return body
+    cards = []
+    for i, f in enumerate(findings, 1):
+        header = f"**[{i}/{len(findings)}]**\n" if len(findings) > 1 else ""
+        cards.append(
+            f"{header}"
+            f"**Keyword:**       {f['keyword']}\n"
+            f"**Campaign:**      {f['campaign']}\n"
+            f"**Quality Score:** {f['quality_score']}/10\n"
+            f"**Spend:**         ${f['spend']:.0f}\n"
+            f"**Ad Relevance:**  {f['ad_relevance']}\n"
+            f"**LP Experience:** {f['landing_page_experience']}\n"
+            f"**Expected CTR:**  {f['expected_ctr']}"
+        )
+    return "\n\n---\n\n".join(cards) + "\n"
 
 
-def _term_table(rows: list[dict], mode: str) -> str:
+def _term_card(rows: list[dict], mode: str) -> str:
     if not rows:
         return ""
-    if mode == "add":
-        body = "| Conv | Spend | CPA | Search Term | Match Suggestion | Campaign |\n"
-        body += "|---|---|---|---|---|---|\n"
-        for r in rows:
+    cards = []
+    for i, r in enumerate(rows, 1):
+        header = f"**[{i}/{len(rows)}]**\n" if len(rows) > 1 else ""
+        if mode == "add":
             cpa = f"${r['cpa']:.0f}" if r.get("cpa") else "—"
-            body += (f"| {r['conv']:.1f} | ${r['spend']:.0f} | {cpa} | "
-                     f"`{r['term']}` | EXACT or PHRASE | {r['campaign']} |\n")
-    else:
-        body = "| Spend | Clicks | Search Term | Recommended Match | Campaign |\n"
-        body += "|---|---|---|---|---|\n"
-        for r in rows:
-            body += (f"| ${r['spend']:.0f} | {r['clicks']} | `{r['term']}` | "
-                     f"NEGATIVE EXACT | {r['campaign']} |\n")
-    return body
+            cards.append(
+                f"{header}"
+                f"**Search Term:**      {r['term']}\n"
+                f"**Campaign:**         {r['campaign']}\n"
+                f"**Conversions:**      {r['conv']:.1f}\n"
+                f"**Spend:**            ${r['spend']:.0f}\n"
+                f"**CPA:**              {cpa}\n"
+                f"**Match Suggestion:** EXACT or PHRASE"
+            )
+        else:
+            cards.append(
+                f"{header}"
+                f"**Search Term:**      {r['term']}\n"
+                f"**Campaign:**         {r['campaign']}\n"
+                f"**Spend:**            ${r['spend']:.0f}\n"
+                f"**Clicks:**           {r['clicks']}\n"
+                f"**Action:**           Add as NEGATIVE EXACT"
+            )
+    return "\n\n---\n\n".join(cards) + "\n"
 
 
 def create_audit_tasks() -> list[tuple[str, str | None]]:
@@ -78,8 +101,8 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                 f"Lost-Rank = Google ranked your ad too low to show (QS × bid insufficient).\n\n")
 
         if scale:
-            body += f"### 📉 Lost to BUDGET — {len(scale)} campaign(s)\n"
-            body += _is_table(scale) + "\n"
+            body += f"### 📉 Lost to BUDGET — {len(scale)} campaign(s)\n\n"
+            body += _is_card(scale) + "\n"
             body += (
                 "**Root causes to investigate before touching budget:**\n"
                 "1. **Dayparting drain** — Run an hourly impression report. "
@@ -100,8 +123,8 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             )
 
         if rank:
-            body += f"### 🎯 Lost to RANK — {len(rank)} campaign(s)\n"
-            body += _is_table(rank) + "\n"
+            body += f"### 🎯 Lost to RANK — {len(rank)} campaign(s)\n\n"
+            body += _is_card(rank) + "\n"
             body += (
                 "**Lost-Rank is a Quality Score problem, not a budget problem.**\n"
                 "Raising bid helps short-term but costs more — fix QS first:\n"
@@ -124,8 +147,8 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             )
 
         if saturated:
-            body += f"### ✅ Saturated (IS > 80%) — {len(saturated)} campaign(s)\n"
-            body += _is_table(saturated) + "\n"
+            body += f"### ✅ Saturated (IS > 80%) — {len(saturated)} campaign(s)\n\n"
+            body += _is_card(saturated) + "\n"
             body += (
                 "**Campaign is winning most auctions it's eligible for — expand the pool:**\n"
                 "1. Add new keyword themes from the search terms report (converting queries "
@@ -160,9 +183,9 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                 f"**Why this matters:** Low QS means higher CPC and lower IS. "
                 f"Improving QS reduces cost AND wins more impressions.\n\n")
         if urgent:
-            body += f"### Urgent (QS < 4) — {len(urgent)} keywords\n" + _qs_table(urgent[:30]) + "\n"
+            body += f"### Urgent (QS < 4) — {len(urgent)} keywords\n\n" + _qs_card(urgent[:30]) + "\n"
         if review:
-            body += f"### Review (QS < 5) — {len(review)} keywords\n" + _qs_table(review[:30]) + "\n"
+            body += f"### Review (QS < 5) — {len(review)} keywords\n\n" + _qs_card(review[:30]) + "\n"
 
         body += ("\n**How to improve QS:**\n"
                  "1. **Ad relevance** below average -> ad copy doesn't match the "
@@ -176,40 +199,108 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         gid = create_task(
             title=f"Google Ads — Low Quality Score keywords ({len(qs_findings)})",
             description=body,
-            project_key="optimization",
-            task_type="Recommendation",
+            project_key="daily_activity",
+            task_type="Keyword",
             channel="google_ads",
             asset_level="keyword",
             action="optimize",
         )
         out.append((f"QS audit ({len(qs_findings)})", gid))
 
-    # ── 3. Keyword expansion (add as keyword) ──────────────────────────────
-    add_kw  = audit["keyword_expansion"]["add_as_keyword"]
-    add_neg = audit["keyword_expansion"]["add_as_negative"]
+    # ── 3. Keyword expansion (add as keyword) — Keyword & Placement Audit project
+    add_kw      = audit["keyword_expansion"]["add_as_keyword"]
+    add_neg     = audit["keyword_expansion"]["add_as_negative"]
+    auto_neg    = audit["keyword_expansion"].get("auto_negative", [])
+    pause_watch = audit["keyword_expansion"].get("pause_watch", [])
 
     if add_kw:
-        body = (f"Daily search-terms audit (last 30d). {len(add_kw)} converting "
-                f"queries are NOT yet in our keyword list.\n\n"
-                f"**Rule:** Queries with >=1 conversion that triggered our ads but "
-                f"aren't a keyword we bid on -> add as EXACT match.\n\n"
-                + _term_table(add_kw[:30], mode="add"))
-        body += ("\n**Action:** Slack approval request posted to #approvals. "
-                 "React ✅ to execute all additions or ❌ to skip. "
-                 "Negatives execute automatically (direct-execute).")
+        body = (f"Search-terms audit (last 30d). {len(add_kw)} converting queries "
+                f"are NOT yet in our keyword list.\n\n"
+                f"**Rule:** Queries with ≥1 conversion that triggered our ads but "
+                f"aren't a keyword we bid on → add as EXACT match.\n\n"
+                f"**Action:** React ✅ in #approvals to add all as EXACT match.\n\n"
+                + _term_card(add_kw[:30], mode="add"))
 
         gid = create_task(
             title=f"Google Ads — {len(add_kw)} new keyword candidates from search terms",
             description=body,
-            project_key="optimization",
-            task_type="Recommendation",
+            project_key="daily_activity",
+            task_type="Keyword",
             channel="google_ads",
             asset_level="keyword",
             action="launch",
         )
         out.append((f"keyword expansion ({len(add_kw)})", gid))
 
-    # Post Slack approval for keyword candidates (+ direct-execute negatives)
+    # ── 4. Negative-keyword candidates (normal wasted terms) ──────────────────
+    if add_neg:
+        body = (f"{len(add_neg)} search terms wasted $25+ each with 0 conversions.\n\n"
+                f"**Rule:** Direct-execute — no approval needed.\n"
+                f"**Not included here:** sign-in / free / دورات terms (auto-executed silently) "
+                f"and قيود / competitor terms (see Pause Watch task).\n\n"
+                + _term_card(add_neg[:50], mode="negative")
+                + "\n**EXECUTED:** Adding as EXACT negatives at campaign level automatically.")
+
+        gid = create_task(
+            title=f"Google Ads — Add {len(add_neg)} negative keywords (waste)",
+            description=body,
+            project_key="daily_activity",
+            task_type="Keyword",
+            channel="google_ads",
+            asset_level="keyword",
+            action="exclude",
+        )
+        out.append((f"negatives ({len(add_neg)})", gid))
+
+    # ── 4b. Always-negative auto-executed (silent log) ────────────────────────
+    if auto_neg:
+        body = (f"{len(auto_neg)} terms match permanent negative rules "
+                f"(sign in / log in / تسجيل الدخول / مجاني / دورات / free).\n\n"
+                f"**EXECUTED AUTOMATICALLY** — no approval needed, never shown as expansion candidates.\n\n"
+                + _term_card(auto_neg[:50], mode="negative"))
+
+        gid = create_task(
+            title=f"Google Ads — Auto-excluded {len(auto_neg)} always-negative terms",
+            description=body,
+            project_key="daily_activity",
+            task_type="Keyword",
+            channel="google_ads",
+            asset_level="keyword",
+            action="exclude",
+        )
+        out.append((f"auto-neg ({len(auto_neg)})", gid))
+
+    # ── 4c. Pause-watch: قيود + competitors — NEVER negative, pause if needed ─
+    if pause_watch:
+        pw_cards = []
+        for i, r in enumerate(pause_watch, 1):
+            header = f"**[{i}/{len(pause_watch)}]**\n" if len(pause_watch) > 1 else ""
+            pw_cards.append(
+                f"{header}"
+                f"**Search Term:** {r['term']}\n"
+                f"**Campaign:**    {r['campaign']}\n"
+                f"**Spend:**       ${r['spend']:.0f}\n"
+                f"**Clicks:**      {r['clicks']}\n"
+                f"**Rule:**        PAUSE if not converting — do NOT add as negative"
+            )
+        body = (f"{len(pause_watch)} terms contain قيود or competitor brand names.\n\n"
+                f"**Rule:** These are NEVER added as negatives. If they are not converting "
+                f"after 14 days, pause the keyword — do not exclude it.\n\n"
+                + "\n\n---\n\n".join(pw_cards) + "\n")
+
+        gid = create_task(
+            title=f"Google Ads — {len(pause_watch)} pause-watch terms (قيود / competitors)",
+            description=body,
+            project_key="daily_activity",
+            task_type="Keyword",
+            channel="google_ads",
+            asset_level="keyword",
+            action="pause",
+        )
+        out.append((f"pause-watch ({len(pause_watch)})", gid))
+
+    # Post Slack approval for keyword candidates + normal negatives only
+    # (auto_neg is silent; pause_watch is not executed automatically)
     if add_kw or add_neg:
         try:
             from executors.keyword_approval import post_keyword_approval
@@ -217,37 +308,32 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         except Exception as e:
             print(f"[audit-tasks] keyword approval post failed (non-fatal): {e}")
 
-    # ── 4. Negative-keyword candidates ─────────────────────────────────────
-    if add_neg:
-        body = (f"{len(add_neg)} search terms wasted $25+ each with 0 conversions "
-                f"and aren't yet excluded.\n\n"
-                f"**Rule:** Negative-keyword adds for clearly irrelevant queries are "
-                f"DIRECT-EXECUTE (no approval needed) per the Media Buyer playbook.\n\n"
-                + _term_table(add_neg[:50], mode="negative"))
-        body += ("\n**EXECUTED:** These are being added automatically as EXACT negatives "
-                 "at campaign level via `executors/keyword_approval.py`. "
-                 "No manual action needed — verify in Google Ads UI.")
-
-        gid = create_task(
-            title=f"Google Ads — Add {len(add_neg)} negative keywords (waste)",
-            description=body,
-            project_key="optimization",
-            task_type="Direct Log",
-            channel="google_ads",
-            asset_level="keyword",
-            action="exclude",
-        )
-        out.append((f"negatives ({len(add_neg)})", gid))
+    # Execute auto-negatives immediately (always-negative rules, no approval)
+    if auto_neg:
+        try:
+            from executors.keyword_approval import _execute_negatives
+            _execute_negatives(auto_neg)
+            print(f"[audit-tasks] auto-neg: {len(auto_neg)} always-negative terms executed")
+        except Exception as e:
+            print(f"[audit-tasks] auto-neg execution failed (non-fatal): {e}")
 
     # ── 5. Non-converting keywords auto-paused ──────────────────────────────
     kw_paused = audit.get("keywords_paused", [])
     if kw_paused:
+        kw_cards = []
+        for i, kw in enumerate(kw_paused, 1):
+            header = f"**[{i}/{len(kw_paused)}]**\n" if len(kw_paused) > 1 else ""
+            kw_cards.append(
+                f"{header}"
+                f"**Keyword:**    {kw['keyword']}\n"
+                f"**Match Type:** {kw['match_type']}\n"
+                f"**Campaign:**   {kw['campaign']}\n"
+                f"**Ad Group:**   {kw['ad_group']}\n"
+                f"**Spend:**      ${kw['spend']:.2f}\n"
+                f"**Status:**     {kw['status']}"
+            )
         body = (f"**EXECUTED:** {len(kw_paused)} keywords auto-paused (7+ days, $4+ spend, 0 leads).\n\n"
-                f"| Keyword | Match | Campaign | Ad Group | Spend | Status |\n"
-                f"|---|---|---|---|---|---|\n")
-        for kw in kw_paused:
-            body += (f"| `{kw['keyword']}` | {kw['match_type']} | {kw['campaign']} | "
-                     f"{kw['ad_group']} | ${kw['spend']:.2f} | {kw['status']} |\n")
+                + "\n\n---\n\n".join(kw_cards) + "\n")
         body += ("\n**Rule:** Keywords running 7+ days with spend > $4 and 0 HubSpot-qualified "
                  "leads are paused automatically. Re-enable only after fixing match type or "
                  "moving keyword to a more relevant ad group.")

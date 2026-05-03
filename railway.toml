@@ -5,12 +5,14 @@ builder = "NIXPACKS"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 
-# Single service: nexa-web
-# Start Command: python app_server.py
+# ── Services ──────────────────────────────────────────────────────────────────
 #
-# app_server.py runs everything in one process:
-#   - Flask (reports + webhooks) on $PORT
-#   - operational_scheduler thread (agent cadences)
-#   - slack_listener thread (responds to @Nexa mentions)
+# Service 1: nexa-web  (existing)
+#   Start command: python app_server.py
+#   Runs: Flask API + operational_scheduler + slack_listener
 #
-# nexa-worker has been removed — it was a duplicate.
+# Service 2: nexa-dashboard  (add manually in Railway UI)
+#   Start command (paste into Railway service settings):
+#     streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+#   Same repo, same env vars.
+#   Public URL → share with team.

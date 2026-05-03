@@ -46,6 +46,32 @@ QS_MIN_SPEND_USD     = 50     # only flag if keyword has spent >$50 in window
 EXPANSION_MIN_CONV   = 1.0    # search terms with conv >= 1 -> candidate
 EXPANSION_MIN_SPEND  = 25.0   # search terms with $25+ spend, 0 conv -> negative
 
+# ─── Keyword routing rules ────────────────────────────────────────────────────
+# Terms that match ANY of these patterns are ALWAYS added as negatives
+# (direct-execute, no approval gate, never shown as a candidate for expansion).
+ALWAYS_NEGATIVE_PATTERNS: list[str] = [
+    "sign in", "signin", "log in", "login",
+    "تسجيل الدخول", "تسجيل دخول",
+    "مجاني", "مجانا", "مجانية", "مجانى",
+    "دورات", "دورة",
+    "free",
+]
+
+# Terms containing ANY of these substrings are NEVER added as negatives.
+# If they don't convert, route to a pause-watch bucket instead.
+NEVER_NEGATIVE_PATTERNS: list[str] = [
+    "قيود",
+    # Competitor brand names — pause if not converting, never exclude
+    "zoho", "quickbooks", "odoo", "xero", "sage", "wave",
+    "منافس", "منافسين",
+]
+
+
+def _matches_any(term: str, patterns: list[str]) -> bool:
+    """Case-insensitive substring check against a list of patterns."""
+    t = term.lower()
+    return any(p.lower() in t for p in patterns)
+
 
 # ─── 1. Impression Share ─────────────────────────────────────────────────────
 
@@ -241,8 +267,11 @@ def audit_search_terms(days: int = 30) -> dict:
       WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
     """
 
-    add_kw: list[dict] = []
-    add_neg: list[dict] = []
+    add_kw: list[dict] = []      # converting terms → add as keyword (approval gate)
+    add_neg: list[dict] = []     # wasted terms → add as negative (direct-execute)
+    auto_neg: list[dict] = []    # always-negative terms → silent direct-execute
+    pause_watch: list[dict] = [] # never-negative terms (قيود / competitors) → pause if not converting
+
     for cid in _customer_ids():
         try:
             rows = list(ga.search(customer_id=cid, query=query))
@@ -256,40 +285,52 @@ def audit_search_terms(days: int = 30) -> dict:
             status = r.search_term_view.status.name  # ADDED / EXCLUDED / NONE / UNKNOWN
             conv = float(r.metrics.conversions)
 
-            # 3a. Converting search terms NOT yet in the keyword list -> add
+            row = {
+                "channel":           "google_ads",
+                "customer_id":       cid,
+                "campaign":          r.campaign.name,
+                "campaign_resource": r.campaign.resource_name,
+                "ad_group":          r.ad_group.name,
+                "ad_group_resource": r.ad_group.resource_name,
+                "term":              term,
+                "spend":             round(spend, 2),
+                "clicks":            int(r.metrics.clicks),
+                "conv":              conv,
+                "status":            status,
+            }
+
+            # 3a. Converting search terms NOT yet in the keyword list -> add as keyword
             if conv >= EXPANSION_MIN_CONV and status not in ("ADDED",):
-                add_kw.append({
-                    "channel":           "google_ads",
-                    "customer_id":       cid,
-                    "campaign":          r.campaign.name,
-                    "campaign_resource": r.campaign.resource_name,
-                    "ad_group":          r.ad_group.name,
-                    "ad_group_resource": r.ad_group.resource_name,
-                    "term":              term,
-                    "spend":             round(spend, 2),
-                    "clicks":            int(r.metrics.clicks),
-                    "conv":              conv,
-                    "status":            status,
-                    "cpa":               round(spend / conv, 0) if conv else None,
-                })
-            # 3b. Spending search terms with 0 conv NOT excluded -> negative candidate
+                row["cpa"] = round(spend / conv, 0) if conv else None
+                add_kw.append(row)
+
+            # 3b. Spending / wasted terms (0 conv, not already excluded)
             elif spend >= EXPANSION_MIN_SPEND and conv == 0 and status not in ("EXCLUDED",):
-                add_neg.append({
-                    "channel":           "google_ads",
-                    "customer_id":       cid,
-                    "campaign":          r.campaign.name,
-                    "campaign_resource": r.campaign.resource_name,
-                    "ad_group":          r.ad_group.name,
-                    "ad_group_resource": r.ad_group.resource_name,
-                    "term":              term,
-                    "spend":             round(spend, 2),
-                    "clicks":            int(r.metrics.clicks),
-                    "status":            status,
-                })
+                # Rule: ALWAYS NEGATIVE — direct-execute silently, no approval
+                if _matches_any(term, ALWAYS_NEGATIVE_PATTERNS):
+                    auto_neg.append(row)
+                # Rule: NEVER NEGATIVE — pause-watch only (قيود, competitors)
+                elif _matches_any(term, NEVER_NEGATIVE_PATTERNS):
+                    pause_watch.append(row)
+                # Normal negative candidate
+                else:
+                    add_neg.append(row)
 
     add_kw.sort(key=lambda x: -x["conv"])
     add_neg.sort(key=lambda x: -x["spend"])
-    return {"add_as_keyword": add_kw, "add_as_negative": add_neg}
+    auto_neg.sort(key=lambda x: -x["spend"])
+    pause_watch.sort(key=lambda x: -x["spend"])
+
+    print(f"[search-terms] add_kw={len(add_kw)}, add_neg={len(add_neg)}, "
+          f"auto_neg={len(auto_neg)} (always-neg rules), "
+          f"pause_watch={len(pause_watch)} (قيود/competitors — pause only)")
+
+    return {
+        "add_as_keyword": add_kw,
+        "add_as_negative": add_neg,
+        "auto_negative": auto_neg,        # always-negative: execute immediately, no approval
+        "pause_watch": pause_watch,       # never-negative: flag for pause review only
+    }
 
 
 # ─── 4. Non-converting keyword auto-pause ────────────────────────────────────
@@ -386,10 +427,12 @@ def run_full_audit(days: int = 14) -> dict:
     qs_findings   = audit_quality_score(days=days)
     search_terms  = audit_search_terms(days=30)
     kw_paused     = audit_and_pause_nonconverting_keywords(days=7)
-    print(f"  IS findings:        {len(is_findings)}")
-    print(f"  QS findings:        {len(qs_findings)}")
-    print(f"  add as keyword:     {len(search_terms['add_as_keyword'])}")
-    print(f"  add as negative:    {len(search_terms['add_as_negative'])}")
+    print(f"  IS findings:          {len(is_findings)}")
+    print(f"  QS findings:          {len(qs_findings)}")
+    print(f"  add as keyword:       {len(search_terms['add_as_keyword'])}")
+    print(f"  add as negative:      {len(search_terms['add_as_negative'])}")
+    print(f"  auto_negative:        {len(search_terms.get('auto_negative', []))} (always-neg rules)")
+    print(f"  pause_watch:          {len(search_terms.get('pause_watch', []))} (قيود/competitors)")
     print(f"  keywords auto-paused: {len(kw_paused)}")
     return {
         "impression_share":  is_findings,
