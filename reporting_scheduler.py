@@ -19,6 +19,7 @@ from collectors import google_ads_bq, meta_bq, snap_bq
 from collectors import meta_organic_bq, youtube_bq, linkedin_bq
 from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
+from collectors import windsor_bq
 from collectors.views import refresh_all_views
 from notifications.notify import send_heartbeat
 from logs.logger import get_logger, setup_global_logging
@@ -28,7 +29,14 @@ log = get_logger("bq-refresh")
 
 
 COLLECTORS = [
-    # Paid — social
+    # ── Windsor.ai managed pipeline (Google, Meta, Snap, TikTok, LinkedIn, Bing)
+    # Windsor runs FIRST — it's the single source for all channels it covers.
+    # Direct collectors below serve as fallback if Windsor key is missing.
+    ("windsor",         windsor_bq.collect_and_write),
+
+    # ── Direct collectors — active only if Windsor doesn't cover the channel
+    #    or WINDSOR_API_KEY is not set. They will be skipped gracefully when
+    #    their own tokens are expired (they print a warning and return 0).
     ("google_ads",      google_ads_bq.collect_and_write),
     ("meta",            meta_bq.collect_and_write),
     ("snapchat",        snap_bq.collect_and_write),
