@@ -30,6 +30,138 @@ from config import DAYS_FOR_PAUSE_DECISION, DRILL_DOWN_CPQL, DRILL_DOWN_CPL
 SCALE_PCT = 0.25   # always 25%
 
 
+# ── BQ helper: junk leads drill-down ──────────────────────────────────────────
+
+def _bq_client():
+    """Return a BQ client using service-account creds from env."""
+    from google.cloud import bigquery as _bq
+    from google.oauth2 import service_account as _sa
+    project  = os.getenv("BQ_PROJECT_ID")
+    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
+    creds    = _sa.Credentials.from_service_account_file(key_path)
+    return _bq.Client(project=project, credentials=creds), project
+
+
+def _get_junk_keyword_detail(channel: str, campaign_name: str, days: int) -> str:
+    """
+    Return a formatted card block showing keyword breakdown for a junk-leads campaign.
+    Flags keywords with qual% < 20% as candidates to pause.
+    """
+    try:
+        client, project = _bq_client()
+        dataset = os.getenv("BQ_DATASET", "qoyod_marketing")
+        safe_campaign = campaign_name.replace("'", "''")
+        sql = f"""
+            SELECT
+              utm_term        AS keyword,
+              utm_audience    AS ad_group,
+              ROUND(SUM(spend), 2)                                                 AS spend,
+              SUM(leads)                                                           AS leads,
+              SUM(leads_qualified)                                                 AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0))*100, 1) AS qual_pct
+            FROM `{project}.{dataset}.v_keyword_performance`
+            WHERE channel = '{channel}'
+              AND utm_campaign = '{safe_campaign}'
+              AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              AND utm_term IS NOT NULL AND utm_term != ''
+            GROUP BY 1, 2
+            ORDER BY spend DESC
+            LIMIT 20
+        """
+        rows = list(client.query(sql).result())
+        if not rows:
+            return ""
+        lines = ["**📌 Keyword Breakdown (junk source):**\n"]
+        for r in rows:
+            qual  = r.qual_pct if r.qual_pct is not None else 0.0
+            flag  = "→ **PAUSE**" if qual < 20 else ""
+            lines.append(
+                f"- `{r.keyword}` | Ad Group: {r.ad_group or '—'} | "
+                f"Spend: ${r.spend:.0f} | Leads: {r.leads} | SQLs: {r.sqls} | "
+                f"Qual: {qual:.0f}% {flag}"
+            )
+        return "\n".join(lines) + "\n"
+    except Exception as e:
+        print(f"[health-tasks] keyword detail error: {e}")
+        return ""
+
+
+def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> str:
+    """
+    Return a formatted card block showing ad-group/ad-set breakdown for a junk-leads campaign.
+    Flags the worst audience and suggests a replacement.
+    """
+    try:
+        client, project = _bq_client()
+        dataset = os.getenv("BQ_DATASET", "qoyod_marketing")
+        safe_campaign = campaign_name.replace("'", "''")
+        sql = f"""
+            SELECT
+              utm_audience AS ad_group,
+              ROUND(SUM(spend), 2)                                                 AS spend,
+              SUM(leads)                                                           AS leads,
+              SUM(leads_qualified)                                                 AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0))*100, 1) AS qual_pct
+            FROM `{project}.{dataset}.v_adset_performance`
+            WHERE channel = '{channel}'
+              AND utm_campaign = '{safe_campaign}'
+              AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              AND utm_audience IS NOT NULL AND utm_audience != ''
+            GROUP BY 1
+            ORDER BY qual_pct ASC
+            LIMIT 10
+        """
+        rows = list(client.query(sql).result())
+        if not rows:
+            return ""
+
+        lines = ["**📌 Audience / Ad-Group Breakdown:**\n"]
+        for i, r in enumerate(rows):
+            qual = r.qual_pct if r.qual_pct is not None else 0.0
+            worst_flag = " ← **WORST**" if i == 0 else ""
+            lines.append(
+                f"- `{r.ad_group or '—'}` | "
+                f"Spend: ${r.spend:.0f} | Leads: {r.leads} | SQLs: {r.sqls} | "
+                f"Qual: {qual:.0f}%{worst_flag}"
+            )
+
+        # Build a replacement suggestion for the worst audience
+        worst = rows[0]
+        ag_name = (worst.ad_group or "").lower()
+        if "broad" in ag_name:
+            suggestion = (
+                "Audience `{ag}` is Broad — replace with **Lookalike 1-3%** or "
+                "**Interests** (narrow to job title / company size) to improve lead quality."
+            ).format(ag=worst.ad_group)
+        elif "interest" in ag_name:
+            suggestion = (
+                "Audience `{ag}` is Interest-based — tighten by adding **age 25-45** "
+                "exclusion, **exclude students**, or switch to a **Lookalike** seed "
+                "built from qualified leads."
+            ).format(ag=worst.ad_group)
+        elif "lookalike" in ag_name or "lal" in ag_name:
+            suggestion = (
+                "Audience `{ag}` is Lookalike — try a tighter seed: use only **SQLs** "
+                "(not all leads) to build the lookalike, or shrink to **1%** similarity."
+            ).format(ag=worst.ad_group)
+        elif "retarget" in ag_name or "remarketing" in ag_name:
+            suggestion = (
+                "Audience `{ag}` is Retargeting — check recency window (shorten to 14d), "
+                "exclude converted users, or split by page visited (pricing page > blog)."
+            ).format(ag=worst.ad_group)
+        else:
+            suggestion = (
+                "Audience `{ag}` has the lowest qual rate — review targeting criteria "
+                "and consider replacing with a Lookalike built from qualified leads."
+            ).format(ag=worst.ad_group)
+
+        lines.append(f"\n**💡 Replacement suggestion:** {suggestion}")
+        return "\n".join(lines) + "\n"
+    except Exception as e:
+        print(f"[health-tasks] audience detail error: {e}")
+        return ""
+
+
 # ── Budget helpers ─────────────────────────────────────────────────────────────
 
 def _avg_daily_spend(channel: str, campaign_name: str, account_id: str,
@@ -114,29 +246,46 @@ def _pause_campaign_exec(channel: str, campaign_id: str, account_id: str) -> str
         return f"Pause execution failed: {e}. Pause manually."
 
 
-# ── Table formatter ────────────────────────────────────────────────────────────
+# ── Card formatter (replaces markdown tables) ──────────────────────────────────
 
-def _campaign_table(findings: list[dict], include_exec: bool = False) -> str:
+def _campaign_card(findings: list[dict], include_exec: bool = False) -> str:
+    """Format each campaign finding as a clean key-value card."""
     if not findings:
         return ""
-    header = "| Channel | Campaign | Spend | Leads | Qual. Leads | CPL | CPQL | Qual% | ROAS | Last Edit |"
-    header += " Action taken |\n" if include_exec else " Note |\n"
-    header += "|---|---|---|---|---|---|---|---|---|---|---|\n"
-    rows = ""
-    for f in findings:
-        cpl_s    = f"${f['cpl']:.2f}"    if f.get("cpl")           else "N/A"
-        cpql_s   = f"${f['cpql']:.2f}"   if f.get("cpql")          else "N/A"
-        roas_s   = f"{f['roas']:.2f}x"   if f.get("roas")          else "—"
-        edit_s   = f"{f.get('last_updated','?')} ({f.get('days_since_edit','?')}d ago)"
-        junk     = " **[JUNK LEADS]**"    if f.get("junk_leads")   else ""
-        aware    = " **[AWARENESS]**"     if f.get("is_awareness")  else ""
-        roas_ok  = " **[ROAS OK]**"       if f.get("roas_override") else ""
-        qflavs   = " **[CHECK QFLAVOURS PIPELINE]**" if f.get("is_qflavours") else ""
-        note     = f.get("exec_result", f.get("note", ""))
-        rows += (f"| {f['channel']} | {f['campaign']}{junk}{aware}{roas_ok}{qflavs} | ${f['spend']:.0f} | "
-                 f"{f['hs_leads']} | {f['sqls']} | {cpl_s} | {cpql_s} | "
-                 f"{f['qual_rate']:.1f}% | {roas_s} | {edit_s} | {note} |\n")
-    return header + rows
+    cards = []
+    for i, f in enumerate(findings, 1):
+        cpl_s  = f"${f['cpl']:.2f}"  if f.get("cpl")  else "N/A"
+        cpql_s = f"${f['cpql']:.2f}" if f.get("cpql") else "N/A"
+        roas_s = f"{f['roas']:.2f}x" if f.get("roas") else "—"
+        edit_s = f"{f.get('last_updated', '?')} ({f.get('days_since_edit', '?')}d ago)"
+        note   = f.get("exec_result", f.get("note", ""))
+
+        flags = []
+        if f.get("junk_leads"):    flags.append("⚠️ JUNK LEADS")
+        if f.get("is_awareness"):  flags.append("📣 AWARENESS")
+        if f.get("roas_override"): flags.append("✅ ROAS OK")
+        if f.get("is_qflavours"):  flags.append("🔍 CHECK QFLAVOURS PIPELINE")
+        flag_line = f"\n**Flags:**          {' | '.join(flags)}" if flags else ""
+
+        header = f"**[{i}/{len(findings)}]**" if len(findings) > 1 else ""
+        card = (
+            f"{header}\n" if header else ""
+        ) + (
+            f"**Channel:**         {f['channel'].replace('_', ' ').title()}\n"
+            f"**Campaign:**        {f['campaign']}\n"
+            f"**Spend:**           ${f['spend']:.0f}\n"
+            f"**Leads:**           {f['hs_leads']}\n"
+            f"**Qualified Leads:** {f['sqls']}\n"
+            f"**CPL:**             {cpl_s}\n"
+            f"**CPQL:**            {cpql_s}\n"
+            f"**Qual%:**           {f['qual_rate']:.1f}%\n"
+            f"**ROAS:**            {roas_s}\n"
+            f"**Last Edit:**       {edit_s}"
+            + flag_line
+            + (f"\n**{'Action taken' if include_exec else 'Note'}:** {note}" if note else "")
+        )
+        cards.append(card)
+    return "\n\n---\n\n".join(cards) + "\n"
 
 
 # ── Main entry point ───────────────────────────────────────────────────────────
@@ -201,8 +350,8 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             body = (
                 f"Campaign health audit — last {days} days.\n"
                 f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
-                f"### Scale candidate — *awaiting approval*\n"
-                + _campaign_table([f])
+                f"### Scale candidate — *awaiting approval*\n\n"
+                + _campaign_card([f])
                 + awareness_note
                 + "\nApprove in #approvals to execute the +25% budget increase."
             )
@@ -226,15 +375,34 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                     "CPL looks cheap but qual rate is low — leads are not converting to SQLs. "
                     "Do NOT scale on CPL alone. Fix audience, creative, or LP before any budget change."
                 )
+                # Fetch keyword and audience drill-down for this junk campaign
+                kw_detail  = _get_junk_keyword_detail(f["channel"], f["campaign"], days)
+                aud_detail = _get_junk_audience_detail(f["channel"], f["campaign"], days)
+                junk_drill = ""
+                if kw_detail:
+                    junk_drill += f"\n\n{kw_detail}"
+                if aud_detail:
+                    junk_drill += f"\n{aud_detail}"
+                if not junk_drill:
+                    junk_drill = (
+                        "\n\n**Common causes:**\n"
+                        "- Wrong audience pulling unqualified traffic\n"
+                        "- Broad-match keywords capturing off-intent searches\n"
+                        "- Landing page / form not filtering by company size or role\n"
+                        "- Creative attracting B2C audience instead of B2B\n"
+                    )
             else:
                 title = f"PENDING APPROVAL: Pause — {f['campaign']} — CPQL critical ({days}d)"
                 reason = "Fix audience/creative/LP before reactivating."
+                junk_drill = ""
             body = (
                 f"Campaign health audit — last {days} days.\n"
                 f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
-                f"### Pause candidate — *awaiting approval*\n"
-                + _campaign_table([f])
-                + f"\n{reason}\nApprove in #approvals to pause."
+                f"### Pause candidate — *awaiting approval*\n\n"
+                + _campaign_card([f])
+                + f"\n{reason}"
+                + junk_drill
+                + "\n\nApprove in #approvals to pause."
             )
             gid = create_task(
                 title=title,
@@ -299,7 +467,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 f"CPQL >${DRILL_DOWN_CPQL} AND CPL >${DRILL_DOWN_CPL} for {days} days. "
                 f"Do NOT pause at campaign level yet.\n\n"
                 + hierarchy + "\n"
-                + _campaign_table([f])
+                + _campaign_card([f])
                 + ("\n\n**Ad / Keyword detail:**\n" + drill_table if drill_table.strip() else "")
                 + (f"\n{creative_section}" if creative_section else "")
             )
@@ -367,8 +535,8 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 f"Campaign health audit — **{date_range_str}**\n"
                 f"Cost: channel source | Leads: HubSpot Lead Module\n"
                 f"⚠️ Actions only applied to campaigns last edited ≥7 days ago.\n\n"
-                + section_title + "\n"
-                + _campaign_table([f])
+                + section_title + "\n\n"
+                + _campaign_card([f])
                 + f"\n{investigation}"
                 + (f"\n{creative_section}" if creative_section else "")
             )
@@ -385,7 +553,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
 
     # ── ONE #approvals message covering everything ────────────────────────────
     review_items: list[dict] = []
-    for f in drilldown_f + optimize_f + junk_f:
+    for f in drilldown_f + optimize_f + junk_extra:
         if f not in review_items:
             review_items.append(f)
     _send_nightly_digest(scale_f, pause_f, review_items)
