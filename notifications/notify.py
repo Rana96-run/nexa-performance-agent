@@ -21,8 +21,6 @@ from config import (
     NOTIFY_VIA, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL,
     SLACK_CHANNEL_HEALTH,
 )
-from notifications import email as email_mod
-
 try:
     from notifications.slack import client as slack_client, post_approval_request as slack_approval
     SLACK_OK = True
@@ -30,6 +28,14 @@ except Exception as e:
     print(f"[notify] Slack client unavailable: {e}")
     slack_client = None
     SLACK_OK = False
+
+# Email module is optional — only imported when actually needed
+email_mod = None
+if NOTIFY_VIA in ("email", "both"):
+    try:
+        from notifications import email as email_mod  # type: ignore
+    except ImportError:
+        print("[notify] notifications.email module not found — email notifications disabled")
 
 
 from notifications.quiet import is_quiet, quiet_log
