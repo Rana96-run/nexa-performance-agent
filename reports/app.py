@@ -112,22 +112,13 @@ _HEX_DASHBOARD = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
 
 
 @app.route("/")
-@app.route("/dashboard")
 @app.route("/paid-performance/latest")
 @app.route("/paid-performance/<report_date>")
 @app.route("/reports/latest")
 @app.route("/reports/<report_date>")
 def dashboard_redirect(**kwargs):
-    """All old HTML report URLs + /dashboard → Hex performance dashboard."""
-    return redirect(_HEX_DASHBOARD, code=302)
-
-
-_HEX_ACTIVITY = os.getenv("ACTIVITY_DASHBOARD_URL") or "https://app.hex.tech"
-
-@app.route("/activity")
-def activity_redirect():
-    """Short URL → Hex agent activity dashboard."""
-    return redirect(_HEX_ACTIVITY, code=302)
+    """All old HTML report URLs → Hex performance dashboard (permanent redirect)."""
+    return redirect(_HEX_DASHBOARD, code=301)
 
 
 
