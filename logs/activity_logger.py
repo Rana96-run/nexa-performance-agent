@@ -136,7 +136,7 @@ def log_activity_async(
             details=details, rows_affected=rows_affected,
             duration_s=duration_s,
         ),
-        daemon=True,
+        daemon=False,   # non-daemon so the thread survives process keepalive cycles
     )
     t.start()
 
