@@ -35,50 +35,33 @@ the bottom of the relevant section.
 
 ## P1 — Attribution depth (user explicitly requested)
 
-- [ ] **Build `utm_paid_attribution_daily` view** — joins HubSpot leads
-  (grouped by date + `qoyod_source` + `lead_utm_campaign` + `lead_utm_audience`
-  + `lead_utm_content`) to `campaigns_daily` / `adsets_daily` / `ads_daily`
-  using dual-strategy matcher (see `07_attribution.md`). Emits `__no_utm__`
-  unattributed bucket row per channel/day.
-- [ ] **Adset-grain collector** — extend `meta_bq.py` with `level=adset`;
-  add `google_ads_adgroups_bq.py`. Write to new `adsets_daily` table.
-- [ ] **Ad-grain collector** — `level=ad` for Meta, `ad_group_ad` resource
-  for Google Ads. Write to `ads_daily`.
-- [ ] **PMax asset-group collector** — GAQL on `asset_group` + `asset_group_asset`
-  + `asset_group_asset_view`. Write to `pmax_asset_groups_daily`.
+- [x] **Build `utm_paid_attribution_daily` view** — completed 2026-05-04. View was already in `bq_writer.py`; wired into `refresh_all_views()` in `views.py` with correct dependency order.
+- [x] **Adset-grain collector** — already existed: `meta_bq.collect_adsets_and_write`, `google_ads_bq.collect_adgroups_and_write`, `snap_bq.collect_adsets_and_write`, `tiktok_bq.collect_adgroups_and_write`. All wired in `reporting_scheduler.py`.
+- [x] **Ad-grain collector** — already existed: `google_ads_bq.collect_ads_and_write`, `meta_bq.collect_ads_and_write`, `tiktok_bq.collect_ads_and_write`. All wired.
+- [x] **PMax asset-group collector** — completed 2026-05-04. `collect_pmax_asset_groups_and_write()` added to `collectors/google_ads_bq.py`. Writes to `pmax_asset_groups_daily`. Wired into `reporting_scheduler.py`.
 - [ ] **Creative type tagging** — for each ad row, classify as
   `{image, video, carousel, collection, reels, story}`. Requires pulling
   `creative` fields alongside insights.
 
 ## P1 — Dashboard expansion (user explicitly requested)
 
-- [ ] **Split dashboard**: `1_Paid_Overview.py` + `2_Organic_Overview.py`
-  (current `1_Live_Campaigns.py` is paid-biased)
-- [ ] **`3_Channel_Deep_Dive.py`** — per-channel tabs with campaigns / adsets
-  / ads tables, CPL-zone coloring, creative type pie, date window filter
-- [ ] **`4_Leads_Funnel.py`** — disqualification reasons **with sub-reasons**
-  (HubSpot `disqualification_reason` + `disqualification_sub_reason`
-  properties — confirm exact property API names before coding)
-- [ ] **`5_Insights_Recommendations.py`** — rules-based recs per channel:
-  - CPL > pause zone for 3+ days → "pause campaign X"
-  - CPL in scale zone + budget < cap → "scale campaign X by 20%"
-  - ROAS > 3 + impression share < 70% → "raise budget / loosen targeting"
-  - Creative type CTR < 0.5% → "refresh creative"
-- [ ] **Deals table on Channel Deep Dive** — show deals by channel with
-  stage + amount + owner
+- [ ] **Channel Deep Dive (Hex)** — section header + SQL 102 added to Hex notebook
+  (adset grain × CPL zone coloring: Scale/OK/Watch/Pause). Still needs:
+  Leads Funnel section + Insights/Recs section (browser was freezing mid-run)
+- [ ] **Leads Funnel (Hex)** — disqualification reasons + sub-reasons.
+  Property names confirmed: `leads_disqualification_reason__ops` (main, 10 opts)
+  + `leads_disqualification_reason__sub_reasons` (31 opts). `top_disq_sub_reason`
+  now stored in `hubspot_leads_module_daily`. SQL ready to add to Hex.
+- [ ] **Insights & Recommendations (Hex)** — rules-based recs using
+  `v_campaign_leaderboard` + `v_channel_scorecard`. SQL ready to add to Hex.
 - [ ] **"(no UTM — click-ID only)" explicit row** in every campaign table
 
 ## P2 — Ops hardening
 
-- [ ] **LinkedIn token auto-refresh** — 60-day expiry; add
-  `scripts/linkedin_refresh.py` + nightly cron in scheduler
-- [ ] **Slack digest of 6h refresh** — post row counts + failures to Slack
-  channel after every `reporting_scheduler` pass
-- [ ] **Disqualification property probe** — write
-  `scripts/probe_hubspot_props.py` that lists all lead properties matching
-  `disqualif*` so we know the exact API names
-- [ ] **Deploy dashboard to Replit** — create Repl B per `06_dashboard.md`,
-  paste secrets, share URL
+- [x] **LinkedIn token auto-refresh** — completed 2026-05-04. `scripts/linkedin_refresh.py` already existed; wired as step 3f in `operational_scheduler._nightly()`.
+- [x] **Slack digest of 6h refresh** — completed 2026-05-04. `_post_refresh_digest()` added to `reporting_scheduler.py` — posts on failures or 06:00 UTC run; non-fatal.
+- [x] **Disqualification property probe** — completed 2026-05-04. `scripts/probe_hubspot_props.py` created. Confirmed property names: `leads_disqualification_reason__ops` (main) + `leads_disqualification_reason__sub_reasons` (sub). Both stored in `hubspot_leads_module_daily`.
+- [ ] **Deploy dashboard to Replit** — superseded: Hex is canonical dashboard. No Replit deploy needed.
 
 ## P1 — Funnel.io learning (dashboard prep)
 
