@@ -119,12 +119,25 @@ All executors delegate to `executors/naming.py::prefixed()` — never bypass it.
 
 ## Keyword management rules (non-negotiable)
 
-- **Never remove a keyword unless its all-time spend = $0.** Low QS, low CTR, or
-  poor performance is never grounds for removal on its own. Fix it (improve ad copy
-  or landing page) or pause it — but only delete when there has been zero cost ever.
-- **Low QS (< 5) action = fix, not remove.** QS is Google's signal that ad copy or
-  landing page relevance needs improvement. Pausing is acceptable while fixing.
+- **Never remove a keyword unless its all-time spend = $0.** Only delete when zero
+  cost ever. Low QS, low CTR, or poor performance = pause, not remove.
+- **QS < 5 pause rule — CPA exception applies:**
+  - If QS < 5 BUT conv ≥ 3 AND CPA ≤ $90 AND running 30+ days → **leave ENABLED**
+  - If QS < 5 AND (conv < 3 OR CPA > $90) → **PAUSE**
+  - If QS < 5, CPA was ≤ $90, but CPA has since risen above $90 → **PAUSE**
+  - QS 0 (not set / PMax keywords) → do nothing, cannot evaluate
 - **Negative keywords** can be added freely (no spend history requirement).
+
+## Ad pause rules (non-negotiable)
+
+Applied to `ads_daily` joined to `hubspot_leads_module_daily` on `lead_utm_content`:
+
+- **Zero-conversion pause:** spend > $70 over 7+ days with 0 platform conversions → PAUSE
+- **Junk lead pause:** ad running 10+ days, converting leads, but
+  `leads_disqualified / leads_total >= 0.60` (60%+ disqualification rate) → PAUSE
+- **High CPL pause:** CPL (`spend / hs_leads`) > $50 for 10+ days → PAUSE
+- **Never remove an ad** — only pause. All ad actions logged and approval-gated.
+- These same rules apply in the manual ad-management tool (`scripts/bulk_ads.py`).
 
 ## Two runtimes (don't confuse them)
 

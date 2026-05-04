@@ -245,3 +245,6 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 - **Spend is USD, not SAR.** `campaigns_daily.spend` is always stored in USD regardless of channel. Never label spend figures as SAR in Slack messages, dashboards, or reports. Google Ads cost_micros and Snap spend are divided by 1,000,000 to get USD before BQ write.
 
 - **Never remove a keyword with any spend history.** Only delete keywords with all-time spend = $0. Low QS or poor performance = fix (ad copy / LP) or pause, never remove. Negatives can always be added freely.
+
+- **QS < 5 CPA exception:** Do NOT pause a low-QS keyword if conv >= 3 AND CPA <= $90 AND 30+ days running. Only pause if CPA > $90 or conv < 3. Always re-check before acting.
+- **Ad pause thresholds:** spend > $70 / 7 days / 0 conv → pause. 60%+ disqualified leads (10+ days) → pause. CPL > $50 (10+ days) → pause. Never remove ads, only pause.
