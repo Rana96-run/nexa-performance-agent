@@ -12,7 +12,7 @@ keys here BEFORE coding so we never chase "is it connected?" again.
 | Snapchat | ✅ connected (2 accts) | n/a | refresh token (perpetual) | Only `conversion_sign_ups` pulled; `conversion_lead` / `total_conversions` invalid |
 | HubSpot | ✅ read-only | ✅ read-only | Private app token (perpetual) | NEVER write to HubSpot |
 | TikTok | ⏳ account IDs present, token pending | ❌ | — | `TIKTOK_AD_ACCOUNT_2024/2025` + pixels set; access token still blocked on app approval |
-| Microsoft Ads | ⏳ app registered, OAuth needed | n/a | — | Client/Secret/Tenant/AccountID set; run `scripts/microsoft_oauth.py` to mint `MS_REFRESH_TOKEN` |
+| Microsoft Ads | ❌ blocked on qoyod IT | n/a | — | Account `G1206XJR`, Customer `254476670` set. Tenant locked to qoyod.com Azure AD; needs Global Admin to run `New-MgServicePrincipal -AppId d42ffc93-c136-491d-b4fd-6f18168c68fd`. See `09_open_tasks.md` + `08_pitfalls.md` |
 | LinkedIn organic | ⏳ OAuth app set, tokens re-minted needed | — | **60 days** | `LI_CLIENT_ID/SECRET` set; `LI_ACCESS_TOKEN/ORG_URN/AD_ACCOUNT_URN` currently empty — rerun `scripts/linkedin_oauth.py` then `linkedin_refresh.py` |
 | LinkedIn Ads | ⏳ same as organic | n/a | 60 days | Auto-refresh helper `scripts/linkedin_refresh.py` now exists |
 | YouTube | n/a | ⏳ app scaffold, OAuth pending | refresh token (perpetual) | Env slots empty — run `scripts/youtube_oauth.py` to fill |
@@ -80,7 +80,7 @@ YT_CHANNEL_ID=
 MS_DEVELOPER_TOKEN=<set>
 MS_CLIENT_ID / MS_CLIENT_SECRET / MS_TENANT_ID / MS_OBJECT_ID=<set>
 MS_ACCOUNT_ID=G1206XJR
-MS_REDIRECT_URI=http://localhost:8080/microsoft/callback
+MS_REDIRECT_URI=http://localhost:8080/ms-ads/callback
 # MS_REFRESH_TOKEN, MS_CUSTOMER_ID — filled after OAuth
 
 # TikTok (account IDs + pixels present; access token pending app approval)
@@ -129,7 +129,7 @@ FUNNEL_LOOKER_REPORT_ID=    # pending — canonical Looker board URL
 | `scripts/youtube_oauth.py` | YouTube OAuth; prints refresh_token + channel_id |
 | `scripts/snap_oauth.py` | Already-used Snap OAuth flow |
 | `scripts/linkedin_refresh.py` | Refresh LI access token via refresh_token grant; `--write-env` persists back |
-| `scripts/microsoft_oauth.py` | TO BUILD — mint MS Ads refresh token |
+| `scripts/microsoft_oauth.py` | Mint MS Ads refresh token (uses `/consumers/` endpoint — personal MS account only) |
 
 ## Rules
 

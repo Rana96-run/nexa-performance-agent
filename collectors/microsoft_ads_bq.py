@@ -26,7 +26,7 @@ CUSTOMER_ID     = os.getenv("MS_CUSTOMER_ID", "")
 ACCOUNT_ID      = os.getenv("MS_ACCOUNT_ID", "")
 REFRESH_TOKEN   = os.getenv("MS_REFRESH_TOKEN", "")
 
-TOKEN_URL     = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+TOKEN_URL     = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
 SCOPE         = "https://ads.microsoft.com/msads.manage offline_access"
 REPORTING_URL = "https://reporting.api.bingads.microsoft.com/api/advertiser/reporting/v13"
 

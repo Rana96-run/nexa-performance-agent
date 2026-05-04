@@ -10,9 +10,24 @@ the bottom of the relevant section.
   paste outputs to `.env`. Follow-ups via `scripts/linkedin_refresh.py`.
 - [ ] **Run YouTube OAuth** — `python scripts/youtube_oauth.py`. Writes
   `YT_REFRESH_TOKEN` + `YT_CHANNEL_ID` to `.env` (slots empty today).
-- [ ] **Run Microsoft Ads OAuth** — build `scripts/microsoft_oauth.py`
-  (AAD v2 auth code flow → refresh_token). Env has client/secret/tenant/
-  account; still needs `MS_REFRESH_TOKEN` + `MS_CUSTOMER_ID`.
+- [ ] **Microsoft Ads — BLOCKED on qoyod IT.** OAuth script exists
+  (`scripts/microsoft_oauth.py`), collector exists (`collectors/microsoft_ads_bq.py`,
+  3 grains). Blocker: qoyod.com Azure AD tenant lacks the Microsoft Advertising
+  service principal (error `AADSTS650052`). Personal-account fallback also
+  blocked: Microsoft migrated `rana.khalid@qoyod.com` personal → work
+  (`PersonalIdentityMigratedToWork`), and the Ads account itself is locked to
+  qoyod.com tenant so fresh outlook.com accounts get rejected (`AADSTS500200`).
+  **Fix requires a Global Admin on qoyod.com to run:**
+  ```powershell
+  Install-Module Microsoft.Graph -Scope CurrentUser -Force
+  Connect-MgGraph -Scopes "Application.ReadWrite.All"
+  New-MgServicePrincipal -AppId "d42ffc93-c136-491d-b4fd-6f18168c68fd"
+  ```
+  After that, re-run `python scripts/microsoft_oauth.py` (currently set to
+  `/consumers/` — flip back to `/common/`) signed in as `@qoyod.com` work.
+  Customer ID already set: `MS_CUSTOMER_ID=254476670`. Account: `G1206XJR`.
+  See `memory/08_pitfalls.md` for full trap analysis.
+  Deprioritized — MS Ads is ~3% of Saudi paid search.
 - [ ] **Get Funnel.io read API token** — ask Amar for workspace API token
   + account_id + project_id. Fill `FUNNEL_API_TOKEN/ACCOUNT_ID/PROJECT_ID`.
 - [ ] **HubSpot leads YTD backfill** — `python collectors/hubspot_leads_bq.py`

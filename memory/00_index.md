@@ -26,6 +26,8 @@ single concern. Read only what you need.
 | `09_open_tasks.md` | "What's next?" — prioritized work queue |
 | `10_google_drive.md` | Connecting to / reading the shared Drive folder |
 | `11_agent_roles.md` | Which roles live in this repo vs external (Creative, MarkOps) |
+| `12_funnel_io.md` | Funnel.io workspace audit, custom dims/metrics, Looker board mapping |
+| `13_hubspot_fields.md` | HubSpot BQ schema, UTM→BQ field map, qoyod_source channel key map, CPL/CPQL methodology at every grain |
 
 ## External references (not in repo)
 
