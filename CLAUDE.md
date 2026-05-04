@@ -51,13 +51,14 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
   No PATCH / DELETE / POST to HubSpot without sign-off.
 - **Arabic copy is MSA.** Never colloquial. See `docs/PLAYBOOK.md` §4.
 - **Secrets come from `.env` / Replit Secrets.** Never hardcode.
-- **Currency is SAR.** Platforms returning micros (Google Ads cost_micros,
-  Snap spend) are divided by 1,000,000.
+- **Spend is always reported in USD.** `campaigns_daily.spend` stores USD regardless
+  of channel. Never label spend figures as SAR. Platforms returning micros (Google Ads
+  `cost_micros`, Snap `spend`) are divided by 1,000,000 to get USD before writing to BQ.
 - **Time zone is Asia/Riyadh (UTC+3)** for user-facing times; BQ stores UTC.
 
 ## KPI measurement rules (non-negotiable)
 
-- **Cost comes from the channel** (`campaigns_daily.spend` — always USD).
+- **Cost comes from the channel** (`campaigns_daily.spend` — always USD, never SAR).
 - **Leads and SQLs come from HubSpot Lead Module only** (`hubspot_leads_module_daily`).
   Never use `hubspot_leads_daily` (legacy contact lifecycle — nothing writes to it).
 - **Evaluation order: CPQL first, then CPL.** A good CPL with bad CPQL = bad campaign.

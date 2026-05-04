@@ -241,3 +241,5 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   `channel`, `campaign_id`, `campaign_name`, `date`, `spend`, `impressions`,
   `clicks`, `leads`, and channel-specific columns. Any JOIN or GROUP BY on
   `campaign_group_name` will fail silently (column not found).
+
+- **Spend is USD, not SAR.** `campaigns_daily.spend` is always stored in USD regardless of channel. Never label spend figures as SAR in Slack messages, dashboards, or reports. Google Ads cost_micros and Snap spend are divided by 1,000,000 to get USD before BQ write.
