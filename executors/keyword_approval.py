@@ -31,74 +31,21 @@ _RIYADH = timezone(timedelta(hours=3))
 
 def post_keyword_approval(add_kw: list[dict], add_neg: list[dict]) -> str | None:
     """
-    Post a keyword approval request to #approvals.
-    Persists the pending payload so the next run can check and execute.
-    Returns the Slack message ts, or None in quiet mode / on error.
+    Keywords go to Asana only (via google_ads_audit_tasks.py). No Slack post.
+    Negatives are direct-executed immediately; converting terms are persisted
+    as Asana tasks and skipped here (no approval gate without Slack).
     """
-    from slack_sdk import WebClient
-    from slack_sdk.errors import SlackApiError
-    from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
-    from notifications.quiet import is_quiet, quiet_log
-
     if not add_kw and not add_neg:
         return None
 
-    # ── Build message text ─────────────────────────────────────────────────
-    lines = [f":key: *Google Ads — Keyword Approval Required*"]
+    if add_neg:
+        _execute_negatives(add_neg)
+        print(f"[keyword-approval] Direct-executed {len(add_neg)} negatives (no Slack)")
 
     if add_kw:
-        lines.append(f"\n*Add as Keywords* ({len(add_kw)} converting search terms — 30d)")
-        lines.append("| Conv | Spend | CPA | Term | Ad Group |")
-        for kw in add_kw[:20]:  # cap at 20 rows to stay readable
-            cpa = f"${kw['cpa']:.0f}" if kw.get("cpa") else "—"
-            lines.append(
-                f"• {kw['conv']:.0f} conv · ${kw['spend']:.0f} · {cpa} · "
-                f"`{kw['term']}` → _{kw['ad_group']}_ ({kw['campaign']})"
-            )
-        if len(add_kw) > 20:
-            lines.append(f"_…and {len(add_kw) - 20} more (see Asana task)_")
+        print(f"[keyword-approval] {len(add_kw)} converting terms → Asana only (no Slack)")
 
-    if add_neg:
-        lines.append(f"\n*Add as Negatives — DIRECT-EXECUTE* ({len(add_neg)} wasted terms)")
-        for neg in add_neg[:15]:
-            lines.append(
-                f"• ${neg['spend']:.0f} wasted · `{neg['term']}` "
-                f"→ _{neg['campaign']}_"
-            )
-        if len(add_neg) > 15:
-            lines.append(f"_…and {len(add_neg) - 15} more_")
-
-    lines.append(
-        f"\nReact :white_check_mark: to add ALL keyword candidates as EXACT match. "
-        f":x: to skip. Negatives execute automatically on next run."
-    )
-    text = "\n".join(lines)
-
-    if is_quiet():
-        quiet_log("keyword-approval", SLACK_CHANNEL_APPROVAL, text)
-        _persist_pending(ts=None, add_kw=add_kw, add_neg=add_neg)
-        return None
-
-    try:
-        wc = WebClient(token=SLACK_BOT_TOKEN)
-        resp = wc.chat_postMessage(channel=SLACK_CHANNEL_APPROVAL, text=text)
-        ts = resp["ts"]
-
-        # Pre-add reactions so the user just clicks the existing emoji
-        for emoji in ("white_check_mark", "x"):
-            try:
-                wc.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)
-            except SlackApiError:
-                pass  # already added or missing scope — non-fatal
-
-        _persist_pending(ts=ts, add_kw=add_kw, add_neg=add_neg)
-        print(f"[keyword-approval] Approval request posted (ts={ts}), "
-              f"{len(add_kw)} kw candidates, {len(add_neg)} negatives")
-        return ts
-    except SlackApiError as e:
-        print(f"[keyword-approval] Slack post failed: {e}")
-        _persist_pending(ts=None, add_kw=add_kw, add_neg=add_neg)
-        return None
+    return None
 
 
 # ─── State persistence ────────────────────────────────────────────────────────

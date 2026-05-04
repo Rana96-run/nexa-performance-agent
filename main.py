@@ -93,16 +93,19 @@ def collect(cadence: str) -> dict:
                 f"gads_campaigns_{days}d",
                 lambda: read_campaigns("google_ads", days=days),
             ),
-            "keywords": get_or_fetch(
+            # keyword grain: live API, only for cadences where Claude roles run
+            # (daily has no roles — skip to avoid wasting Google Ads API credits)
+            **({"keywords": get_or_fetch(
                 f"gads_keywords_{kw_days}d",
-                lambda: get_keyword_performance(days=kw_days),  # live API — BQ has no keyword grain
-            ),
+                lambda: get_keyword_performance(days=kw_days),
+            )} if cadence != "daily" else {}),
         },
         "meta": {
-            "ads": get_or_fetch(
+            # ad grain: live API, only for cadences where Claude roles run
+            **({"ads": get_or_fetch(
                 f"meta_ads_{days}d",
-                lambda: get_ad_performance(days=days),  # live API — BQ has no ad grain yet
-            ),
+                lambda: get_ad_performance(days=days),
+            )} if cadence != "daily" else {}),
         },
         "snapchat": {
             "campaigns": get_or_fetch(
@@ -375,10 +378,11 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
         "DASHBOARD_URL",
         "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
     )
+    _DASHBOARD_SHORT = "https://app.hex.tech/app/Qoyod-marketing-performance/latest"
 
     lines = [
         f"{emoji} *{cadence.title()} Performance Check — {today_str}*",
-        f"Dashboard: {url}",
+        f"Dashboard: <{url}|{_DASHBOARD_SHORT}>",
         "",
     ]
 
@@ -480,18 +484,15 @@ def run_cadence(cadence: str, force: bool = False):
     log.info(f"Asana batch complete: {created}/{len(tasks)} tasks created.")
 
     # 6. Post Slack summary.
-    #    Daily cadence: operational_scheduler._post_report_ready() owns the channel
-    #    after the nightly cycle finishes — it has spike data, health findings, and
-    #    audit tasks that run_cadence() doesn't see.  Posting here too would flood
-    #    the channel with duplicates.  Non-daily cadences (weekly, monthly, quarterly)
-    #    still post here because _post_report_ready() is not called for them.
-    if cadence != "daily":
+    #    Daily: _post_report_ready() in operational_scheduler owns the channel.
+    #    Weekly: no Slack post — tasks go to Asana only (per user instruction).
+    #    Monthly/quarterly: still post.
+    if cadence not in ("daily", "weekly"):
         summary_text = _build_slack_summary(cadence, results, tasks, approvals)
         send_summary(
             subject=f"{cadence.title()} check | {today}",
             body_text=summary_text,
-            event_type={"weekly": "weekly_review",
-                        "monthly": "monthly_review", "quarterly": "monthly_review",
+            event_type={"monthly": "monthly_review", "quarterly": "monthly_review",
                         "on_demand": "daily_summary"}.get(cadence, "daily_summary"),
             meta={"Cadence": cadence, "Tasks": created, "Roles": len(results)},
         )
@@ -584,26 +585,10 @@ def weekly_search_term_review() -> dict:
         except Exception as e:
             print(f"[search_terms] Negative keyword error: {e}")
 
-    # 2. Post converting terms to #approvals
+    # 2. Converting terms → Asana task only, no Slack (per user instruction)
     if buckets["convert"]:
-        lines = [f"*Google Ads — Weekly Search Term Review | {today_str}*",
-                 f"Found *{len(buckets['convert'])} converting search terms* to add as keywords.\n"]
-        for t in buckets["convert"]:
-            lines.append(
-                f"• `{t['query']}` — {t['clicks']} clicks, {t['conversions']:.0f} conv, "
-                f"${t['cost_usd']:.2f} spend | ad group: _{t['ad_group_name']}_"
-            )
-        lines.append(
-            f"\nReact ✅ to add these as EXACT match keywords to their respective ad groups. "
-            f"React ❌ to skip."
-        )
-        msg = "\n".join(lines)
-        try:
-            post_to_slack(msg, channel=SLACK_CHANNEL_APPROVAL)
-            approvals_sent = [t["query"] for t in buckets["convert"]]
-            print(f"[search_terms] Approval request sent for {len(approvals_sent)} converting terms.")
-        except Exception as e:
-            print(f"[search_terms] Slack approval post failed: {e}")
+        approvals_sent = [t["query"] for t in buckets["convert"]]
+        print(f"[search_terms] {len(approvals_sent)} converting terms → Asana only (no Slack)")
 
     # 3. Create Asana task with full weekly summary
     watch_lines  = [f"• `{t['query']}` — {t['clicks']} clicks, ${t['cost_usd']:.2f}" for t in buckets["watch"]]

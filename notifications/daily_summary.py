@@ -319,6 +319,7 @@ def build_daily_summary_text(spikes: list | None = None,
         "DASHBOARD_URL",
         "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
     )
+    _DASHBOARD_SHORT = "https://app.hex.tech/app/Qoyod-marketing-performance/latest"
 
     counts       = _asana_task_counts()
     action_lines = _agent_actions_lines(audit_tasks or [], health_tasks or [])
@@ -326,7 +327,7 @@ def build_daily_summary_text(spikes: list | None = None,
     spike_lines  = _spike_lines(spikes or [])
     overdue      = _overdue_task_count()
 
-    lines = [f"*{today_str}  ·  <{url}|Dashboard>*", ""]
+    lines = [f"*{today_str}  ·  <{url}|{_DASHBOARD_SHORT}>*", ""]
 
     # ── Performance — channel totals, no campaign names ───────────────────────
     if peak_lines:

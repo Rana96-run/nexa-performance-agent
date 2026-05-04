@@ -21,11 +21,6 @@ from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
 from collectors import windsor_bq
 from collectors.views import refresh_all_views
-try:
-    from collectors.airbyte_normalize import run_all_normalizations as _airbyte_normalize
-    _HAS_AIRBYTE = True
-except ImportError:
-    _HAS_AIRBYTE = False
 from notifications.notify import send_heartbeat
 from logs.logger import get_logger, setup_global_logging
 from logs.activity_logger import log_activity_async
@@ -98,22 +93,6 @@ def run_refresh(incremental: bool = True, days: int | None = None):
             results[name] = (False, str(e), dt)
             log.error(f"{name} FAILED after {dt:.1f}s: {e}")
             traceback.print_exc()
-
-    # ── Airbyte normalization (runs after direct collectors) ─────────────────
-    # Reads Airbyte's raw BQ tables and MERGEs into campaigns_daily.
-    # Silently skipped if AIRBYTE_RAW_DATASET is not set or tables don't exist yet.
-    import os
-    if _HAS_AIRBYTE and os.getenv("AIRBYTE_RAW_DATASET"):
-        t0 = time.time()
-        try:
-            airbyte_rows = _airbyte_normalize()
-            dt = time.time() - t0
-            total_airbyte = sum(airbyte_rows.values())
-            results["airbyte_normalize"] = (True, total_airbyte, dt)
-            log.info(f"airbyte_normalize: {total_airbyte} rows in {dt:.1f}s")
-        except Exception as e:
-            results["airbyte_normalize"] = (False, str(e), time.time() - t0)
-            log.error(f"airbyte_normalize FAILED: {e}")
 
     try:
         refresh_all_views()

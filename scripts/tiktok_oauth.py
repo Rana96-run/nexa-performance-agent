@@ -182,7 +182,7 @@ def do_oauth():
         sys.exit(1)
 
     auth_url = (
-        "https://business.tiktok.com/portal/auth?"
+        "https://business-api.tiktok.com/portal/auth?"
         + urlencode({
             "app_id":        APP_ID,
             "state":         "nexa_tiktok_oauth",

@@ -15,6 +15,16 @@ the fix, not just the symptom.
   `WHERE date >= CURRENT_DATE() - INTERVAL 7 DAY` in a view definition; use
   it in queries, or pass params.
 
+## TikTok Marketing API OAuth
+
+- **Auth URL host is `business-api.tiktok.com`, NOT `business.tiktok.com`.**
+  Using the latter redirects to `/not-found`. The Marketing API portal lives
+  on the API subdomain. Fixed in `scripts/tiktok_oauth.py`.
+- **Token lifetimes:** access_token = 24 h, refresh_token = 365 d. Daily
+  `--refresh` runs needed unless the collector auto-refreshes per call.
+- **Redirect URI must be registered** at TikTok Developer Portal → app →
+  Settings → Redirect URIs: `http://localhost:8080/tiktok/callback`.
+
 ## Microsoft Ads OAuth
 
 - **Work accounts (Azure AD) are blocked.** Signing in with `@qoyod.com`
