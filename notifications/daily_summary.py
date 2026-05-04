@@ -314,15 +314,9 @@ def build_daily_summary_text(spikes: list | None = None,
     """Clean, human-readable daily summary for #notify."""
     riyadh    = timezone(timedelta(hours=3))
     today_str = datetime.now(riyadh).strftime("%d %b %Y")
-    # Dashboard URL = Hex published app (replaces the deprecated Flask HTML report)
-    url = os.getenv(
-        "DASHBOARD_URL",
-        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
-    )
-    activity_url = os.getenv(
-        "ACTIVITY_DASHBOARD_URL",
-        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D/latest",
-    )
+    # Dashboard URLs — must be set in .env / Railway secrets
+    url          = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
+    activity_url = os.getenv("ACTIVITY_DASHBOARD_URL") or "https://app.hex.tech"
 
     counts       = _asana_task_counts()
     action_lines = _agent_actions_lines(audit_tasks or [], health_tasks or [])

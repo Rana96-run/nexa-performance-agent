@@ -108,13 +108,7 @@ def refresh_status():
 
 
 
-_HEX_DASHBOARD = (
-    os.getenv(
-        "DASHBOARD_URL",
-        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/"
-        "Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
-    )
-)
+_HEX_DASHBOARD = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
 
 
 @app.route("/")

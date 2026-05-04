@@ -374,12 +374,8 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
     riyadh   = _tz(timedelta(hours=3))
     today_str = date.today().strftime("%d %b %Y")
     emoji    = CADENCE_EMOJI.get(cadence, "📋")
-    # Dashboard URL = Hex published app (replaces deprecated Flask HTML report)
-    url = os.getenv(
-        "DASHBOARD_URL",
-        "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
-    )
-    _DASHBOARD_SHORT = "https://app.hex.tech/app/Qoyod-marketing-performance/latest"
+    # Dashboard URL — must be set in .env / Railway secrets
+    url = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
 
     lines = [
         f"{emoji} *{cadence.title()} Performance Check — {today_str}*",
