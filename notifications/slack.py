@@ -13,8 +13,13 @@ client = WebClient(token=SLACK_BOT_TOKEN)
 
 # ── Pending approval store ────────────────────────────────────────────────────
 # Persists ts → metadata so the events endpoint can look up what to execute.
+# Stored in memory/ (alongside pending_keyword_approvals.json) so it survives
+# process restarts within a deploy. NOTE: Railway redeploys wipe the filesystem —
+# if a redeploy happens between the nightly post (03:00) and the morning ✅,
+# the file is lost and the reaction silently does nothing. Mitigation: avoid
+# pushing to main between 03:00–08:00 Riyadh. Long-term fix: Railway Volume.
 
-_PENDING_FILE = Path(os.getenv("DATA_DIR", "/tmp")) / "pending_approvals.json"
+_PENDING_FILE = Path(os.getenv("DATA_DIR", str(Path(__file__).parent.parent / "memory"))) / "pending_approvals.json"
 
 
 def _load_pending() -> dict:

@@ -39,7 +39,7 @@ Before posting to Slack or creating Asana tasks, always verify:
 1. **Slack daily format**: main message has dashboard URL (plain text), peak numbers (top + worst per channel with CPQL), agent actions spelled out in full (never abbreviations like IS/QS). Follow-up message has recommendations referencing Asana tasks + `#approvals` channel.
 2. **Naming convention applied**: `{Channel}_{Type}_{Language}_{Product}_{Audience}` — no "Prospecting" audience, products normalized, LinkedIn UTM mapping correct (Group=utm_campaign, Campaign=utm_audience, Ad=utm_content).
 3. **Asana task footer present**: every task description ends with Created, Due, Priority, Type, Channel, Asset level, Action.
-4. **Approval flow correct**: scale/pause are auto-executed (logged as `EXECUTED:`); optimize/junk trigger an approval request to `#approvals` — never say "pending approval" for scale/pause.
+4. **Approval flow correct**: ALL actions go to ONE nightly #approvals digest. ✅ reaction executes all scale + pause items; ❌ skips them. optimize/junk/drilldown are review-only — Asana tasks already created, no further execution. Never auto-execute scale or pause without ✅.
 
 A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically before `slack_post_message` and `create_tasks`.
 

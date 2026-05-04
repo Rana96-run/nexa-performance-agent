@@ -407,6 +407,24 @@ def slack_events():
     return Response("", status=200)
 
 
+# ─── Startup: warn if pending approvals were lost on redeploy ─────────────────
+
+def _check_pending_on_startup():
+    """Log any surviving pending approvals so we know the state on boot."""
+    try:
+        from notifications.slack import _load_pending
+        pending = _load_pending()
+        if pending:
+            print(f"[startup] {len(pending)} pending approval(s) survived redeploy: "
+                  f"{list(pending.keys())}")
+        else:
+            print("[startup] No pending approvals on disk.")
+    except Exception as e:
+        print(f"[startup] Could not read pending approvals: {e}")
+
+_check_pending_on_startup()
+
+
 # ─── Entrypoint ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
