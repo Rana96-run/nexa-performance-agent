@@ -144,7 +144,7 @@ mirror (and extend) the Looker boards the team already trusts.
 ## Done this session (2026-05-04) — continuation
 
 - [x] **Landing page performance analysis built** — `final_url` added to `ads_daily` schema and Google Ads BQ collector. New BQ views: `v_lp_performance_weekly` (week × lp_type × campaign, joins HubSpot via campaign_name) and `v_lp_weekly_summary` (week × lp_type rollup). 669 rows backfilled (30 days). Data shows HubSpot LP (`campaigns.qoyod.com`) CPQL ~$127 vs WordPress LP (`lp.qoyod.com`) CPQL ~$713 for week of Apr 27. `google_ads_ads` collector added to `reporting_scheduler.py` so `final_url` updates every 6h.
-- [ ] **Add LP comparison cell to Hex dashboard** — SQL below. Filter starts 2026-05-04 (WordPress LP test start). Title: "🏠 Landing Page Performance — Weekly (Test from 2026-05-04)".
+- [x] **Add LP comparison cell to Hex dashboard** — SQL below. Filter starts 2026-05-04 (WordPress LP test start). Title: "🏠 Landing Page Performance — Weekly (Test from 2026-05-04)".
   ```sql
   SELECT week_start, lp_type, lp_domain, active_campaigns,
          ROUND(spend,2) AS spend_usd, impressions, clicks,

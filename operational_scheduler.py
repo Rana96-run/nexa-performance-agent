@@ -35,42 +35,6 @@ def _run_with_heartbeat(cadence: str):
                        duration_s=time.time() - t0)
 
 
-def _post_report_ready(spikes: list | None = None,
-                       audit_tasks: list | None = None,
-                       health_tasks: list | None = None,
-                       health_findings: list | None = None):
-    """Post ONE Slack message to #notify: report link + performance + alerts + actions + Asana."""
-    try:
-        from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
-        from notifications.quiet import is_quiet, quiet_log
-        from notifications.daily_summary import build_daily_summary_text
-
-        text = build_daily_summary_text(
-            spikes=spikes or [],
-            audit_tasks=audit_tasks or [],
-            health_tasks=health_tasks or [],
-        )
-
-        if is_quiet():
-            quiet_log("ops-scheduler", SLACK_CHANNEL_NOTIFY, text)
-            return
-
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=text)
-        print(f"[ops-scheduler] Posted daily summary to Slack")
-        try:
-            from logs.activity_logger import log_activity_async
-            log_activity_async(role="daily_agent", action="post_daily_summary",
-                               status="success", channel="all",
-                               details={"spikes": len(spikes or []),
-                                        "audit_tasks": len(audit_tasks or []),
-                                        "health_tasks": len(health_tasks or [])})
-        except Exception:
-            pass
-    except Exception as e:
-        print(f"[ops-scheduler] Daily summary post failed (non-fatal): {e}")
-
-
 def _refresh_bigquery():
     """Run all BQ collectors + view refresh once before report generation."""
     print("[ops-scheduler] Refreshing BigQuery before report generation…")

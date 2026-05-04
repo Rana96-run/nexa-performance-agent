@@ -519,7 +519,7 @@ def run_cadence(cadence: str, force: bool = False):
                 details={"cadence": cadence, "total_attempted": len(tasks)})
 
     # 6. Post Slack summary.
-    #    Daily: _post_report_ready() in operational_scheduler owns the channel.
+    #    Daily: _post_weekly_summary() in operational_scheduler owns the channel.
     #    Weekly: no Slack post — tasks go to Asana only (per user instruction).
     #    Monthly/quarterly: still post.
     if cadence not in ("daily", "weekly"):
