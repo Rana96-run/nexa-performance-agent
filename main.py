@@ -693,11 +693,14 @@ def weekly_search_term_review() -> dict:
 # ---------------------------------------------------------------------------
 
 def execute_channel_action(decision: dict):
-    action  = (decision.get("action") or "").lower()
-    channel = (decision.get("channel") or "").lower()
-    entity  = (decision.get("entity") or "").lower()
-    notes   = decision.get("notes", "")
+    action     = (decision.get("action") or "").lower()
+    channel    = (decision.get("channel") or "").lower()
+    entity     = (decision.get("entity") or "").lower()
+    notes      = decision.get("notes", "")
+    # new_budget may be passed for scale/adjust actions (float, USD/day)
+    new_budget = decision.get("new_budget")
 
+    # ── PAUSE ────────────────────────────────────────────────────────────────
     if action.startswith("pause"):
         if "google" in channel:
             if "keyword" in entity and notes:
@@ -706,9 +709,12 @@ def execute_channel_action(decision: dict):
             elif "ad" in entity and notes:
                 gads_exec.set_ad_status(notes, "PAUSED")
                 print(f"✅ Paused Google Ads ad: {notes}")
+            elif notes:
+                gads_exec.set_campaign_status(notes, "PAUSED")
+                print(f"✅ Paused Google Ads campaign: {notes}")
         elif "meta" in channel and notes:
-            meta_exec.set_ad_status(notes, "PAUSED")
-            print(f"✅ Paused Meta ad: {notes}")
+            meta_exec.pause_campaign(notes)
+            print(f"✅ Paused Meta campaign: {notes}")
         elif "tiktok" in channel and notes:
             if "campaign" in entity:
                 tiktok_exec.pause_campaign(notes)
@@ -730,6 +736,56 @@ def execute_channel_action(decision: dict):
             from executors import linkedin as li_exec
             li_exec.pause_campaign(notes)
             print(f"✅ Paused LinkedIn campaign: {notes}")
+
+    # ── SCALE / ADJUST BUDGET ────────────────────────────────────────────────
+    elif action in ("scale", "adjust", "increase_budget", "scale_budget"):
+        if not (notes and new_budget):
+            print(f"⚠️  Scale action requires notes (campaign_id) and new_budget — skipping.")
+            return
+        budget = float(new_budget)
+        if "google" in channel:
+            customer_id = decision.get("account_id") or decision.get("customer_id")
+            if not customer_id:
+                import os
+                customer_id = os.getenv("GOOGLE_ADS_CUSTOMER_IDS", "").split(",")[0].strip().replace("-", "")
+            gads_exec.set_campaign_budget(notes, budget, customer_id=customer_id)
+            print(f"✅ Google Ads campaign {notes} budget → ${budget}/day")
+        elif "meta" in channel:
+            meta_exec.update_campaign_budget(notes, budget)
+            print(f"✅ Meta campaign {notes} budget → ${budget}/day")
+        elif "tiktok" in channel:
+            tiktok_exec.set_campaign_budget(notes, budget)
+            print(f"✅ TikTok campaign {notes} budget → ${budget}/day")
+        elif "snapchat" in channel:
+            from executors import snapchat as snap_exec
+            snap_exec.set_campaign_budget(notes, budget)
+            print(f"✅ Snapchat campaign {notes} budget → ${budget}/day")
+        elif "linkedin" in channel:
+            from executors import linkedin as li_exec
+            li_exec.set_campaign_budget(notes, budget)
+            print(f"✅ LinkedIn campaign {notes} budget → ${budget}/day")
+        else:
+            print(f"⚠️  Scale: unknown channel '{channel}' — Asana task is the execution record.")
+
+    # ── ENABLE ───────────────────────────────────────────────────────────────
+    elif action in ("enable", "resume", "unpause"):
+        if "google" in channel and notes:
+            gads_exec.set_campaign_status(notes, "ENABLED")
+            print(f"✅ Enabled Google Ads campaign: {notes}")
+        elif "meta" in channel and notes:
+            meta_exec.activate_campaign(notes)
+            print(f"✅ Enabled Meta campaign: {notes}")
+        elif "snapchat" in channel and notes:
+            from executors import snapchat as snap_exec
+            snap_exec.enable_campaign(notes)
+            print(f"✅ Enabled Snapchat campaign: {notes}")
+        elif "linkedin" in channel and notes:
+            from executors import linkedin as li_exec
+            li_exec.enable_campaign(notes)
+            print(f"✅ Enabled LinkedIn campaign: {notes}")
+        else:
+            print(f"Action '{action}' approved — Asana task is the execution record.")
+
     else:
         print(f"Action '{action}' approved — Asana task is the execution record.")
 

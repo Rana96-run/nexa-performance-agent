@@ -187,21 +187,95 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] Zapier monitor failed (non-fatal): {e}")
 
-    # 4. Main Slack message + follow-up recommendations message
-    _post_report_ready(
-        spikes=spikes,
-        audit_tasks=audit_tasks,
-        health_tasks=health_tasks,
-        health_findings=health_findings,
-    )
+    # 4. Audit is SILENT — Asana tasks are the record. No daily Slack post.
+    #    Weekly Slack summary goes out Monday night (step below).
+    _log_nightly_audit_to_bq(audit_tasks, health_tasks)
 
     today = date.today()
     if today.weekday() == 0:                              # Monday -> weekly
         _run_with_heartbeat("weekly")
+        _post_weekly_summary(                             # Weekly Slack digest
+            spikes=spikes,
+            audit_tasks=audit_tasks,
+            health_tasks=health_tasks,
+            health_findings=health_findings,
+        )
     if today.day == 1:                                    # 1st -> monthly
         _run_with_heartbeat("monthly")
     if today.day == 1 and today.month in (1, 4, 7, 10):  # Quarter start
         _run_with_heartbeat("quarterly")
+
+
+def _log_nightly_audit_to_bq(audit_tasks: list, health_tasks: list):
+    """Silently log nightly audit counts to BQ activity log — no Slack."""
+    try:
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="ops_scheduler",
+            action="nightly_audit_complete",
+            status="success",
+            details={
+                "audit_tasks_created": len(audit_tasks),
+                "health_tasks_created": len(health_tasks),
+            },
+        )
+    except Exception as e:
+        print(f"[ops-scheduler] BQ audit log failed (non-fatal): {e}")
+
+
+def _post_weekly_summary(spikes: list | None = None,
+                          audit_tasks: list | None = None,
+                          health_tasks: list | None = None,
+                          health_findings: list | None = None):
+    """Post a consolidated weekly summary to #notify every Monday night."""
+    try:
+        from slack_sdk import WebClient
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
+        from notifications.quiet import is_quiet, quiet_log
+        from notifications.daily_summary import build_daily_summary_text, build_recommendations_text
+        from datetime import datetime, timezone, timedelta
+
+        riyadh = timezone(timedelta(hours=3))
+        week_end   = datetime.now(riyadh).strftime("%d %b")
+        week_start = (datetime.now(riyadh) - timedelta(days=6)).strftime("%d %b")
+
+        # Reuse daily summary builder — it already shows 7d performance,
+        # alerts, and Asana counts, which is exactly the weekly read.
+        base_text = build_daily_summary_text(
+            spikes=spikes or [],
+            audit_tasks=audit_tasks or [],
+            health_tasks=health_tasks or [],
+        )
+        # Prepend week label
+        header = f"*Weekly Summary  {week_start} – {week_end}*\n"
+        text = header + base_text
+
+        if is_quiet():
+            quiet_log("ops-scheduler-weekly", SLACK_CHANNEL_NOTIFY, text)
+            return
+
+        client = WebClient(token=SLACK_BOT_TOKEN)
+        client.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=text)
+
+        # Follow-up recommendations thread if health findings exist
+        if health_findings:
+            rec_text = build_recommendations_text(health_findings)
+            if rec_text:
+                client.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=rec_text)
+
+        print(f"[ops-scheduler] Posted weekly summary to Slack")
+
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="ops_scheduler",
+            action="post_weekly_summary",
+            status="success",
+            details={"spikes": len(spikes or []),
+                     "audit_tasks": len(audit_tasks or []),
+                     "health_tasks": len(health_tasks or [])},
+        )
+    except Exception as e:
+        print(f"[ops-scheduler] Weekly summary post failed (non-fatal): {e}")
 
 
 def _run_health_check():
