@@ -59,13 +59,12 @@ def _post_report_ready(spikes: list | None = None,
         WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=text)
         print(f"[ops-scheduler] Posted daily summary to Slack")
         try:
-            from logs.csv_logger import log_async as _csv_log
-            _csv_log(role="daily_agent", action_type="notify",
-                     action="posted daily summary to #notify",
-                     channel="all", status="ok",
-                     details={"spikes": len(spikes or []),
-                              "audit_tasks": len(audit_tasks or []),
-                              "health_tasks": len(health_tasks or [])})
+            from logs.activity_logger import log_activity_async
+            log_activity_async(role="daily_agent", action="post_daily_summary",
+                               status="success", channel="all",
+                               details={"spikes": len(spikes or []),
+                                        "audit_tasks": len(audit_tasks or []),
+                                        "health_tasks": len(health_tasks or [])})
         except Exception:
             pass
     except Exception as e:

@@ -53,6 +53,7 @@ COLLECTORS = [
     # These use the same API credentials — no new infrastructure needed.
     ("google_ads_adgroups",  google_ads_bq.collect_adgroups_and_write),
     ("google_ads_keywords",  google_ads_bq.collect_keywords_and_write),
+    ("google_ads_ads",       google_ads_bq.collect_ads_and_write),
     ("meta_adsets",          meta_bq.collect_adsets_and_write),
     ("meta_ads",             meta_bq.collect_ads_and_write),
     ("tiktok_adgroups",      tiktok_bq.collect_adgroups_and_write),
@@ -77,8 +78,6 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     print(f"\n{'='*60}\n[scheduler] Refresh start @ {started.isoformat()}"
           f"  (mode={mode}{f' days={days}' if days else ''})\n{'='*60}")
 
-    from logs.csv_logger import log as csv_log, sync_to_bq
-
     results = {}
     for name, fn in COLLECTORS:
         t0 = time.time()
@@ -90,32 +89,30 @@ def run_refresh(incremental: bool = True, days: int | None = None):
             dt = time.time() - t0
             results[name] = (True, n, dt)
             log.info(f"{name}: {n} rows in {dt:.1f}s")
-            csv_log(role="bq_refresh", action_type="collect",
-                    action=f"collected {name}: {n} rows",
-                    channel=name if name not in ("windsor", "views") else "all",
-                    status="ok", count=n,
-                    details={"mode": mode, "duration_s": round(dt, 1)})
+            log_activity_async(
+                role="bq_refresh", action=f"collect_{name}", status="success",
+                channel=name, rows_affected=n, duration_s=dt,
+                details={"mode": mode},
+            )
         except Exception as e:
             dt = time.time() - t0
             results[name] = (False, str(e), dt)
             log.error(f"{name} FAILED after {dt:.1f}s: {e}")
             traceback.print_exc()
-            csv_log(role="bq_refresh", action_type="collect",
-                    action=f"collect {name} FAILED",
-                    channel=name, status="failed",
-                    details={"error": str(e), "mode": mode})
+            log_activity_async(
+                role="bq_refresh", action=f"collect_{name}", status="failed",
+                channel=name, duration_s=dt, details={"error": str(e), "mode": mode},
+            )
 
     try:
         refresh_all_views()
         results["views"] = (True, "ok", 0)
-        csv_log(role="bq_refresh", action_type="refresh",
-                action="refreshed all BQ views", status="ok")
+        log_activity_async(role="bq_refresh", action="refresh_views", status="success")
     except Exception as e:
         results["views"] = (False, str(e), 0)
         print(f"[scheduler] view refresh FAILED: {e}")
-        csv_log(role="bq_refresh", action_type="refresh",
-                action="BQ view refresh FAILED", status="failed",
-                details={"error": str(e)})
+        log_activity_async(role="bq_refresh", action="refresh_views",
+                           status="failed", details={"error": str(e)})
 
     ended = datetime.now(timezone.utc)
     elapsed = (ended - started).total_seconds()
@@ -138,30 +135,11 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         log.warning(f"heartbeat emit failed: {e}")
 
-    # ── CSV activity log summary row + BQ sync ───────────────────────────────
-    csv_log(
-        role="bq_refresh", action_type="refresh",
-        action=f"refresh cycle complete ({mode}): {total_rows:,} rows, "
-               f"{len(ok_items)} ok, {len(bad_items)} failed",
-        status=status, count=total_rows,
-        details={"mode": mode, "collectors_ok": ok_items,
-                 "collectors_failed": bad_items, "duration_s": round(elapsed, 1)},
-    )
-    sync_to_bq()  # upload CSV → agent_activity_log so Hex can query it
-
-    # ── Legacy BQ activity log ────────────────────────────────────────────────
     log_activity_async(
-        role="bq_refresh",
-        action="refresh_complete",
-        status=status,
-        details={
-            "mode":               mode,
-            "collectors_ok":      ok_items,
-            "collectors_failed":  bad_items,
-            "total_rows":         total_rows,
-        },
-        rows_affected=total_rows,
-        duration_s=elapsed,
+        role="bq_refresh", action="refresh_complete", status=status,
+        rows_affected=total_rows, duration_s=elapsed,
+        details={"mode": mode, "collectors_ok": ok_items,
+                 "collectors_failed": bad_items, "total_rows": total_rows},
     )
 
     return results

@@ -11,7 +11,7 @@ keys here BEFORE coding so we never chase "is it connected?" again.
 | Meta (FB+IG) | ✅ connected (2 accts) | ✅ connected | Page token: permanent | Nov 2025 deprecated many metrics — see 08 |
 | Snapchat | ✅ connected (2 accts) | n/a | refresh token (perpetual) | Only `conversion_sign_ups` pulled; `conversion_lead` / `total_conversions` invalid |
 | HubSpot | ✅ read-only | ✅ read-only | Private app token (perpetual) | NEVER write to HubSpot |
-| TikTok | ⏳ account IDs present, token pending | ❌ | — | `TIKTOK_AD_ACCOUNT_2024/2025` + pixels set; access token still blocked on app approval |
+| TikTok | ✅ connected (2 accts) | n/a | access_token perpetual | Both Qoyod 2024 (`7304642840767021057`) and Qoyod 2025 (`7565475813811093521`) authorized via app `7635928165407260689`. Token does NOT expire. No refresh flow needed. Re-run `scripts/tiktok_oauth.py` only if app secret rotates. **TZ note: 2025 acct is Asia/Kuwait — should be Asia/Riyadh for consistency.** |
 | Microsoft Ads | ❌ blocked on qoyod IT | n/a | — | Account `G1206XJR`, Customer `254476670` set. Tenant locked to qoyod.com Azure AD; needs Global Admin to run `New-MgServicePrincipal -AppId d42ffc93-c136-491d-b4fd-6f18168c68fd`. See `09_open_tasks.md` + `08_pitfalls.md` |
 | LinkedIn organic | ⏳ OAuth app set, tokens re-minted needed | — | **60 days** | `LI_CLIENT_ID/SECRET` set; `LI_ACCESS_TOKEN/ORG_URN/AD_ACCOUNT_URN` currently empty — rerun `scripts/linkedin_oauth.py` then `linkedin_refresh.py` |
 | LinkedIn Ads | ⏳ same as organic | n/a | 60 days | Auto-refresh helper `scripts/linkedin_refresh.py` now exists |

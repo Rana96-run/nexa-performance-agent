@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from analysers.google_ads_audit import run_full_audit
 from executors.asana import create_task
+from logs.activity_logger import log_activity_async
 
 
 def _is_card(findings: list[dict]) -> str:
@@ -349,6 +350,10 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         )
         out.append((f"kw-auto-paused ({len(kw_paused)})", gid))
 
+    log_activity_async(role="google_ads_audit", action="create_audit_tasks",
+                       status="success", channel="google_ads",
+                       rows_affected=len(out),
+                       details={"tasks": [t[0] for t in out]})
     return out
 
 

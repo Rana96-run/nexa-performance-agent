@@ -117,16 +117,32 @@ Meta_LeadGen_AR_Invoice_Prospecting        ✗ raises ValueError — use Interes
 
 All executors delegate to `executors/naming.py::prefixed()` — never bypass it.
 
+## APPROVAL REQUIRED BEFORE ANY PAUSE / ENABLE / CREATE (non-negotiable)
+
+**Never autonomously pause, enable, or create any ad, keyword, campaign, or ad group.**
+Every write action — no matter how obvious — must go through one of these two paths:
+
+1. **Slack approval** — post findings to `#approvals`, wait for ✅/❌ reaction, then execute.
+2. **Manual prompt** — user runs `python scripts/bulk_ads.py execute` or
+   `python scripts/bulk_keywords.py ...` themselves after reviewing the `audit` output.
+
+The nightly `bulk_ads.py audit` and keyword review run automatically but only **report**.
+They NEVER execute without explicit approval. If the agent identifies pause candidates,
+it posts a summary to `#approvals` and waits. It does not call `execute` on its own.
+
+This applies to everything: Meta ads, Google Ads keywords, campaigns, ad groups.
+Exception: adding **negative keywords** can be direct-executed (no spend at risk).
+
 ## Keyword management rules (non-negotiable)
 
 - **Never remove a keyword unless its all-time spend = $0.** Only delete when zero
   cost ever. Low QS, low CTR, or poor performance = pause, not remove.
 - **QS < 5 pause rule — CPA exception applies:**
   - If QS < 5 BUT conv ≥ 3 AND CPA ≤ $90 AND running 30+ days → **leave ENABLED**
-  - If QS < 5 AND (conv < 3 OR CPA > $90) → **PAUSE**
-  - If QS < 5, CPA was ≤ $90, but CPA has since risen above $90 → **PAUSE**
+  - If QS < 5 AND (conv < 3 OR CPA > $90) → **PAUSE** (after approval)
+  - If QS < 5, CPA was ≤ $90, but CPA has since risen above $90 → **PAUSE** (after approval)
   - QS 0 (not set / PMax keywords) → do nothing, cannot evaluate
-- **Negative keywords** can be added freely (no spend history requirement).
+- **Negative keywords** can be added freely (no approval needed).
 
 ## Ad pause rules (non-negotiable)
 

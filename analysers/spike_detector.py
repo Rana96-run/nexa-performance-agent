@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from logs.activity_logger import log_activity_async
 from typing import Optional
 
 # Thresholds — tune in .env without redeploy
@@ -248,6 +249,10 @@ def detect_spikes() -> list[dict]:
                     "pp": drate_diff, "yesterday_pct": drate_y, "baseline_pct": drate_b,
                 })
 
+    log_activity_async(role="spike_detector", action="detect_spikes",
+                       status="success", channel="all",
+                       rows_affected=len(spikes),
+                       details={"spikes": [f"{s['channel']}:{s['metric']}" for s in spikes]})
     return spikes
 
 

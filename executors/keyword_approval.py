@@ -38,21 +38,21 @@ def post_keyword_approval(add_kw: list[dict], add_neg: list[dict]) -> str | None
     if not add_kw and not add_neg:
         return None
 
-    from logs.csv_logger import log_async as csv_log_async
+    from logs.activity_logger import log_activity_async as _bq_log
 
     if add_neg:
         _execute_negatives(add_neg)
         print(f"[keyword-approval] Direct-executed {len(add_neg)} negatives (no Slack)")
-        csv_log_async(role="keyword_approval", action_type="execute",
+        _bq_log(role="keyword_approval",
                       action=f"direct-executed {len(add_neg)} negative keywords",
-                      channel="google_ads", status="ok", count=len(add_neg),
+                      channel="google_ads", status="ok", rows_affected=len(add_neg),
                       details={"terms": [t.get("query", "") for t in add_neg[:10]]})
 
     if add_kw:
         print(f"[keyword-approval] {len(add_kw)} converting terms → Asana only (no Slack)")
-        csv_log_async(role="keyword_approval", action_type="task",
+        _bq_log(role="keyword_approval",
                       action=f"{len(add_kw)} converting search terms → Asana task",
-                      channel="google_ads", status="ok", count=len(add_kw),
+                      channel="google_ads", status="ok", rows_affected=len(add_kw),
                       details={"terms": [t.get("query", "") for t in add_kw[:10]]})
 
     return None
@@ -167,7 +167,7 @@ def _check_reaction(wc, channel: str, ts: str) -> str:
     try:
         resp = wc.reactions_get(channel=channel, timestamp=ts)
         reactions = [r["name"] for r in resp.get("message", {}).get("reactions", [])]
-        # Bot pre-adds both reactions with count=1; user approval adds count=2+
+        # Bot pre-adds both reactions with rows_affected=1; user approval adds rows_affected=2+
         for r in resp.get("message", {}).get("reactions", []):
             if r["name"] == "white_check_mark" and r["count"] >= 2:
                 return "approved"

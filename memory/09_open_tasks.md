@@ -130,7 +130,12 @@ mirror (and extend) the Looker boards the team already trusts.
 
 - [ ] **Microsoft Ads collector** (env scaffolding now present — unblocked
   once OAuth refresh token is minted)
-- [ ] **TikTok Ads collector** (account IDs + pixels present; pending token)
+- [x] **TikTok Ads collector** — connected 2026-05-04. Both accts (Qoyod 2024 + 2025) pulled 56 rows to `campaigns_daily` on first run. Auth URL bug fixed (`business-api.tiktok.com`, not `business.tiktok.com`).
+- [x] **TikTok in daily Slack report** — automatic via `paid_channel_daily` view + `v_channel_key_map` (already had `tiktok → TikTok Ads`). $1,313 / 45 leads visible in last 7d.
+- [x] **TikTok in agent activities** — already in `main.py::collect_data()` line 128.
+- [x] **TikTok executor (post-approval pause)** — wired in `main.py::execute_channel_action()` with campaign/adgroup/ad routing. Default policy for missing-entity left as TODO for explicit decision (see `main.py:670+`).
+- [ ] **Wire Snapchat + LinkedIn pause routing** — same gap as TikTok had. `execute_channel_action()` only handles google/meta/tiktok. Should match the TikTok pattern.
+- [ ] **Add scale action wiring** — currently only `pause` is auto-executed; `scale`/`adjust` fall through to "Asana task is the execution record". CLAUDE.md says scale/pause should auto-execute. Build `set_campaign_budget()` calls per channel using existing executors (e.g. `tiktok_exec.set_campaign_budget`, `gads_exec.set_campaign_budget`, etc).
 - [ ] Snapchat organic (if Snap exposes public page metrics — doubtful)
 - [ ] Weekly email digest via existing Gmail SMTP (creds set) of top KPIs
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)

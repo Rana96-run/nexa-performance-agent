@@ -1,10 +1,11 @@
 """
 Google Ads -> BigQuery collector.
-Pulls per-day metrics at campaign / ad-group / keyword grain.
+Pulls per-day metrics at campaign / ad-group / keyword / ad grain.
 
   collect_and_write()          -> campaigns_daily
   collect_adgroups_and_write() -> adsets_daily
   collect_keywords_and_write() -> keywords_daily
+  collect_ads_and_write()      -> ads_daily  (includes final_url for LP analysis)
 """
 import os
 from datetime import date, timedelta, datetime, timezone
@@ -257,6 +258,84 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False):
                        key_fields=["date", "channel", "adgroup_id", "keyword_id"])
 
 
+# ── Ad level → ads_daily (with final_url for LP analysis) ─────────────────────
+
+def collect_ads_and_write(days: int = None, incremental: bool = False):
+    """Ad grain → ads_daily. Includes final_url so LP type (HubSpot vs WordPress) can be tracked."""
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
+
+    query = f"""
+        SELECT
+            customer.id,
+            customer.currency_code,
+            campaign.id,
+            campaign.name,
+            ad_group.id,
+            ad_group.name,
+            ad_group_ad.ad.id,
+            ad_group_ad.ad.name,
+            ad_group_ad.ad.final_urls,
+            ad_group_ad.status,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.clicks,
+            metrics.impressions,
+            metrics.ctr,
+            segments.date
+        FROM ad_group_ad
+        WHERE segments.date BETWEEN '{start}' AND '{end}'
+          AND campaign.status != 'REMOVED'
+          AND ad_group.status != 'REMOVED'
+          AND ad_group_ad.status != 'REMOVED'
+    """
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+    accounts = _customer_ids()
+    print(f"[google_ads] ads {start} -> {end} | {len(accounts)} account(s)")
+    for cid in accounts:
+        count = 0
+        try:
+            for r in ga.search(customer_id=cid, query=query):
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
+                conv         = r.metrics.conversions
+                # final_urls is a repeated field; take first URL or None
+                final_urls   = list(r.ad_group_ad.ad.final_urls)
+                final_url    = final_urls[0] if final_urls else None
+                rows.append({
+                    "date":          str(r.segments.date),
+                    "channel":       "google_ads",
+                    "account_id":    cid,
+                    "campaign_id":   str(r.campaign.id),
+                    "campaign_name": r.campaign.name,
+                    "adset_id":      str(r.ad_group.id),
+                    "adset_name":    r.ad_group.name,
+                    "ad_id":         str(r.ad_group_ad.ad.id),
+                    "ad_name":       r.ad_group_ad.ad.name or "",
+                    "status":        r.ad_group_ad.status.name,
+                    "spend":         round(spend, 2),
+                    "impressions":   int(r.metrics.impressions),
+                    "clicks":        int(r.metrics.clicks),
+                    "ctr":           round(r.metrics.ctr * 100, 4),
+                    "leads":         int(conv),
+                    "conversions":   float(conv),
+                    "currency":      "USD",
+                    "final_url":     final_url,
+                    "updated_at":    now,
+                })
+                count += 1
+        except Exception as e:
+            print(f"[google_ads]   ads account {cid} error: {e}")
+        print(f"[google_ads]   ads account {cid}: {count} rows")
+
+    return upsert_rows("ads_daily", rows,
+                       key_fields=["date", "channel", "ad_id"])
+
+
 if __name__ == "__main__":
     import sys
     cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -267,3 +346,5 @@ if __name__ == "__main__":
         print(f"adgroups:  {collect_adgroups_and_write(days=days)} rows")
     if cmd in ("all", "keywords"):
         print(f"keywords:  {collect_keywords_and_write(days=days)} rows")
+    if cmd in ("all", "ads"):
+        print(f"ads:       {collect_ads_and_write(days=days)} rows")
