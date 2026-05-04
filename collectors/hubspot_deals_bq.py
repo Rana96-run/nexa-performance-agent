@@ -147,10 +147,11 @@ def collect_and_write(days: int = None, start_date: date = None,
     since_ms = int(datetime(start.year, start.month, start.day).timestamp() * 1000)
 
     # bucket by (date, channel, pipeline, stage_status, utm_*)
+    # date = closedate for won deals (revenue recognised at close, not creation)
+    # date = createdate for open/lost deals (tracks pipeline entry)
     # Amounts are accumulated twice: once in USD (primary), once in native currency.
     buckets = defaultdict(lambda: {
         "n": 0, "won": 0, "lost": 0, "open": 0,
-        "max_closedate_won": None,   # latest closedate among won deals in this bucket
         "amount": 0.0, "won_amount": 0.0, "lost_amount": 0.0, "open_amount": 0.0,
         "amount_native": 0.0, "won_amount_native": 0.0,
         "lost_amount_native": 0.0, "open_amount_native": 0.0,
@@ -222,8 +223,12 @@ def collect_and_write(days: int = None, start_date: date = None,
                 else:
                     src_label = explicit_src or "Other"
 
+                # Won deals use closedate as the partition date so ROAS can be
+                # filtered by when revenue was actually recognised, not when the
+                # deal was created. Open/lost use createdate for pipeline reporting.
+                partition_date = (closed if (status == "won" and closed) else created)
                 key = (
-                    created,
+                    partition_date,
                     src_label,
                     plabel or "Unknown",
                     status,
@@ -243,8 +248,6 @@ def collect_and_write(days: int = None, start_date: date = None,
                     b["won"] += 1
                     b["won_amount"] += amount
                     b["won_amount_native"] += amount_native
-                    if closed and (b["max_closedate_won"] is None or closed > b["max_closedate_won"]):
-                        b["max_closedate_won"] = closed
                 elif status == "lost":
                     b["lost"] += 1
                     b["lost_amount"] += amount
@@ -307,7 +310,6 @@ def collect_and_write(days: int = None, start_date: date = None,
             "amount_open_native": round(b["open_amount_native"], 2),
             "currency_native": native_label,
             "avg_time_in_current_stage_ms": avg_time,
-            "closedate_won": b["max_closedate_won"],  # latest close date for won deals
             "updated_at": now,
         })
 
@@ -348,7 +350,6 @@ def _ensure_table_exists():
         bigquery.SchemaField("amount_open_native", "FLOAT64"),
         bigquery.SchemaField("currency_native", "STRING"),
         bigquery.SchemaField("avg_time_in_current_stage_ms", "FLOAT64"),
-        bigquery.SchemaField("closedate_won", "DATE"),  # latest close date among won deals in bucket
         bigquery.SchemaField("updated_at", "TIMESTAMP"),
     ]
     table = bigquery.Table(table_id, schema=schema)
