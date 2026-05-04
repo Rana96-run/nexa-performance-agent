@@ -109,6 +109,19 @@ def refresh_status():
 
 
 _HEX_DASHBOARD = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
+_HEX_ACTIVITY  = os.getenv("ACTIVITY_DASHBOARD_URL") or "https://app.hex.tech"
+
+
+@app.route("/dashboard")
+def dashboard_short():
+    """Short link → Hex performance dashboard."""
+    return redirect(_HEX_DASHBOARD, code=302)
+
+
+@app.route("/activity")
+def activity_short():
+    """Short link → Hex agent activity dashboard."""
+    return redirect(_HEX_ACTIVITY, code=302)
 
 
 @app.route("/")
@@ -117,7 +130,7 @@ _HEX_DASHBOARD = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
 @app.route("/reports/latest")
 @app.route("/reports/<report_date>")
 def dashboard_redirect(**kwargs):
-    """All old HTML report URLs → Hex performance dashboard (permanent redirect)."""
+    """Legacy HTML report URLs → Hex performance dashboard."""
     return redirect(_HEX_DASHBOARD, code=301)
 
 
