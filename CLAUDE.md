@@ -117,6 +117,15 @@ Meta_LeadGen_AR_Invoice_Prospecting        ✗ raises ValueError — use Interes
 
 All executors delegate to `executors/naming.py::prefixed()` — never bypass it.
 
+## Keyword management rules (non-negotiable)
+
+- **Never remove a keyword unless its all-time spend = $0.** Low QS, low CTR, or
+  poor performance is never grounds for removal on its own. Fix it (improve ad copy
+  or landing page) or pause it — but only delete when there has been zero cost ever.
+- **Low QS (< 5) action = fix, not remove.** QS is Google's signal that ad copy or
+  landing page relevance needs improvement. Pausing is acceptable while fixing.
+- **Negative keywords** can be added freely (no spend history requirement).
+
 ## Two runtimes (don't confuse them)
 
 - `reporting_scheduler.py` — 6h data refresh, dashboard-only
