@@ -110,20 +110,19 @@ def refresh_status():
 
 # DASHBOARD_URL / ACTIVITY_DASHBOARD_URL = short Railway URLs shown in Slack/email/Asana
 # DASHBOARD_DEST_URL / ACTIVITY_DEST_URL = full Hex URLs that /dashboard and /activity redirect to
-_HEX_DASHBOARD = os.getenv("DASHBOARD_DEST_URL") or "https://app.hex.tech"
-_HEX_ACTIVITY  = os.getenv("ACTIVITY_DEST_URL")  or "https://app.hex.tech"
-
 
 @app.route("/dashboard")
 def dashboard_short():
     """Short link → Hex performance dashboard."""
-    return redirect(_HEX_DASHBOARD, code=302)
+    dest = os.getenv("DASHBOARD_DEST_URL") or "https://app.hex.tech"
+    return redirect(dest, code=302)
 
 
 @app.route("/activity")
 def activity_short():
     """Short link → Hex agent activity dashboard."""
-    return redirect(_HEX_ACTIVITY, code=302)
+    dest = os.getenv("ACTIVITY_DEST_URL") or "https://app.hex.tech"
+    return redirect(dest, code=302)
 
 
 @app.route("/")
