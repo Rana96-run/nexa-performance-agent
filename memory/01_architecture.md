@@ -8,7 +8,7 @@
   │ Google Ads│         │  Leads    │        │ FB/IG/YT/ │
   │   Meta    │         │  Deals    │        │ LinkedIn  │
   │ Snapchat  │         │ Pipelines │        │           │
-  │  TikTok*  │         └─────┬─────┘        └─────┬─────┘
+  │  TikTok   │         └─────┬─────┘        └─────┬─────┘
   │ Microsoft*│               │                    │
   │ LinkedIn* │               │                    │
   └─────┬─────┘               │                    │
@@ -24,13 +24,17 @@
                       ▼
         ┌───────────────────────────┐
         │   Views (collectors/views)│
-        │   channel_roas_daily/...  │
+        │   paid_channel_daily/...  │
         └─────────────┬─────────────┘
                       │
                       ▼
         ┌───────────────────────────┐
-        │ Streamlit (dashboard/*)   │  ← Replit-hosted
-        │ Slack agent (agent/*)     │  ← local or Replit, always-on
+        │ Hex dashboards (2)        │  ← Hex-hosted (read from BQ)
+        │   Performance: Qoyod-marketing-performance
+        │   Activity:    Nexa-Agent-Activity
+        │ Flask (reports/app.py)    │  ← Railway-hosted
+        │   /health, /api/refresh   │
+        │   /slack/events           │
         └───────────────────────────┘
 
 * = pending / blocked (see 02_credentials.md)
@@ -69,35 +73,47 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 | Runtime | Purpose | Cadence | Where |
 |---|---|---|---|
-| **Operational agent** | Slack approvals, pause/scale watchers, threshold alarms, Asana tasks, list building, landing page drafts | Always-on, reactive | `main.py daily` (local or Replit repl A) |
-| **Reporting scheduler** | Refresh BQ tables + views for the dashboard | Every 6h | `reporting_scheduler.py loop` (local or Replit repl B) |
+| **Operational scheduler** | Nightly: BQ refresh, spike detector, keyword approvals, Google Ads audit, campaign health, Asana tasks, Slack daily summary | 03:00 Riyadh nightly + 6h health checks | `operational_scheduler.py` → Railway |
+| **Reporting scheduler** | Refresh BQ tables + views for the Hex dashboard | Every 6h | `reporting_scheduler.py loop` → Railway |
 
-The 6h cadence is **only** for reporting. The operational agent doesn't wait.
+`main.py` = the LLM analysis layer (paid_media_strategist Claude role). Called by `operational_scheduler.py` for weekly/monthly/quarterly cadences only. Daily nightly work is deterministic (no LLM).
 
 ## Repo layout
 
 ```
 Nexa Performance Agent/
-├── agent/                  # operational agent (Slack, decisions)
+├── analysers/              # deterministic analysis (no LLM)
+│   ├── campaign_health.py        # 14d CPQL/CPL cross-channel audit
+│   ├── campaign_health_tasks.py  # → Asana tasks + scale/pause execution
+│   ├── google_ads_audit.py       # IS, QS, search terms analysis
+│   ├── google_ads_audit_tasks.py # → Asana tasks
+│   ├── spike_detector.py         # yesterday vs 7d baseline anomaly alerts
+│   ├── creative_performance.py   # per-creative qual rate (utm_content)
+│   └── ad_drilldown.py           # ad/keyword drill-down Markdown tables
 ├── collectors/             # BQ collectors (one per data source)
 │   ├── bq_writer.py        # shared: MERGE helper + schemas
-│   ├── views.py            # creates channel_roas_*, funnel, etc
-│   ├── google_ads_bq.py    # paid
-│   ├── meta_bq.py          # paid
-│   ├── snap_bq.py          # paid
-│   ├── meta_organic_bq.py  # organic (FB+IG)
-│   ├── youtube_bq.py       # organic
-│   ├── linkedin_bq.py      # organic + ads if approved
+│   ├── views.py            # creates paid_channel_daily, v_lp_*, etc
+│   ├── google_ads_bq.py    # campaign + adgroup + ad + keywords grain
+│   ├── meta_bq.py          # campaign + adset + ad grain
+│   ├── snap_bq.py          # campaign + adset + ad grain
+│   ├── tiktok_bq.py        # campaign + adgroup + ad grain
+│   ├── linkedin_bq.py      # campaign grain (token refresh needed)
+│   ├── microsoft_ads_bq.py # blocked on OAuth (see open_tasks.md)
 │   ├── hubspot_leads_bq.py # lead module daily buckets
-│   └── hubspot_deals_bq.py # deals daily buckets
-├── dashboard/              # Streamlit app for Replit
-├── scripts/                # one-off helpers (OAuth flows)
-├── reporting_scheduler.py  # 6h reporting refresh orchestrator
-├── main.py                 # operational agent entrypoint
-├── config.py               # env-driven config for all collectors
+│   ├── hubspot_deals_bq.py # deals daily buckets
+│   ├── windsor_bq.py       # Windsor.ai unified channel fallback
+│   └── zapier.py           # Zapier error monitor + auto-replay
+├── executors/              # write actions (pause, scale, Asana, keywords)
+├── notifications/          # Slack formatters (daily_summary, slack.py)
+├── logs/                   # activity_logger.py → agent_activity_log BQ
+├── scripts/                # OAuth flows + bulk_ads + bulk_keywords tools
+├── reports/app.py          # Flask: /health, /api/refresh, /slack/events
+├── operational_scheduler.py # nightly 03:00 Riyadh orchestrator
+├── reporting_scheduler.py  # 6h BQ refresh for Hex dashboards
+├── main.py                 # LLM cadence runner (weekly/monthly/quarterly)
+├── config.py               # env-driven config
 ├── memory/                 # ← this folder
-├── .claude/skills/         # reusable skill recipes
-└── md_files/               # long-form docs (Looker mapping, brand, etc)
+└── .claude/skills/         # reusable skill recipes
 ```
 
 ## Tech choices (and why)
@@ -106,6 +122,9 @@ Nexa Performance Agent/
   partition pruning keeps query cost near zero.
 - **Load jobs, not streaming inserts**: streaming buffer blocks DELETE for 90min,
   breaking idempotent re-runs. See `08_pitfalls.md`.
-- **Streamlit over Looker Studio**: full programmatic control, Qoyod branding,
-  can embed agent actions (pause/scale buttons). Looker is read-only from code.
-- **Replit** for hosting: user already pays for Core; avoids a separate VM.
+- **Hex over Streamlit**: Hex reads directly from BQ, survives Railway redeploys,
+  no separate hosting cost, collaborative editing. Dashboards at:
+  - Performance: `Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK`
+  - Activity: `Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`
+- **Railway** for hosting: single dyno runs both schedulers + Flask; env vars
+  managed via Railway dashboard or `scripts/sync_railway_env.py`.

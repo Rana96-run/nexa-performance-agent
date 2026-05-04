@@ -267,6 +267,9 @@ def _execute_approved_action(meta: dict) -> str:
             elif channel == "tiktok":
                 from executors.tiktok import set_campaign_budget
                 set_campaign_budget(campaign_id, new_budget, advertiser_id=account_id)
+            elif channel == "linkedin":
+                from executors.linkedin import set_campaign_budget
+                set_campaign_budget(campaign_id, new_budget)
             else:
                 return f"Channel `{channel}` not supported for auto-scale. Set budget to ${new_budget:.0f}/day manually."
             return f"Budget increased to ${new_budget:.0f}/day (+25%). Done."
@@ -289,6 +292,9 @@ def _execute_approved_action(meta: dict) -> str:
             elif channel == "tiktok":
                 from executors.tiktok import pause_campaign
                 pause_campaign(campaign_id, advertiser_id=account_id)
+            elif channel == "linkedin":
+                from executors.linkedin import pause_campaign
+                pause_campaign(campaign_id)
             else:
                 return f"Channel `{channel}` not supported for auto-pause. Pause `{campaign}` manually."
             return f"Campaign paused. Done."

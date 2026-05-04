@@ -710,9 +710,6 @@ def execute_channel_action(decision: dict):
             meta_exec.set_ad_status(notes, "PAUSED")
             print(f"✅ Paused Meta ad: {notes}")
         elif "tiktok" in channel and notes:
-            # TikTok has 3 entity levels — route by `entity`. The naming
-            # convention enforces that `notes` is the TikTok numeric ID for
-            # whichever level the entity says.
             if "campaign" in entity:
                 tiktok_exec.pause_campaign(notes)
                 print(f"✅ Paused TikTok campaign: {notes}")
@@ -723,17 +720,16 @@ def execute_channel_action(decision: dict):
                 tiktok_exec.pause_ad(notes)
                 print(f"✅ Paused TikTok ad: {notes}")
             else:
-                # TODO (your choice): pick the default policy when entity is missing
-                #   A) Safest — pause the whole campaign
-                #        tiktok_exec.pause_campaign(notes)
-                #        print(f"✅ Paused TikTok campaign (default): {notes}")
-                #   B) Surgical — assume ad-level (matches Meta default)
-                #        tiktok_exec.pause_ad(notes)
-                #        print(f"✅ Paused TikTok ad (default): {notes}")
-                #   C) Strict — skip with a log, force LLM to be explicit
-                #        print(f"⚠️ TikTok pause skipped — entity not specified: {notes}")
-                # Uncomment ONE of the three blocks above to set the project default.
-                print(f"⚠️ TikTok pause requested but entity not specified — skipped (notes={notes})")
+                tiktok_exec.pause_campaign(notes)
+                print(f"✅ Paused TikTok campaign (default): {notes}")
+        elif "snapchat" in channel and notes:
+            from executors import snapchat as snap_exec
+            snap_exec.pause_campaign(notes)
+            print(f"✅ Paused Snapchat campaign: {notes}")
+        elif "linkedin" in channel and notes:
+            from executors import linkedin as li_exec
+            li_exec.pause_campaign(notes)
+            print(f"✅ Paused LinkedIn campaign: {notes}")
     else:
         print(f"Action '{action}' approved — Asana task is the execution record.")
 

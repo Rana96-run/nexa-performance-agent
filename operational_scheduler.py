@@ -180,6 +180,13 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] Asana maintenance failed (non-fatal): {e}")
 
+    # 3e. Zapier monitor — auto-replay errored zap runs, alert on persistent failures
+    try:
+        from collectors.zapier import run as zapier_run
+        zapier_run()
+    except Exception as e:
+        print(f"[ops-scheduler] Zapier monitor failed (non-fatal): {e}")
+
     # 4. Main Slack message + follow-up recommendations message
     _post_report_ready(
         spikes=spikes,
