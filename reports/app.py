@@ -108,8 +108,10 @@ def refresh_status():
 
 
 
-_HEX_DASHBOARD = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
-_HEX_ACTIVITY  = os.getenv("ACTIVITY_DASHBOARD_URL") or "https://app.hex.tech"
+# DASHBOARD_URL / ACTIVITY_DASHBOARD_URL = short Railway URLs shown in Slack/email/Asana
+# DASHBOARD_DEST_URL / ACTIVITY_DEST_URL = full Hex URLs that /dashboard and /activity redirect to
+_HEX_DASHBOARD = os.getenv("DASHBOARD_DEST_URL") or "https://app.hex.tech"
+_HEX_ACTIVITY  = os.getenv("ACTIVITY_DEST_URL")  or "https://app.hex.tech"
 
 
 @app.route("/dashboard")
