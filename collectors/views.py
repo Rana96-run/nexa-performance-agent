@@ -439,16 +439,24 @@ ALL_VIEWS = [
 # Sub-campaign views (adset / ad / keyword grain).
 # Defined in bq_writer.py alongside their table schemas.
 # Imported here so refresh_all_views() keeps them in sync automatically.
+#
+# Order matters: utm_paid_attribution_daily MUST come before v_adset_performance,
+# v_ad_performance, and v_keyword_performance because those views SELECT from it.
 def _sub_campaign_views():
     from collectors.bq_writer import (
+        UTM_PAID_ATTRIBUTION_VIEW_SQL,
         V_ADSET_PERFORMANCE_SQL,
         V_AD_PERFORMANCE_SQL,
         V_KEYWORD_PERFORMANCE_SQL,
     )
+    # Expose under the canonical name used in the task spec and memory docs.
+    UTM_ATTRIBUTION_DAILY_SQL = UTM_PAID_ATTRIBUTION_VIEW_SQL
     return [
-        ("v_adset_performance",   V_ADSET_PERFORMANCE_SQL),
-        ("v_ad_performance",      V_AD_PERFORMANCE_SQL),
-        ("v_keyword_performance", V_KEYWORD_PERFORMANCE_SQL),
+        # Attribution base — must be created before the grain views below
+        ("utm_paid_attribution_daily", UTM_ATTRIBUTION_DAILY_SQL),
+        ("v_adset_performance",        V_ADSET_PERFORMANCE_SQL),
+        ("v_ad_performance",           V_AD_PERFORMANCE_SQL),
+        ("v_keyword_performance",      V_KEYWORD_PERFORMANCE_SQL),
     ]
 
 

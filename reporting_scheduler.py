@@ -15,6 +15,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 
+from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
 from collectors import google_ads_bq, meta_bq, snap_bq
 from collectors import meta_organic_bq, youtube_bq, linkedin_bq
 from collectors import hubspot_leads_bq, hubspot_deals_bq
@@ -62,7 +63,68 @@ COLLECTORS = [
     ("linkedin_adsets",      linkedin_bq.collect_adsets_and_write),
     ("microsoft_ads_adgroups", microsoft_ads_bq.collect_adsets_and_write),
     ("microsoft_ads_keywords", microsoft_ads_bq.collect_keywords_and_write),
+    ("google_ads_pmax_assets", google_ads_bq.collect_pmax_asset_groups_and_write),
 ]
+
+
+def _post_refresh_digest(results: dict, elapsed: float, utc_hour: int) -> None:
+    """Post a short Slack digest after a BQ refresh pass.
+
+    Only fires when:
+      - there are failures (always notify on errors), OR
+      - it is the first run of the day (06:00 UTC pass, utc_hour == 6).
+
+    Args:
+        results:  dict of name -> (ok: bool, val, dt) from run_refresh().
+        elapsed:  total wall-clock seconds for the full refresh.
+        utc_hour: UTC hour at which the refresh started (0-23).
+    """
+    ok_items   = [n for n, (o, _, _) in results.items() if o]
+    bad_items  = [n for n, (o, _, _) in results.items() if not o]
+    has_errors = bool(bad_items)
+    is_morning = (utc_hour == 6)
+
+    if not has_errors and not is_morning:
+        return  # silent pass — nothing to report
+
+    try:
+        from slack_sdk import WebClient
+        client = WebClient(token=SLACK_BOT_TOKEN)
+
+        total_rows = sum(v for _, (o, v, _) in results.items()
+                         if o and isinstance(v, int))
+
+        # Build per-collector status lines
+        lines = []
+        for name, (ok, val, _) in results.items():
+            icon = ":white_check_mark:" if ok else ":x:"
+            suffix = f"  ({val:,} rows)" if ok and isinstance(val, int) else (f"  `{val}`" if not ok else "")
+            lines.append(f"{icon} `{name}`{suffix}")
+
+        status_block = "\n".join(lines)
+        summary = f"{total_rows:,} rows across {len(ok_items)} collectors in {elapsed:.0f}s"
+
+        if has_errors:
+            header = f":warning: *BQ Refresh — {len(bad_items)} failure(s)*"
+            failures_section = (
+                f"\n\n*Failed:* {', '.join(f'`{n}`' for n in bad_items)}"
+            )
+        else:
+            header = ":large_green_circle: *BQ Refresh — daily 06:00 UTC pass*"
+            failures_section = ""
+
+        text = (
+            f"{header}\n"
+            f"{summary}"
+            f"{failures_section}\n\n"
+            f"{status_block}"
+        )
+
+        client.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=text)
+        log.info(f"refresh digest posted to {SLACK_CHANNEL_NOTIFY}")
+
+    except Exception as e:
+        log.warning(f"_post_refresh_digest failed (non-fatal): {e}")
 
 
 def run_refresh(incremental: bool = True, days: int | None = None):
@@ -74,6 +136,7 @@ def run_refresh(incremental: bool = True, days: int | None = None):
                      collector that supports it. e.g. days=30 -> 30-day backfill.
     """
     started = datetime.now(timezone.utc)
+    utc_hour = started.hour
     mode = "backfill" if days else ("incremental" if incremental else "full")
     print(f"\n{'='*60}\n[scheduler] Refresh start @ {started.isoformat()}"
           f"  (mode={mode}{f' days={days}' if days else ''})\n{'='*60}")
@@ -141,6 +204,8 @@ def run_refresh(incremental: bool = True, days: int | None = None):
         details={"mode": mode, "collectors_ok": ok_items,
                  "collectors_failed": bad_items, "total_rows": total_rows},
     )
+
+    _post_refresh_digest(results, elapsed, utc_hour)
 
     return results
 

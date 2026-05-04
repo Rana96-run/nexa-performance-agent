@@ -336,15 +336,123 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                        key_fields=["date", "channel", "ad_id"])
 
 
+# ── PMax Asset Group level → pmax_asset_groups_daily ─────────────────────────
+
+def collect_pmax_asset_groups_and_write(days: int = None, incremental: bool = False):
+    """PMax asset-group grain → pmax_asset_groups_daily.
+
+    Queries asset_group_asset for Performance Max campaigns only,
+    joining asset and campaign metadata.  One row per
+    (date, customer_id, campaign_id, asset_group_id, asset_id).
+    """
+    from google.cloud import bigquery as bq
+    from collectors.bq_writer import get_client
+
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
+
+    query = f"""
+        SELECT
+            asset_group.id,
+            asset_group.name,
+            asset_group.status,
+            asset_group.campaign,
+            campaign.id,
+            campaign.name,
+            asset.id,
+            asset.name,
+            asset.type,
+            asset_group_asset.performance_label,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            segments.date
+        FROM asset_group_asset
+        WHERE segments.date BETWEEN '{start}' AND '{end}'
+          AND campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+    """
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+    accounts = _customer_ids()
+    print(f"[google_ads] pmax_asset_groups {start} -> {end} | {len(accounts)} account(s)")
+    for cid in accounts:
+        count = 0
+        try:
+            for r in ga.search(customer_id=cid, query=query):
+                spend = r.metrics.cost_micros / 1_000_000
+                rows.append({
+                    "date":               str(r.segments.date),
+                    "customer_id":        cid,
+                    "campaign_id":        str(r.campaign.id),
+                    "campaign_name":      r.campaign.name,
+                    "asset_group_id":     str(r.asset_group.id),
+                    "asset_group_name":   r.asset_group.name,
+                    "asset_group_status": r.asset_group.status.name,
+                    "asset_id":           str(r.asset.id),
+                    "asset_name":         r.asset.name or "",
+                    "asset_type":         r.asset.type_.name,
+                    "performance_label":  r.asset_group_asset.performance_label.name,
+                    "impressions":        int(r.metrics.impressions),
+                    "clicks":             int(r.metrics.clicks),
+                    "spend":              round(spend, 6),
+                    "conversions":        float(r.metrics.conversions),
+                    "updated_at":         now,
+                })
+                count += 1
+        except Exception as e:
+            print(f"[google_ads]   pmax_asset_groups account {cid} error: {e}")
+        print(f"[google_ads]   pmax_asset_groups account {cid}: {count} rows")
+
+    _ensure_pmax_asset_groups_table()
+    return upsert_rows("pmax_asset_groups_daily", rows,
+                       key_fields=["date", "customer_id", "campaign_id",
+                                   "asset_group_id", "asset_id"])
+
+
+def _ensure_pmax_asset_groups_table():
+    from google.cloud import bigquery as bq
+    from collectors.bq_writer import get_client
+
+    client   = get_client()
+    table_id = f"{os.getenv('BQ_PROJECT_ID')}.{os.getenv('BQ_DATASET')}.pmax_asset_groups_daily"
+    schema = [
+        bq.SchemaField("date",               "DATE",      mode="REQUIRED"),
+        bq.SchemaField("customer_id",         "STRING"),
+        bq.SchemaField("campaign_id",         "STRING"),
+        bq.SchemaField("campaign_name",       "STRING"),
+        bq.SchemaField("asset_group_id",      "STRING"),
+        bq.SchemaField("asset_group_name",    "STRING"),
+        bq.SchemaField("asset_group_status",  "STRING"),
+        bq.SchemaField("asset_id",            "STRING"),
+        bq.SchemaField("asset_name",          "STRING"),
+        bq.SchemaField("asset_type",          "STRING"),
+        bq.SchemaField("performance_label",   "STRING"),
+        bq.SchemaField("impressions",         "INT64"),
+        bq.SchemaField("clicks",              "INT64"),
+        bq.SchemaField("spend",               "FLOAT64"),
+        bq.SchemaField("conversions",         "FLOAT64"),
+        bq.SchemaField("updated_at",          "TIMESTAMP"),
+    ]
+    table = bq.Table(table_id, schema=schema)
+    table.time_partitioning = bq.TimePartitioning(field="date")
+    table.clustering_fields = ["customer_id", "campaign_id", "asset_group_id"]
+    client.create_table(table, exists_ok=True)
+
+
 if __name__ == "__main__":
     import sys
     cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
     days = int(sys.argv[2]) if len(sys.argv) > 2 else None
     if cmd in ("all", "campaigns"):
-        print(f"campaigns: {collect_and_write(days=days)} rows")
+        print(f"campaigns:         {collect_and_write(days=days)} rows")
     if cmd in ("all", "adgroups"):
-        print(f"adgroups:  {collect_adgroups_and_write(days=days)} rows")
+        print(f"adgroups:          {collect_adgroups_and_write(days=days)} rows")
     if cmd in ("all", "keywords"):
-        print(f"keywords:  {collect_keywords_and_write(days=days)} rows")
+        print(f"keywords:          {collect_keywords_and_write(days=days)} rows")
     if cmd in ("all", "ads"):
-        print(f"ads:       {collect_ads_and_write(days=days)} rows")
+        print(f"ads:               {collect_ads_and_write(days=days)} rows")
+    if cmd in ("all", "pmax_asset_groups"):
+        print(f"pmax_asset_groups: {collect_pmax_asset_groups_and_write(days=days)} rows")

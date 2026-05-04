@@ -599,6 +599,8 @@ def cmd_from_search_terms(argv: list[str]) -> None:
     cid     = _get_flag(argv, "--cid", _DEFAULT_CID)
     dry_run = _has_flag(argv, "--dry-run")
     yes     = _has_flag(argv, "--yes")
+    _excl_raw = _get_flag(argv, "--exclude", "")
+    exclude  = {t.strip().lower() for t in _excl_raw.split(",") if t.strip()}
 
     _log(f"Fetching search terms for last {days} days (account {cid}) ...")
     terms = list_search_terms(days=days, customer_id=cid)
@@ -636,6 +638,9 @@ def cmd_from_search_terms(argv: list[str]) -> None:
     # campaign resource_name = customers/{cid}/campaigns/{campaign_id}
     # We have campaign_id from the term dict.
     for t in negative_terms:
+        if t["query"].strip().lower() in exclude:
+            _log(f"Skipping excluded term: {t['query']}")
+            continue
         neg_to_add.append({"text": t["query"], "match_type": "BROAD"})
         # Build campaign resource name from cid + campaign_id
         campaign_rn = f"customers/{cid}/campaigns/{t['campaign_id']}"

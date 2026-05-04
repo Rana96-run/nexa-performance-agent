@@ -116,7 +116,8 @@ def collect_and_write(days: int = None, start_date: date = None,
 
     # bucket key: (date, qoyod_source, pipeline, stage, utm_campaign, utm_audience, utm_content, utm_source, utm_medium, utm_term)
     buckets = defaultdict(lambda: {"total": 0, "qualified": 0, "disqualified": 0, "open": 0,
-                                     "disq_reasons": defaultdict(int)})
+                                     "disq_reasons": defaultdict(int),
+                                     "disq_sub_reasons": defaultdict(int)})
 
     # HubSpot Search caps at 10k results — walk 7-day windows.
     # pages counter resets each window so one large period can't exhaust the cap.
@@ -205,6 +206,10 @@ def collect_and_write(days: int = None, start_date: date = None,
                               p.get("leads_disqualification_reason__ops_qflavour") or
                               p.get("disqualification_reason_bookkeeping") or "Unknown")
                     b["disq_reasons"][reason] += 1
+                    sub_reason = (p.get("leads_disqualification_reason__sub_reasons") or
+                                  p.get("leads_disqualification_reason__sub_reasons_qflavour") or
+                                  "Unknown")
+                    b["disq_sub_reasons"][sub_reason] += 1
                 if is_open:
                     b["open"] += 1
                 total_fetched += 1
@@ -223,6 +228,7 @@ def collect_and_write(days: int = None, start_date: date = None,
     for key, b in buckets.items():
         (d, src, pipeline, stage, utm_c, utm_a, utm_co, utm_s, utm_m, utm_t) = key
         top_reason = max(b["disq_reasons"].items(), key=lambda x: x[1])[0] if b["disq_reasons"] else None
+        top_sub_reason = max(b["disq_sub_reasons"].items(), key=lambda x: x[1])[0] if b["disq_sub_reasons"] else None
         rows.append({
             "date": d,
             "qoyod_source": src,
@@ -239,6 +245,7 @@ def collect_and_write(days: int = None, start_date: date = None,
             "leads_disqualified": b["disqualified"],
             "leads_open": b["open"],
             "top_disq_reason": top_reason,
+            "top_disq_sub_reason": top_sub_reason,
             "updated_at": now,
         })
 
@@ -270,6 +277,7 @@ def _ensure_table_exists():
         bigquery.SchemaField("leads_disqualified", "INT64"),
         bigquery.SchemaField("leads_open", "INT64"),
         bigquery.SchemaField("top_disq_reason", "STRING"),
+        bigquery.SchemaField("top_disq_sub_reason", "STRING"),
         bigquery.SchemaField("updated_at", "TIMESTAMP"),
     ]
     table = bigquery.Table(table_id, schema=schema)

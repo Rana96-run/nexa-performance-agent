@@ -151,6 +151,13 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] Zapier monitor failed (non-fatal): {e}")
 
+    # 3f. LinkedIn token refresh — tokens expire every 60 days; refresh nightly
+    try:
+        from scripts.linkedin_refresh import refresh_token
+        refresh_token()
+    except Exception as e:
+        print(f"[ops-scheduler] LinkedIn token refresh failed (non-fatal): {e}")
+
     # 4. Audit is SILENT — Asana tasks are the record. No daily Slack post.
     #    Weekly Slack summary goes out Monday night (step below).
     _log_nightly_audit_to_bq(audit_tasks, health_tasks)
