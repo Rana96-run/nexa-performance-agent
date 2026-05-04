@@ -6,18 +6,16 @@ Flask server that:
   GET  /                       -> 301 → Hex performance dashboard
   GET  /paid-performance/*     -> 301 → Hex performance dashboard
   GET  /reports/*              -> 301 → Hex performance dashboard
-  GET  /activity               -> Agent Activity Dashboard (HTML, reads activity_log.csv)
-  GET  /activity/data          -> Agent Activity JSON (raw data for Hex or external tools)
   POST /api/refresh            -> kick off BQ data refresh in background
   GET  /api/refresh/status     -> poll refresh progress
   POST /slack/events           -> Slack Events API (reaction_added → approve/reject)
   POST /hubspot/webhook        -> HubSpot lead webhooks (via hubspot_bp blueprint)
 
-Two dashboards:
-  Performance → Hex (qoyod-marketing-performance) — paid media KPIs, spend, leads, CPQL
-  Activity    → /activity (this server) — agent actions, tasks, messages, workflows
+Both dashboards live in Hex (read from BigQuery):
+  Performance → qoyod-marketing-performance  (paid media KPIs)
+  Activity    → qoyod-agent-activity         (agent actions, tasks, messages, workflows)
 
-Deploy on Railway (single dyno).
+Railway runs the agent only — no HTML serving.
 """
 from __future__ import annotations
 
@@ -26,7 +24,6 @@ from datetime import datetime
 
 from flask import Flask, jsonify, redirect, request, Response
 from collectors.hubspot_webhook import hubspot_bp
-from reports.activity_dashboard import render_dashboard_html, get_data_json  # noqa: E402
 
 app = Flask(__name__)
 app.register_blueprint(hubspot_bp)
@@ -128,20 +125,6 @@ def dashboard_redirect(**kwargs):
     """All old HTML report URLs → Hex performance dashboard (permanent redirect)."""
     return redirect(_HEX_DASHBOARD, code=301)
 
-
-@app.route("/activity")
-def activity_dashboard():
-    """Agent Activity Dashboard — what the agent did, tasks, messages, workflows."""
-    days = int(request.args.get("days", 30))
-    html = render_dashboard_html(days=days)
-    return Response(html, mimetype="text/html")
-
-
-@app.route("/activity/data")
-def activity_data():
-    """Raw activity data as JSON — for Hex or external tools."""
-    days = int(request.args.get("days", 30))
-    return jsonify(get_data_json(days=days))
 
 
 # ─── Removed: /api/report (HTML report custom date-range API) ────────────────
