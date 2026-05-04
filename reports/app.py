@@ -6,16 +6,18 @@ Flask server that:
   GET  /                       -> 301 → Hex performance dashboard
   GET  /paid-performance/*     -> 301 → Hex performance dashboard
   GET  /reports/*              -> 301 → Hex performance dashboard
+  GET  /activity               -> Agent Activity Dashboard (HTML, reads activity_log.csv)
+  GET  /activity/data          -> Agent Activity raw JSON
   POST /api/refresh            -> kick off BQ data refresh in background
   GET  /api/refresh/status     -> poll refresh progress
   POST /slack/events           -> Slack Events API (reaction_added → approve/reject)
   POST /hubspot/webhook        -> HubSpot lead webhooks (via hubspot_bp blueprint)
 
-Both dashboards live in Hex (read from BigQuery):
-  Performance → qoyod-marketing-performance  (paid media KPIs)
-  Activity    → qoyod-agent-activity         (agent actions, tasks, messages, workflows)
+Two dashboards, two URLs:
+  Performance → Hex  https://app.hex.tech/.../Qoyod-marketing-performance/latest
+  Activity    → Railway  https://nexa-performance-agent.up.railway.app/activity
 
-Railway runs the agent only — no HTML serving.
+Deploy on Railway (single dyno).
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from datetime import datetime
 
 from flask import Flask, jsonify, redirect, request, Response
 from collectors.hubspot_webhook import hubspot_bp
+from reports.activity_dashboard import render_dashboard_html, get_data_json
 
 app = Flask(__name__)
 app.register_blueprint(hubspot_bp)
@@ -68,6 +71,20 @@ def _do_refresh(days: int | None, backfill: bool):
         from datetime import datetime as _dt
         _REFRESH_STATUS["finished_at"] = _dt.utcnow().isoformat() + "Z"
         _REFRESH_STATUS["running"] = False
+
+
+@app.route("/activity")
+def activity_dashboard():
+    """Agent Activity Dashboard — what the agent did, tasks, messages, workflows."""
+    days = int(request.args.get("days", 30))
+    return Response(render_dashboard_html(days=days), mimetype="text/html")
+
+
+@app.route("/activity/data")
+def activity_data():
+    """Raw activity JSON — summary + recent rows + workflow definitions."""
+    days = int(request.args.get("days", 30))
+    return jsonify(get_data_json(days=days))
 
 
 @app.route("/api/refresh", methods=["POST", "GET"])
