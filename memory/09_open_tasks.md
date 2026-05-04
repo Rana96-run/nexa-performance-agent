@@ -136,6 +136,16 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## Done this session (2026-05-04)
+
+- [x] **Hex sub-campaign SQL cells** — added Ad Groups/Ads/Keywords for Google Ads; Ad Sets/Ads for Meta, Snapchat, TikTok, LinkedIn. Each cell joins `adsets_daily`/`ads_daily` → `hubspot_leads_module_daily` on `lead_utm_audience`/`lead_utm_content` showing spend, CTR, leads, SQLs, CPL, CPQL.
+- [x] **Organic Search section deleted** — section + all child cells removed from Hex (no paid drill-down data)
+- [x] **Orphaned cells deleted** — `adsets_data`, `Ad Performance Summary`, SQL 105, SQL 115 removed
+- [x] **Hex dashboard published** — all changes live at https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest
+- [x] **`scripts/create_health_tasks.py` deleted** — one-off script with hardcoded wrong spend data
+- [x] **`utm-lead-measurement.md` skill created** — codifies CPL/CPQL join patterns at all grains, TikTok trap, zero-lead diagnosis steps
+- [x] **Activities summary posted to #notify** — Slack message listing all Hex changes
+
 ## Done this session (2026-05-03)
 
 - [x] **Slack cleanup** — stopped verbose "Agent actions" from posting to #notify; only category × count in summary
