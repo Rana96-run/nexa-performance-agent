@@ -41,7 +41,7 @@ IS_SATURATED         = 0.80   # IS > 80% = no growth headroom
 
 QS_TASK_THRESHOLD    = 5      # QS < 5 -> recommend
 QS_URGENT_THRESHOLD  = 4
-QS_MIN_SPEND_USD     = 50     # only flag if keyword has spent >$50 in window
+QS_MIN_SPEND_USD     = 70     # only flag if keyword has spent >$70 in window
 
 EXPANSION_MIN_CONV   = 1.0    # search terms with conv >= 1 -> candidate
 EXPANSION_MIN_SPEND  = 25.0   # search terms with $25+ spend, 0 conv -> negative
@@ -115,7 +115,7 @@ def audit_impression_share(days: int = 14) -> list[dict]:
         for r in rows:
             cur = normalize_currency(getattr(r.customer, "currency_code", None))
             spend = to_usd(r.metrics.cost_micros / 1_000_000, cur)
-            if spend < 50:
+            if spend < 70:
                 continue   # too small to act on
 
             is_share   = float(r.metrics.search_impression_share or 0)

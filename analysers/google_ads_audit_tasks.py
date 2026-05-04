@@ -180,7 +180,7 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         review = [f for f in qs_findings if f["urgency"] == "review"]
 
         body = (f"Daily Quality Score audit (last 14d). {len(qs_findings)} keywords "
-                f"with QS < 5 and $50+ spend.\n\n"
+                f"with QS < 5 and $70+ spend.\n\n"
                 f"**Why this matters:** Low QS means higher CPC and lower IS. "
                 f"Improving QS reduces cost AND wins more impressions.\n\n")
         if urgent:

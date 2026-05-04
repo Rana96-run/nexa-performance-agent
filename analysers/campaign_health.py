@@ -72,7 +72,7 @@ def _cpl_zone(val: float | None) -> str:
 
 def audit_campaign_health(
     days: int = DAYS_FOR_PAUSE_DECISION,
-    min_spend: float = 50.0,
+    min_spend: float = 70.0,
     channels: list[str] | None = None,
 ) -> list[dict]:
     """

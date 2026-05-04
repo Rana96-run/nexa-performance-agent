@@ -525,7 +525,7 @@ def best_audience(product: str | None = None, days: int = 30) -> dict:
             WHERE c.channel = 'meta' AND c.date >= '{since}'
               {prod_filter}
             GROUP BY c.campaign_name
-            HAVING SUM(c.spend) >= 50 AND SUM(hs.sqls) > 0
+            HAVING SUM(c.spend) >= 70 AND SUM(hs.sqls) > 0
             ORDER BY cpql ASC LIMIT 1
         """
         rows = list(bq.query(sql).result())

@@ -249,7 +249,7 @@ def _bq_channel_cpql(days: int = 14) -> list[dict]:
             WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days} DAY)
               AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
             GROUP BY c.channel
-            HAVING SUM(c.spend) >= 50
+            HAVING SUM(c.spend) >= 70
             ORDER BY cpql ASC NULLS LAST
         """).result())
         return [
