@@ -45,15 +45,10 @@ the bottom of the relevant section.
 
 ## P1 — Dashboard expansion (user explicitly requested)
 
-- [ ] **Channel Deep Dive (Hex)** — section header + SQL 102 added to Hex notebook
-  (adset grain × CPL zone coloring: Scale/OK/Watch/Pause). Still needs:
-  Leads Funnel section + Insights/Recs section (browser was freezing mid-run)
-- [ ] **Leads Funnel (Hex)** — disqualification reasons + sub-reasons.
-  Property names confirmed: `leads_disqualification_reason__ops` (main, 10 opts)
-  + `leads_disqualification_reason__sub_reasons` (31 opts). `top_disq_sub_reason`
-  now stored in `hubspot_leads_module_daily`. SQL ready to add to Hex.
-- [ ] **Insights & Recommendations (Hex)** — rules-based recs using
-  `v_campaign_leaderboard` + `v_channel_scorecard`. SQL ready to add to Hex.
+- [x] **Channel Deep Dive (Hex)** — completed 2026-05-04. Section header + SQL 102 (dataframe_20) showing adset × CPL zone (Scale/OK/Watch/Pause) for all channels. Hex published.
+- [x] **Leads Funnel (Hex)** — completed 2026-05-04. Text header + SQL 104 (dataframe_21) querying `hubspot_leads_module_daily` for `top_disq_reason` + `top_disq_sub_reason` grouped by disqualified count. Hex published.
+- [x] **Insights & Recommendations (Hex)** — completed 2026-05-04. Markdown header + SQL 106 (dataframe_22) querying `v_campaign_leaderboard` with PAUSE/SCALE/OK/WATCH rules (CPQL thresholds $40/$80, min $70 spend). Hex published.
+- [x] **Paid Overview (Hex)** — completed 2026-05-05. Markdown header (Markdown 19) + SQL 20 (`dataframe_23`) querying `paid_channel_daily` for channel × spend/leads/sqls/CPL/CPQL/qual_rate_pct/ROAS (30 days). SQL 21 (`dataframe_24`) querying `organic_page_daily` UNION ALL across Meta FB/IG/YouTube/LinkedIn with platform-specific engagement metrics. BQ columns verified before publish. Hex published.
 - [ ] **"(no UTM — click-ID only)" explicit row** in every campaign table
 
 ## P2 — Ops hardening
