@@ -30,10 +30,8 @@ the bottom of the relevant section.
   Deprioritized — MS Ads is ~3% of Saudi paid search.
 - [ ] **Get Funnel.io read API token** — ask Amar for workspace API token
   + account_id + project_id. Fill `FUNNEL_API_TOKEN/ACCOUNT_ID/PROJECT_ID`.
-- [ ] **HubSpot leads YTD backfill** — `python collectors/hubspot_leads_bq.py`
-  (no args = YTD). Current data is only incremental → channel_roas_daily is
-  sparse.
-- [ ] **HubSpot deals YTD backfill** — `python collectors/hubspot_deals_bq.py`.
+- [x] **HubSpot leads YTD backfill** — completed 2026-05-04. 24,260 leads → 11,460 rows in `hubspot_leads_module_daily` (2026-01-08 to 2026-05-05). Run with `python -m collectors.hubspot_leads_bq` (module mode).
+- [x] **HubSpot deals YTD backfill** — completed 2026-05-04. 31,557 deals → 13,595 rows in `hubspot_deals_daily` (2026-01-08 to 2026-05-05). Run with `python -m collectors.hubspot_deals_bq`.
 
 ## P1 — Attribution depth (user explicitly requested)
 
@@ -135,7 +133,7 @@ mirror (and extend) the Looker boards the team already trusts.
 - [x] **TikTok in agent activities** — already in `main.py::collect_data()` line 128.
 - [x] **TikTok executor (post-approval pause)** — wired in `main.py::execute_channel_action()` with campaign/adgroup/ad routing. Default policy for missing-entity left as TODO for explicit decision (see `main.py:670+`).
 - [x] **Wire Snapchat + LinkedIn pause routing** — added to `main.py::execute_channel_action()` and `reports/app.py::_execute_approved_action()` (both scale + pause for LinkedIn; Snapchat was already in app.py).
-- [ ] **Add scale action wiring** — currently only `pause` is auto-executed; `scale`/`adjust` fall through to "Asana task is the execution record". CLAUDE.md says scale/pause should auto-execute. Build `set_campaign_budget()` calls per channel using existing executors (e.g. `tiktok_exec.set_campaign_budget`, `gads_exec.set_campaign_budget`, etc).
+- [x] **Add scale action wiring** — completed 2026-05-04. `execute_channel_action()` in `main.py` now handles `scale`/`adjust`/`increase_budget` → `set_campaign_budget()` per channel, and `enable`/`resume`/`unpause` → channel enable methods. Google Ads campaign-level pause also wired.
 - [ ] Snapchat organic (if Snap exposes public page metrics — doubtful)
 - [ ] Weekly email digest via existing Gmail SMTP (creds set) of top KPIs
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
@@ -143,6 +141,10 @@ mirror (and extend) the Looker boards the team already trusts.
 
 ## Done this session (2026-05-04) — continuation
 
+- [x] **LP Hex cell published** — "LP Performance — Weekly (Test from 2026-05-04)" cell added to Hex notebook, queries `v_lp_weekly_summary WHERE week_start >= '2026-05-04'`. Shows 0 rows on day 1 (expected). Hex published.
+- [x] **Silent nightly audit + weekly Slack summary** — nightly audit no longer posts to Slack daily; `_log_nightly_audit_to_bq()` writes counts silently; `_post_weekly_summary()` fires every Monday posting to #notify with weekly totals + recommendations.
+- [x] **Scale/enable wiring** — `execute_channel_action()` now handles `scale`/`adjust`/`increase_budget` and `enable`/`resume` per channel (Google, Meta, TikTok, Snapchat, LinkedIn).
+- [x] **HubSpot backfills** — leads (24,260 → 11,460 rows) + deals (31,557 → 13,595 rows) backfilled to BQ, 2026-01-08 to 2026-05-05.
 - [x] **Landing page performance analysis built** — `final_url` added to `ads_daily` schema and Google Ads BQ collector. New BQ views: `v_lp_performance_weekly` (week × lp_type × campaign, joins HubSpot via campaign_name) and `v_lp_weekly_summary` (week × lp_type rollup). 669 rows backfilled (30 days). Data shows HubSpot LP (`campaigns.qoyod.com`) CPQL ~$127 vs WordPress LP (`lp.qoyod.com`) CPQL ~$713 for week of Apr 27. `google_ads_ads` collector added to `reporting_scheduler.py` so `final_url` updates every 6h.
 - [x] **Add LP comparison cell to Hex dashboard** — SQL below. Filter starts 2026-05-04 (WordPress LP test start). Title: "🏠 Landing Page Performance — Weekly (Test from 2026-05-04)".
   ```sql
