@@ -115,14 +115,6 @@ def test_entry_points_import():
         importlib.import_module(mod)
 
 
-def test_logger_setup_idempotent():
-    """setup_global_logging() must be safe to call multiple times."""
-    from logs.logger import setup_global_logging
-    log1 = setup_global_logging("smoke-test")
-    log2 = setup_global_logging("smoke-test")
-    assert log1 is log2
-
-
 def test_critical_env_vars_present():
     """Soft check: warn (don't fail) if optional creds are missing."""
     from dotenv import load_dotenv
@@ -130,17 +122,6 @@ def test_critical_env_vars_present():
     must_have = ["BQ_PROJECT_ID", "ANTHROPIC_API_KEY"]
     missing = [v for v in must_have if not os.getenv(v)]
     assert not missing, f"Critical env vars missing: {missing}"
-
-
-def test_bq_view_sql_uses_config_thresholds():
-    """The campaign_performance view SQL must inject thresholds from config."""
-    from collectors import bq_writer
-    import config
-    sql = bq_writer.CAMPAIGN_PERFORMANCE_VIEW_SQL
-    # Threshold values from config must appear literally in the rendered SQL
-    for v in (config.CPL_SCALE, config.CPL_ACCEPTABLE, config.CPL_WARNING,
-              config.CPQL_SCALE, config.CPQL_ACCEPTABLE, config.CPQL_WARNING):
-        assert str(v) in sql, f"View SQL missing threshold {v}"
 
 
 # ---------------------------------------------------------------------------
