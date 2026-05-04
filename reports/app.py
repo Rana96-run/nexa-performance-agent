@@ -3,15 +3,21 @@ reports/app.py
 ==============
 Flask server that:
   GET  /health                 -> 200 OK (Railway health check)
-  GET  /                       -> 301 → Hex dashboard
-  GET  /paid-performance/*     -> 301 → Hex dashboard
-  GET  /reports/*              -> 301 → Hex dashboard
+  GET  /                       -> 301 → Hex performance dashboard
+  GET  /paid-performance/*     -> 301 → Hex performance dashboard
+  GET  /reports/*              -> 301 → Hex performance dashboard
+  GET  /activity               -> Agent Activity Dashboard (HTML, reads activity_log.csv)
+  GET  /activity/data          -> Agent Activity JSON (raw data for Hex or external tools)
   POST /api/refresh            -> kick off BQ data refresh in background
   GET  /api/refresh/status     -> poll refresh progress
   POST /slack/events           -> Slack Events API (reaction_added → approve/reject)
   POST /hubspot/webhook        -> HubSpot lead webhooks (via hubspot_bp blueprint)
 
-Deploy on Railway (single dyno). HTML report is gone — Hex is the dashboard.
+Two dashboards:
+  Performance → Hex (qoyod-marketing-performance) — paid media KPIs, spend, leads, CPQL
+  Activity    → /activity (this server) — agent actions, tasks, messages, workflows
+
+Deploy on Railway (single dyno).
 """
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ from datetime import datetime
 
 from flask import Flask, jsonify, redirect, request, Response
 from collectors.hubspot_webhook import hubspot_bp
+from reports.activity_dashboard import render_dashboard_html, get_data_json  # noqa: E402
 
 app = Flask(__name__)
 app.register_blueprint(hubspot_bp)
@@ -118,8 +125,23 @@ _HEX_DASHBOARD = (
 @app.route("/reports/latest")
 @app.route("/reports/<report_date>")
 def dashboard_redirect(**kwargs):
-    """All old HTML report URLs → Hex dashboard (permanent redirect)."""
+    """All old HTML report URLs → Hex performance dashboard (permanent redirect)."""
     return redirect(_HEX_DASHBOARD, code=301)
+
+
+@app.route("/activity")
+def activity_dashboard():
+    """Agent Activity Dashboard — what the agent did, tasks, messages, workflows."""
+    days = int(request.args.get("days", 30))
+    html = render_dashboard_html(days=days)
+    return Response(html, mimetype="text/html")
+
+
+@app.route("/activity/data")
+def activity_data():
+    """Raw activity data as JSON — for Hex or external tools."""
+    days = int(request.args.get("days", 30))
+    return jsonify(get_data_json(days=days))
 
 
 # ─── Removed: /api/report (HTML report custom date-range API) ────────────────
@@ -184,6 +206,14 @@ def _handle_reaction(event: dict):
 
         if reaction == "white_check_mark":
             exec_result = _execute_approved_action(meta)
+            try:
+                from logs.csv_logger import log_async as _csv_log
+                _csv_log(role="slack_approval", action_type="approve",
+                         action=f"approved: {action} on {camp[:60]}",
+                         channel=meta.get("channel", ""), campaign=camp,
+                         status="approved", details={"user": user, "result": exec_result[:200]})
+            except Exception:
+                pass
             # Update Asana for each finding in a batch, or the single asana_gid
             gids = [f.get("asana_gid") for f in meta.get("findings", []) if f.get("asana_gid")]
             if not gids and meta.get("asana_gid"):
@@ -203,6 +233,14 @@ def _handle_reaction(event: dict):
             reply = f"✅ *Approved* by <@{user}>\n{exec_result}"
         else:
             reply = f"❌ *Rejected* by <@{user}>\n`{camp}` — no changes made."
+            try:
+                from logs.csv_logger import log_async as _csv_log
+                _csv_log(role="slack_approval", action_type="approve",
+                         action=f"rejected: {action} on {camp[:60]}",
+                         channel=meta.get("channel", ""), campaign=camp,
+                         status="rejected", details={"user": user})
+            except Exception:
+                pass
 
         wc.chat_postMessage(
             channel=SLACK_CHANNEL_APPROVAL,

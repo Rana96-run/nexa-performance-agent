@@ -44,6 +44,7 @@ from notifications.notify import send_summary, send_approval_request
 from config import NOTIFY_VIA, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL
 from executors import google_ads as gads_exec
 from executors import meta as meta_exec
+from executors import tiktok as tiktok_exec
 from executors.asana import create_task, ensure_channel_sections
 from executors.google_ads import list_search_terms, classify_search_terms, add_negative_keywords
 
@@ -378,7 +379,7 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
         "DASHBOARD_URL",
         "https://app.hex.tech/019de9f2-2933-7000-80ba-80156bf7570d/app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest",
     )
-    _DASHBOARD_SHORT = "https://app.hex.tech/app/Qoyod-marketing-performance/latest"
+    _DASHBOARD_SHORT = "qoyod-marketing-performance"
 
     lines = [
         f"{emoji} *{cadence.title()} Performance Check — {today_str}*",
@@ -425,12 +426,18 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
 # ---------------------------------------------------------------------------
 
 def run_cadence(cadence: str, force: bool = False):
+    from logs.csv_logger import log as csv_log, log_async as csv_log_async
     today = str(date.today())
     log.info(f"=== {cadence.upper()} cadence starting ===")
+    csv_log(role="daily_agent", action_type="health",
+            action=f"{cadence} cadence started", status="ok",
+            details={"cadence": cadence})
 
     if cadence != "on_demand" and not force:
         if not can_run_analysis(cadence):
             log.info(f"Already ran {cadence} today — skipping. Use --force to override.")
+            csv_log(role="daily_agent", action_type="health",
+                    action=f"{cadence} cadence skipped — already ran today", status="skipped")
             return
 
     # 0. Weekly-only: search term review runs deterministically before LLM roles
@@ -438,8 +445,16 @@ def run_cadence(cadence: str, force: bool = False):
         try:
             st_summary = weekly_search_term_review()
             log.info(f"Search term review: {st_summary}")
+            csv_log(role="daily_agent", action_type="analyse",
+                    action=f"weekly search term review: {st_summary.get('negatives_added', 0)} negatives added, "
+                           f"{st_summary.get('approvals_sent', 0)} converting terms → Asana",
+                    channel="google_ads", status="ok",
+                    count=st_summary.get("terms", 0))
         except Exception as e:
             log.warning(f"Search term review failed (non-fatal): {e}")
+            csv_log(role="daily_agent", action_type="analyse",
+                    action="weekly search term review FAILED", status="failed",
+                    details={"error": str(e)})
 
     # 1. Collect data from ALL channels
     data = collect(cadence)
@@ -447,6 +462,9 @@ def run_cadence(cadence: str, force: bool = False):
                           if k not in ("date", "cadence", "hubspot")
                           and (v.get("campaigns") or v.get("ads"))]
     log.info(f"Data collected from: {', '.join(channels_with_data)}")
+    csv_log(role="daily_agent", action_type="collect",
+            action=f"data collected from BQ cache: {', '.join(channels_with_data)}",
+            channel="all", status="ok", count=len(channels_with_data))
 
     # 2. Run role agents — daily has none (deterministic analysers handle it),
     #    strategist runs weekly/monthly/quarterly/on_demand.
@@ -454,6 +472,10 @@ def run_cadence(cadence: str, force: bool = False):
     results = run_trigger(cadence, data)
     if results:
         log.info(f"{len(results)} role result(s) returned")
+        for r in results:
+            csv_log(role=r.get("role", "unknown"), action_type="analyse",
+                    action=f"role ran: {r.get('role')} for {cadence} cadence",
+                    status="ok")
     else:
         log.info(f"No role agents for cadence={cadence} — deterministic analysers handle decisions")
 
@@ -482,6 +504,11 @@ def run_cadence(cadence: str, force: bool = False):
         if gid:
             created += 1
     log.info(f"Asana batch complete: {created}/{len(tasks)} tasks created.")
+    if tasks:
+        csv_log(role="daily_agent", action_type="task",
+                action=f"created {created}/{len(tasks)} Asana tasks",
+                status="ok", count=created,
+                details={"cadence": cadence, "total_attempted": len(tasks)})
 
     # 6. Post Slack summary.
     #    Daily: _post_report_ready() in operational_scheduler owns the channel.
@@ -496,23 +523,31 @@ def run_cadence(cadence: str, force: bool = False):
                         "on_demand": "daily_summary"}.get(cadence, "daily_summary"),
             meta={"Cadence": cadence, "Tasks": created, "Roles": len(results)},
         )
+        csv_log(role="daily_agent", action_type="notify",
+                action=f"posted {cadence} Slack summary to #notify",
+                status="ok", details={"cadence": cadence, "tasks": created})
 
-    # 6b. HTML report generation DISABLED.
-    #     The Hex published app replaces the Flask HTML report.
-    #     Slack messages now link to the Hex dashboard via DASHBOARD_URL env.
-    #     Re-enable only if Hex becomes unavailable.
     log.info("HTML report generation skipped — using Hex dashboard via DASHBOARD_URL")
 
     # 7. Handle high-confidence channel actions -> approval channel
     for res in approvals:
         print(f"[approval] Requesting approval for: {res['role']}")
+        dec = res.get("decision") or {}
         result = send_approval_request(res)
         ts = result.get("slack_ts") if result else None
+        csv_log(role="daily_agent", action_type="approve",
+                action=f"approval requested: {dec.get('action', '?')} on {dec.get('campaign', '?')}",
+                channel=dec.get("channel", ""), campaign=dec.get("campaign", ""),
+                status="ok" if ts else "failed")
         if ts:
             approval = wait_for_approval(ts, timeout_minutes=60)
             print(f"[approval] Response: {approval}")
+            csv_log(role="daily_agent", action_type="approve",
+                    action=f"approval {approval}: {dec.get('action', '?')} on {dec.get('campaign', '?')}",
+                    channel=dec.get("channel", ""), campaign=dec.get("campaign", ""),
+                    status=approval or "timeout")
             if approval == "approved":
-                execute_channel_action(res.get("decision") or {})
+                execute_channel_action(dec)
         else:
             print(f"[approval] No Slack ts — manual approval via Asana task.")
 
@@ -521,6 +556,10 @@ def run_cadence(cadence: str, force: bool = False):
         mark_analysis_done(cadence)
 
     log.info(f"{cadence} cadence complete — Tasks: {created}  Approvals: {len(approvals)}")
+    csv_log(role="daily_agent", action_type="health",
+            action=f"{cadence} cadence complete: {created} tasks, {len(approvals)} approvals",
+            status="ok", count=created,
+            details={"cadence": cadence, "approvals": len(approvals), "roles": len(results)})
 
 
 # ---------------------------------------------------------------------------
@@ -662,6 +701,31 @@ def execute_channel_action(decision: dict):
         elif "meta" in channel and notes:
             meta_exec.set_ad_status(notes, "PAUSED")
             print(f"✅ Paused Meta ad: {notes}")
+        elif "tiktok" in channel and notes:
+            # TikTok has 3 entity levels — route by `entity`. The naming
+            # convention enforces that `notes` is the TikTok numeric ID for
+            # whichever level the entity says.
+            if "campaign" in entity:
+                tiktok_exec.pause_campaign(notes)
+                print(f"✅ Paused TikTok campaign: {notes}")
+            elif "adgroup" in entity or "adset" in entity or "ad_group" in entity:
+                tiktok_exec.set_adgroup_status(notes, enable=False)
+                print(f"✅ Paused TikTok adgroup: {notes}")
+            elif "ad" in entity:
+                tiktok_exec.pause_ad(notes)
+                print(f"✅ Paused TikTok ad: {notes}")
+            else:
+                # TODO (your choice): pick the default policy when entity is missing
+                #   A) Safest — pause the whole campaign
+                #        tiktok_exec.pause_campaign(notes)
+                #        print(f"✅ Paused TikTok campaign (default): {notes}")
+                #   B) Surgical — assume ad-level (matches Meta default)
+                #        tiktok_exec.pause_ad(notes)
+                #        print(f"✅ Paused TikTok ad (default): {notes}")
+                #   C) Strict — skip with a log, force LLM to be explicit
+                #        print(f"⚠️ TikTok pause skipped — entity not specified: {notes}")
+                # Uncomment ONE of the three blocks above to set the project default.
+                print(f"⚠️ TikTok pause requested but entity not specified — skipped (notes={notes})")
     else:
         print(f"Action '{action}' approved — Asana task is the execution record.")
 

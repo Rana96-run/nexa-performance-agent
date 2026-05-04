@@ -38,12 +38,22 @@ def post_keyword_approval(add_kw: list[dict], add_neg: list[dict]) -> str | None
     if not add_kw and not add_neg:
         return None
 
+    from logs.csv_logger import log_async as csv_log_async
+
     if add_neg:
         _execute_negatives(add_neg)
         print(f"[keyword-approval] Direct-executed {len(add_neg)} negatives (no Slack)")
+        csv_log_async(role="keyword_approval", action_type="execute",
+                      action=f"direct-executed {len(add_neg)} negative keywords",
+                      channel="google_ads", status="ok", count=len(add_neg),
+                      details={"terms": [t.get("query", "") for t in add_neg[:10]]})
 
     if add_kw:
         print(f"[keyword-approval] {len(add_kw)} converting terms → Asana only (no Slack)")
+        csv_log_async(role="keyword_approval", action_type="task",
+                      action=f"{len(add_kw)} converting search terms → Asana task",
+                      channel="google_ads", status="ok", count=len(add_kw),
+                      details={"terms": [t.get("query", "") for t in add_kw[:10]]})
 
     return None
 
