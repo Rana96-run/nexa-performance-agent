@@ -144,7 +144,17 @@ mirror (and extend) the Looker boards the team already trusts.
 ## Done this session (2026-05-04) — continuation
 
 - [x] **Landing page performance analysis built** — `final_url` added to `ads_daily` schema and Google Ads BQ collector. New BQ views: `v_lp_performance_weekly` (week × lp_type × campaign, joins HubSpot via campaign_name) and `v_lp_weekly_summary` (week × lp_type rollup). 669 rows backfilled (30 days). Data shows HubSpot LP (`campaigns.qoyod.com`) CPQL ~$127 vs WordPress LP (`lp.qoyod.com`) CPQL ~$713 for week of Apr 27. `google_ads_ads` collector added to `reporting_scheduler.py` so `final_url` updates every 6h.
-- [ ] **Add LP comparison cell to Hex dashboard** — SQL to add (see memory note below). Paste into a new SQL cell at the bottom of the Google Ads section in Hex, titled "🏠 Landing Page Performance — Weekly".
+- [ ] **Add LP comparison cell to Hex dashboard** — SQL below. Filter starts 2026-05-04 (WordPress LP test start). Title: "🏠 Landing Page Performance — Weekly (Test from 2026-05-04)".
+  ```sql
+  SELECT week_start, lp_type, lp_domain, active_campaigns,
+         ROUND(spend,2) AS spend_usd, impressions, clicks,
+         ROUND(ctr_pct,1) AS ctr_pct, hs_leads, hs_qualified,
+         hs_disqualified, ROUND(disq_rate_pct,1) AS disq_rate_pct,
+         ROUND(cpl,2) AS cpl, ROUND(cpql,2) AS cpql
+  FROM `angular-axle-492812-q4.qoyod_marketing.v_lp_weekly_summary`
+  WHERE week_start >= '2026-05-04'
+  ORDER BY week_start DESC, spend_usd DESC
+  ```
 
 ## Done this session (2026-05-04)
 

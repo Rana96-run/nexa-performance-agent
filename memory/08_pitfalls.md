@@ -202,6 +202,13 @@ IG insights:
   `0-136`). CPQL = spend / qualified leads. Never compute CPQL from
   contact-stage data.
 
+## Landing page A/B test
+
+- **Test start date: 2026-05-04.** HubSpot LP (`campaigns.qoyod.com`) has been live ~1 year. WordPress LP (`lp.qoyod.com`) launched for testing starting this date.
+- **Never compare LP types using data before 2026-05-04.** Historical data is biased — HubSpot LP has 1 year of optimization, WordPress LP had no volume. All CPL/CPQL comparisons must use `week_start >= '2026-05-04'` as the filter.
+- **Minimum test window: 2 weeks** before drawing conclusions. Check back ~2026-05-18 for a meaningful read.
+- `v_lp_weekly_summary` and `v_lp_performance_weekly` views are set up and collecting from today. The Hex LP cell should always filter `week_start >= '2026-05-04'`.
+
 ## UTM → BQ field mapping (universal across all channels)
 
 Every platform's data is stored with the following UTM-aligned field names.
