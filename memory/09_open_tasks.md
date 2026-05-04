@@ -141,6 +141,11 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## Done this session (2026-05-04) — continuation
+
+- [x] **Landing page performance analysis built** — `final_url` added to `ads_daily` schema and Google Ads BQ collector. New BQ views: `v_lp_performance_weekly` (week × lp_type × campaign, joins HubSpot via campaign_name) and `v_lp_weekly_summary` (week × lp_type rollup). 669 rows backfilled (30 days). Data shows HubSpot LP (`campaigns.qoyod.com`) CPQL ~$127 vs WordPress LP (`lp.qoyod.com`) CPQL ~$713 for week of Apr 27. `google_ads_ads` collector added to `reporting_scheduler.py` so `final_url` updates every 6h.
+- [ ] **Add LP comparison cell to Hex dashboard** — SQL to add (see memory note below). Paste into a new SQL cell at the bottom of the Google Ads section in Hex, titled "🏠 Landing Page Performance — Weekly".
+
 ## Done this session (2026-05-04)
 
 - [x] **Hex sub-campaign SQL cells** — added Ad Groups/Ads/Keywords for Google Ads; Ad Sets/Ads for Meta, Snapchat, TikTok, LinkedIn. Each cell joins `adsets_daily`/`ads_daily` → `hubspot_leads_module_daily` on `lead_utm_audience`/`lead_utm_content` showing spend, CTR, leads, SQLs, CPL, CPQL.
