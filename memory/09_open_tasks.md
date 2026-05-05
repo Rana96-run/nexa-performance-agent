@@ -117,6 +117,17 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## Done this session (2026-05-06)
+
+- [x] **ROAS close-date fix** — `hubspot_deals_bq.py` now uses `closedate` as the partition date for won deals (not `createdate`). SQL `WHERE stage_status='won' AND date BETWEEN x AND y` natively filters by when deals closed. 365-day backfill re-run: 88,034 deals → 35,015 rows.
+- [x] **Hex auto-refresh** — `collectors/hex_refresh.py` created. After every BQ refresh pass, the scheduler POSTs to Hex API to re-run both notebooks (performance + activity). Stale dashboard issue eliminated.
+- [x] **Snap timezone crash fixed** — `ZoneInfo("UTC")` crashes on Windows (no tzdata). Fixed with `timezone.utc` fallback in `snap_bq.py`.
+- [x] **Snap future-date fix** — DAY granularity rejects `end_time` in the future. Capped `end = date.today() - timedelta(days=1)` in both `collect_and_write` and `collect_adsets_and_write`.
+- [x] **Zero-row + BQ staleness guards** — `reporting_scheduler.py` now alerts Slack immediately (any time of day) when a paid channel (google_ads, meta, snapchat, tiktok) writes 0 rows, or when `MAX(date)` per paid channel in BQ is >3 days old. Silent failures can never go unnoticed again.
+- [x] **Dead code: `collectors/drive_writer.py` deleted** — 0 importers, 212 lines removed.
+- [x] **Activity dashboard design spec** — saved to `memory/14_activity_dashboard.md`.
+- [x] **Full incremental data pull** — 2,994 rows across 24 collectors. All Hex notebooks triggered. All git changes pushed to Railway.
+
 ## Done this session (2026-05-04) — continuation
 
 - [x] **LP Hex cell published** — "LP Performance — Weekly (Test from 2026-05-04)" cell added to Hex notebook, queries `v_lp_weekly_summary WHERE week_start >= '2026-05-04'`. Shows 0 rows on day 1 (expected). Hex published.
