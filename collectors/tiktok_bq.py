@@ -52,16 +52,27 @@ def _advertiser_currency(advertiser_id: str) -> str:
 
 def _get_report(advertiser_id: str, start: date, end: date,
                 data_level: str = "AUCTION_CAMPAIGN",
-                dimensions: list | None = None) -> list[dict]:
-    """Fetch paginated report rows for one advertiser account."""
+                dimensions: list | None = None,
+                metrics: list | None = None) -> list[dict]:
+    """Fetch paginated report rows for one advertiser account.
+
+    TikTok dimension rules (enforced by API, error 40002 otherwise):
+      AUCTION_CAMPAIGN  → dimensions may include campaign_id
+      AUCTION_ADGROUP   → dimensions must NOT include campaign_id; use adgroup_id only
+      AUCTION_AD        → dimensions must NOT include campaign_id/adgroup_id; use ad_id only
+    Parent IDs are obtained via _list_adgroups() / _list_ads() metadata calls.
+    """
+    import json as _json
     PAGE_SIZE = 1000
     all_rows: list[dict] = []
     page = 1
+    _dims = dimensions or ["campaign_id", "stat_time_day"]
+    _metrics = metrics or [
+        "spend", "impressions", "clicks", "ctr",
+        "conversion", "cost_per_conversion",
+        "campaign_name",
+    ]
     while True:
-        # TikTok Marketing API v1.3 requires GET with JSON-encoded list params,
-        # not POST with JSON body. POST returns HTTP 405 Method Not Allowed.
-        import json as _json
-        _dims = dimensions or ["campaign_id", "stat_time_day"]
         params = {
             "advertiser_id": advertiser_id,
             "report_type":   "BASIC",
@@ -70,13 +81,9 @@ def _get_report(advertiser_id: str, start: date, end: date,
             "lifetime":      "false",
             "start_date":    str(start),
             "end_date":      str(end),
-            "metrics": _json.dumps([
-                "spend", "impressions", "clicks", "ctr",
-                "conversion", "cost_per_conversion",
-                "campaign_name",
-            ]),
-            "page_size": PAGE_SIZE,
-            "page":      page,
+            "metrics":       _json.dumps(_metrics),
+            "page_size":     PAGE_SIZE,
+            "page":          page,
         }
         r = requests.get(f"{BASE}/report/integrated/get/",
                          headers=_headers(), params=params, timeout=30)
@@ -93,6 +100,63 @@ def _get_report(advertiser_id: str, start: date, end: date,
             break   # last page
         page += 1
     return all_rows
+
+
+def _list_adgroups(advertiser_id: str) -> dict[str, dict]:
+    """Return {adgroup_id: {campaign_id, name}} for all ad groups in account."""
+    out: dict[str, dict] = {}
+    page = 1
+    while True:
+        r = requests.get(f"{BASE}/adgroup/get/", headers=_headers(),
+                         params={"advertiser_id": advertiser_id,
+                                 "page_size": 1000, "page": page},
+                         timeout=30)
+        if r.status_code >= 400:
+            print(f"[tiktok-bq] adgroup/get {r.status_code}: {r.text[:120]}")
+            break
+        data = r.json()
+        if data.get("code", 0) != 0:
+            print(f"[tiktok-bq] adgroup/get error {data.get('code')}: {data.get('message','')}")
+            break
+        items = data.get("data", {}).get("list", [])
+        for item in items:
+            out[str(item.get("adgroup_id", ""))] = {
+                "campaign_id": str(item.get("campaign_id", "")),
+                "name":        item.get("adgroup_name", ""),
+            }
+        if len(items) < 1000:
+            break
+        page += 1
+    return out
+
+
+def _list_ads(advertiser_id: str) -> dict[str, dict]:
+    """Return {ad_id: {adgroup_id, campaign_id, ad_name}} for all ads in account."""
+    out: dict[str, dict] = {}
+    page = 1
+    while True:
+        r = requests.get(f"{BASE}/ad/get/", headers=_headers(),
+                         params={"advertiser_id": advertiser_id,
+                                 "page_size": 1000, "page": page},
+                         timeout=30)
+        if r.status_code >= 400:
+            print(f"[tiktok-bq] ad/get {r.status_code}: {r.text[:120]}")
+            break
+        data = r.json()
+        if data.get("code", 0) != 0:
+            print(f"[tiktok-bq] ad/get error {data.get('code')}: {data.get('message','')}")
+            break
+        items = data.get("data", {}).get("list", [])
+        for item in items:
+            out[str(item.get("ad_id", ""))] = {
+                "adgroup_id":  str(item.get("adgroup_id", "")),
+                "campaign_id": str(item.get("campaign_id", "")),
+                "name":        item.get("ad_name", ""),
+            }
+        if len(items) < 1000:
+            break
+        page += 1
+    return out
 
 
 def collect_and_write(days: int = None, incremental: bool = False) -> int:
@@ -176,11 +240,17 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
     rows = []
 
     for account_id in _ad_accounts():
-        native_cur  = _advertiser_currency(account_id)
+        native_cur = _advertiser_currency(account_id)
+        # Metadata lookup: adgroup_id -> {campaign_id, name}
+        adgroup_meta = _list_adgroups(account_id)
+        print(f"[tiktok-bq] adgroups account {account_id}: {len(adgroup_meta)} adgroups in metadata")
+        # dimensions must NOT include campaign_id at AUCTION_ADGROUP level
         report_rows = _get_report(
             account_id, start, end,
             data_level="AUCTION_ADGROUP",
-            dimensions=["campaign_id", "adgroup_id", "stat_time_day"],
+            dimensions=["adgroup_id", "stat_time_day"],
+            metrics=["spend", "impressions", "clicks", "ctr",
+                     "conversion", "adgroup_name"],
         )
         for row in report_rows:
             dims    = row.get("dimensions", {})
@@ -188,16 +258,18 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
             day     = (dims.get("stat_time_day") or "")[:10]
             if not day:
                 continue
+            adgroup_id   = str(dims.get("adgroup_id", ""))
+            meta         = adgroup_meta.get(adgroup_id, {})
             spend_native = float(metrics.get("spend", 0) or 0)
             spend        = to_usd(spend_native, native_cur)
             rows.append({
                 "date":          day,
                 "channel":       "tiktok",
                 "account_id":    account_id,
-                "campaign_id":   str(dims.get("campaign_id", "")),
-                "campaign_name": metrics.get("campaign_name"),
-                "adset_id":      str(dims.get("adgroup_id", "")),
-                "adset_name":    metrics.get("adgroup_name"),
+                "campaign_id":   meta.get("campaign_id", ""),
+                "campaign_name": None,   # not available at adgroup grain
+                "adset_id":      adgroup_id,
+                "adset_name":    metrics.get("adgroup_name") or meta.get("name"),
                 "status":        None,
                 "spend":         round(spend, 2),
                 "impressions":   int(metrics.get("impressions", 0) or 0),
@@ -208,7 +280,7 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
                 "currency":      "USD",
                 "updated_at":    now,
             })
-        print(f"[tiktok-bq] adgroups account {account_id}: {len(report_rows)} rows")
+        print(f"[tiktok-bq] adgroups account {account_id}: {len(report_rows)} stat rows")
 
     return upsert_rows("adsets_daily", rows,
                        key_fields=["date", "channel", "adset_id"])
@@ -234,11 +306,17 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     rows = []
 
     for account_id in _ad_accounts():
-        native_cur  = _advertiser_currency(account_id)
+        native_cur = _advertiser_currency(account_id)
+        # Metadata lookup: ad_id -> {adgroup_id, campaign_id, name}
+        ad_meta = _list_ads(account_id)
+        print(f"[tiktok-bq] ads account {account_id}: {len(ad_meta)} ads in metadata")
+        # dimensions must NOT include campaign_id or adgroup_id at AUCTION_AD level
         report_rows = _get_report(
             account_id, start, end,
             data_level="AUCTION_AD",
-            dimensions=["campaign_id", "adgroup_id", "ad_id", "stat_time_day"],
+            dimensions=["ad_id", "stat_time_day"],
+            metrics=["spend", "impressions", "clicks", "ctr",
+                     "conversion", "ad_name"],
         )
         for row in report_rows:
             dims    = row.get("dimensions", {})
@@ -246,18 +324,20 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
             day     = (dims.get("stat_time_day") or "")[:10]
             if not day:
                 continue
+            ad_id        = str(dims.get("ad_id", ""))
+            meta         = ad_meta.get(ad_id, {})
             spend_native = float(metrics.get("spend", 0) or 0)
             spend        = to_usd(spend_native, native_cur)
             rows.append({
                 "date":          day,
                 "channel":       "tiktok",
                 "account_id":    account_id,
-                "campaign_id":   str(dims.get("campaign_id", "")),
-                "campaign_name": metrics.get("campaign_name"),
-                "adset_id":      str(dims.get("adgroup_id", "")),
-                "adset_name":    metrics.get("adgroup_name"),
-                "ad_id":         str(dims.get("ad_id", "")),
-                "ad_name":       metrics.get("ad_name"),
+                "campaign_id":   meta.get("campaign_id", ""),
+                "campaign_name": None,   # not available at ad grain
+                "adset_id":      meta.get("adgroup_id", ""),
+                "adset_name":    None,
+                "ad_id":         ad_id,
+                "ad_name":       metrics.get("ad_name") or meta.get("name"),
                 "status":        None,
                 "spend":         round(spend, 2),
                 "impressions":   int(metrics.get("impressions", 0) or 0),
@@ -268,7 +348,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "currency":      "USD",
                 "updated_at":    now,
             })
-        print(f"[tiktok-bq] ads account {account_id}: {len(report_rows)} rows")
+        print(f"[tiktok-bq] ads account {account_id}: {len(report_rows)} stat rows")
 
     return upsert_rows("ads_daily", rows,
                        key_fields=["date", "channel", "ad_id"])
