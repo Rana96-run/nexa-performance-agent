@@ -22,6 +22,7 @@ from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
 from collectors import windsor_bq
 from collectors.views import refresh_all_views
+from collectors.hex_refresh import refresh_all as refresh_hex
 from notifications.notify import send_heartbeat
 from logs.logger import get_logger, setup_global_logging
 from logs.activity_logger import log_activity_async
@@ -176,6 +177,21 @@ def run_refresh(incremental: bool = True, days: int | None = None):
         print(f"[scheduler] view refresh FAILED: {e}")
         log_activity_async(role="bq_refresh", action="refresh_views",
                            status="failed", details={"error": str(e)})
+
+    # ── Trigger Hex notebook re-runs so dashboards reflect fresh BQ data ─────
+    try:
+        hex_results = refresh_hex(wait=False)   # fire-and-forget; Hex queues the run
+        if hex_results:
+            ok_hex  = [n for n, v in hex_results.items() if v]
+            bad_hex = [n for n, v in hex_results.items() if not v]
+            status_hex = "success" if not bad_hex else "failed"
+            log_activity_async(
+                role="bq_refresh", action="refresh_hex_notebooks",
+                status=status_hex,
+                details={"triggered": ok_hex, "failed": bad_hex},
+            )
+    except Exception as e:
+        print(f"[scheduler] Hex refresh failed (non-fatal): {e}")
 
     ended = datetime.now(timezone.utc)
     elapsed = (ended - started).total_seconds()
