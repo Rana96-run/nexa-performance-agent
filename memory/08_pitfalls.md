@@ -135,6 +135,8 @@ IG insights:
 
 ## Snapchat (extended)
 
+- **DAY granularity rejects end_time in the future.** Always cap `end = date.today() - timedelta(days=1)`. Passing `date.today()` means `end_exclusive = tomorrow` which Snap rejects. Applies to both `collect_and_write` and `collect_adsets_and_write`.
+- **`ZoneInfo("UTC")` crashes on Windows** when the `tzdata` package is absent from the system timezone database. Fix: `if not tz_name or tz_name.upper() == "UTC": tz = timezone.utc` — use `timezone.utc` directly rather than `ZoneInfo("UTC")`.
 - **Conversion fields are per-account.** Safe across every account:
   `conversion_sign_ups`. Others (`conversion_purchases`, `conversion_add_cart`,
   `conversion_start_checkout`, `conversion_save`, `conversion_subscribe`,
@@ -230,6 +232,7 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 
 ## TikTok
 
+- **Adgroup/ad-grain API error 40002: "dimension campaign_id does not match data_level AUCTION_ADGROUP"** — TikTok API rejects `campaign_id` as a dimension when `data_level=AUCTION_ADGROUP` or `AUCTION_AD`. Fix: remove `campaign_id` from the `dimensions[]` list for adgroup/ad calls and instead look it up via a separate campaigns list call. Tracked in 09_open_tasks.md.
 - **`qoyod_source` is stored as `'Tiktok Ads'`** (lowercase 'i' — not
   `'TikTok'` and not `'TikTok Ads'`). `v_channel_key_map` in `collectors/views.py`
   must use `WHEN 'tiktok' THEN 'Tiktok Ads'` or the BQ join in
