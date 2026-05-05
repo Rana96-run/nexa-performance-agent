@@ -33,8 +33,8 @@ _TOKEN  = os.getenv("HEX_API_TOKEN")
 
 # Project IDs extracted from app URLs (alphanumeric suffix after last dash)
 _PROJECTS = {
-    "performance": os.getenv("HEX_PERFORMANCE_PROJECT_ID", "0339sAIgaMNYNW4ffgEBZK"),
-    "activity":    os.getenv("HEX_ACTIVITY_PROJECT_ID",    "033ArC9Xytz3SK6tPXwk9D"),
+    "performance": os.getenv("HEX_PERFORMANCE_PROJECT_ID", "019de9ff-969c-7000-8463-5dfe9a5f730a"),
+    "activity":    os.getenv("HEX_ACTIVITY_PROJECT_ID",    "019df2e4-5f15-7000-8317-f5db0af316d3"),
 }
 
 _POLL_INTERVAL = 5   # seconds between status checks
