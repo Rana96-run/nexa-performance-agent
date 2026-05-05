@@ -64,10 +64,15 @@ def _day_start_iso(d: date, tz_name: str) -> str:
     Midnight of `d` in timezone `tz_name`, expressed as a UTC ISO-8601 string
     that Snap accepts (e.g. '2026-01-01T08:00:00Z' for an LA-tz day).
     """
-    try:
-        tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC")
-    except Exception:
-        tz = ZoneInfo("UTC")
+    # timezone.utc is always available; ZoneInfo("UTC") fails on Windows
+    # when the tzdata package is absent from the system tz database.
+    if not tz_name or tz_name.upper() == "UTC":
+        tz = timezone.utc
+    else:
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = timezone.utc
     local = datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=tz)
     utc   = local.astimezone(timezone.utc)
     return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
