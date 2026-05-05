@@ -162,7 +162,9 @@ def collect_and_write(days: int = None, incremental: bool = False):
     """
     token = _refresh_access_token()
 
-    end = date.today()  # Snap stats available same-day
+    # Snap DAY-granularity queries reject end_time in the future.
+    # Use yesterday as the ceiling so end_exclusive (end+1) = today midnight.
+    end = date.today() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -285,7 +287,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     """Ad Squad grain → adsets_daily. Same token as campaign collector."""
     token = _refresh_access_token()
 
-    end = date.today()
+    end = date.today() - timedelta(days=1)   # cap at yesterday — same reason as campaigns
     if incremental:
         start = end - timedelta(days=2)
     elif days:
