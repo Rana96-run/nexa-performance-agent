@@ -13,7 +13,7 @@ backfill can be forced via `python reporting_scheduler.py backfill`.
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 
 from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
 from collectors import google_ads_bq, meta_bq, snap_bq
@@ -29,6 +29,51 @@ from logs.activity_logger import log_activity_async
 
 setup_global_logging("bq-refresh")  # captures every print() into logs/
 log = get_logger("bq-refresh")
+
+
+# ── Paid-channel guardrails ──────────────────────────────────────────────────
+# Collectors that MUST write ≥1 row every incremental pass when credentials
+# are present.  A zero-row result is a silent failure (API bug, auth expiry,
+# bad date window) — treat it as an error and force a Slack alert.
+ZERO_ROW_WARN: set[str] = {
+    "google_ads", "meta", "snapchat", "tiktok",
+}
+
+# BQ channels to monitor for staleness (MAX date > 3 days old = alert)
+_STALENESS_CHANNELS = ("google_ads", "meta", "snapchat", "tiktok")
+_STALENESS_WARN_DAYS = 3
+
+
+def _check_bq_staleness() -> list[str]:
+    """
+    Query MAX(date) per paid channel in campaigns_daily.
+    Returns list of warning strings for channels whose latest date is
+    more than _STALENESS_WARN_DAYS days behind today.
+    """
+    try:
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+        client = get_client()
+        threshold = (date.today() - timedelta(days=_STALENESS_WARN_DAYS)).isoformat()
+        channels_str = ", ".join(f"'{c}'" for c in _STALENESS_CHANNELS)
+        q = f"""
+        SELECT channel, MAX(date) AS latest_date
+        FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+        WHERE channel IN ({channels_str})
+        GROUP BY channel
+        """
+        stale = []
+        found = {row.channel: str(row.latest_date) for row in client.query(q).result()}
+        # Also catch channels that have NO rows at all
+        for ch in _STALENESS_CHANNELS:
+            ld = found.get(ch)
+            if ld is None:
+                stale.append(f"`{ch}` — no data in BQ at all")
+            elif ld < threshold:
+                stale.append(f"`{ch}` — last data: {ld}")
+        return stale
+    except Exception as e:
+        log.warning(f"staleness check failed (non-fatal): {e}")
+        return []
 
 
 COLLECTORS = [
@@ -68,24 +113,40 @@ COLLECTORS = [
 ]
 
 
-def _post_refresh_digest(results: dict, elapsed: float, utc_hour: int) -> None:
+def _post_refresh_digest(results: dict, elapsed: float, utc_hour: int,
+                          stale_warnings: list[str] | None = None) -> None:
     """Post a short Slack digest after a BQ refresh pass.
 
-    Only fires when:
-      - there are failures (always notify on errors), OR
-      - it is the first run of the day (06:00 UTC pass, utc_hour == 6).
+    Fires when ANY of the following is true:
+      - there are hard failures (exception from a collector)
+      - a paid-channel collector wrote 0 rows (silent API/auth failure)
+      - BQ staleness check found a channel whose data is >3 days old
+      - it is the first run of the day (06:00 UTC pass)
 
     Args:
-        results:  dict of name -> (ok: bool, val, dt) from run_refresh().
-        elapsed:  total wall-clock seconds for the full refresh.
-        utc_hour: UTC hour at which the refresh started (0-23).
+        results:        dict of name -> (ok: bool, val, dt) from run_refresh().
+        elapsed:        total wall-clock seconds for the full refresh.
+        utc_hour:       UTC hour at which the refresh started (0-23).
+        stale_warnings: list of human-readable staleness warnings from
+                        _check_bq_staleness(), or None/[] if all clean.
     """
+    stale_warnings = stale_warnings or []
+
     ok_items   = [n for n, (o, _, _) in results.items() if o]
     bad_items  = [n for n, (o, _, _) in results.items() if not o]
     has_errors = bool(bad_items)
     is_morning = (utc_hour == 6)
 
-    if not has_errors and not is_morning:
+    # Zero-row warnings: paid channels that succeeded but wrote nothing
+    zero_row_items = [
+        n for n in ZERO_ROW_WARN
+        if n in results and results[n][0] and isinstance(results[n][1], int)
+        and results[n][1] == 0
+    ]
+    has_zero_row  = bool(zero_row_items)
+    has_stale     = bool(stale_warnings)
+
+    if not has_errors and not has_zero_row and not has_stale and not is_morning:
         return  # silent pass — nothing to report
 
     try:
@@ -95,34 +156,51 @@ def _post_refresh_digest(results: dict, elapsed: float, utc_hour: int) -> None:
         total_rows = sum(v for _, (o, v, _) in results.items()
                          if o and isinstance(v, int))
 
-        # Build per-collector status lines
+        # Build per-collector status lines (flag zero-row paid collectors)
         lines = []
         for name, (ok, val, _) in results.items():
-            icon = ":white_check_mark:" if ok else ":x:"
+            if not ok:
+                icon = ":x:"
+            elif name in ZERO_ROW_WARN and isinstance(val, int) and val == 0:
+                icon = ":warning:"  # succeeded but wrote nothing
+            else:
+                icon = ":white_check_mark:"
             suffix = f"  ({val:,} rows)" if ok and isinstance(val, int) else (f"  `{val}`" if not ok else "")
             lines.append(f"{icon} `{name}`{suffix}")
 
         status_block = "\n".join(lines)
         summary = f"{total_rows:,} rows across {len(ok_items)} collectors in {elapsed:.0f}s"
 
+        # Determine header and alert sections
+        alert_parts = []
         if has_errors:
-            header = f":warning: *BQ Refresh — {len(bad_items)} failure(s)*"
-            failures_section = (
-                f"\n\n*Failed:* {', '.join(f'`{n}`' for n in bad_items)}"
-            )
+            alert_parts.append(f":x: *{len(bad_items)} collector(s) threw exceptions:* "
+                                + ", ".join(f"`{n}`" for n in bad_items))
+        if has_zero_row:
+            alert_parts.append(f":warning: *Paid channels wrote 0 rows (silent failure):* "
+                                + ", ".join(f"`{n}`" for n in zero_row_items))
+        if has_stale:
+            alert_parts.append(":clock3: *Stale BQ data detected:*\n"
+                                + "\n".join(f"  • {w}" for w in stale_warnings))
+
+        is_alert = has_errors or has_zero_row or has_stale
+        if is_alert:
+            header = ":rotating_light: *BQ Refresh — action required*"
         else:
             header = ":large_green_circle: *BQ Refresh — daily 06:00 UTC pass*"
-            failures_section = ""
+
+        alert_section = ("\n\n" + "\n".join(alert_parts)) if alert_parts else ""
 
         text = (
             f"{header}\n"
             f"{summary}"
-            f"{failures_section}\n\n"
+            f"{alert_section}\n\n"
             f"{status_block}"
         )
 
         client.chat_postMessage(channel=SLACK_CHANNEL_NOTIFY, text=text)
-        log.info(f"refresh digest posted to {SLACK_CHANNEL_NOTIFY}")
+        log.info(f"refresh digest posted to {SLACK_CHANNEL_NOTIFY}"
+                 + (" [ALERT]" if is_alert else ""))
 
     except Exception as e:
         log.warning(f"_post_refresh_digest failed (non-fatal): {e}")
@@ -193,6 +271,13 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] Hex refresh failed (non-fatal): {e}")
 
+    # ── BQ staleness check — catches silent 0-row bugs that still mark OK ────
+    stale_warnings = _check_bq_staleness()
+    if stale_warnings:
+        log.warning(f"staleness check found issues: {stale_warnings}")
+    else:
+        log.info("staleness check: all paid channels up to date")
+
     ended = datetime.now(timezone.utc)
     elapsed = (ended - started).total_seconds()
     print(f"\n[scheduler] Done in {elapsed:.0f}s")
@@ -221,7 +306,7 @@ def run_refresh(incremental: bool = True, days: int | None = None):
                  "collectors_failed": bad_items, "total_rows": total_rows},
     )
 
-    _post_refresh_digest(results, elapsed, utc_hour)
+    _post_refresh_digest(results, elapsed, utc_hour, stale_warnings=stale_warnings)
 
     return results
 
