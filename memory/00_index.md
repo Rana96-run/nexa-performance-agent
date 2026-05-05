@@ -28,6 +28,7 @@ single concern. Read only what you need.
 | `11_agent_roles.md` | Which roles live in this repo vs external (Creative, MarkOps) |
 | `12_funnel_io.md` | Funnel.io workspace audit, custom dims/metrics, Looker board mapping |
 | `13_hubspot_fields.md` | HubSpot BQ schema, UTM→BQ field map, qoyod_source channel key map, CPL/CPQL methodology at every grain |
+| `14_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
 
 ## External references (not in repo)
 
