@@ -4,16 +4,18 @@ scripts/audit_active_keywords.py
 One-off / on-demand audit: scan all currently-ENABLED Google Ads keywords
 across all customer accounts and flag any that violate the keyword policy:
 
-  • ALWAYS_NEGATIVE  — should never have been added (login / free / دورات /
-    تحميل / قرض / تمويل / وظيفة / etc.)
-  • BRAND_ONLY (قيود/qoyod) inside a non-Brand campaign — wrong placement.
+  • always_negative          — should never have been added (login / free /
+                                دورات / تحميل / قرض / تمويل / وظيفة / etc.)
+  • brand_only_block         — قيود/qoyod outside a Brand campaign
+  • competitor_in_generic    — competitor name (Foodics, Daftra, Manager.io,
+                                Zoho, Odoo, …) outside a Competitor campaign
+  • language_mismatch        — Arabic keyword in `_EN_` campaign or vice versa
 
 Output:
   • Console table grouped by violation type.
   • CSV at logs/active_keyword_violations_<date>.csv.
-  • Asana task in `daily_activity` with the full list, so the human can
-    review and pause via `bulk_keywords.py pause` (we do NOT autonomously
-    pause — per CLAUDE.md "APPROVAL REQUIRED BEFORE ANY PAUSE").
+  • Asana task per violation type for human review. We do NOT autonomously
+    pause — per CLAUDE.md, paused via `bulk_keywords.py pause` after review.
 
 Usage:
   python scripts/audit_active_keywords.py
@@ -74,7 +76,13 @@ def scan_active_keywords() -> list[dict]:
             term = r.ad_group_criterion.keyword.text
             campaign_name = r.campaign.name
             kind = classify_term(term, campaign_name)
-            if kind in ("always_negative", "brand_only_block"):
+            # All four are violations when ENABLED:
+            #  - always_negative      → never should be a keyword
+            #  - brand_only_block     → قيود in non-Brand campaign
+            #  - competitor_in_generic → competitor in non-Competitor campaign
+            #  - language_mismatch    → AR/EN mismatch with campaign language
+            if kind in ("always_negative", "brand_only_block",
+                        "competitor_in_generic", "language_mismatch"):
                 violations.append({
                     "violation":         kind,
                     "customer_id":       cid,
@@ -145,12 +153,21 @@ def create_review_task(violations: list[dict], csv_path: Path) -> str | None:
     ]
     for kind, items in by_kind.items():
         rule_explanation = {
-            "always_negative":  "match an ALWAYS-NEGATIVE pattern (login / free / "
-                                "دورات / تحميل / قرض / تمويل / وظائف / etc.) — "
-                                "should never have been ENABLED.",
-            "brand_only_block": "contain قيود / qoyod but live in a NON-BRAND "
-                                "campaign — must be moved to a Brand campaign "
-                                "or paused.",
+            "always_negative":      "match an ALWAYS-NEGATIVE pattern (login / free / "
+                                    "دورات / تحميل / قرض / تمويل / وظائف / etc.) — "
+                                    "should never have been ENABLED.",
+            "brand_only_block":     "contain قيود / qoyod but live in a NON-BRAND "
+                                    "campaign — must be moved to a Brand campaign "
+                                    "or paused. (قيود محاسبية / قيود المحاسبة "
+                                    "are accounting nouns and excluded from this rule.)",
+            "competitor_in_generic":"are competitor brand names (Foodics, Daftra, "
+                                    "Manager.io, Zoho, Odoo, Xero, …) sitting in a "
+                                    "non-Competitor campaign. Move to the matching "
+                                    "Competitor campaign or pause.",
+            "language_mismatch":    "are Arabic keywords in an `_EN_` campaign or "
+                                    "Latin-script keywords in an `_AR_` campaign. "
+                                    "Move to a campaign of the matching language "
+                                    "or pause.",
         }.get(kind, kind)
 
         parts.append(f"### {kind} — {len(items)} keyword(s)")

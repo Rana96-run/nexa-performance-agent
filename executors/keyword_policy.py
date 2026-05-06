@@ -87,9 +87,10 @@ COMPETITOR_PATTERNS: list[str] = [
     "daftra", "دفترة", "دفتره",
     # Manager.io
     "manager io", "manager.io", "managerio",
-    "الاستاذ", "الأستاذ",          # Manager.io's Arabic name "Al-Ostaz"
-    # Wafeq
-    "wafeq", "وافق", "وافيق", "وفق",
+    "الاستاذ المحاسبي", "الأستاذ المحاسبي", "الاستاذ المحاسبه",   # Al-Ostaz (full phrase only —
+    # bare الاستاذ / الأستاذ means "teacher/Mr." in Arabic and would false-positive)
+    # Wafeq (use only distinct spellings; bare "وافق" / "وفق" mean "agreed/in accordance with")
+    "wafeq", "وافيق",
     # International accounting SaaS
     "zoho", "quickbooks", "odoo", "اودو", "أودو",
     "xero", "sage", "wave",

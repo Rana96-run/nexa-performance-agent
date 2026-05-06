@@ -102,6 +102,23 @@ IG insights:
   `qoyod` etc. are brand-only. If you ever see one of those feature-noun
   combinations flagged as a brand violation, the disambiguation list needs
   another modifier added.
+- **Competitor patterns must be distinct, not common Arabic words.** Wafeq
+  (`وافق` = also "agreed") and Manager.io / Al-Ostaz (`الاستاذ` = also "the
+  teacher/Mr.") are common false-positive risks. Use only the specific
+  spellings that don't collide with everyday Arabic: `wafeq`, `وافيق`,
+  `الاستاذ المحاسبي` (full phrase), not the bare ambiguous form.
+- **Removing a negative keyword is safe — re-adding is the risk.** Removing
+  `qoyod` or competitor names as negatives just re-opens those queries to
+  match in the right campaign. The audit `scripts/audit_active_negatives.py`
+  direct-executes removals (no approval) because it can't make money go
+  somewhere it shouldn't. ADDING negatives still requires the patterns to
+  pass the policy check first.
+- **Search-term audit produces 4 buckets, not 2.** Old pattern was add_kw +
+  add_neg. New pattern: add_kw, add_neg (regular wasted), auto_neg
+  (always-negative direct-execute), pause_watch (brand/competitor/lang —
+  flag for human, never auto-execute either way). Don't conflate auto_neg
+  with pause_watch — auto_neg fires immediately, pause_watch surfaces an
+  Asana task and waits.
 - **Keywords NEVER post to Slack.** Expansion candidates → Asana only.
   Negatives → direct-execute silently. The old Slack-approval workflow
   (`post_keyword_approval` / `pending_keyword_approvals.json` /

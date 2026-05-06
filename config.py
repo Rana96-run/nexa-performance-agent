@@ -242,9 +242,11 @@ DAYS_FOR_PAUSE_DECISION    = 14
 ZERO_CONV_SPEND_THRESHOLD  = 8     # pause ad if spend > $8 with zero conv
 ZERO_CONV_DAYS_THRESHOLD   = 7
 # Keyword pause rules (Google Ads / Microsoft Ads) — two independent triggers:
-#   Rule A: spend > $35, zero conversions, running ≥ 14 days  → pause
+#   Rule A: spend > $80, zero conversions, running ≥ 7 days   → pause
 #   Rule B: CPL > $80, 1+ conversions (low quality), ≥ 14 days → pause
-KEYWORD_PAUSE_SPEND        = 35.00   # Rule A: zero-conv threshold
+# Note: wasted-spend KEYWORDS are paused, NOT added as negatives. The whole
+# keyword (and the spend at risk) is the issue, not just one matched query.
+KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv threshold (was $35 / 14d)
 KEYWORD_PAUSE_CPL          = 80.00   # Rule B: poor-CPL threshold (1+ conv)
-KEYWORD_PAUSE_DAYS         = 14
+KEYWORD_PAUSE_DAYS         = 7       # Rule A window (Rule B uses DAYS_FOR_PAUSE_DECISION)
 PLACEMENT_PAUSE_SPEND      = 3

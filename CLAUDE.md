@@ -159,16 +159,42 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
    - job / jobs / career / hiring / وظيفة / وظائف / فرص عمل / توظيف
 2. **BRAND_ONLY** — قيود / qoyod variants only allowed in campaigns whose name
    contains `Brand`. In any other campaign they are dropped from `add_kw` and
-   routed to pause-watch for human review.
+   routed to pause-watch for human review. They are NEVER added as negatives.
    **Exception (Arabic ambiguity):** "قيود" + accounting modifier (`محاسبية` /
    `المحاسبة` / `يومية` / `اليومية`) is the accounting NOUN ("journal entries"),
    NOT the brand name. Terms like `قيود محاسبية`, `قيود المحاسبة`, `قيود يومية`
-   are feature keywords and route through as `normal`. The disambiguation list
-   lives in `keyword_policy.QIYUD_FEATURE_MODIFIERS`. The audit script
-   `scripts/audit_active_keywords.py` applies the same exception when
-   scanning live keywords.
-3. **NEVER_NEGATIVE** — competitor brand names (zoho, quickbooks, odoo, xero,
-   sage, wave, منافس). Never excluded; pause if not converting after 14 days.
+   are feature keywords and route through as `normal`. Disambiguation list lives
+   in `keyword_policy.QIYUD_FEATURE_MODIFIERS`.
+3. **COMPETITOR** — competitor brand names. Currently tracked: Foodics (فودكس),
+   Daftra (دفترة), Manager.io / الاستاذ المحاسبي, Wafeq, Zoho, QuickBooks, Odoo
+   (اودو), Xero, Sage, Wave, plus generic منافس. **Rule:** ONLY allowed in
+   campaigns whose name contains `Competitor`. In any other campaign:
+   - Don't add as keyword (drop from `add_kw`)
+   - Don't add as negative (we want to bid on these — just in the right campaign)
+   - Pause-watch the keyword that triggered the search → human moves or pauses
+
+### Cross-cutting keyword rules
+
+- **Language match (non-negotiable).** A keyword's script must match its
+  campaign's language token (`_AR_` / `_EN_`). Latin keyword in Arabic campaign
+  or vice versa → pause-watch. Mixed-script terms (transliterated brand inside
+  Arabic) are tolerated. Detection: `keyword_policy.is_language_mismatch()`.
+- **Wasted-spend KEYWORDS are paused, not negated.** A keyword that has
+  burnt $80+ in 7 days with 0 conversions gets PAUSED (not added as negative
+  — the keyword itself is the problem, not just one matched query). Threshold
+  in `config.KEYWORD_PAUSE_SPEND` / `KEYWORD_PAUSE_DAYS`.
+- **Never add competitor terms as negatives.** Competitors live in Competitor
+  campaigns; negating them in other campaigns blocks the right traffic too.
+
+### Audit scripts (run on demand)
+
+- `python scripts/audit_active_keywords.py` — scans all ENABLED keywords for
+  policy violations (always-negative-as-keyword, قيود-in-non-brand,
+  competitor-in-generic, language-mismatch). Read-only; creates an Asana task.
+- `python scripts/audit_active_negatives.py` — scans all ACTIVE negative
+  keywords (campaign + ad-group level). Removes any that match competitor or
+  brand-only patterns (removing a negative is safe — re-opens a query). Logs
+  removals to Asana.
 
 ## Ad pause rules (non-negotiable)
 

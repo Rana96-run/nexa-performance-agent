@@ -286,35 +286,58 @@ def audit_search_terms(days: int = 30) -> dict:
             }
 
             kind = classify_term(term, r.campaign.name)
+            row["policy_kind"] = kind
 
             # 3a. Converting search terms NOT yet in the keyword list -> add as keyword
             if conv >= EXPANSION_MIN_CONV and status not in ("ADDED",):
                 row["cpa"] = round(spend / conv, 0) if conv else None
-                # Brand-only block: قيود/qoyod outside Brand campaigns are never
-                # added as keywords — even if converting. Route to pause-watch
-                # so a human reviews whether to move into the Brand campaign.
-                if kind == "brand_only_block":
+                if kind == "always_negative":
+                    # Login / مجاني / دورة / تحميل / قرض / تمويل / وظيفة / etc.
+                    # Never expand on these intents — drop silently.
+                    row["policy_reason"] = "always-negative pattern"
+                elif kind == "brand_only_block":
+                    # قيود / qoyod outside Brand campaign — even if converting,
+                    # don't add. Human reviews whether to move into Brand.
                     row["policy_reason"] = "brand-only term in non-brand campaign"
                     pause_watch.append(row)
-                # Always-negative wins over conversion: even if it converted,
-                # we never expand on these intents.
-                elif kind == "always_negative":
-                    row["policy_reason"] = "always-negative pattern"
-                    # Do NOT add to add_kw; do NOT auto-execute as negative if it
-                    # actually converted — it's already in ADDED state or odd edge,
-                    # just drop it from candidates.
-                    pass
+                elif kind == "competitor_in_competitor":
+                    # Competitor name in a Competitor campaign — correct
+                    # placement. Don't add as keyword (already targeting the
+                    # whole intent), don't pause-watch.
+                    row["policy_reason"] = "competitor in competitor campaign — correct placement"
+                elif kind == "competitor_in_generic":
+                    # Competitor name in a non-competitor campaign — wrong
+                    # placement. Don't add; flag the keyword that triggered it.
+                    row["policy_reason"] = "competitor in non-competitor campaign — move or pause"
+                    pause_watch.append(row)
+                elif kind == "language_mismatch":
+                    # AR keyword in EN campaign or vice versa — flag for review.
+                    row["policy_reason"] = "language mismatch (AR↔EN) — move or pause"
+                    pause_watch.append(row)
                 else:
                     add_kw.append(row)
 
-            # 3b. Spending / wasted terms (0 conv, not already excluded)
+            # 3b. Wasted terms (0 conv, $25+ spend, not already excluded)
             elif spend >= EXPANSION_MIN_SPEND and conv == 0 and status not in ("EXCLUDED",):
                 if kind == "always_negative":
                     auto_neg.append(row)              # silent direct-execute
-                elif kind in ("brand_only_block", "never_negative"):
-                    pause_watch.append(row)           # never exclude — pause if needed
-                elif kind == "brand_allowed":
-                    pause_watch.append(row)           # in Brand campaign but not converting → review
+                elif kind == "competitor_in_competitor":
+                    # Wasted spend on a competitor term in a Competitor campaign
+                    # = the keyword needs review/pause (don't negate — it's the
+                    # campaign's whole purpose). Pause-watch the keyword.
+                    row["policy_reason"] = "competitor spend in competitor campaign — review keyword"
+                    pause_watch.append(row)
+                elif kind == "competitor_in_generic":
+                    # Competitor in wrong campaign — never negate; flag for move/pause.
+                    row["policy_reason"] = "competitor in non-competitor campaign — never negate"
+                    pause_watch.append(row)
+                elif kind in ("brand_only_block", "brand_allowed"):
+                    # قيود/qoyod-related — never negate; pause-watch.
+                    row["policy_reason"] = "brand term — never negate"
+                    pause_watch.append(row)
+                elif kind == "language_mismatch":
+                    row["policy_reason"] = "language mismatch — fix campaign placement, don't negate"
+                    pause_watch.append(row)
                 else:
                     add_neg.append(row)               # normal negative candidate
 
@@ -325,7 +348,7 @@ def audit_search_terms(days: int = 30) -> dict:
 
     print(f"[search-terms] add_kw={len(add_kw)}, add_neg={len(add_neg)}, "
           f"auto_neg={len(auto_neg)} (always-neg rules), "
-          f"pause_watch={len(pause_watch)} (قيود/competitors — pause only)")
+          f"pause_watch={len(pause_watch)} (brand/competitor/language — never negate)")
 
     return {
         "add_as_keyword": add_kw,
