@@ -2,11 +2,12 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand         = "python app_server.py"
-healthcheckPath      = "/health"
-healthcheckTimeout   = 60
-restartPolicyType    = "ON_FAILURE"
+startCommand            = "gunicorn app_server:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120"
+healthcheckPath         = "/health"
+healthcheckTimeout      = 60
+restartPolicyType       = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+numReplicas             = 1
 
 # ── Services ──────────────────────────────────────────────────────────────────
 #
