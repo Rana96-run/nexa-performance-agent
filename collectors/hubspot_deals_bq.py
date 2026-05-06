@@ -226,6 +226,19 @@ def collect_and_write(days: int = None, start_date: date = None,
                 # Won deals use closedate as the partition date so ROAS can be
                 # filtered by when revenue was actually recognised, not when the
                 # deal was created. Open/lost use createdate for pipeline reporting.
+                #
+                # Sanity guard: HubSpot users sometimes set closedate to a far-
+                # future placeholder (e.g. 2026-12-31). That partitions revenue
+                # months in the future and pollutes "won this week" queries.
+                # If closedate > today OR closedate < createdate by more than
+                # a year, fall back to createdate.
+                from datetime import date as _date, datetime as _dt
+                today_str = _date.today().isoformat()
+                if status == "won" and closed:
+                    if closed > today_str:
+                        closed = created                # future date → use createdate
+                    elif created and (closed < created):
+                        closed = created                # closedate before createdate → use createdate
                 partition_date = (closed if (status == "won" and closed) else created)
                 key = (
                     partition_date,
