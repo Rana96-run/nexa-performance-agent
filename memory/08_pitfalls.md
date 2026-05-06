@@ -416,6 +416,20 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   Adspirer is for interactive on-demand execution in Claude Code sessions — the Railway agent cannot
   use it (no browser OAuth).
 
+## Hex API
+
+- **Cannot use `updatePublishedResults: true` AND `inputParams` together.** Hex API v1 returns
+  `"Cannot update app results if specifying custom input parameters"` (400) if both are set.
+  You must choose one: update published results (with notebook's saved defaults) OR run with
+  custom params (results not published). Workaround: set the date input's **default value** to a
+  relative "Today" in the Hex UI — then API triggers with `updatePublishedResults: true` will
+  always publish today's data without needing inputParams.
+- **Date input default must be relative ("Today"), not absolute ("2026-05-02").** If a date
+  parameter's default is an absolute date, every API-triggered run publishes that frozen date
+  forever. Fix: open the notebook, click the date input cell, change its default from a specific
+  date to the relative "Today" option. Then republish. This is a one-time UI fix — cannot be
+  done via API.
+
 ## Looker Studio
 
 - **No public API — all report building is manual.** BQ views can be created via code, but the
