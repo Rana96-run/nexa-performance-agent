@@ -342,6 +342,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     print(f"[snap] adsets window {start} -> {end} across {len(accounts)} account(s)")
 
     for acct in accounts:
+        token   = _refresh_access_token()   # refresh per-account (loop can take >30 min)
         meta    = _get_account(token, acct)
         cur     = normalize_currency(meta.get("currency"))
         tz      = meta.get("timezone") or "UTC"
@@ -485,6 +486,9 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     print(f"[snap] ads window {start} -> {end} across {len(accounts)} account(s)")
 
     for acct in accounts:
+        # Refresh token per-account — the per-ad loop can take >30 min for large
+        # accounts and Snap access tokens expire after 30 min.
+        token  = _refresh_access_token()
         meta   = _get_account(token, acct)
         cur    = normalize_currency(meta.get("currency"))
         tz     = meta.get("timezone") or "UTC"
