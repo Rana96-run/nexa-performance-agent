@@ -402,32 +402,35 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
 # ── Ad (Creative) level → ads_daily ──────────────────────────────────────────
 
 def _list_ads(token: str, ad_account_id: str,
-              active_only: bool = False) -> dict:
-    """Return {ad_id: {name, adsquad_id, campaign_id, status}} for all ads.
+              updated_since: datetime | None = None) -> dict:
+    """Return {ad_id: {name, adsquad_id, campaign_id, status}} for ads.
 
-    active_only=True  → skip PAUSED/DELETED ads (safe for incremental runs —
-                        ads that ran in the past won't have new data today).
-    active_only=False → include all ads (needed for full backfills).
+    updated_since: if set, only return ads whose updated_at >= this datetime.
+        Use for incremental runs — catches ads with new spend, status changes,
+        or creative edits within the window. Ads untouched for months are skipped.
+    updated_since=None: return all ads regardless of update time (full backfill).
     """
     r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/ads",
                      headers=_headers(token), timeout=_SNAP_TIMEOUT)
     if r.status_code >= 400:
         print(f"[snap]   ads list {r.status_code}: {r.text[:160]}")
         return {}
-    # Also need adsquad → campaign mapping for campaign_id lookups
     adsquads = _list_adsquads(token, ad_account_id)
     out = {}
     for item in r.json().get("ads", []):
-        ad     = item.get("ad", {})
-        status = ad.get("status", "")
-        if active_only and status not in ("ACTIVE",):
-            continue
+        ad = item.get("ad", {})
+        if updated_since is not None:
+            # updated_at is a Unix timestamp in milliseconds
+            updated_ms = ad.get("updated_at") or 0
+            ad_updated = datetime.fromtimestamp(updated_ms / 1000, tz=timezone.utc)
+            if ad_updated < updated_since:
+                continue
         sq_id = ad.get("ad_squad_id", "")
         out[ad["id"]] = {
             "name":        ad.get("name", ""),
             "adsquad_id":  sq_id,
             "campaign_id": adsquads.get(sq_id, {}).get("campaign_id", ""),
-            "status":      status,
+            "status":      ad.get("status", ""),
         }
     return out
 
@@ -486,11 +489,18 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         cur    = normalize_currency(meta.get("currency"))
         tz     = meta.get("timezone") or "UTC"
         adsquads = _list_adsquads(token, acct)
-        # Incremental: only active ads (paused/deleted won't have new data today)
-        # Full backfill: include all ads so historical data isn't missed
-        ads    = _list_ads(token, acct, active_only=incremental)
-        label  = "active ads" if incremental else "total ads"
-        print(f"[snap]   ads account {acct}: {len(ads)} {label} in metadata")
+        # Incremental: only ads updated within the window (new spend, status changes,
+        # creative edits). Ads untouched for months won't have data in the window.
+        # Full backfill: include ALL ads to capture complete historical data.
+        if incremental:
+            # Give a 1-day buffer before window start to avoid clock-skew misses
+            updated_since = datetime(start.year, start.month, start.day,
+                                     tzinfo=timezone.utc) - timedelta(days=1)
+        else:
+            updated_since = None
+        ads   = _list_ads(token, acct, updated_since=updated_since)
+        label = f"ads updated since {updated_since.date()}" if incremental else "total ads"
+        print(f"[snap]   ads account {acct}: {len(ads)} {label}")
         acct_count = 0
 
         for ad_id, ad_meta in ads.items():
