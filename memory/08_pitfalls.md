@@ -25,6 +25,26 @@ the fix, not just the symptom.
 - **Redirect URI must be registered** at TikTok Developer Portal → app →
   Settings → Redirect URIs: `http://localhost:8080/tiktok/callback`.
 
+## Microsoft Ads REST Reporting API (May 2026)
+
+- **Correct endpoint:** `https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit`
+  (not `/api/advertiser/reporting/v13/...` — that path doesn't exist).
+  Polling: `/Reporting/v13/GenerateReport/Poll`.
+- **`ReportRequest` body must include `Type` field** as REST discriminator,
+  e.g. `"Type": "CampaignPerformanceReportRequest"`. Without it, API returns
+  `400 NullRequest "request message is null"` even though the JSON is valid.
+- **`Scope.AccountIds` must be a flat int list,** not the SOAP-style
+  `{"long":[id]}` wrapper. Wrong format = same NullRequest error.
+- **Column name differences vs SOAP API:**
+  - AdGroupPerformanceReport: use `Status` (NOT `AdGroupStatus`)
+  - KeywordPerformanceReport: use `BidMatchType` (NOT `MatchType`)
+  Both fail at submit time with cryptic "Invalid JSON at position N. Path: $.Columns[X]".
+- **`AADSTS650052` resolution:** qoyod.com Azure AD tenant didn't have the
+  Microsoft Advertising service principal. Fixed by Global Admin running:
+  `New-MgServicePrincipal -AppId "d42ffc93-c136-491d-b4fd-6f18168c68fd"`.
+  Once SP exists, work account OAuth on `/common/` works. Tenant ID:
+  `8b6fc4da-1c24-432f-b089-2355d22f028d`.
+
 ## Microsoft Ads OAuth
 
 - **Work accounts (Azure AD) are blocked.** Signing in with `@qoyod.com`
@@ -212,6 +232,7 @@ IG insights:
 ## Snapchat (extended)
 
 - **DAY granularity rejects end_time in the future.** Always cap `end = date.today() - timedelta(days=1)`. Passing `date.today()` means `end_exclusive = tomorrow` which Snap rejects. Applies to both `collect_and_write` and `collect_adsets_and_write`.
+- **Access token expires after 30 min — refresh per-account, not per-run.** A single `_refresh_access_token()` at the top of a collect function expires mid-loop when iterating 1000+ ads. Fix: call `token = _refresh_access_token()` at the start of each `for acct in accounts:` iteration. Affects `collect_adsets_and_write` and `collect_ads_and_write`.
 - **`ZoneInfo("UTC")` crashes on Windows** when the `tzdata` package is absent from the system timezone database. Fix: `if not tz_name or tz_name.upper() == "UTC": tz = timezone.utc` — use `timezone.utc` directly rather than `ZoneInfo("UTC")`.
 - **Conversion fields are per-account.** Safe across every account:
   `conversion_sign_ups`. Others (`conversion_purchases`, `conversion_add_cart`,
