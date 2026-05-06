@@ -87,12 +87,13 @@ leads AS (
 deals AS (
   SELECT d.date,
          m.paid_channel AS channel,
-         SUM(d.deals_total)   AS deals_total,
-         SUM(d.deals_won)     AS deals_won,
-         SUM(d.deals_lost)    AS deals_lost,
-         SUM(d.deals_open)    AS deals_open,
-         SUM(d.amount_won)    AS revenue_won,
-         SUM(d.amount_open)   AS pipeline_open
+         SUM(d.deals_total)    AS deals_total,
+         SUM(d.deals_won)      AS deals_won,
+         SUM(d.deals_lost)     AS deals_lost,
+         SUM(d.deals_open)     AS deals_open,
+         SUM(d.amount_won)     AS revenue_won,
+         SUM(d.amount_open)    AS pipeline_open,
+         SUM(d.amount_total)   AS total_deal_amount
   FROM `{P}.{D}.hubspot_deals_daily` d
   JOIN `{P}.{D}.v_channel_key_map` m ON d.qoyod_source = m.qoyod_source
   GROUP BY 1,2
@@ -126,11 +127,14 @@ SELECT
   COALESCE(d.deals_won, 0)       AS deals_won,
   COALESCE(d.deals_lost, 0)      AS deals_lost,
   COALESCE(d.deals_open, 0)      AS deals_open,
-  COALESCE(d.revenue_won, 0)     AS revenue_won,
-  COALESCE(d.pipeline_open, 0)   AS pipeline_open,
+  COALESCE(d.revenue_won, 0)       AS revenue_won,
+  COALESCE(d.pipeline_open, 0)     AS pipeline_open,
+  COALESCE(d.total_deal_amount, 0) AS amount_total,
   SAFE_DIVIDE(s.spend, l.hs_leads)     AS cpl,
   SAFE_DIVIDE(s.spend, l.hs_qualified) AS cpql,
-  SAFE_DIVIDE(l.hs_qualified, l.hs_leads) * 100 AS qual_rate_pct,
+  -- qual/disq rates: denominator = qualified+disqualified (excludes open leads)
+  SAFE_DIVIDE(l.hs_qualified,   l.hs_qualified + l.hs_disqualified) * 100 AS qual_rate_pct,
+  SAFE_DIVIDE(l.hs_disqualified, l.hs_qualified + l.hs_disqualified) * 100 AS disq_rate_pct,
   SAFE_DIVIDE(d.revenue_won, s.spend)   AS roas,
   SAFE_DIVIDE(d.deals_won, l.hs_leads) * 100 AS lead_to_deal_pct,
   CASE
@@ -174,11 +178,14 @@ SELECT
   SUM(deals_won)      AS deals_won,
   SUM(deals_lost)     AS deals_lost,
   SUM(deals_open)     AS deals_open,
-  SUM(revenue_won)    AS revenue_won,
-  SUM(pipeline_open)  AS pipeline_open,
+  SUM(revenue_won)      AS revenue_won,
+  SUM(pipeline_open)    AS pipeline_open,
+  SUM(amount_total)     AS amount_total,
   SAFE_DIVIDE(SUM(spend), SUM(hs_leads))       AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(hs_qualified))   AS cpql,
-  SAFE_DIVIDE(SUM(hs_qualified), SUM(hs_leads)) * 100 AS qual_rate_pct,
+  -- qual/disq rates: denominator = qualified+disqualified (excludes open leads)
+  SAFE_DIVIDE(SUM(hs_qualified),   SUM(hs_qualified) + SUM(hs_disqualified)) * 100 AS qual_rate_pct,
+  SAFE_DIVIDE(SUM(hs_disqualified), SUM(hs_qualified) + SUM(hs_disqualified)) * 100 AS disq_rate_pct,
   SAFE_DIVIDE(SUM(revenue_won), SUM(spend))    AS roas,
   SAFE_DIVIDE(SUM(deals_won), SUM(hs_leads)) * 100 AS lead_to_deal_pct
 FROM `{P}.{D}.channel_roas_daily`
