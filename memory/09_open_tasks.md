@@ -117,6 +117,23 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## Done this session (2026-05-06 continued)
+
+- [x] **Full YTD sub-level backfills** — all grains filled to Jan 1, 2026:
+  - TikTok adgroups: 1,565 rows (125 days, Jan 1 → May 5)
+  - TikTok ads: 10,438 rows (125 days, Jan 1 → May 5)
+  - Meta adsets: 2,142 rows (125 days, Jan 1 → May 5)
+  - Meta ads: 8,599 rows (125 days, Mar 16 → May 5 — actual data boundary)
+  - Google adgroups: 2,313 rows (125 days, Jan 1 → May 5)
+  - Google ads: 2,935 rows (125 days, Jan 1 → May 5)
+  - Google keywords: 9,747 rows (125 days, Feb 8 → May 5 — keyword setup date)
+  - Snap adsets: in progress (bc105f0mc / btq16btry — per-squad API calls, slow)
+- [x] **Keyword policy extended** — COMPETITOR_PATTERNS list, competitor campaign rules,
+  language mismatch detection (AR in EN campaign and vice versa). NEVER_NEGATIVE_PATTERNS
+  kept as backwards-compat shim. Committed 2f38a72, pushed to Railway.
+- [x] **BQ views refreshed + Hex triggered** — all 13 views refreshed; both Hex notebooks
+  (performance + activity) re-triggered after backfills confirmed complete.
+
 ## Done this session (2026-05-06)
 
 - [x] **ROAS close-date fix** — `hubspot_deals_bq.py` now uses `closedate` as the partition date for won deals (not `createdate`). SQL `WHERE stage_status='won' AND date BETWEEN x AND y` natively filters by when deals closed. 365-day backfill re-run: 88,034 deals → 35,015 rows.
