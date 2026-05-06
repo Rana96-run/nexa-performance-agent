@@ -29,8 +29,8 @@ CLIENT_ID     = os.getenv("MS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
 REDIRECT_URI  = os.getenv("MS_REDIRECT_URI", "http://localhost:8080/ms-ads/callback")
 
-AUTH_URL  = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
-TOKEN_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+AUTH_URL  = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 SCOPE     = "https://ads.microsoft.com/msads.manage offline_access"
 
 _code: str | None = None

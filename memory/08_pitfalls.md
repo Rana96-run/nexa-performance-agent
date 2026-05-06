@@ -15,6 +15,35 @@ the fix, not just the symptom.
   `WHERE date >= CURRENT_DATE() - INTERVAL 7 DAY` in a view definition; use
   it in queries, or pass params.
 
+## Channel name mismatch: `microsoft` vs `microsoft_ads`
+
+- **`v_channel_key_map` originally used `microsoft`** as the paid_channel
+  key, but every collector writes `channel='microsoft_ads'` to the daily
+  tables. Result: any Hex tile that joined via `v_channel_key_map`
+  silently dropped Microsoft Ads (no error, just blank). Fixed in
+  `collectors/views.py` on 2026-05-06 by changing `microsoft` →
+  `microsoft_ads` in both the CASE branches and the UNNEST list. Run
+  `python -c "from collectors.views import refresh_all_views; refresh_all_views()"`
+  to push the view update to BQ.
+- **Future-proofing:** the channel name in `v_channel_key_map` MUST equal
+  `campaigns_daily.channel` (collector output) exactly. If you add a new
+  channel, write it the same way in both places.
+
+## bq_writer schema vs live BQ schema drift
+
+- **`ADS_DAILY_SCHEMA` (and other TABLES schemas) in `collectors/bq_writer.py`
+  must match the live BQ table.** When they don't, load jobs fail with
+  cryptic `"No such field: <name>"` even though the field exists in the
+  destination table.
+- **Why:** Even with `ALLOW_FIELD_ADDITION`, BQ validates each input row
+  against the **supplied** schema, not the destination's. The flag only
+  allows the destination to GROW; rows can't carry fields the supplied
+  schema lacks.
+- **Fix when adding new collectors:** before writing rows with a new field
+  (e.g. `cpl`, `frequency`), verify the field exists in
+  `bq_writer.<TABLE>_SCHEMA`. If not, add it. Specifically `cpl` was added
+  to `ADS_DAILY_SCHEMA` on 2026-05-06 to fix MS Ads `collect_ads_and_write`.
+
 ## TikTok Marketing API OAuth
 
 - **Auth URL host is `business-api.tiktok.com`, NOT `business.tiktok.com`.**
@@ -232,7 +261,7 @@ IG insights:
 ## Snapchat (extended)
 
 - **DAY granularity rejects end_time in the future.** Always cap `end = date.today() - timedelta(days=1)`. Passing `date.today()` means `end_exclusive = tomorrow` which Snap rejects. Applies to both `collect_and_write` and `collect_adsets_and_write`.
-- **Access token expires after 30 min — refresh per-account, not per-run.** A single `_refresh_access_token()` at the top of a collect function expires mid-loop when iterating 1000+ ads. Fix: call `token = _refresh_access_token()` at the start of each `for acct in accounts:` iteration. Affects `collect_adsets_and_write` and `collect_ads_and_write`.
+- **Access token expires after 30 min — per-account refresh is NOT enough for large accounts.** 1,000 ads × 5 date-chunks = 5,000 API calls → can take 1–4 hours. Even a per-account refresh at loop start expires mid-account. Fix: track `token_refreshed_at = time.monotonic()` and renew with `token = _refresh_access_token()` whenever `time.monotonic() - token_refreshed_at > 1500` (25 min) inside the per-ad/per-adset inner loop. Applies to `collect_ads_and_write` and `collect_adsets_and_write`.
 - **`ZoneInfo("UTC")` crashes on Windows** when the `tzdata` package is absent from the system timezone database. Fix: `if not tz_name or tz_name.upper() == "UTC": tz = timezone.utc` — use `timezone.utc` directly rather than `ZoneInfo("UTC")`.
 - **Conversion fields are per-account.** Safe across every account:
   `conversion_sign_ups`. Others (`conversion_purchases`, `conversion_add_cart`,

@@ -26,9 +26,9 @@ CUSTOMER_ID     = os.getenv("MS_CUSTOMER_ID", "")
 ACCOUNT_ID      = os.getenv("MS_ACCOUNT_ID", "")
 REFRESH_TOKEN   = os.getenv("MS_REFRESH_TOKEN", "")
 
-TOKEN_URL     = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+TOKEN_URL     = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 SCOPE         = "https://ads.microsoft.com/msads.manage offline_access"
-REPORTING_URL = "https://reporting.api.bingads.microsoft.com/api/advertiser/reporting/v13"
+REPORTING_URL = "https://reporting.api.bingads.microsoft.com/Reporting/v13"
 
 
 def _get_access_token() -> str:
@@ -61,6 +61,7 @@ def _submit_report_generic(access_token: str, start: date, end: date,
     """Generic async report submission. Returns report request ID or None."""
     body = {
         "ReportRequest": {
+            "Type":                   report_type,   # REST discriminator — required
             "Format":                 "Csv",
             "Language":               "English",
             "ReportName":             report_name,
@@ -70,7 +71,7 @@ def _submit_report_generic(access_token: str, start: date, end: date,
             "ExcludeReportFooter":    True,
             "ExcludeReportHeader":    True,
             "Columns":                columns,
-            "Scope":                  {"AccountIds": {"long": [ACCOUNT_ID]}},
+            "Scope":                  {"AccountIds": [int(ACCOUNT_ID)]},
             "Time": {
                 "CustomDateRangeStart": {
                     "Day": start.day, "Month": start.month, "Year": start.year
@@ -82,7 +83,7 @@ def _submit_report_generic(access_token: str, start: date, end: date,
         }
     }
     r = requests.post(
-        f"{REPORTING_URL}/SubmitGenerateReport",
+        f"{REPORTING_URL}/GenerateReport/Submit",
         json=body, headers=_headers(access_token), timeout=20,
     )
     if r.status_code >= 400:
@@ -111,7 +112,7 @@ def _poll_report(access_token: str, request_id: str,
     """Poll until report is ready. Returns download URL or None."""
     for _ in range(max_wait // 5):
         r = requests.post(
-            f"{REPORTING_URL}/PollGenerateReport",
+            f"{REPORTING_URL}/GenerateReport/Poll",
             json={"ReportRequestId": request_id},
             headers=_headers(access_token), timeout=15,
         )
@@ -257,7 +258,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
         columns=[
             "TimePeriod", "AccountId", "CurrencyCode",
             "CampaignId", "CampaignName",
-            "AdGroupId", "AdGroupName", "AdGroupStatus",
+            "AdGroupId", "AdGroupName", "Status",   # REST API uses "Status" not "AdGroupStatus"
             "Impressions", "Clicks", "Spend",
             "Conversions", "CostPerConversion", "Ctr",
         ],
@@ -297,7 +298,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
             "campaign_name": row.get("CampaignName", ""),
             "adset_id":      str(row.get("AdGroupId", "")),
             "adset_name":    row.get("AdGroupName", ""),   # utm_audience
-            "status":        row.get("AdGroupStatus", ""),
+            "status":        row.get("Status", ""),
             "spend":         round(spend, 2),
             "impressions":   impr,
             "clicks":        clicks,
@@ -344,7 +345,7 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
             "TimePeriod", "AccountId", "CurrencyCode",
             "CampaignId", "CampaignName",
             "AdGroupId", "AdGroupName",
-            "KeywordId", "Keyword", "MatchType", "QualityScore",
+            "KeywordId", "Keyword", "BidMatchType", "QualityScore",  # REST uses BidMatchType
             "Impressions", "Clicks", "Spend",
             "Conversions", "CostPerConversion", "Ctr", "AverageCpc",
         ],
@@ -391,7 +392,7 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
             "adgroup_name":  row.get("AdGroupName", ""),
             "keyword_id":    str(row.get("KeywordId", "")),
             "keyword_text":  row.get("Keyword", ""),     # utm_term
-            "match_type":    row.get("MatchType", ""),
+            "match_type":    row.get("BidMatchType", ""),
             "status":        None,
             "quality_score": qs,
             "spend":         round(spend, 2),
@@ -409,6 +410,107 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
                        key_fields=["date", "channel", "adgroup_id", "keyword_id"])
 
 
+# ── Ad level → ads_daily ───────────────────────────────────────────────────────
+
+def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
+    """Ad grain → ads_daily. utm_content maps to AdId.
+
+    Note Microsoft Ads naming inconsistency vs other report types:
+      AdGroupPerformanceReport uses 'Status' (not AdGroupStatus)
+      KeywordPerformanceReport uses 'KeywordStatus'
+      AdPerformanceReport      uses 'AdStatus' (NOT Status — would 400)
+    """
+    if not REFRESH_TOKEN:
+        print("[ms-bq] MS_REFRESH_TOKEN not set — skipping ads")
+        return 0
+    try:
+        access_token = _get_access_token()
+    except Exception as e:
+        print(f"[ms-bq] ads auth failed: {e}")
+        return 0
+
+    end = date.today() - timedelta(days=1)
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    print(f"[ms-bq] ads window {start} -> {end}")
+
+    request_id = _submit_report_generic(
+        access_token, start, end,
+        report_type="AdPerformanceReportRequest",
+        report_name="NexaAdPerformance",
+        columns=[
+            "TimePeriod", "AccountId", "CurrencyCode",
+            "CampaignId", "CampaignName",
+            "AdGroupId", "AdGroupName",
+            "AdId", "AdTitle", "AdDescription", "AdType", "AdStatus",
+            "FinalUrl",
+            "Impressions", "Clicks", "Spend",
+            "Conversions", "CostPerConversion", "Ctr",
+        ],
+    )
+    if not request_id:
+        return 0
+    download_url = _poll_report(access_token, request_id)
+    if not download_url:
+        return 0
+
+    csv_rows = _download_and_parse(download_url)
+    now = datetime.now(timezone.utc).isoformat()
+    bq_rows = []
+
+    def _f(val, default=0.0):
+        try:
+            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
+        except (TypeError, ValueError):
+            return float(default)
+
+    for row in csv_rows:
+        day = (row.get("TimePeriod") or "")[:10]
+        if not day:
+            continue
+        native_cur   = normalize_currency(row.get("CurrencyCode"))
+        spend_native = _f(row.get("Spend"))
+        spend        = to_usd(spend_native, native_cur)
+        leads        = int(_f(row.get("Conversions")))
+        ctr          = _f(row.get("Ctr")) / 100
+        cpl_native   = _f(row.get("CostPerConversion"))
+        cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
+        # Ad name fallback: AdTitle, then AdDescription, then AdId
+        ad_name = (row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
+        bq_rows.append({
+            "date":          day,
+            "channel":       "microsoft_ads",
+            "account_id":    ACCOUNT_ID,
+            "campaign_id":   str(row.get("CampaignId", "")),
+            "campaign_name": row.get("CampaignName", ""),
+            "adset_id":      str(row.get("AdGroupId", "")),
+            "adset_name":    row.get("AdGroupName", ""),
+            "ad_id":         str(row.get("AdId", "")),    # utm_content
+            "ad_name":       ad_name,
+            "status":        row.get("AdStatus", ""),
+            "spend":         round(spend, 2),
+            "impressions":   int(_f(row.get("Impressions"))),
+            "clicks":        int(_f(row.get("Clicks"))),
+            "ctr":           round(ctr, 6),
+            "leads":         leads,
+            "conversions":   float(leads),
+            "cpl":           round(cpl_usd, 2) if cpl_usd else None,
+            "frequency":     None,
+            "currency":      "USD",
+            "final_url":     row.get("FinalUrl", ""),
+            "updated_at":    now,
+        })
+
+    print(f"[ms-bq] ads parsed {len(bq_rows)} rows")
+    return upsert_rows("ads_daily", bq_rows,
+                       key_fields=["date", "channel", "ad_id"])
+
+
 if __name__ == "__main__":
     import sys
     cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -419,3 +521,5 @@ if __name__ == "__main__":
         print(f"adgroups:  {collect_adsets_and_write(days=days)} rows")
     if cmd in ("all", "keywords"):
         print(f"keywords:  {collect_keywords_and_write(days=days)} rows")
+    if cmd in ("all", "ads"):
+        print(f"ads:       {collect_ads_and_write(days=days)} rows")

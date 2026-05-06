@@ -10,24 +10,19 @@ the bottom of the relevant section.
   paste outputs to `.env`. Follow-ups via `scripts/linkedin_refresh.py`.
 - [ ] **Run YouTube OAuth** — `python scripts/youtube_oauth.py`. Writes
   `YT_REFRESH_TOKEN` + `YT_CHANNEL_ID` to `.env` (slots empty today).
-- [ ] **Microsoft Ads — BLOCKED on qoyod IT.** OAuth script exists
-  (`scripts/microsoft_oauth.py`), collector exists (`collectors/microsoft_ads_bq.py`,
-  3 grains). Blocker: qoyod.com Azure AD tenant lacks the Microsoft Advertising
-  service principal (error `AADSTS650052`). Personal-account fallback also
-  blocked: Microsoft migrated `rana.khalid@qoyod.com` personal → work
-  (`PersonalIdentityMigratedToWork`), and the Ads account itself is locked to
-  qoyod.com tenant so fresh outlook.com accounts get rejected (`AADSTS500200`).
-  **Fix requires a Global Admin on qoyod.com to run:**
-  ```powershell
-  Install-Module Microsoft.Graph -Scope CurrentUser -Force
-  Connect-MgGraph -Scopes "Application.ReadWrite.All"
-  New-MgServicePrincipal -AppId "d42ffc93-c136-491d-b4fd-6f18168c68fd"
-  ```
-  After that, re-run `python scripts/microsoft_oauth.py` (currently set to
-  `/consumers/` — flip back to `/common/`) signed in as `@qoyod.com` work.
-  Customer ID already set: `MS_CUSTOMER_ID=254476670`. Account: `G1206XJR`.
-  See `memory/08_pitfalls.md` for full trap analysis.
-  Deprioritized — MS Ads is ~3% of Saudi paid search.
+- [x] **Microsoft Ads** — UNBLOCKED + FULLY CONNECTED 2026-05-06. Admin granted
+  Global Admin → ran `New-MgServicePrincipal -AppId d42ffc93-c136-491d-b4fd-6f18168c68fd`
+  → service principal exists in qoyod.com tenant → `/common/` OAuth works with
+  `@qoyod.com` work account. YTD coverage Dec 27 → Apr 24 (119 days):
+  - campaigns: 534 rows
+  - adgroups:  993 rows
+  - ads:       1,182 rows (NEW collector function `collect_ads_and_write`)
+  - keywords:  7,819 rows
+  Collector function added + wired into `reporting_scheduler.py`. REST API
+  pitfalls fixed in `microsoft_ads_bq.py`: endpoint URL `/Reporting/v13/GenerateReport/Submit`,
+  `Type` discriminator field, column names per-report (CampaignStatus / Status / KeywordStatus / AdStatus),
+  `Scope.AccountIds` flat int list. `bq_writer.ADS_DAILY_SCHEMA` updated to
+  include `cpl` (was the final blocker). All in `08_pitfalls.md`.
 - [ ] **Get Funnel.io read API token** — ask Amar for workspace API token
   + account_id + project_id. Fill `FUNNEL_API_TOKEN/ACCOUNT_ID/PROJECT_ID`.
 - [x] **HubSpot leads YTD backfill** — completed 2026-05-04. 24,260 leads → 11,460 rows in `hubspot_leads_module_daily` (2026-01-08 to 2026-05-05). Run with `python -m collectors.hubspot_leads_bq` (module mode).
@@ -127,7 +122,8 @@ mirror (and extend) the Looker boards the team already trusts.
   - Google adgroups: 2,313 rows (125 days, Jan 1 → May 5)
   - Google ads: 2,935 rows (125 days, Jan 1 → May 5)
   - Google keywords: 9,747 rows (125 days, Feb 8 → May 5 — keyword setup date)
-  - Snap adsets: in progress (bc105f0mc / btq16btry — per-squad API calls, slow)
+  - Snap adsets: completed (separate session — full YTD coverage)
+  - Snap ads: **completed 2026-05-07** — 142,000 rows (125 days, Jan 1 → May 5). Both accounts: 1,000 + 136 ads. Exact per-ad spend from `/ads/{id}/stats` API. Token auto-refreshed 4× during account 1's 100-min loop. Total $71,770.39 Snapchat ad spend now in `ads_daily` with exact figures (not proportional allocation).
 - [x] **Keyword policy extended** — COMPETITOR_PATTERNS list, competitor campaign rules,
   language mismatch detection (AR in EN campaign and vice versa). NEVER_NEGATIVE_PATTERNS
   kept as backwards-compat shim. Committed 2f38a72, pushed to Railway.

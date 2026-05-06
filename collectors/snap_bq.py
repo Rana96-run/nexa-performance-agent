@@ -326,6 +326,7 @@ def _adsquad_stats_single_call(token: str, adsquad_id: str,
 
 def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int:
     """Ad Squad grain → adsets_daily. Same token as campaign collector."""
+    import time as _time
     token = _refresh_access_token()
 
     end = date.today() - timedelta(days=1)   # cap at yesterday — same reason as campaigns
@@ -341,8 +342,13 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     accounts = _ad_accounts()
     print(f"[snap] adsets window {start} -> {end} across {len(accounts)} account(s)")
 
+    _TOKEN_MAX_AGE_S = 1500  # 25 min — tokens last 30 min; refresh proactively
+
     for acct in accounts:
-        token   = _refresh_access_token()   # refresh per-account (loop can take >30 min)
+        # Refresh per-account + time-based within the inner loop
+        token   = _refresh_access_token()
+        token_refreshed_at = _time.monotonic()
+
         meta    = _get_account(token, acct)
         cur     = normalize_currency(meta.get("currency"))
         tz      = meta.get("timezone") or "UTC"
@@ -351,6 +357,12 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
         acct_count = 0
 
         for sq_id, sq in adsquads.items():
+            # Proactive token refresh every 25 min
+            if _time.monotonic() - token_refreshed_at > _TOKEN_MAX_AGE_S:
+                token = _refresh_access_token()
+                token_refreshed_at = _time.monotonic()
+                print(f"[snap]   token refreshed (>25min elapsed) mid-account {acct}")
+
             camp_id = sq.get("campaign_id", "")
             camp    = campaigns.get(camp_id, {})
             for cs, ce in _date_chunks(start, end, max_days=30):
@@ -470,6 +482,7 @@ def _ad_stats_single_call(token: str, ad_id: str,
 
 def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     """Ad/Creative grain → ads_daily. Exact spend per ad from Snap API."""
+    import time as _time
     token = _refresh_access_token()
 
     end = date.today() - timedelta(days=1)
@@ -485,10 +498,15 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     accounts = _ad_accounts()
     print(f"[snap] ads window {start} -> {end} across {len(accounts)} account(s)")
 
+    _TOKEN_MAX_AGE_S = 1500  # 25 min — tokens last 30 min; refresh proactively
+
     for acct in accounts:
-        # Refresh token per-account — the per-ad loop can take >30 min for large
-        # accounts and Snap access tokens expire after 30 min.
-        token  = _refresh_access_token()
+        # Refresh token per-account + time-based within the inner loop.
+        # Account 1 has 1,000 ads × 5 chunks = 5,000 API calls → can take 1–4 hours.
+        # We track when the token was last refreshed and renew every 25 min.
+        token = _refresh_access_token()
+        token_refreshed_at = _time.monotonic()
+
         meta   = _get_account(token, acct)
         cur    = normalize_currency(meta.get("currency"))
         tz     = meta.get("timezone") or "UTC"
@@ -508,6 +526,12 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         acct_count = 0
 
         for ad_id, ad_meta in ads.items():
+            # Proactive token refresh: renew before the 30-min expiry window
+            if _time.monotonic() - token_refreshed_at > _TOKEN_MAX_AGE_S:
+                token = _refresh_access_token()
+                token_refreshed_at = _time.monotonic()
+                print(f"[snap]   token refreshed (>25min elapsed) mid-account {acct}")
+
             sq_id    = ad_meta.get("adsquad_id", "")
             camp_id  = ad_meta.get("campaign_id", "")
             sq       = adsquads.get(sq_id, {})
