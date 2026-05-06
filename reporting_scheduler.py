@@ -104,6 +104,7 @@ COLLECTORS = [
     ("linkedin_adsets",      linkedin_bq.collect_adsets_and_write),
     ("microsoft_ads_adgroups", microsoft_ads_bq.collect_adsets_and_write),
     ("microsoft_ads_keywords", microsoft_ads_bq.collect_keywords_and_write),
+    ("microsoft_ads_ads",      microsoft_ads_bq.collect_ads_and_write),
     ("google_ads_pmax_assets", google_ads_bq.collect_pmax_asset_groups_and_write),
 ]
 
@@ -250,6 +251,16 @@ def run_refresh(incremental: bool = True, days: int | None = None):
         print(f"[scheduler] view refresh FAILED: {e}")
         log_activity_async(role="bq_refresh", action="refresh_views",
                            status="failed", details={"error": str(e)})
+
+    # ── Silent auto-heal: future partitions, zero-row channels, etc. ────────
+    # Runs every refresh pass. Fixes are logged silently; weekly summary
+    # surfaces a one-line "🔧 Auto-healed: N" block. We don't alert.
+    try:
+        from analysers.data_quality import auto_heal
+        heal_counts = auto_heal()
+        results["data_quality"] = (True, heal_counts, 0)
+    except Exception as e:
+        print(f"[scheduler] auto-heal failed (non-fatal): {e}")
 
     # ── Trigger Hex notebook re-runs so dashboards reflect fresh BQ data ─────
     try:

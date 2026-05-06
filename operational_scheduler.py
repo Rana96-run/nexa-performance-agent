@@ -9,6 +9,7 @@ are ready when the team wakes up.
   1st   03:00               -> + monthly analysis
   Jan/Apr/Jul/Oct 1st 03:00 -> + quarterly analysis
 """
+import json
 import schedule
 import time
 import traceback
@@ -135,6 +136,37 @@ def _run_weekly_keyword_autofix() -> dict:
         import traceback; traceback.print_exc()
         print(f"[weekly-autofix] failed (non-fatal): {e}")
         return counts
+
+
+def _read_data_quality_summary() -> dict:
+    """Read the latest 'data_quality_autoheal' BQ activity log row from the
+    last 8 days (so the Monday weekly summary covers a full week of refresh
+    runs). Aggregates the counts across all runs in that window."""
+    try:
+        from collectors.bq_writer import get_client
+        c = get_client()
+        q = """
+          SELECT details
+          FROM `angular-axle-492812-q4.qoyod_marketing.agent_activity_log`
+          WHERE role = 'bq_refresh'
+            AND action = 'data_quality_autoheal'
+            AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 8 DAY)
+        """
+        agg = {
+            "future_partitions_removed":              0,
+            "zero_row_channels_recovered":            0,
+            "zero_row_channels_still_empty":          0,
+            "negative_partitions_recovered":          0,
+            "inconsistent_lead_partitions_recovered": 0,
+        }
+        for r in c.query(q).result():
+            d = json.loads(r.details) if r.details else {}
+            for k in agg:
+                agg[k] += d.get(k, 0) or 0
+        return agg
+    except Exception as e:
+        print(f"[data-quality] BQ read failed: {e}")
+    return {}
 
 
 def _read_weekly_autofix_summary() -> dict:
@@ -320,6 +352,24 @@ def _post_weekly_summary(spikes: list | None = None,
                 if neg_rm:  fix_lines.append(f"  • {neg_rm} negative(s) removed (competitor names / brand terms wrongly excluded)")
                 if age_sk:  fix_lines.append(f"  • {age_sk} keyword(s) skipped — under 10-day age guard, will reconsider next week")
                 text += "\n" + "\n".join(fix_lines)
+
+        # Append data-quality auto-heal block — silent fixes from the BQ
+        # refresh pipeline (future partitions, zero-row channels, etc.)
+        dq = _read_data_quality_summary()
+        if dq:
+            fp = dq.get("future_partitions_removed", 0)
+            zr_ok = dq.get("zero_row_channels_recovered", 0)
+            zr_no = dq.get("zero_row_channels_still_empty", 0)
+            ne = dq.get("negative_partitions_recovered", 0)
+            inc = dq.get("inconsistent_lead_partitions_recovered", 0)
+            if (fp + zr_ok + zr_no + ne + inc) > 0:
+                dq_lines = ["\n*🩹 Data quality (silent auto-heal)*"]
+                if fp:    dq_lines.append(f"  • {fp} future-dated row(s) removed")
+                if zr_ok: dq_lines.append(f"  • {zr_ok} silent-failing channel(s) re-fetched successfully")
+                if zr_no: dq_lines.append(f"  • {zr_no} channel(s) still 0 rows — likely paused / token issue")
+                if ne:    dq_lines.append(f"  • {ne} negative-spend partition(s) cleaned + re-fetched")
+                if inc:   dq_lines.append(f"  • {inc} inconsistent lead partition(s) cleaned + re-fetched")
+                text += "\n" + "\n".join(dq_lines)
 
         if is_quiet():
             quiet_log("ops-scheduler-weekly", SLACK_CHANNEL_NOTIFY, text)

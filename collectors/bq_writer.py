@@ -129,6 +129,7 @@ ADS_DAILY_SCHEMA = [
     bigquery.SchemaField("currency",      "STRING"),
     bigquery.SchemaField("final_url",     "STRING"),   # destination LP URL (Google Ads only for now)
     bigquery.SchemaField("updated_at",    "TIMESTAMP"),
+    bigquery.SchemaField("cpl",           "FLOAT64"),   # spend / leads (USD); already in live table — added here for explicit-schema validation
 ]
 
 KEYWORDS_DAILY_SCHEMA = [
@@ -230,6 +231,108 @@ def ensure_dataset_and_tables():
 
 # ---------- WRITE ----------
 
+# ─── Pre-write sanity guards (Part A: 2026-05-06) ────────────────────────────
+# Single source of truth for "what's a valid row?" — runs before any write hits
+# BigQuery. Bad rows are dropped (not raised) so one corrupt record from the
+# upstream API doesn't kill the whole batch. Counts are logged.
+
+from datetime import date as _date
+
+_MIN_VALID_DATE = _date(2024, 1, 1)   # nothing earlier than 2024 makes sense
+                                       # for our business — sanity floor
+_VALID_CURRENCIES = {                 # ISO codes we've ever seen + USD
+    "USD", "SAR", "EUR", "GBP", "AED", "EGP", "JOD", "KWD",
+    "QAR", "BHD", "OMR", "INR", "TRY", "PKR",
+}
+# Numeric columns where negative values indicate an upstream parsing/API bug
+# (refunds in our world are reflected as conversions=0, not as negative spend).
+_NON_NEGATIVE_NUMERICS = {
+    "spend", "amount", "amount_total", "amount_won", "amount_lost",
+    "amount_open", "cost_micros", "impressions", "clicks", "leads",
+    "leads_total", "leads_qualified", "leads_disqualified",
+    "deals_total", "deals_won", "deals_lost", "deals_open",
+}
+
+
+def validate_row(row: dict, table_name: str = "") -> tuple[bool, str]:
+    """
+    Returns (is_valid, reason). Bad rows are dropped at write time, with the
+    reason logged. This catches:
+
+      • date in the future (anything > today)
+      • date before the sanity floor (2024-01-01)
+      • negative spend / amount / count
+      • currency code outside the known allowlist
+      • required `date` field missing or unparseable
+    """
+    # 1. Date must exist and be parseable
+    d = row.get("date")
+    if not d:
+        return False, "missing date"
+    if isinstance(d, str):
+        try:
+            d_obj = _date.fromisoformat(d[:10])
+        except Exception:
+            return False, f"unparseable date: {d!r}"
+    elif isinstance(d, _date):
+        d_obj = d
+    else:
+        return False, f"date wrong type: {type(d).__name__}"
+
+    # 2. Date bounds
+    today = _date.today()
+    if d_obj > today:
+        return False, f"future date: {d_obj}"
+    if d_obj < _MIN_VALID_DATE:
+        return False, f"pre-2024 date: {d_obj}"
+
+    # 3. Non-negative numerics
+    for col in _NON_NEGATIVE_NUMERICS:
+        if col in row and row[col] is not None:
+            try:
+                v = float(row[col])
+            except Exception:
+                continue
+            if v < 0:
+                return False, f"{col} negative: {v}"
+
+    # 4. Currency allowlist (only if a currency field is present)
+    for cur_field in ("currency", "currency_native"):
+        cur = row.get(cur_field)
+        if cur and cur not in _VALID_CURRENCIES:
+            return False, f"{cur_field} not in allowlist: {cur!r}"
+
+    return True, ""
+
+
+def filter_valid_rows(rows: list[dict], table_name: str
+                      ) -> tuple[list[dict], dict[str, int]]:
+    """Returns (valid_rows, drop_counts_by_reason). Logs a summary if any
+    rows were dropped — so the operator sees it, but doesn't crash."""
+    valid: list[dict] = []
+    dropped: dict[str, int] = {}
+    examples: dict[str, dict] = {}
+    for r in rows:
+        ok, reason = validate_row(r, table_name)
+        if ok:
+            valid.append(r)
+        else:
+            # Bucket reasons (strip the value off, just keep the type)
+            bucket = reason.split(":")[0]
+            dropped[bucket] = dropped.get(bucket, 0) + 1
+            if bucket not in examples:
+                examples[bucket] = {"row": r, "reason": reason}
+
+    if dropped:
+        total = sum(dropped.values())
+        print(f"[validate] {table_name}: dropped {total}/{len(rows)} rows — {dict(dropped)}")
+        for bucket, info in examples.items():
+            ex = info["row"]
+            ex_brief = {k: ex.get(k) for k in ("date","channel","account_id","campaign_id","spend","currency") if k in ex}
+            print(f"  ↳ example [{bucket}]: {info['reason']} | {ex_brief}")
+    return valid, dropped
+
+
 def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
     """
     Idempotent write: for each distinct DATE in `rows`, DELETE that partition's
@@ -238,6 +341,13 @@ def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
     """
     if not rows:
         print(f"[SKIP] {table_name}: no rows to write.")
+        return 0
+
+    # Sanity guard: drop future-dated, negative-spend, bad-currency rows BEFORE
+    # they hit BigQuery. Single source of truth lives in validate_row().
+    rows, _drop_counts = filter_valid_rows(rows, table_name)
+    if not rows:
+        print(f"[SKIP] {table_name}: all rows dropped by validator.")
         return 0
 
     client = get_client()
