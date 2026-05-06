@@ -143,10 +143,11 @@ def collect_and_write(days: int = None, incremental: bool = False):
         start = date(end.year, 1, 1)
     print(f"[meta_organic] Window {start} -> {end}")
 
-    # Meta Page Insights caps at 93 days per call — chunk into 90-day windows
+    # FB Page Insights: 93-day cap. IG Insights: 30-day cap.
+    # Use 30-day chunks for both to satisfy the stricter IG limit.
     fb: dict = {}
     ig: dict = {}
-    for cs, ce in _date_chunks(start, end, max_days=90):
+    for cs, ce in _date_chunks(start, end, max_days=30):
         fb.update(_fetch_fb_page_daily(cs, ce))
         ig.update(_fetch_ig_daily(cs, ce))
 
