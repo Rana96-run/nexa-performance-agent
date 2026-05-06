@@ -274,7 +274,7 @@ def collect_and_write(days: int = None, incremental: bool = False):
 def _list_adsquads(token: str, ad_account_id: str) -> dict:
     """Return {adsquad_id: {name, campaign_id, status}} for the account."""
     r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/adsquads",
-                     headers=_headers(token), timeout=15)
+                     headers=_headers(token), timeout=_SNAP_TIMEOUT)
     if r.status_code >= 400:
         print(f"[snap]   adsquads {r.status_code}: {r.text[:160]}")
         return {}
@@ -401,10 +401,16 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
 
 # ── Ad (Creative) level → ads_daily ──────────────────────────────────────────
 
-def _list_ads(token: str, ad_account_id: str) -> dict:
-    """Return {ad_id: {name, adsquad_id, campaign_id}} for all ads in account."""
+def _list_ads(token: str, ad_account_id: str,
+              active_only: bool = False) -> dict:
+    """Return {ad_id: {name, adsquad_id, campaign_id, status}} for all ads.
+
+    active_only=True  → skip PAUSED/DELETED ads (safe for incremental runs —
+                        ads that ran in the past won't have new data today).
+    active_only=False → include all ads (needed for full backfills).
+    """
     r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/ads",
-                     headers=_headers(token), timeout=30)
+                     headers=_headers(token), timeout=_SNAP_TIMEOUT)
     if r.status_code >= 400:
         print(f"[snap]   ads list {r.status_code}: {r.text[:160]}")
         return {}
@@ -412,12 +418,16 @@ def _list_ads(token: str, ad_account_id: str) -> dict:
     adsquads = _list_adsquads(token, ad_account_id)
     out = {}
     for item in r.json().get("ads", []):
-        ad = item.get("ad", {})
+        ad     = item.get("ad", {})
+        status = ad.get("status", "")
+        if active_only and status not in ("ACTIVE",):
+            continue
         sq_id = ad.get("ad_squad_id", "")
         out[ad["id"]] = {
             "name":        ad.get("name", ""),
             "adsquad_id":  sq_id,
             "campaign_id": adsquads.get(sq_id, {}).get("campaign_id", ""),
+            "status":      status,
         }
     return out
 
@@ -476,8 +486,11 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         cur    = normalize_currency(meta.get("currency"))
         tz     = meta.get("timezone") or "UTC"
         adsquads = _list_adsquads(token, acct)
-        ads    = _list_ads(token, acct)
-        print(f"[snap]   ads account {acct}: {len(ads)} ads in metadata")
+        # Incremental: only active ads (paused/deleted won't have new data today)
+        # Full backfill: include all ads so historical data isn't missed
+        ads    = _list_ads(token, acct, active_only=incremental)
+        label  = "active ads" if incremental else "total ads"
+        print(f"[snap]   ads account {acct}: {len(ads)} {label} in metadata")
         acct_count = 0
 
         for ad_id, ad_meta in ads.items():
