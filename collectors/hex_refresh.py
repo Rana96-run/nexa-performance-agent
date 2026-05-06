@@ -46,10 +46,26 @@ def _headers() -> dict:
 
 
 def _trigger_run(project_id: str) -> str | None:
-    """POST /project/{id}/run — returns run_id or None on failure."""
+    """POST /project/{id}/run — returns run_id or None on failure.
+
+    Critical params:
+      updatePublishedResults=true → push the new run output into the published
+                                     app so the dashboard URL shows fresh data.
+                                     Without this, the published app keeps
+                                     showing cached results from the last
+                                     manual publish — that's the trap that
+                                     made the dashboard look 5 days stale on
+                                     2026-05-06.
+      useCachedSqlResults=false  → bypass any per-cell cache so the SQL hits
+                                     BigQuery again for the latest partitions.
+    """
     url = f"{_BASE}/project/{project_id}/run"
+    body = {
+        "updatePublishedResults": True,
+        "useCachedSqlResults":    False,
+    }
     try:
-        r = requests.post(url, json={}, headers=_headers(), timeout=15)
+        r = requests.post(url, json=body, headers=_headers(), timeout=15)
         if r.status_code in (200, 201):
             run_id = r.json().get("runId") or r.json().get("runStatusUrl", "")
             print(f"[hex] triggered run for {project_id}: {run_id}")
