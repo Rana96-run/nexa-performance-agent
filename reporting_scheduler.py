@@ -20,7 +20,6 @@ from collectors import google_ads_bq, meta_bq, snap_bq
 from collectors import meta_organic_bq, youtube_bq, linkedin_bq
 from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
-from collectors import windsor_bq
 from collectors.views import refresh_all_views
 from collectors.hex_refresh import refresh_all as refresh_hex
 from notifications.notify import send_heartbeat
@@ -77,11 +76,6 @@ def _check_bq_staleness() -> list[str]:
 
 
 COLLECTORS = [
-    # ── Windsor.ai managed pipeline (Google, Meta, Snap, TikTok, LinkedIn, Bing)
-    # Windsor runs FIRST — it's the single source for all channels it covers.
-    # Direct collectors below serve as fallback if Windsor key is missing.
-    ("windsor",         windsor_bq.collect_and_write),
-
     # ── Campaign-level direct collectors ──────────────────────────────────────
     ("google_ads",      google_ads_bq.collect_and_write),
     ("meta",            meta_bq.collect_and_write),
