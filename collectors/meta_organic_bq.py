@@ -121,6 +121,14 @@ def _fetch_ig_daily(start, end):
     return by_day
 
 
+def _date_chunks(start: date, end: date, max_days: int = 90):
+    """Yield (chunk_start, chunk_end) tuples of up to max_days each."""
+    cur = start
+    while cur <= end:
+        yield cur, min(cur + timedelta(days=max_days - 1), end)
+        cur = cur + timedelta(days=max_days)
+
+
 def collect_and_write(days: int = None, incremental: bool = False):
     if not TOKEN or not FB_PAGE:
         print("[meta_organic] missing META_PAGE_ACCESS_TOKEN or META_FB_PAGE_ID — skipping")
@@ -135,8 +143,12 @@ def collect_and_write(days: int = None, incremental: bool = False):
         start = date(end.year, 1, 1)
     print(f"[meta_organic] Window {start} -> {end}")
 
-    fb = _fetch_fb_page_daily(start, end)
-    ig = _fetch_ig_daily(start, end)
+    # Meta Page Insights caps at 93 days per call — chunk into 90-day windows
+    fb: dict = {}
+    ig: dict = {}
+    for cs, ce in _date_chunks(start, end, max_days=90):
+        fb.update(_fetch_fb_page_daily(cs, ce))
+        ig.update(_fetch_ig_daily(cs, ce))
 
     now = datetime.now(timezone.utc).isoformat()
     all_days = sorted(set(fb) | set(ig))

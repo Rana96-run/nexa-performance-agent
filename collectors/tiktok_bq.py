@@ -50,55 +50,66 @@ def _advertiser_currency(advertiser_id: str) -> str:
     return "SAR"
 
 
+def _date_chunks(start: date, end: date, max_days: int = 30):
+    """Yield (chunk_start, chunk_end) tuples of up to max_days each."""
+    cur = start
+    while cur <= end:
+        yield cur, min(cur + timedelta(days=max_days - 1), end)
+        cur = cur + timedelta(days=max_days)
+
+
 def _get_report(advertiser_id: str, start: date, end: date,
                 data_level: str = "AUCTION_CAMPAIGN",
                 dimensions: list | None = None,
                 metrics: list | None = None) -> list[dict]:
     """Fetch paginated report rows for one advertiser account.
 
-    TikTok dimension rules (enforced by API, error 40002 otherwise):
-      AUCTION_CAMPAIGN  → dimensions may include campaign_id
-      AUCTION_ADGROUP   → dimensions must NOT include campaign_id; use adgroup_id only
-      AUCTION_AD        → dimensions must NOT include campaign_id/adgroup_id; use ad_id only
+    TikTok rules:
+    - max 30 days per query when using stat_time_day — chunked automatically
+    - AUCTION_CAMPAIGN  → dimensions may include campaign_id
+    - AUCTION_ADGROUP   → dimensions must NOT include campaign_id; use adgroup_id only
+    - AUCTION_AD        → dimensions must NOT include campaign_id/adgroup_id; use ad_id only
     Parent IDs are obtained via _list_adgroups() / _list_ads() metadata calls.
     """
     import json as _json
     PAGE_SIZE = 1000
     all_rows: list[dict] = []
-    page = 1
     _dims = dimensions or ["campaign_id", "stat_time_day"]
     _metrics = metrics or [
         "spend", "impressions", "clicks", "ctr",
         "conversion", "cost_per_conversion",
         "campaign_name",
     ]
-    while True:
-        params = {
-            "advertiser_id": advertiser_id,
-            "report_type":   "BASIC",
-            "dimensions":    _json.dumps(_dims),
-            "data_level":    data_level,
-            "lifetime":      "false",
-            "start_date":    str(start),
-            "end_date":      str(end),
-            "metrics":       _json.dumps(_metrics),
-            "page_size":     PAGE_SIZE,
-            "page":          page,
-        }
-        r = requests.get(f"{BASE}/report/integrated/get/",
-                         headers=_headers(), params=params, timeout=30)
-        if r.status_code >= 400:
-            print(f"[tiktok-bq] report {r.status_code} (page {page}): {r.text[:200]}")
-            break
-        data = r.json()
-        if data.get("code", 0) != 0:
-            print(f"[tiktok-bq] API error {data.get('code')}: {data.get('message','')} (page {page})")
-            break
-        batch = data.get("data", {}).get("list", [])
-        all_rows.extend(batch)
-        if len(batch) < PAGE_SIZE:
-            break   # last page
-        page += 1
+
+    for cs, ce in _date_chunks(start, end, max_days=30):
+        page = 1
+        while True:
+            params = {
+                "advertiser_id": advertiser_id,
+                "report_type":   "BASIC",
+                "dimensions":    _json.dumps(_dims),
+                "data_level":    data_level,
+                "lifetime":      "false",
+                "start_date":    str(cs),
+                "end_date":      str(ce),
+                "metrics":       _json.dumps(_metrics),
+                "page_size":     PAGE_SIZE,
+                "page":          page,
+            }
+            r = requests.get(f"{BASE}/report/integrated/get/",
+                             headers=_headers(), params=params, timeout=30)
+            if r.status_code >= 400:
+                print(f"[tiktok-bq] report {r.status_code} (page {page}): {r.text[:200]}")
+                break
+            data = r.json()
+            if data.get("code", 0) != 0:
+                print(f"[tiktok-bq] API error {data.get('code')}: {data.get('message','')} (page {page})")
+                break
+            batch = data.get("data", {}).get("list", [])
+            all_rows.extend(batch)
+            if len(batch) < PAGE_SIZE:
+                break
+            page += 1
     return all_rows
 
 
