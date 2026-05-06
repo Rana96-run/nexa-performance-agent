@@ -781,12 +781,6 @@ deals AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4
-),
-utmproxy AS (
-  SELECT date, channel, utm_campaign, utm_audience, utm_content, SUM(spend) AS spend
-  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-  WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
-  GROUP BY 1, 2, 3, 4, 5
 )
 SELECT
   COALESCE(p.date, h.date)                  AS date,
@@ -803,7 +797,10 @@ SELECT
   COALESCE(p.campaign_name, h.utm_campaign)  AS utm_campaign,
   COALESCE(p.adset_name, h.utm_audience)     AS utm_audience,
   COALESCE(p.utm_content, h.utm_content)     AS utm_content,
-  COALESCE(p.spend, u.spend, 0)              AS spend,
+  -- spend: only use real platform data. utm_proxy spend is proportionally
+  -- allocated from campaign level and is NOT accurate at ad grain — show NULL
+  -- so CPL/CPQL don't display fabricated numbers.
+  p.spend                                    AS spend,
   COALESCE(p.impressions, 0)                 AS impressions,
   COALESCE(p.clicks, 0)                      AS clicks,
   COALESCE(h.leads, 0)                       AS leads,
@@ -812,18 +809,16 @@ SELECT
   COALESCE(d.deals, 0)                       AS deals,
   COALESCE(d.deals_won, 0)                   AS deals_won,
   COALESCE(d.revenue_won, 0)                 AS revenue_won,
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))                    AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))                 AS disq_rate,
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))           AS CPL,
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0)) AS CPQL,
-  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS ROAS,
-  IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                        AS data_source
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))         AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))      AS disq_rate,
+  SAFE_DIVIDE(p.spend, NULLIF(h.leads, 0))                   AS CPL,
+  SAFE_DIVIDE(p.spend, NULLIF(h.leads_qualified, 0))         AS CPQL,
+  SAFE_DIVIDE(d.revenue_won, NULLIF(p.spend, 0))             AS ROAS,
+  IF(p.date IS NOT NULL, 'platform', 'utm_proxy')            AS data_source
 FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
   AND LOWER(TRIM(p.utm_content)) = LOWER(TRIM(h.utm_content))
-LEFT JOIN utmproxy u
-  ON h.date = u.date AND h.channel = u.channel AND h.utm_content = u.utm_content
 LEFT JOIN deals d
   ON COALESCE(p.date, h.date) = d.date
   AND COALESCE(p.channel, h.channel) = d.channel

@@ -399,6 +399,140 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                        key_fields=["date", "channel", "adset_id"])
 
 
+# ── Ad (Creative) level → ads_daily ──────────────────────────────────────────
+
+def _list_ads(token: str, ad_account_id: str) -> dict:
+    """Return {ad_id: {name, adsquad_id, campaign_id}} for all ads in account."""
+    r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/ads",
+                     headers=_headers(token), timeout=30)
+    if r.status_code >= 400:
+        print(f"[snap]   ads list {r.status_code}: {r.text[:160]}")
+        return {}
+    # Also need adsquad → campaign mapping for campaign_id lookups
+    adsquads = _list_adsquads(token, ad_account_id)
+    out = {}
+    for item in r.json().get("ads", []):
+        ad = item.get("ad", {})
+        sq_id = ad.get("ad_squad_id", "")
+        out[ad["id"]] = {
+            "name":        ad.get("name", ""),
+            "adsquad_id":  sq_id,
+            "campaign_id": adsquads.get(sq_id, {}).get("campaign_id", ""),
+        }
+    return out
+
+
+def _ad_stats_single_call(token: str, ad_id: str,
+                           start: date, end: date, tz_name: str) -> list:
+    end_exclusive = end + timedelta(days=1)
+    params = {
+        "granularity": "DAY",
+        "start_time":  _day_start_iso(start, tz_name),
+        "end_time":    _day_start_iso(end_exclusive, tz_name),
+        "fields":      SNAP_STATS_FIELDS,
+    }
+    try:
+        r = _snap_get(f"{BASE}/ads/{ad_id}/stats", _headers(token), params)
+    except Exception as exc:
+        print(f"[snap]   skipping ad {ad_id} after {_SNAP_RETRIES} retries: {exc}")
+        return []
+    if r.status_code >= 400 and SNAP_STATS_FIELDS != SNAP_STATS_FIELDS_SAFE:
+        body = r.text.lower()
+        if "field" in body or ("unsupported" in body and "granularity" not in body):
+            params["fields"] = SNAP_STATS_FIELDS_SAFE
+            try:
+                r = _snap_get(f"{BASE}/ads/{ad_id}/stats", _headers(token), params)
+            except Exception as exc:
+                print(f"[snap]   skipping ad {ad_id} on safe-fields retry: {exc}")
+                return []
+    if r.status_code >= 400:
+        print(f"[snap]   ad stats {r.status_code} for {ad_id}: {r.text[:120]}")
+        return []
+    series = r.json().get("timeseries_stats", [])
+    if not series:
+        return []
+    return series[0].get("timeseries_stat", {}).get("timeseries", [])
+
+
+def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
+    """Ad/Creative grain → ads_daily. Exact spend per ad from Snap API."""
+    token = _refresh_access_token()
+
+    end = date.today() - timedelta(days=1)
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+    accounts = _ad_accounts()
+    print(f"[snap] ads window {start} -> {end} across {len(accounts)} account(s)")
+
+    for acct in accounts:
+        meta   = _get_account(token, acct)
+        cur    = normalize_currency(meta.get("currency"))
+        tz     = meta.get("timezone") or "UTC"
+        adsquads = _list_adsquads(token, acct)
+        ads    = _list_ads(token, acct)
+        print(f"[snap]   ads account {acct}: {len(ads)} ads in metadata")
+        acct_count = 0
+
+        for ad_id, ad_meta in ads.items():
+            sq_id    = ad_meta.get("adsquad_id", "")
+            camp_id  = ad_meta.get("campaign_id", "")
+            sq       = adsquads.get(sq_id, {})
+            for cs, ce in _date_chunks(start, end, max_days=30):
+                pts = _ad_stats_single_call(token, ad_id, cs, ce, tz)
+                for pt in pts:
+                    stats        = pt.get("stats", {})
+                    spend_micro  = float(stats.get("spend", 0) or 0)
+                    spend_native = spend_micro / 1_000_000
+                    spend        = to_usd(spend_native, cur)
+                    impressions  = int(stats.get("impressions", 0) or 0)
+                    clicks       = int(stats.get("swipes", 0) or 0)
+                    conversions_total = (
+                        int(stats.get("conversion_sign_ups", 0) or 0)
+                        + int(stats.get("conversion_purchases", 0) or 0)
+                        + int(stats.get("conversion_add_cart", 0) or 0)
+                        + int(stats.get("conversion_save", 0) or 0)
+                        + int(stats.get("conversion_start_checkout", 0) or 0)
+                        + int(stats.get("conversion_subscribe", 0) or 0)
+                        + int(stats.get("conversion_app_installs", 0) or 0)
+                    )
+                    ctr = (clicks / impressions * 100) if impressions else 0.0
+                    d   = (pt.get("start_time") or "")[:10]
+                    if not d:
+                        continue
+                    rows.append({
+                        "date":          d,
+                        "channel":       "snapchat",
+                        "account_id":    acct,
+                        "campaign_id":   camp_id,
+                        "campaign_name": None,   # not at ad grain
+                        "adset_id":      sq_id,
+                        "adset_name":    sq.get("name"),
+                        "ad_id":         ad_id,
+                        "ad_name":       ad_meta.get("name"),
+                        "status":        None,
+                        "spend":         round(spend, 2),
+                        "impressions":   impressions,
+                        "clicks":        clicks,
+                        "ctr":           round(ctr, 4),
+                        "leads":         0,
+                        "conversions":   float(conversions_total),
+                        "currency":      "USD",
+                        "updated_at":    now,
+                    })
+                    acct_count += 1
+        print(f"[snap]   ads account {acct}: {acct_count} rows across {len(ads)} ads")
+
+    return upsert_rows("ads_daily", rows,
+                       key_fields=["date", "channel", "ad_id"])
+
+
 if __name__ == "__main__":
     import sys
     cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -407,3 +541,5 @@ if __name__ == "__main__":
         print(f"campaigns: {collect_and_write(days=days)} rows")
     if cmd in ("all", "adsets"):
         print(f"adsets:    {collect_adsets_and_write(days=days)} rows")
+    if cmd in ("all", "ads"):
+        print(f"ads:       {collect_ads_and_write(days=days)} rows")
