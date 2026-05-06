@@ -2,17 +2,19 @@
 builder = "NIXPACKS"
 
 [deploy]
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 5
+startCommand         = "python app_server.py"
+healthcheckPath      = "/health"
+healthcheckTimeout   = 60
+restartPolicyType    = "ON_FAILURE"
+restartPolicyMaxRetries = 10
 
 # ── Services ──────────────────────────────────────────────────────────────────
 #
-# Service 1: nexa-web  (existing)
-#   Start command: python app_server.py
-#   Runs: Flask API + operational_scheduler + slack_listener
+# Service 1: nexa-web  (this service)
+#   Runs: Flask API + operational_scheduler + reporting_scheduler + slack_listener
+#   Health: GET /health → 200 OK
+#   Railway waits up to 60s for /health before marking deploy successful.
 #
-# Service 2: nexa-dashboard  (add manually in Railway UI)
-#   Start command (paste into Railway service settings):
-#     streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+# Service 2: nexa-dashboard  (add manually in Railway UI if needed)
+#   Start command: streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
 #   Same repo, same env vars.
-#   Public URL → share with team.

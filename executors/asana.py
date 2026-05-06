@@ -20,15 +20,23 @@ from config import (
 )
 
 
+_ASSIGNEE_NAMES = {
+    "google_ads": "Rana Khalid",
+}
+_ASSIGNEE_DEFAULT_NAME = "Donia Mohamed"
+
+
 def _assignee_for_channel(channel: str) -> str:
-    """
-    Google Ads tasks → Rana Khalid
-    Everything else  → Donia Mohamed
-    """
+    """Google Ads tasks → Rana Khalid. Everything else → Donia Mohamed."""
     ch = (channel or "").lower().replace(" ", "_").replace("-", "_")
     if ch in ("google_ads", "google ads"):
         return ASANA_ASSIGNEE_GOOGLE_ADS_GID
     return ASANA_ASSIGNEE_DEFAULT_GID or ASANA_ASSIGNEE_GID
+
+
+def _assignee_name_for_channel(channel: str) -> str:
+    ch = (channel or "").lower().replace(" ", "_").replace("-", "_")
+    return _ASSIGNEE_NAMES.get(ch, _ASSIGNEE_DEFAULT_NAME)
 from cache.cache_manager import task_is_new, record_task, get_task_gid
 
 # Action -> priority label (shown in task footer)
@@ -43,26 +51,40 @@ _ACTION_PRIORITY = {
 }
 
 
+_PRIORITY_EMOJI = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}
+_ACTION_EMOJI   = {
+    "pause": "⏸️", "scale": "📈", "optimize": "🔧",
+    "fix": "🛠️", "launch": "🚀", "refresh": "🔄", "exclude": "🚫",
+}
+
+
 def _task_footer(channel: str, asset_level: str, action: str, task_type: str) -> str:
     """Structured metadata block appended to every task description."""
     from datetime import datetime, timedelta, timezone
-    riyadh    = timezone(timedelta(hours=3))
-    now_str   = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M Riyadh")
-    due_str   = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
-    priority  = _ACTION_PRIORITY.get((action or "").lower(), "Medium")
-    ch_label  = ASANA_CHANNEL_LABELS.get(
-                    (channel or "").lower().replace(" ", "_").replace("-", "_"),
-                    channel or "—")
-    lvl_label = ASANA_ASSET_LEVEL_LABELS.get((asset_level or "").lower(), asset_level or "—")
+    riyadh      = timezone(timedelta(hours=3))
+    now_str     = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M Riyadh")
+    due_str     = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
+    priority    = _ACTION_PRIORITY.get((action or "").lower(), "Medium")
+    pri_emoji   = _PRIORITY_EMOJI.get(priority, "")
+    act_emoji   = _ACTION_EMOJI.get((action or "").lower(), "")
+    ch_label    = ASANA_CHANNEL_LABELS.get(
+                      (channel or "").lower().replace(" ", "_").replace("-", "_"),
+                      channel or "—")
+    lvl_label   = ASANA_ASSET_LEVEL_LABELS.get((asset_level or "").lower(), asset_level or "—")
+    assignee    = _assignee_name_for_channel(channel)
     return (
         f"\n\n---\n"
-        f"**Created:** {now_str}\n"
-        f"**Due:** {due_str}\n"
-        f"**Priority:** {priority}\n"
-        f"**Type:** {task_type}\n"
-        f"**Channel:** {ch_label}\n"
-        f"**Asset level:** {lvl_label}\n"
-        f"**Action:** {(action or '—').title()}"
+        f"📋 **Task Details**\n\n"
+        f"| Field | Value |\n"
+        f"|---|---|\n"
+        f"| 📅 Created | {now_str} |\n"
+        f"| ⏰ Due | {due_str} |\n"
+        f"| {pri_emoji} Priority | {priority} |\n"
+        f"| 🏷️ Type | {task_type} |\n"
+        f"| 📣 Channel | {ch_label} |\n"
+        f"| 🎯 Asset level | {lvl_label} |\n"
+        f"| {act_emoji} Action | {(action or '—').title()} |\n"
+        f"| 👤 Assignee | {assignee} |"
     )
 
 # Cache section GIDs so we only look them up once per session

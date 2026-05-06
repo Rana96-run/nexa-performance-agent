@@ -250,7 +250,7 @@ def _pause_campaign_exec(channel: str, campaign_id: str, account_id: str) -> str
 # ── Card formatter (replaces markdown tables) ──────────────────────────────────
 
 def _campaign_card(findings: list[dict], include_exec: bool = False) -> str:
-    """Format each campaign finding as a clean key-value card."""
+    """Format each campaign finding as a structured card with metrics table."""
     if not findings:
         return ""
     cards = []
@@ -260,30 +260,43 @@ def _campaign_card(findings: list[dict], include_exec: bool = False) -> str:
         roas_s = f"{f['roas']:.2f}x" if f.get("roas") else "—"
         edit_s = f"{f.get('last_updated', '?')} ({f.get('days_since_edit', '?')}d ago)"
         note   = f.get("exec_result", f.get("note", ""))
+        date_from = f.get("date_from", "")
+        date_to   = f.get("date_to", "")
 
         flags = []
         if f.get("junk_leads"):    flags.append("⚠️ JUNK LEADS")
         if f.get("is_awareness"):  flags.append("📣 AWARENESS")
         if f.get("roas_override"): flags.append("✅ ROAS OK")
         if f.get("is_qflavours"):  flags.append("🔍 CHECK QFLAVOURS PIPELINE")
-        flag_line = f"\n**Flags:**          {' | '.join(flags)}" if flags else ""
+        flag_line = f"\n\n🚩 **Flags:** {' | '.join(flags)}" if flags else ""
 
-        header = f"**[{i}/{len(findings)}]**" if len(findings) > 1 else ""
+        # HubSpot verification line so the reviewer can cross-check directly
+        hs_verify = ""
+        if date_from and date_to:
+            hs_verify = (
+                f"\n\n🔍 **Verify in HubSpot:** Filter Lead module by "
+                f"`lead_utm_campaign = {f['campaign']}` "
+                f"and create date **{date_from} → {date_to}** to confirm these numbers."
+            )
+
+        header = f"**Campaign {i} of {len(findings)}**\n\n" if len(findings) > 1 else ""
         card = (
-            f"{header}\n" if header else ""
-        ) + (
-            f"**Channel:**         {f['channel'].replace('_', ' ').title()}\n"
-            f"**Campaign:**        {f['campaign']}\n"
-            f"**Spend:**           ${f['spend']:.0f}\n"
-            f"**Leads:**           {f['hs_leads']}\n"
-            f"**Qualified Leads:** {f['sqls']}\n"
-            f"**CPL:**             {cpl_s}\n"
-            f"**CPQL:**            {cpql_s}\n"
-            f"**Qual%:**           {f['qual_rate']:.1f}%\n"
-            f"**ROAS:**            {roas_s}\n"
-            f"**Last Edit:**       {edit_s}"
+            f"{header}"
+            f"| Metric | Value |\n"
+            f"|---|---|\n"
+            f"| 📣 Channel | {f['channel'].replace('_', ' ').title()} |\n"
+            f"| 🏷️ Campaign | `{f['campaign']}` |\n"
+            f"| 💰 Spend | ${f['spend']:.0f} |\n"
+            f"| 👥 Total Leads | {f['hs_leads']} |\n"
+            f"| ✅ Qualified Leads | {f['sqls']} |\n"
+            f"| 📊 Qual Rate | {f['qual_rate']:.1f}% |\n"
+            f"| 💵 CPL | {cpl_s} |\n"
+            f"| 🎯 CPQL | {cpql_s} |\n"
+            f"| 📈 ROAS | {roas_s} |\n"
+            f"| ✏️ Last Edit | {edit_s} |"
             + flag_line
-            + (f"\n**{'Action taken' if include_exec else 'Note'}:** {note}" if note else "")
+            + hs_verify
+            + (f"\n\n📝 **{'Action taken' if include_exec else 'Analysis'}:** {note}" if note else "")
         )
         cards.append(card)
     return "\n\n---\n\n".join(cards) + "\n"
@@ -348,16 +361,17 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 )
             else:
                 awareness_note = ""
+            date_range_str = f"{f['date_from']} to {f['date_to']}"
             body = (
-                f"Campaign health audit — last {days} days.\n"
-                f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
-                f"### Scale candidate — *awaiting approval*\n\n"
+                f"## 📈 Scale Candidate — Awaiting Approval\n\n"
+                f"**Period:** {date_range_str}\n"
+                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module | Eval = CPQL first\n\n"
                 + _campaign_card([f])
                 + awareness_note
-                + "\nApprove in #approvals to execute the +25% budget increase."
+                + f"\n\n✅ **Action required:** React with ✅ in #approvals to raise budget +{SCALE_PCT*100:.0f}%."
             )
             gid = create_task(
-                title=f"PENDING APPROVAL: Scale — {f['campaign']} +{SCALE_PCT*100:.0f}% ({days}d)",
+                title=f"PENDING APPROVAL: Scale — {f['campaign']} +{SCALE_PCT*100:.0f}% ({date_range_str})",
                 description=body,
                 project_key="optimization",
                 task_type="Recommendation",
@@ -378,7 +392,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
     if pause_f:
         for f in pause_f:
             if f.get("junk_leads"):
-                title = f"PENDING APPROVAL: Pause — {f['campaign']} — Junk Leads ({days}d)"
+                title = f"PENDING APPROVAL: Pause — {f['campaign']} — Junk Leads ({f['date_from']} to {f['date_to']})"
                 reason = (
                     "CPL looks cheap but qual rate is low — leads are not converting to SQLs. "
                     "Do NOT scale on CPL alone. Fix audience, creative, or LP before any budget change."
@@ -400,17 +414,17 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                         "- Creative attracting B2C audience instead of B2B\n"
                     )
             else:
-                title = f"PENDING APPROVAL: Pause — {f['campaign']} — CPQL critical ({days}d)"
+                title = f"PENDING APPROVAL: Pause — {f['campaign']} — CPQL critical ({f['date_from']} to {f['date_to']})"
                 reason = "Fix audience/creative/LP before reactivating."
                 junk_drill = ""
             body = (
-                f"Campaign health audit — last {days} days.\n"
-                f"Cost: channel source | Leads: HubSpot Lead Module | Evaluation: CPQL first\n\n"
-                f"### Pause candidate — *awaiting approval*\n\n"
+                f"## ⏸️ Pause Candidate — Awaiting Approval\n\n"
+                f"**Period:** {f['date_from']} to {f['date_to']}\n"
+                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module | Eval = CPQL first\n\n"
                 + _campaign_card([f])
-                + f"\n{reason}"
+                + f"\n\n⚠️ **Why pause:** {reason}"
                 + junk_drill
-                + "\n\nApprove in #approvals to pause."
+                + "\n\n✅ **Action required:** React with ✅ in #approvals to pause this campaign."
             )
             gid = create_task(
                 title=title,
@@ -479,7 +493,9 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
 
             body = (
-                f"**Drill-down Analysis Required — {channel} — {date_range_str}**\n\n"
+                f"## 🔍 Drill-down Analysis Required\n\n"
+                f"**Period:** {date_range_str}\n"
+                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module\n\n"
                 f"CPQL >${DRILL_DOWN_CPQL} AND CPL >${DRILL_DOWN_CPL} for {days} days. "
                 f"Do NOT pause at campaign level yet.\n\n"
                 + hierarchy + "\n"
@@ -542,7 +558,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                     "- If frequency > 3: refresh creatives to avoid ad fatigue\n"
                     "- Ensure `utm_source=paid_social&utm_medium=cpm` so brand-lift is tracked\n"
                 )
-                task_title = f"{channel.replace('_',' ').title()} — IS Review: {f['campaign']} ({days}d)"
+                task_title = f"{channel.replace('_',' ').title()} — IS Review: {f['campaign']} ({date_range_str})"
             else:
                 section_title = f"### {channel} — CPQL investigation"
                 investigation = (
@@ -551,15 +567,16 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                     "- High CPQL vs CPL: leads entering but not qualifying (LP or ICP mismatch)\n"
                     "- Missing UTM: HubSpot not receiving utm_campaign correctly\n"
                 )
-                task_title = f"{channel.replace('_',' ').title()} — CPQL investigation: {f['campaign']} ({days}d)"
+                task_title = f"{channel.replace('_',' ').title()} — CPQL investigation: {f['campaign']} ({date_range_str})"
 
             body = (
-                f"Campaign health audit — **{date_range_str}**\n"
-                f"Cost: channel source | Leads: HubSpot Lead Module\n"
+                f"## 🔧 Optimize — Investigation Required\n\n"
+                f"**Period:** {date_range_str}\n"
+                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module\n"
                 f"⚠️ Actions only applied to campaigns last edited ≥7 days ago.\n\n"
                 + section_title + "\n\n"
                 + _campaign_card([f])
-                + f"\n{investigation}"
+                + f"\n\n{investigation}"
                 + (f"\n{creative_section}" if creative_section else "")
             )
             gid = create_task(

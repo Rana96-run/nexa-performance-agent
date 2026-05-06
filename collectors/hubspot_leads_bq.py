@@ -96,15 +96,17 @@ def _search_leads(since_ms, until_ms=None, after=None):
 def collect_and_write(days: int = None, start_date: date = None,
                        incremental: bool = False):
     """Modes:
-      - incremental=True: last 2 days (scheduled runs)
-      - days=N / start_date=: custom window
-      - default: YTD (initial backfill only)
+      - incremental=True: last 30 days by hs_createdate (scheduled runs).
+        Re-fetches leads created in the last 30 days with their CURRENT stage
+        so leads qualified days after creation are correctly counted.
+      - days=N / start_date=: custom window by hs_createdate
+      - default: YTD backfill
     """
     _load_pipelines()
 
     end = date.today()
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=30)
     elif start_date:
         start = start_date
     elif days:

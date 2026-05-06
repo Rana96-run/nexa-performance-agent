@@ -31,9 +31,16 @@ app.register_blueprint(hubspot_bp)
 
 # ─── Static report pages ──────────────────────────────────────────────────────
 
+_START_TIME = datetime.utcnow()
+
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok"}), 200
+    uptime_s = int((datetime.utcnow() - _START_TIME).total_seconds())
+    return jsonify({
+        "status": "ok",
+        "uptime_seconds": uptime_s,
+        "utc_now": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }), 200
 
 
 _REFRESH_STATUS: dict = {"running": False, "started_at": None,
