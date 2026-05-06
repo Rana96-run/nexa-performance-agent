@@ -443,15 +443,108 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
     return paused
 
 
+# ─── 30-keyword-per-ad-group cap helper ──────────────────────────────────────
+def _count_keywords_per_adgroup(adgroup_resources: set[str]) -> dict[str, int]:
+    """Returns {ad_group_resource_name: enabled_keyword_count} for the given set."""
+    if not adgroup_resources:
+        return {}
+
+    client = get_client()
+    ga = client.get_service("GoogleAdsService")
+    counts: dict[str, int] = {rn: 0 for rn in adgroup_resources}
+
+    # Group ad groups by customer_id so we can query per-account
+    by_cid: dict[str, list[str]] = {}
+    for rn in adgroup_resources:
+        # ad_group resource looks like "customers/{cid}/adGroups/{id}"
+        try:
+            cid = rn.split("/")[1]
+        except Exception:
+            continue
+        by_cid.setdefault(cid, []).append(rn)
+
+    for cid, rns in by_cid.items():
+        # Build IN clause; cap to 1000 to keep query size bounded
+        rns_str = ", ".join(f"'{rn}'" for rn in rns[:1000])
+        q = f"""
+          SELECT ad_group.resource_name
+          FROM ad_group_criterion
+          WHERE ad_group_criterion.type    = 'KEYWORD'
+            AND ad_group_criterion.status  = 'ENABLED'
+            AND ad_group_criterion.negative = FALSE
+            AND ad_group.resource_name IN ({rns_str})
+        """
+        try:
+            for r in ga.search(customer_id=cid, query=q):
+                rn = r.ad_group.resource_name
+                counts[rn] = counts.get(rn, 0) + 1
+        except Exception as e:
+            print(f"[kw-cap] count query failed for {cid}: {e}")
+    return counts
+
+
+def filter_kw_against_adgroup_cap(add_kw: list[dict],
+                                  max_per_adgroup: int = 30
+                                  ) -> tuple[list[dict], list[dict]]:
+    """
+    Apply the per-ad-group keyword cap. Returns (kept, dropped).
+    For each ad group we may add at most (max_per_adgroup - current_enabled_count)
+    new keywords. Within an ad group, keep highest-conv first.
+    """
+    if not add_kw:
+        return [], []
+
+    # Group candidates by ad group, sort by descending conv
+    by_ag: dict[str, list[dict]] = {}
+    for kw in add_kw:
+        rn = kw.get("ad_group_resource", "")
+        if not rn:
+            continue
+        by_ag.setdefault(rn, []).append(kw)
+    for rn in by_ag:
+        by_ag[rn].sort(key=lambda x: -x.get("conv", 0))
+
+    counts = _count_keywords_per_adgroup(set(by_ag.keys()))
+
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    for rn, candidates in by_ag.items():
+        existing = counts.get(rn, 0)
+        room = max(0, max_per_adgroup - existing)
+        kept.extend(candidates[:room])
+        for c in candidates[room:]:
+            c["drop_reason"] = (f"ad group at cap ({existing}/{max_per_adgroup} "
+                                f"keywords already)")
+            dropped.append(c)
+
+    print(f"[kw-cap] kept={len(kept)}, dropped={len(dropped)} (30-per-adgroup cap)")
+    return kept, dropped
+
+
 # ─── Orchestrator ────────────────────────────────────────────────────────────
 
+def _is_weekly_keyword_day() -> bool:
+    """True on Sunday (Riyadh). Mirror of the helper in audit_tasks — kept here
+    so the orchestrator can skip the auto-pause function on off-days."""
+    import os
+    if os.getenv("FORCE_WEEKLY_KEYWORDS", "").lower() in ("1", "true", "yes"):
+        return True
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=3))).weekday() == 6
+
+
 def run_full_audit(days: int = 14) -> dict:
-    """Run all four audits and return a single combined finding set."""
+    """Run all four audits and return a single combined finding set.
+    Keyword auto-pause runs WEEKLY (Sunday) — on other days it returns []."""
     print(f"[google-ads-audit] running IS + QS + search-terms + kw-auto-pause audit ({days}d)")
     is_findings   = audit_impression_share(days=days)
     qs_findings   = audit_quality_score(days=days)
     search_terms  = audit_search_terms(days=30)
-    kw_paused     = audit_and_pause_nonconverting_keywords(days=7)
+    if _is_weekly_keyword_day():
+        kw_paused = audit_and_pause_nonconverting_keywords(days=7)
+    else:
+        kw_paused = []
+        print("[kw-pause] skipped — runs weekly on Sunday Riyadh (set FORCE_WEEKLY_KEYWORDS=1 to override)")
     print(f"  IS findings:          {len(is_findings)}")
     print(f"  QS findings:          {len(qs_findings)}")
     print(f"  add as keyword:       {len(search_terms['add_as_keyword'])}")

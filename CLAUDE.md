@@ -175,6 +175,27 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 
 ### Cross-cutting keyword rules
 
+- **Cadence: weekly, not daily.** Adding new keyword candidates AND pausing
+  non-converting keywords run **once a week, on Sunday Riyadh time** — not
+  every nightly run. The audit still computes candidates daily so we know the
+  state, but the Asana task only fires on Sunday so the team batches the
+  review at the start of the work week. Override for one-off runs:
+  `FORCE_WEEKLY_KEYWORDS=1`. Negative-keyword direct-execution is unchanged
+  (still daily — no spend at risk).
+- **30-keyword cap per ad group.** No ad group may exceed 30 enabled keywords.
+  When the weekly audit proposes additions, candidates are sorted highest-conv
+  first per ad group and only `(30 - existing_count)` are kept; the rest are
+  dropped with the reason surfaced in the Asana task body. Helper:
+  `analysers.google_ads_audit.filter_kw_against_adgroup_cap()`.
+- **Don't ADD a keyword with QS<5 AND >80% lost-IS.** This combination signals
+  a keyword that won't win impressions and will lower account-level QS — even
+  if it's in our candidate list, drop it. (Applies to existing keywords too —
+  see next rule.)
+- **EXISTING keyword with QS<5 AND >80% lost-IS:**
+  - If all-time spend = 0 → **DELETE** (zero cost, safe to remove cleanly).
+  - If all-time spend > 0 → **PAUSE** (per "never delete with cost" rule).
+  - Detection: `scripts/audit_active_keywords.py`, lookback window 180 days
+    for "all-time spend".
 - **Language match (non-negotiable).** A keyword's script must match its
   campaign's language token (`_AR_` / `_EN_`). Latin keyword in Arabic campaign
   or vice versa → pause-watch. Mixed-script terms (transliterated brand inside
@@ -182,7 +203,8 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 - **Wasted-spend KEYWORDS are paused, not negated.** A keyword that has
   burnt $80+ in 7 days with 0 conversions gets PAUSED (not added as negative
   — the keyword itself is the problem, not just one matched query). Threshold
-  in `config.KEYWORD_PAUSE_SPEND` / `KEYWORD_PAUSE_DAYS`.
+  in `config.KEYWORD_PAUSE_SPEND` / `KEYWORD_PAUSE_DAYS`. Pausing also runs
+  WEEKLY only.
 - **Never add competitor terms as negatives.** Competitors live in Competitor
   campaigns; negating them in other campaigns blocks the right traffic too.
 

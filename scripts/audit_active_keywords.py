@@ -39,32 +39,59 @@ from executors.keyword_policy import classify_term
 def scan_active_keywords() -> list[dict]:
     """
     Returns one dict per ENABLED keyword that violates policy.
+
+    Violation kinds:
+      - always_negative           — pattern match (login / free / دورة / etc.)
+      - brand_only_block          — قيود/qoyod outside Brand campaign
+      - competitor_in_generic     — competitor outside Competitor campaign
+      - language_mismatch         — script doesn't match `_AR_`/`_EN_` token
+      - low_qs_high_lost_is_delete — QS<5 AND rank-lost-IS>80% AND zero all-time spend
+                                      → safe to delete (no historical cost)
+      - low_qs_high_lost_is_pause  — QS<5 AND rank-lost-IS>80% AND has spend
+                                      → pause (per "never delete with cost" rule)
     """
     client = get_client()
     ga = client.get_service("GoogleAdsService")
 
-    query = """
+    # Per-keyword 30d lifetime metrics: QS, rank-lost-IS, spend.
+    # QS lives at criterion level; metrics aggregated across the window we ask for.
+    # We use a long lookback (180d) so "all-time spend = 0" is meaningful.
+    from datetime import date, timedelta
+    end_date = date.today() - timedelta(days=1)
+    start_date = end_date - timedelta(days=179)
+
+    query = f"""
       SELECT
         ad_group_criterion.resource_name,
         ad_group_criterion.criterion_id,
         ad_group_criterion.keyword.text,
         ad_group_criterion.keyword.match_type,
         ad_group_criterion.status,
+        ad_group_criterion.quality_info.quality_score,
         ad_group.name,
         ad_group.resource_name,
         ad_group.status,
         campaign.id,
         campaign.name,
         campaign.resource_name,
-        campaign.status
+        campaign.status,
+        metrics.cost_micros,
+        metrics.search_rank_lost_impression_share
       FROM keyword_view
-      WHERE ad_group_criterion.status  = 'ENABLED'
-        AND ad_group.status            = 'ENABLED'
-        AND campaign.status            = 'ENABLED'
+      WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
+        AND ad_group_criterion.status   = 'ENABLED'
+        AND ad_group.status             = 'ENABLED'
+        AND campaign.status             = 'ENABLED'
         AND ad_group_criterion.negative = FALSE
     """
 
     violations: list[dict] = []
+    # Aggregate per criterion since segments.date returns daily rows. We sum
+    # cost and take the last-seen QS / IS-lost values.
+    from collections import defaultdict
+    LOW_QS = 5
+    HIGH_LOST_IS = 0.80
+
     for cid in _customer_ids():
         try:
             rows = list(ga.search(customer_id=cid, query=query))
@@ -72,29 +99,66 @@ def scan_active_keywords() -> list[dict]:
             print(f"[active-kw-audit] account {cid} skipped: {e}")
             continue
 
+        # Aggregate metrics per criterion + capture latest QS / IS-lost
+        agg: dict[str, dict] = {}
         for r in rows:
+            key = r.ad_group_criterion.resource_name
+            slot = agg.setdefault(key, {
+                "row":           r,
+                "cost_micros":   0,
+                "qs_seen":       [],
+                "is_lost_seen":  [],
+            })
+            slot["cost_micros"] += int(r.metrics.cost_micros or 0)
+            qs = getattr(r.ad_group_criterion.quality_info, "quality_score", None)
+            if qs is not None and qs > 0:
+                slot["qs_seen"].append(qs)
+            lost = r.metrics.search_rank_lost_impression_share
+            if lost is not None and lost >= 0:
+                slot["is_lost_seen"].append(lost)
+
+        for key, slot in agg.items():
+            r = slot["row"]
             term = r.ad_group_criterion.keyword.text
             campaign_name = r.campaign.name
             kind = classify_term(term, campaign_name)
-            # All four are violations when ENABLED:
-            #  - always_negative      → never should be a keyword
-            #  - brand_only_block     → قيود in non-Brand campaign
-            #  - competitor_in_generic → competitor in non-Competitor campaign
-            #  - language_mismatch    → AR/EN mismatch with campaign language
+
+            base = {
+                "violation":         kind,
+                "customer_id":       cid,
+                "campaign":          campaign_name,
+                "campaign_resource": r.campaign.resource_name,
+                "ad_group":          r.ad_group.name,
+                "ad_group_resource": r.ad_group.resource_name,
+                "keyword":           term,
+                "match_type":        r.ad_group_criterion.keyword.match_type.name,
+                "criterion_id":      r.ad_group_criterion.criterion_id,
+                "criterion_resource": r.ad_group_criterion.resource_name,
+            }
+
+            # Policy-pattern violations
             if kind in ("always_negative", "brand_only_block",
                         "competitor_in_generic", "language_mismatch"):
-                violations.append({
-                    "violation":         kind,
-                    "customer_id":       cid,
-                    "campaign":          campaign_name,
-                    "campaign_resource": r.campaign.resource_name,
-                    "ad_group":          r.ad_group.name,
-                    "ad_group_resource": r.ad_group.resource_name,
-                    "keyword":           term,
-                    "match_type":        r.ad_group_criterion.keyword.match_type.name,
-                    "criterion_id":      r.ad_group_criterion.criterion_id,
-                    "criterion_resource": r.ad_group_criterion.resource_name,
-                })
+                violations.append(base)
+                continue
+
+            # QS + IS-lost combined check (rule: 2026-05-06)
+            qs_seen      = slot["qs_seen"]
+            is_lost_seen = slot["is_lost_seen"]
+            spend        = slot["cost_micros"] / 1_000_000
+
+            if qs_seen and is_lost_seen:
+                latest_qs    = qs_seen[-1]
+                max_is_lost  = max(is_lost_seen)
+                if latest_qs < LOW_QS and max_is_lost > HIGH_LOST_IS:
+                    base["qs"]       = latest_qs
+                    base["is_lost"]  = round(max_is_lost, 2)
+                    base["spend"]    = round(spend, 2)
+                    if spend == 0:
+                        base["violation"] = "low_qs_high_lost_is_delete"
+                    else:
+                        base["violation"] = "low_qs_high_lost_is_pause"
+                    violations.append(base)
 
     return violations
 
@@ -107,10 +171,20 @@ def write_csv(violations: list[dict]) -> Path:
         out.write_text("violation,customer_id,campaign,ad_group,keyword,match_type\n",
                        encoding="utf-8")
         return out
+    # Union of all keys across violations (rows have variable shape — QS/IS-lost
+    # rows have extra columns vs pure pattern violations)
+    all_keys: list[str] = []
+    seen = set()
+    for v in violations:
+        for k in v.keys():
+            if k not in seen:
+                seen.add(k); all_keys.append(k)
     with out.open("w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(violations[0].keys()))
+        w = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
         w.writeheader()
-        w.writerows(violations)
+        for row in violations:
+            # Pad with None for missing keys
+            w.writerow({k: row.get(k, "") for k in all_keys})
     return out
 
 
@@ -168,6 +242,16 @@ def create_review_task(violations: list[dict], csv_path: Path) -> str | None:
                                     "Latin-script keywords in an `_AR_` campaign. "
                                     "Move to a campaign of the matching language "
                                     "or pause.",
+            "low_qs_high_lost_is_delete":
+                                    "have QS<5 AND >80% lost impression share (rank) "
+                                    "AND zero historical spend — broken keywords that "
+                                    "never gained traction. SAFE TO DELETE per the "
+                                    "'never delete with cost' rule (zero cost ⇒ ok).",
+            "low_qs_high_lost_is_pause":
+                                    "have QS<5 AND >80% lost impression share (rank) "
+                                    "AND historical spend > $0 — pause (not delete) "
+                                    "because we keep history for keywords that ever "
+                                    "spent money.",
         }.get(kind, kind)
 
         parts.append(f"### {kind} — {len(items)} keyword(s)")

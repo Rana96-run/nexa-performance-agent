@@ -12,9 +12,28 @@ Task design (always consolidated, never one task per row):
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
+
 from analysers.google_ads_audit import run_full_audit
 from executors.asana import create_task
 from logs.activity_logger import log_activity_async
+
+
+# ── Weekly cadence ────────────────────────────────────────────────────────────
+# Adding new keywords and pausing keywords run WEEKLY (not nightly). Negatives
+# direct-execute daily, QS / IS audits surface daily, but "add as keyword" and
+# "pause keyword" actions only fire on Sunday Riyadh time — first day of the
+# Saudi work week, so the team sees the proposal list at Sunday standup.
+_RIYADH = timezone(timedelta(hours=3))
+WEEKLY_KEYWORD_WEEKDAY = 6   # Python: Monday=0 … Sunday=6
+
+
+def _is_weekly_keyword_day() -> bool:
+    """True if today (Riyadh time) is the weekly keyword-action day."""
+    import os
+    if os.getenv("FORCE_WEEKLY_KEYWORDS", "").lower() in ("1", "true", "yes"):
+        return True
+    return datetime.now(_RIYADH).weekday() == WEEKLY_KEYWORD_WEEKDAY
 
 
 def _is_card(findings: list[dict]) -> str:
@@ -214,18 +233,40 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
     auto_neg    = audit["keyword_expansion"].get("auto_negative", [])
     pause_watch = audit["keyword_expansion"].get("pause_watch", [])
 
-    if add_kw:
-        body = (f"Search-terms audit (last 30d). {len(add_kw)} converting queries "
-                f"are NOT yet in our keyword list.\n\n"
+    # KEYWORD EXPANSION runs WEEKLY (Sunday Riyadh) — not nightly. The audit
+    # still computes candidates daily so we know the latest state, but the
+    # Asana task only fires once per week to cut review noise + force a
+    # batched, considered review.
+    if add_kw and _is_weekly_keyword_day():
+        # Apply the 30-keyword-per-ad-group cap (rule from 2026-05-06): keep
+        # add candidates only up to (30 - existing_count) per destination ad
+        # group. Drop the rest with a note in the task body.
+        from analysers.google_ads_audit import filter_kw_against_adgroup_cap
+        capped, dropped = filter_kw_against_adgroup_cap(add_kw, max_per_adgroup=30)
+
+        cap_note = ""
+        if dropped:
+            cap_note = (f"\n**30-keyword cap applied:** {len(dropped)} candidate(s) "
+                        f"dropped because their target ad group already has 30+ keywords. "
+                        f"To add them, first prune low performers in those ad groups.\n")
+
+        body = (f"Search-terms audit (last 30d). {len(capped)} converting queries "
+                f"are NOT yet in our keyword list (was {len(add_kw)} before "
+                f"30-per-adgroup cap).\n\n"
                 f"**Rule:** Queries with ≥1 conversion that triggered our ads but "
-                f"aren't a keyword we bid on → add as EXACT match.\n\n"
-                f"**Action:** Review this list, then run `python scripts/bulk_keywords.py "
-                f"add` to execute the additions. قيود/Qoyod terms in non-brand "
-                f"campaigns are filtered out automatically (see Pause Watch task).\n\n"
-                + _term_card(add_kw[:30], mode="add"))
+                f"aren't a keyword we bid on → add as EXACT match.\n"
+                f"**Cadence:** Keyword expansion runs WEEKLY on Sunday Riyadh.\n"
+                f"**Cap:** No ad group may exceed 30 keywords — candidates beyond "
+                f"that are dropped (see note below if any).\n\n"
+                f"**Action:** Review, then run `python scripts/bulk_keywords.py "
+                f"add` to execute. قيود/Qoyod in non-brand, competitors in non-"
+                f"competitor campaigns, and language-mismatched terms were "
+                f"already filtered out (see Pause Watch task).\n"
+                + cap_note
+                + "\n" + _term_card(capped[:30], mode="add"))
 
         gid = create_task(
-            title=f"Google Ads — {len(add_kw)} new keyword candidates from search terms",
+            title=f"Google Ads — {len(capped)} new keyword candidates (weekly)",
             description=body,
             project_key="daily_activity",
             task_type="Keyword",
@@ -233,7 +274,14 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             asset_level="keyword",
             action="launch",
         )
-        out.append((f"keyword expansion ({len(add_kw)})", gid))
+        out.append((f"keyword expansion ({len(capped)})", gid))
+    elif add_kw:
+        # Off-day — log only, don't create the task.
+        log_activity_async(
+            role="keyword_approval",
+            action=f"{len(add_kw)} keyword candidates queued for next Sunday",
+            channel="google_ads", status="ok", rows_affected=len(add_kw),
+        )
 
     # ── 4. Negative-keyword candidates (normal wasted terms) ──────────────────
     if add_neg:

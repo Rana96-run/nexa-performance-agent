@@ -119,6 +119,29 @@ IG insights:
   flag for human, never auto-execute either way). Don't conflate auto_neg
   with pause_watch — auto_neg fires immediately, pause_watch surfaces an
   Asana task and waits.
+- **Keyword cadence: WEEKLY for adds + pauses, DAILY for negatives.** New
+  keyword expansion task and `audit_and_pause_nonconverting_keywords` only
+  fire on Sunday Riyadh (`weekday() == 6`). Negatives still direct-execute
+  daily. Override for testing: `FORCE_WEEKLY_KEYWORDS=1`. Helpers:
+  `_is_weekly_keyword_day()` exists in BOTH `analysers/google_ads_audit.py`
+  and `analysers/google_ads_audit_tasks.py` — change them in lockstep if the
+  weekday convention ever changes.
+- **30-keyword-per-adgroup cap.** Before proposing additions,
+  `filter_kw_against_adgroup_cap` queries existing enabled keyword counts
+  per ad group and only keeps `(30 - existing)` highest-conv candidates per
+  group. Dropped candidates carry a `drop_reason` for the Asana task body.
+  This is enforced at audit time, not at execution time — `bulk_keywords.py
+  add` doesn't re-check (yet).
+- **QS<5 + lost-IS>80% combo.** Existing keywords matching this combo with
+  zero historical spend (180-day window) → **DELETE**; with spend → **PAUSE**.
+  GAQL note: `metrics.search_rank_lost_impression_share` IS available on
+  `keyword_view` (despite docs being unclear). Aggregating in Python because
+  GAQL with `segments.date` filter returns daily rows; we sum cost and take
+  the latest QS / max lost-IS across the window.
+- **CSV writer with variable-shape rows.** When `audit_active_keywords.py`
+  emits both pattern violations and QS+IS-lost violations in one CSV, rows
+  have different keys. Use the union of all keys + `extrasaction='ignore'`
+  on `csv.DictWriter` so it doesn't crash on the first short row.
 - **Keywords NEVER post to Slack.** Expansion candidates → Asana only.
   Negatives → direct-execute silently. The old Slack-approval workflow
   (`post_keyword_approval` / `pending_keyword_approvals.json` /
