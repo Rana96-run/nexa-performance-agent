@@ -108,27 +108,33 @@ def _list_campaigns(token, ad_account_id):
     return out
 
 
-_SNAP_TIMEOUT = 90   # seconds — Railway egress to adsapi.snapchat.com can be slow
+_SNAP_TIMEOUT  = 120   # seconds per request — Snap API can be slow on Railway
+_SNAP_RETRIES  = 5    # attempts before giving up on a single request
+_SNAP_RETRY_WAIT = 15  # seconds between retries (fixed — avoids long exponential waits)
 
 
 def _snap_get(url, headers, params) -> requests.Response:
-    """GET with retry on timeout. Tries up to 3 times before giving up."""
+    """GET with retry on timeout/connection error. Tries up to _SNAP_RETRIES times."""
     import time as _time
-    for attempt in range(3):
+    last_exc = None
+    for attempt in range(_SNAP_RETRIES):
         try:
             return requests.get(url, headers=headers, params=params,
                                 timeout=_SNAP_TIMEOUT)
-        except requests.exceptions.Timeout:
-            if attempt < 2:
-                wait = 10 * (attempt + 1)
-                print(f"[snap]   timeout on attempt {attempt+1}, retrying in {wait}s…")
-                _time.sleep(wait)
-            else:
-                raise
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError) as exc:
+            last_exc = exc
+            if attempt < _SNAP_RETRIES - 1:
+                print(f"[snap]   network error attempt {attempt+1}/{_SNAP_RETRIES} "
+                      f"({type(exc).__name__}), retry in {_SNAP_RETRY_WAIT}s...")
+                _time.sleep(_SNAP_RETRY_WAIT)
+    raise last_exc
 
 
 def _stats_single_call(token, campaign_id, start, end, tz_name, fields):
-    """One Snap stats request for a ≤30-day window. Returns list of timeseries points."""
+    """One Snap stats request for a ≤30-day window. Returns list of timeseries points.
+    Timeouts after all retries return [] (skip campaign, don't crash the whole run).
+    """
     end_exclusive = end + timedelta(days=1)
     params = {
         "granularity": "DAY",
@@ -136,7 +142,12 @@ def _stats_single_call(token, campaign_id, start, end, tz_name, fields):
         "end_time":    _day_start_iso(end_exclusive, tz_name),
         "fields":      fields,
     }
-    r = _snap_get(f"{BASE}/campaigns/{campaign_id}/stats", _headers(token), params)
+    try:
+        r = _snap_get(f"{BASE}/campaigns/{campaign_id}/stats", _headers(token), params)
+    except Exception as exc:
+        print(f"[snap]   skipping campaign {campaign_id} ({start}..{end}) "
+              f"after {_SNAP_RETRIES} retries: {exc}")
+        return []
 
     # If the error looks like a field-support problem (not a time/window problem),
     # retry with minimal safe fields.
@@ -147,8 +158,12 @@ def _stats_single_call(token, campaign_id, start, end, tz_name, fields):
         )
         if looks_like_field_issue:
             params["fields"] = SNAP_STATS_FIELDS_SAFE
-            r = _snap_get(f"{BASE}/campaigns/{campaign_id}/stats",
-                          _headers(token), params)
+            try:
+                r = _snap_get(f"{BASE}/campaigns/{campaign_id}/stats",
+                              _headers(token), params)
+            except Exception as exc:
+                print(f"[snap]   skipping campaign {campaign_id} on safe-fields retry: {exc}")
+                return []
 
     if r.status_code >= 400:
         print(f"[snap]   stats error {r.status_code} for campaign {campaign_id} "
@@ -284,13 +299,22 @@ def _adsquad_stats_single_call(token: str, adsquad_id: str,
         "end_time":    _day_start_iso(end_exclusive, tz_name),
         "fields":      fields,
     }
-    r = _snap_get(f"{BASE}/adsquads/{adsquad_id}/stats", _headers(token), params)
+    try:
+        r = _snap_get(f"{BASE}/adsquads/{adsquad_id}/stats", _headers(token), params)
+    except Exception as exc:
+        print(f"[snap]   skipping adsquad {adsquad_id} ({start}..{end}) "
+              f"after {_SNAP_RETRIES} retries: {exc}")
+        return []
     if r.status_code >= 400 and fields != SNAP_STATS_FIELDS_SAFE:
         body = r.text.lower()
         if "field" in body or ("unsupported" in body and "granularity" not in body):
             params["fields"] = SNAP_STATS_FIELDS_SAFE
-            r = _snap_get(f"{BASE}/adsquads/{adsquad_id}/stats",
-                          _headers(token), params)
+            try:
+                r = _snap_get(f"{BASE}/adsquads/{adsquad_id}/stats",
+                              _headers(token), params)
+            except Exception as exc:
+                print(f"[snap]   skipping adsquad {adsquad_id} on safe-fields retry: {exc}")
+                return []
     if r.status_code >= 400:
         print(f"[snap]   adsquad stats {r.status_code} for {adsquad_id}: {r.text[:120]}")
         return []
