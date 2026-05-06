@@ -68,17 +68,6 @@ def _run_spike_detector() -> list:
         return []
 
 
-def _check_keyword_approvals():
-    """Check pending keyword approvals from previous nights and execute approved ones."""
-    try:
-        from executors.keyword_approval import check_and_execute_pending
-        result = check_and_execute_pending()
-        print(f"[ops-scheduler] Keyword approvals: {result}")
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] Keyword approval check failed (non-fatal): {e}")
-
-
 def _run_google_ads_audit() -> list:
     """Daily impression-share, quality-score, and search-terms audit.
     Creates Asana tasks with consolidated recommendations."""
@@ -127,10 +116,8 @@ def _nightly():
     # 3. Spike detector — returns list, folded into summary message.
     spikes = _run_spike_detector()
 
-    # 3b-pre. Check pending keyword approvals from previous nights and execute
-    _check_keyword_approvals()
-
     # 3b. Google Ads daily audit — IS, QS, search terms, keyword auto-pause -> Asana tasks
+    # (Keyword Slack-approval flow has been removed — keywords go to Asana, negatives direct-execute.)
     audit_tasks = _run_google_ads_audit()
 
     # 3c. Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause

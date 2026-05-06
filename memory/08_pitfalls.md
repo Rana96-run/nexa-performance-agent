@@ -87,6 +87,26 @@ IG insights:
 - PMax campaigns have **no ad groups**; they have **asset groups**. Requires
   a different query (`asset_group` resource).
 - Cost in **micros** (`cost_micros / 1_000_000`).
+- **Keyword policy is centralised in `executors/keyword_policy.py`.** Don't
+  duplicate ALWAYS_NEGATIVE / BRAND_ONLY / NEVER_NEGATIVE patterns into other
+  files — import from the policy module. قيود/qoyod variants are BRAND_ONLY
+  (only allowed in campaigns whose name contains `Brand`). Always-negative
+  terms (login / مجاني / دورة / تحميل / قرض / تمويل / وظيفة + EN equivalents)
+  are dropped from `add_kw` even if they converted, and direct-executed as
+  EXACT negatives when they appear with 0-conv spend.
+- **Arabic "قيود" is ambiguous.** It can mean either the company name "Qoyod"
+  OR the accounting noun "journal entries". The policy module disambiguates by
+  checking for accounting modifiers (`محاسبية` / `المحاسبة` / `يومية` /
+  `اليومية`). Terms like `قيود محاسبية` and `قيود المحاسبة` are FEATURE
+  keywords (treat as normal); only standalone `قيود`, `برنامج قيود`, `نظام قيود`,
+  `qoyod` etc. are brand-only. If you ever see one of those feature-noun
+  combinations flagged as a brand violation, the disambiguation list needs
+  another modifier added.
+- **Keywords NEVER post to Slack.** Expansion candidates → Asana only.
+  Negatives → direct-execute silently. The old Slack-approval workflow
+  (`post_keyword_approval` / `pending_keyword_approvals.json` /
+  `check_and_execute_pending`) was removed in 2026-05. If a re-introduction
+  is ever proposed: don't.
 
 ## Windows / Python 3.14 / Console encoding
 

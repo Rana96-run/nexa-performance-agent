@@ -135,6 +135,9 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 
 ## Keyword management rules (non-negotiable)
 
+- **Keywords are NEVER posted to Slack.** Keyword expansion candidates go to Asana
+  only. Negatives are direct-executed silently. The single source of truth for
+  keyword policy is `executors/keyword_policy.py` — all call sites import from it.
 - **Never remove a keyword unless its all-time spend = $0.** Only delete when zero
   cost ever. Low QS, low CTR, or poor performance = pause, not remove.
 - **QS < 5 pause rule — CPA exception applies:**
@@ -143,6 +146,29 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
   - If QS < 5, CPA was ≤ $90, but CPA has since risen above $90 → **PAUSE** (after approval)
   - QS 0 (not set / PMax keywords) → do nothing, cannot evaluate
 - **Negative keywords** can be added freely (no approval needed).
+
+### Keyword policy buckets (enforced by `executors/keyword_policy.py`)
+
+1. **ALWAYS_NEGATIVE** — direct-execute as negative, never proposed as a keyword,
+   even if the term converted. Patterns:
+   - login / sign in / signin / log in / تسجيل الدخول / تسجيل دخول
+   - free / مجاني / مجانا / مجانية
+   - course / training / دورة / دورات / كورس / كورسات
+   - download / تحميل / تنزيل
+   - loan / loans / financing / قرض / قروض / تمويل / تمويلات
+   - job / jobs / career / hiring / وظيفة / وظائف / فرص عمل / توظيف
+2. **BRAND_ONLY** — قيود / qoyod variants only allowed in campaigns whose name
+   contains `Brand`. In any other campaign they are dropped from `add_kw` and
+   routed to pause-watch for human review.
+   **Exception (Arabic ambiguity):** "قيود" + accounting modifier (`محاسبية` /
+   `المحاسبة` / `يومية` / `اليومية`) is the accounting NOUN ("journal entries"),
+   NOT the brand name. Terms like `قيود محاسبية`, `قيود المحاسبة`, `قيود يومية`
+   are feature keywords and route through as `normal`. The disambiguation list
+   lives in `keyword_policy.QIYUD_FEATURE_MODIFIERS`. The audit script
+   `scripts/audit_active_keywords.py` applies the same exception when
+   scanning live keywords.
+3. **NEVER_NEGATIVE** — competitor brand names (zoho, quickbooks, odoo, xero,
+   sage, wave, منافس). Never excluded; pause if not converting after 14 days.
 
 ## Ad pause rules (non-negotiable)
 

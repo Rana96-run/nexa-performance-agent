@@ -47,30 +47,16 @@ EXPANSION_MIN_CONV   = 1.0    # search terms with conv >= 1 -> candidate
 EXPANSION_MIN_SPEND  = 25.0   # search terms with $25+ spend, 0 conv -> negative
 
 # ─── Keyword routing rules ────────────────────────────────────────────────────
-# Terms that match ANY of these patterns are ALWAYS added as negatives
-# (direct-execute, no approval gate, never shown as a candidate for expansion).
-ALWAYS_NEGATIVE_PATTERNS: list[str] = [
-    "sign in", "signin", "log in", "login",
-    "تسجيل الدخول", "تسجيل دخول",
-    "مجاني", "مجانا", "مجانية", "مجانى",
-    "دورات", "دورة",
-    "free",
-]
-
-# Terms containing ANY of these substrings are NEVER added as negatives.
-# If they don't convert, route to a pause-watch bucket instead.
-NEVER_NEGATIVE_PATTERNS: list[str] = [
-    "قيود",
-    # Competitor brand names — pause if not converting, never exclude
-    "zoho", "quickbooks", "odoo", "xero", "sage", "wave",
-    "منافس", "منافسين",
-]
-
-
-def _matches_any(term: str, patterns: list[str]) -> bool:
-    """Case-insensitive substring check against a list of patterns."""
-    t = term.lower()
-    return any(p.lower() in t for p in patterns)
+# Single source of truth lives in executors/keyword_policy.py. Re-exported here
+# only so legacy imports keep working.
+from executors.keyword_policy import (
+    ALWAYS_NEGATIVE_PATTERNS,
+    BRAND_ONLY_PATTERNS,
+    NEVER_NEGATIVE_PATTERNS,
+    classify_term,
+    is_brand_campaign,
+    matches_any as _matches_any,
+)
 
 
 # ─── 1. Impression Share ─────────────────────────────────────────────────────
@@ -299,22 +285,38 @@ def audit_search_terms(days: int = 30) -> dict:
                 "status":            status,
             }
 
+            kind = classify_term(term, r.campaign.name)
+
             # 3a. Converting search terms NOT yet in the keyword list -> add as keyword
             if conv >= EXPANSION_MIN_CONV and status not in ("ADDED",):
                 row["cpa"] = round(spend / conv, 0) if conv else None
-                add_kw.append(row)
+                # Brand-only block: قيود/qoyod outside Brand campaigns are never
+                # added as keywords — even if converting. Route to pause-watch
+                # so a human reviews whether to move into the Brand campaign.
+                if kind == "brand_only_block":
+                    row["policy_reason"] = "brand-only term in non-brand campaign"
+                    pause_watch.append(row)
+                # Always-negative wins over conversion: even if it converted,
+                # we never expand on these intents.
+                elif kind == "always_negative":
+                    row["policy_reason"] = "always-negative pattern"
+                    # Do NOT add to add_kw; do NOT auto-execute as negative if it
+                    # actually converted — it's already in ADDED state or odd edge,
+                    # just drop it from candidates.
+                    pass
+                else:
+                    add_kw.append(row)
 
             # 3b. Spending / wasted terms (0 conv, not already excluded)
             elif spend >= EXPANSION_MIN_SPEND and conv == 0 and status not in ("EXCLUDED",):
-                # Rule: ALWAYS NEGATIVE — direct-execute silently, no approval
-                if _matches_any(term, ALWAYS_NEGATIVE_PATTERNS):
-                    auto_neg.append(row)
-                # Rule: NEVER NEGATIVE — pause-watch only (قيود, competitors)
-                elif _matches_any(term, NEVER_NEGATIVE_PATTERNS):
-                    pause_watch.append(row)
-                # Normal negative candidate
+                if kind == "always_negative":
+                    auto_neg.append(row)              # silent direct-execute
+                elif kind in ("brand_only_block", "never_negative"):
+                    pause_watch.append(row)           # never exclude — pause if needed
+                elif kind == "brand_allowed":
+                    pause_watch.append(row)           # in Brand campaign but not converting → review
                 else:
-                    add_neg.append(row)
+                    add_neg.append(row)               # normal negative candidate
 
     add_kw.sort(key=lambda x: -x["conv"])
     add_neg.sort(key=lambda x: -x["spend"])

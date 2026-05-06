@@ -219,7 +219,9 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                 f"are NOT yet in our keyword list.\n\n"
                 f"**Rule:** Queries with ≥1 conversion that triggered our ads but "
                 f"aren't a keyword we bid on → add as EXACT match.\n\n"
-                f"**Action:** React ✅ in #approvals to add all as EXACT match.\n\n"
+                f"**Action:** Review this list, then run `python scripts/bulk_keywords.py "
+                f"add` to execute the additions. قيود/Qoyod terms in non-brand "
+                f"campaigns are filtered out automatically (see Pause Watch task).\n\n"
                 + _term_card(add_kw[:30], mode="add"))
 
         gid = create_task(
@@ -237,8 +239,10 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
     if add_neg:
         body = (f"{len(add_neg)} search terms wasted $25+ each with 0 conversions.\n\n"
                 f"**Rule:** Direct-execute — no approval needed.\n"
-                f"**Not included here:** sign-in / free / دورات terms (auto-executed silently) "
-                f"and قيود / competitor terms (see Pause Watch task).\n\n"
+                f"**Not included here:**\n"
+                f"• ALWAYS-NEGATIVE terms (login / free / دورات / تحميل / قرض / تمويل / وظائف) — auto-executed silently\n"
+                f"• قيود / Qoyod terms in non-brand campaigns — see Pause Watch task (brand-only rule)\n"
+                f"• Competitor terms (zoho, quickbooks, …) — see Pause Watch task (never-negative rule)\n\n"
                 + _term_card(add_neg[:50], mode="negative")
                 + "\n**EXECUTED:** Adding as EXACT negatives at campaign level automatically.")
 
@@ -255,8 +259,13 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
 
     # ── 4b. Always-negative auto-executed (silent log) ────────────────────────
     if auto_neg:
-        body = (f"{len(auto_neg)} terms match permanent negative rules "
-                f"(sign in / log in / تسجيل الدخول / مجاني / دورات / free).\n\n"
+        body = (f"{len(auto_neg)} terms match permanent always-negative rules:\n"
+                f"• login / sign in / تسجيل الدخول\n"
+                f"• free / مجاني / مجانية\n"
+                f"• course / دورة / دورات / كورس\n"
+                f"• download / تحميل / تنزيل\n"
+                f"• loan / قرض / قروض / تمويل\n"
+                f"• job / وظيفة / وظائف / فرص عمل\n\n"
                 f"**EXECUTED AUTOMATICALLY** — no approval needed, never shown as expansion candidates.\n\n"
                 + _term_card(auto_neg[:50], mode="negative"))
 
@@ -284,9 +293,11 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                 f"**Clicks:**      {r['clicks']}\n"
                 f"**Rule:**        PAUSE if not converting — do NOT add as negative"
             )
-        body = (f"{len(pause_watch)} terms contain قيود or competitor brand names.\n\n"
-                f"**Rule:** These are NEVER added as negatives. If they are not converting "
-                f"after 14 days, pause the keyword — do not exclude it.\n\n"
+        body = (f"{len(pause_watch)} terms need human review (NEVER added as negatives):\n"
+                f"• قيود / Qoyod variants in non-brand campaigns (brand-only rule — these "
+                f"belong in a Brand campaign or shouldn't be bid on at all)\n"
+                f"• Competitor brand names (zoho, quickbooks, etc. — pause if not "
+                f"converting after 14 days; never exclude)\n\n"
                 + "\n\n---\n\n".join(pw_cards) + "\n")
 
         gid = create_task(
@@ -300,16 +311,18 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         )
         out.append((f"pause-watch ({len(pause_watch)})", gid))
 
-    # Post Slack approval for keyword candidates + normal negatives only
-    # (auto_neg is silent; pause_watch is not executed automatically)
-    if add_kw or add_neg:
+    # Direct-execute negatives (no approval gate — no spend at risk).
+    # Both `add_neg` (normal wasted spend) and `auto_neg` (always-negative
+    # policy matches) execute immediately. Keywords/expansion go to Asana
+    # only — never to Slack.
+    if add_neg:
         try:
-            from executors.keyword_approval import post_keyword_approval
-            post_keyword_approval(add_kw=add_kw, add_neg=add_neg)
+            from executors.keyword_approval import _execute_negatives
+            _execute_negatives(add_neg)
+            print(f"[audit-tasks] neg: {len(add_neg)} wasted-spend negatives executed")
         except Exception as e:
-            print(f"[audit-tasks] keyword approval post failed (non-fatal): {e}")
+            print(f"[audit-tasks] neg execution failed (non-fatal): {e}")
 
-    # Execute auto-negatives immediately (always-negative rules, no approval)
     if auto_neg:
         try:
             from executors.keyword_approval import _execute_negatives
