@@ -68,6 +68,98 @@ def _run_spike_detector() -> list:
         return []
 
 
+def _run_weekly_keyword_autofix() -> dict:
+    """
+    Sunday-only: silently scan ENABLED keywords + active negatives, apply
+    the rule-mandated action, log counts to BQ for Monday's weekly summary.
+
+    Returns: {paused, deleted, negatives_removed, age_skipped, errors}.
+    On non-Sunday days, returns {} and does nothing.
+    """
+    counts = {}
+    try:
+        from analysers.google_ads_audit_tasks import _is_weekly_keyword_day
+        if not _is_weekly_keyword_day():
+            return {}
+
+        # ── Active keyword violations (always-neg / brand / competitor /
+        #    language-mismatch / QS+IS-lost) ────────────────────────────
+        from scripts.audit_active_keywords import (
+            scan_active_keywords as scan_kw,
+            write_csv as write_kw_csv,
+        )
+        kw_violations = scan_kw()
+        kw_csv = write_kw_csv(kw_violations)
+        skipped_age = sum(1 for v in kw_violations if v.get("age_guard_skip"))
+
+        if kw_violations:
+            from scripts.action_audit_violations import execute as execute_kw
+            kw_counts = execute_kw(kw_violations, dry_run=False)
+            counts.update({
+                "kw_paused":  kw_counts.get("paused", 0),
+                "kw_deleted": kw_counts.get("deleted", 0),
+                "kw_errors":  kw_counts.get("errors", 0),
+                "age_skipped": skipped_age,
+            })
+        else:
+            counts.update({"kw_paused": 0, "kw_deleted": 0, "kw_errors": 0,
+                           "age_skipped": skipped_age})
+
+        # ── Active negative violations (competitors + brand-only as
+        #    negatives — remove them silently, no spend at risk) ────────
+        from scripts.audit_active_negatives import (
+            scan_active_negatives as scan_neg,
+            remove_negatives as exec_neg,
+        )
+        neg_violations = scan_neg()
+        if neg_violations:
+            removed = exec_neg(neg_violations)
+            counts["neg_removed"] = removed
+        else:
+            counts["neg_removed"] = 0
+
+        # Log to BQ so Monday's summary can pick it up
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="keyword_approval",
+            action="weekly_autofix",
+            status="success",
+            details=counts,
+            rows_affected=(counts.get("kw_paused", 0)
+                           + counts.get("kw_deleted", 0)
+                           + counts.get("neg_removed", 0)),
+        )
+        print(f"[weekly-autofix] {counts}")
+        return counts
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[weekly-autofix] failed (non-fatal): {e}")
+        return counts
+
+
+def _read_weekly_autofix_summary() -> dict:
+    """Read the latest 'weekly_autofix' BQ activity log row (within last 36h
+    so we capture Sunday's run when Monday summary fires Riyadh-time)."""
+    try:
+        from collectors.bq_writer import get_client
+        import json
+        c = get_client()
+        q = """
+          SELECT details
+          FROM `angular-axle-492812-q4.qoyod_marketing.agent_activity_log`
+          WHERE role = 'keyword_approval'
+            AND action = 'weekly_autofix'
+            AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 36 HOUR)
+          ORDER BY ts DESC
+          LIMIT 1
+        """
+        for r in c.query(q).result():
+            return json.loads(r.details) if r.details else {}
+    except Exception as e:
+        print(f"[weekly-autofix] BQ read failed: {e}")
+    return {}
+
+
 def _run_google_ads_audit() -> list:
     """Daily impression-share, quality-score, and search-terms audit.
     Creates Asana tasks with consolidated recommendations."""
@@ -145,6 +237,12 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] LinkedIn token refresh failed (non-fatal): {e}")
 
+    # 3g. WEEKLY KEYWORD AUTO-FIX — Sunday Riyadh only.
+    # Silently scans all ENABLED keywords + active negatives, applies the
+    # rule-mandated action (pause / delete / remove-negative), and logs the
+    # counts to BQ so Monday's weekly summary picks them up.
+    weekly_fix_counts = _run_weekly_keyword_autofix()
+
     # 4. Audit is SILENT — Asana tasks are the record. No daily Slack post.
     #    Weekly Slack summary goes out Monday night (step below).
     _log_nightly_audit_to_bq(audit_tasks, health_tasks)
@@ -207,6 +305,21 @@ def _post_weekly_summary(spikes: list | None = None,
         # Prepend week label
         header = f"*Weekly Summary  {week_start} – {week_end}*\n"
         text = header + base_text
+
+        # Append "what we auto-fixed yesterday" block — read from BQ.
+        autofix = _read_weekly_autofix_summary()
+        if autofix:
+            paused  = autofix.get("kw_paused", 0)
+            deleted = autofix.get("kw_deleted", 0)
+            neg_rm  = autofix.get("neg_removed", 0)
+            age_sk  = autofix.get("age_skipped", 0)
+            if (paused + deleted + neg_rm + age_sk) > 0:
+                fix_lines = ["\n*🔧 Auto-fixed this week*"]
+                if paused:  fix_lines.append(f"  • {paused} keyword(s) paused (always-neg / brand / competitor / lang-mismatch / QS+IS-lost)")
+                if deleted: fix_lines.append(f"  • {deleted} keyword(s) deleted (QS<5, lost-IS>80%, zero historical spend)")
+                if neg_rm:  fix_lines.append(f"  • {neg_rm} negative(s) removed (competitor names / brand terms wrongly excluded)")
+                if age_sk:  fix_lines.append(f"  • {age_sk} keyword(s) skipped — under 10-day age guard, will reconsider next week")
+                text += "\n" + "\n".join(fix_lines)
 
         if is_quiet():
             quiet_log("ops-scheduler-weekly", SLACK_CHANNEL_NOTIFY, text)

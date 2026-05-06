@@ -182,6 +182,19 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
   review at the start of the work week. Override for one-off runs:
   `FORCE_WEEKLY_KEYWORDS=1`. Negative-keyword direct-execution is unchanged
   (still daily — no spend at risk).
+- **Sunday auto-fix is silent.** On Sunday Riyadh, `_run_weekly_keyword_autofix`
+  in the operational scheduler scans + applies the rule-mandated action
+  (pause / delete / remove-negative) without creating per-violation Asana
+  tasks. Counts get logged to BQ; Monday's weekly Slack summary surfaces them
+  as a "🔧 Auto-fixed this week" block.
+- **Minimum age: 10 days before pausing for performance.** A non-converting
+  keyword must have first impressed ≥ `MIN_KEYWORD_AGE_DAYS` (=10) days ago
+  before being eligible for the QS+IS-lost rule OR the wasted-spend pause
+  rule. Younger keywords get queued for next week — they haven't had time to
+  perform. **Exception:** ALWAYS-NEGATIVE policy violations (login / دورة /
+  تحميل / etc.) bypass age — those should never be a keyword at any age.
+  Helper: `keyword_policy.keyword_first_impression_dates()` (queries last
+  365 days of `keyword_view` impressions).
 - **30-keyword cap per ad group.** No ad group may exceed 30 enabled keywords.
   When the weekly audit proposes additions, candidates are sorted highest-conv
   first per ad group and only `(30 - existing_count)` are kept; the rest are

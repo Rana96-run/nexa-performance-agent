@@ -33,7 +33,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from collectors.google_ads import get_client
 from collectors.google_ads_bq import _customer_ids
-from executors.keyword_policy import classify_term
+from executors.keyword_policy import (
+    classify_term,
+    keyword_first_impression_dates,
+    days_since,
+)
+from config import MIN_KEYWORD_AGE_DAYS
 
 
 def scan_active_keywords() -> list[dict]:
@@ -160,6 +165,38 @@ def scan_active_keywords() -> list[dict]:
                         base["violation"] = "low_qs_high_lost_is_pause"
                     violations.append(base)
 
+    # ── Age guard for performance-based actions ──────────────────────────────
+    # ALWAYS-NEGATIVE / brand-only / competitor-in-generic / language-mismatch
+    # are POLICY violations and bypass the age check. QS + IS-lost are
+    # PERFORMANCE actions and must respect MIN_KEYWORD_AGE_DAYS — a 3-day-old
+    # keyword hasn't had time to perform.
+    perf_kinds = {"low_qs_high_lost_is_delete", "low_qs_high_lost_is_pause"}
+    perf_violations = [v for v in violations if v["violation"] in perf_kinds]
+    if perf_violations:
+        # Look up first-impression dates for these criteria, per account
+        from collectors.google_ads import get_client as _get
+        client = _get()
+        by_cid: dict[str, list[dict]] = {}
+        for v in perf_violations:
+            by_cid.setdefault(v["customer_id"], []).append(v)
+        for cid, vs in by_cid.items():
+            firsts = keyword_first_impression_dates(
+                client, cid, [v["criterion_resource"] for v in vs]
+            )
+            for v in vs:
+                first = firsts.get(v["criterion_resource"])
+                age = days_since(first)
+                v["age_days"] = age
+                v["first_impression"] = first or ""
+                if age < MIN_KEYWORD_AGE_DAYS:
+                    v["age_guard_skip"] = True
+        # Filter out skipped ones from the actionable list
+        skipped = [v for v in perf_violations if v.get("age_guard_skip")]
+        if skipped:
+            print(f"[age-guard] skipped {len(skipped)} performance violation(s) "
+                  f"under {MIN_KEYWORD_AGE_DAYS} days old (will reconsider next week)")
+        violations = [v for v in violations if not v.get("age_guard_skip")]
+
     return violations
 
 
@@ -282,11 +319,17 @@ def create_review_task(violations: list[dict], csv_path: Path) -> str | None:
 
 
 if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--silent", action="store_true",
+                   help="Skip Asana task creation (used by weekly auto-fix)")
+    args = p.parse_args()
+
     violations = scan_active_keywords()
     csv_path = write_csv(violations)
     print_summary(violations)
     print(f"\nCSV written: {csv_path}")
-    if violations:
+    if violations and not args.silent:
         create_review_task(violations, csv_path)
-    else:
+    elif not violations:
         print("\nNo policy violations among ENABLED keywords. ✅")

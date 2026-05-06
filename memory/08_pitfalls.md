@@ -142,6 +142,22 @@ IG insights:
   emits both pattern violations and QS+IS-lost violations in one CSV, rows
   have different keys. Use the union of all keys + `extrasaction='ignore'`
   on `csv.DictWriter` so it doesn't crash on the first short row.
+- **`change_status.resource_change_operation` is NOT a valid GAQL field**
+  in v23 (despite some older docs/examples). To estimate keyword age, use
+  first-impression date via `keyword_view` + `metrics.impressions > 0`
+  with a 365-day window. That's what `keyword_policy.keyword_first_impression_dates`
+  does. Newly-added keywords without any impressions return empty → treat
+  as age 0 → age guard skips them (safe default).
+- **Age guard: 10 days minimum.** `MIN_KEYWORD_AGE_DAYS = 10` in config.
+  Performance-based pause (Rule A: spend>$80/0-conv) and the QS+IS-lost rule
+  both check `keyword_first_impression_dates()` first. ALWAYS-NEGATIVE
+  bypass — login/دورة/تحميل etc. are policy violations, not performance
+  decisions, so they get paused immediately at any age.
+- **Sunday is `weekday() == 6`.** The Saudi work week starts Sunday, so
+  Sunday Riyadh runs the keyword auto-fix and Monday Riyadh posts the
+  weekly summary. The summary reads Sunday's BQ activity log entry
+  (`role='keyword_approval'`, `action='weekly_autofix'`) within a 36-hour
+  window so timezone slop doesn't drop it.
 - **Keywords NEVER post to Slack.** Expansion candidates → Asana only.
   Negatives → direct-execute silently. The old Slack-approval workflow
   (`post_keyword_approval` / `pending_keyword_approvals.json` /

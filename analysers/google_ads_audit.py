@@ -395,6 +395,9 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
         AND ad_group_criterion.status = 'ENABLED'
     """
 
+    from config import MIN_KEYWORD_AGE_DAYS
+    from executors.keyword_policy import keyword_first_impression_dates, days_since
+
     paused: list[dict] = []
     for cid in _customer_ids():
         try:
@@ -403,16 +406,35 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
             print(f"[kw-pause] account {cid} skipped: {e}")
             continue
 
+        # First pass: build the list of pause candidates (over spend, 0 conv)
+        candidates = []
         for r in rows:
             from collectors.currency import normalize_currency, to_usd
             cur   = normalize_currency(getattr(r.customer, "currency_code", None))
             spend = to_usd(r.metrics.cost_micros / 1_000_000, cur)
             conv  = float(r.metrics.conversions)
-
             if spend < KEYWORD_PAUSE_SPEND or conv > 0:
                 continue   # under spend threshold or already converting
+            candidates.append((r, spend, conv))
 
+        if not candidates:
+            continue
+
+        # Apply age guard — only pause keywords ≥ MIN_KEYWORD_AGE_DAYS old.
+        firsts = keyword_first_impression_dates(
+            client, cid,
+            [r.ad_group_criterion.resource_name for r, _, _ in candidates],
+        )
+
+        for r, spend, conv in candidates:
             rn = r.ad_group_criterion.resource_name
+            first = firsts.get(rn)
+            age = days_since(first)
+            if age < MIN_KEYWORD_AGE_DAYS:
+                print(f"[kw-pause] AGE-GUARD skip: '{r.ad_group_criterion.keyword.text}' "
+                      f"({age}d old, threshold {MIN_KEYWORD_AGE_DAYS}d)")
+                continue
+
             try:
                 op   = client.get_type("AdGroupCriterionOperation")
                 crit = op.update

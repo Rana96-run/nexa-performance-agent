@@ -206,6 +206,77 @@ def classify_term(term: str, campaign_name: str) -> str:
     return "normal"
 
 
+# ── Age guard ─────────────────────────────────────────────────────────────────
+# A non-converting keyword must be active for ≥ MIN_KEYWORD_AGE_DAYS before
+# being eligible for performance-based pause/delete (Rule A in config:
+# spend>$80 0-conv, OR QS<5 + lost-IS>80%). Always-negative policy violations
+# (login / دورة / تحميل / etc.) are paused immediately regardless of age —
+# those should never be a keyword at any age.
+
+def keyword_first_impression_dates(client, customer_id: str,
+                                    criterion_resources: list[str]
+                                    ) -> dict[str, str]:
+    """
+    For each criterion resource, returns the first segments.date with
+    impressions > 0 in the past 365 days (or '' if never impressed).
+
+    Used as a proxy for "active since" — Google Ads doesn't expose criterion
+    creation date in v23 directly, but first impression is a tighter signal
+    (a keyword that's been added but never served traffic isn't really old).
+    """
+    if not criterion_resources:
+        return {}
+    ga = client.get_service("GoogleAdsService")
+    from datetime import date, timedelta
+    end = date.today()
+    start = end - timedelta(days=365)
+
+    # Extract criterion_ids from resource names like
+    # "customers/{cid}/adGroupCriteria/{ag_id}~{criterion_id}"
+    crit_ids = []
+    for rn in criterion_resources:
+        try:
+            crit_ids.append(rn.rsplit("~", 1)[1])
+        except Exception:
+            continue
+    if not crit_ids:
+        return {}
+
+    ids_clause = ", ".join(crit_ids)
+    q = f"""
+      SELECT
+        ad_group_criterion.resource_name,
+        ad_group_criterion.criterion_id,
+        segments.date
+      FROM keyword_view
+      WHERE segments.date BETWEEN '{start}' AND '{end}'
+        AND ad_group_criterion.criterion_id IN ({ids_clause})
+        AND metrics.impressions > 0
+      ORDER BY segments.date
+    """
+    first: dict[str, str] = {}
+    try:
+        for r in ga.search(customer_id=customer_id, query=q):
+            rn = r.ad_group_criterion.resource_name
+            if rn not in first:   # ORDER BY date ASC, take first
+                first[rn] = r.segments.date
+    except Exception as e:
+        print(f"[age-helper] first-impression query failed for {customer_id}: {e}")
+    return first
+
+
+def days_since(yyyy_mm_dd: str | None) -> int:
+    """Days between yyyy-mm-dd and today. Returns 0 if missing/never."""
+    if not yyyy_mm_dd:
+        return 0
+    from datetime import date, datetime
+    try:
+        d = datetime.strptime(yyyy_mm_dd, "%Y-%m-%d").date()
+        return (date.today() - d).days
+    except Exception:
+        return 0
+
+
 # ── Backwards-compat shim ─────────────────────────────────────────────────────
 # Old name used elsewhere in the codebase. Keep importable.
 NEVER_NEGATIVE_PATTERNS = COMPETITOR_PATTERNS

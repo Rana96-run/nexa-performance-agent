@@ -249,4 +249,12 @@ ZERO_CONV_DAYS_THRESHOLD   = 7
 KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv threshold (was $35 / 14d)
 KEYWORD_PAUSE_CPL          = 80.00   # Rule B: poor-CPL threshold (1+ conv)
 KEYWORD_PAUSE_DAYS         = 7       # Rule A window (Rule B uses DAYS_FOR_PAUSE_DECISION)
+
+# Minimum age before a NON-CONVERTING keyword can be paused. A 3-day-old
+# keyword with $0 spend and 0 conv shouldn't be paused — it hasn't had time
+# to perform. Measured by first-impression date (proxy for "active since").
+# Does NOT apply to ALWAYS-NEGATIVE policy violations (login / دورة / etc.) —
+# those are paused immediately regardless of age, since they should never be
+# a keyword at any age.
+MIN_KEYWORD_AGE_DAYS       = 10      # rule from Amar 2026-05-06
 PLACEMENT_PAUSE_SPEND      = 3
