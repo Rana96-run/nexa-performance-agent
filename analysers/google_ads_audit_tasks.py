@@ -279,8 +279,9 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         # Off-day — log only, don't create the task.
         log_activity_async(
             role="keyword_management",
-            action=f"{len(add_kw)} keyword candidates queued for next Sunday",
+            action="keyword_candidates_queued_for_weekly_review",
             channel="google_ads", status="ok", rows_affected=len(add_kw),
+            details={"candidate_count": len(add_kw), "next_review_day": "Sunday Riyadh"},
         )
 
     # ── 4. Negative-keyword candidates (normal wasted terms) ──────────────────

@@ -208,10 +208,11 @@ def _handle_reaction(event: dict):
             try:
                 from logs.activity_logger import log_activity_async
                 log_activity_async(role="slack_approval",
-                                   action=f"approved: {action} on {camp[:60]}",
+                                   action="action_approved_via_slack",
                                    status="approved", channel=meta.get("channel", ""),
                                    campaign_name=camp,
-                                   details={"user": user, "result": exec_result[:200]})
+                                   details={"user": user, "requested_action": action,
+                                            "result": exec_result[:200]})
             except Exception:
                 pass
             # Update Asana for each finding in a batch, or the single asana_gid
@@ -236,10 +237,10 @@ def _handle_reaction(event: dict):
             try:
                 from logs.activity_logger import log_activity_async
                 log_activity_async(role="slack_approval",
-                                   action=f"rejected: {action} on {camp[:60]}",
+                                   action="action_rejected_via_slack",
                                    status="rejected", channel=meta.get("channel", ""),
                                    campaign_name=camp,
-                                   details={"user": user})
+                                   details={"user": user, "requested_action": action})
             except Exception:
                 pass
 
