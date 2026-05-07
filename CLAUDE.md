@@ -141,11 +141,11 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
   keyword policy is `executors/keyword_policy.py` — all call sites import from it.
 - **Never remove a keyword unless its all-time spend = $0.** Only delete when zero
   cost ever. Low QS, low CTR, or poor performance = pause, not remove.
-- **QS < 5 pause rule — CPA exception applies:**
-  - If QS < 5 BUT conv ≥ 3 AND CPA ≤ $90 AND running 30+ days → **leave ENABLED**
-  - If QS < 5 AND (conv < 3 OR CPA > $90) → **PAUSE** (after approval)
-  - If QS < 5, CPA was ≤ $90, but CPA has since risen above $90 → **PAUSE** (after approval)
+- **QS < 5 pause rule — converting keyword exception:**
+  - If QS < 5 AND >80% lost-IS BUT conv > 4 AND $10 ≤ CPA ≤ $70 → **leave ENABLED** (keyword is converting despite low QS)
+  - If QS < 5 AND >80% lost-IS AND (conv ≤ 4 OR CPA > $70 OR CPA < $10) → **PAUSE** (after approval)
   - QS 0 (not set / PMax keywords) → do nothing, cannot evaluate
+- **Zero-active-keyword guard (non-negotiable):** Never pause a keyword if it is the **last enabled keyword** in its ad group. Pausing it leaves 0 active keywords → campaign goes dark silently. The audit skips sole-keyword flagging with a console warning.
 - **Negative keywords** can be added freely (no approval needed).
 
 ### Keyword policy buckets (enforced by `executors/keyword_policy.py`)

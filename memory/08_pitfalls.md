@@ -383,7 +383,8 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 
 - **Never remove a keyword with any spend history.** Only delete keywords with all-time spend = $0. Low QS or poor performance = fix (ad copy / LP) or pause, never remove. Negatives can always be added freely.
 
-- **QS < 5 CPA exception:** Do NOT pause a low-QS keyword if conv >= 3 AND CPA <= $90 AND 30+ days running. Only pause if CPA > $90 or conv < 3. Always re-check before acting.
+- **QS < 5 converting-keyword exception:** Do NOT pause a low-QS + high-lost-IS keyword if conv > 4 AND $10 ≤ CPA ≤ $70. Keyword is delivering real leads despite poor quality score. Guard enforced in `scan_active_keywords()` before flagging. Pause only if conv ≤ 4 OR CPA outside that range.
+- **Zero-active-keyword guard:** Never pause the last enabled keyword in an ad group — campaign goes dark silently. `scan_active_keywords()` counts enabled keywords per ad group before flagging and skips sole keywords with a console warning.
 - **Ad pause thresholds:** spend > $70 / 7 days / 0 conv → pause. 60%+ disqualified leads (10+ days) → pause. CPL > $50 (10+ days) → pause. Never remove ads, only pause.
 
 ## HubSpot collector

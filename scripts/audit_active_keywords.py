@@ -81,6 +81,7 @@ def scan_active_keywords() -> list[dict]:
         campaign.resource_name,
         campaign.status,
         metrics.cost_micros,
+        metrics.conversions,
         metrics.search_rank_lost_impression_share
       FROM keyword_view
       WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
@@ -111,16 +112,24 @@ def scan_active_keywords() -> list[dict]:
             slot = agg.setdefault(key, {
                 "row":           r,
                 "cost_micros":   0,
+                "conversions":   0.0,
                 "qs_seen":       [],
                 "is_lost_seen":  [],
             })
-            slot["cost_micros"] += int(r.metrics.cost_micros or 0)
+            slot["cost_micros"]  += int(r.metrics.cost_micros or 0)
+            slot["conversions"]  += float(r.metrics.conversions or 0)
             qs = getattr(r.ad_group_criterion.quality_info, "quality_score", None)
             if qs is not None and qs > 0:
                 slot["qs_seen"].append(qs)
             lost = r.metrics.search_rank_lost_impression_share
             if lost is not None and lost >= 0:
                 slot["is_lost_seen"].append(lost)
+
+        # Count enabled keywords per ad group — used by zero-keyword guard below
+        enabled_kw_per_adgroup: dict[str, int] = defaultdict(int)
+        for slot in agg.values():
+            ag_rn = slot["row"].ad_group.resource_name
+            enabled_kw_per_adgroup[ag_rn] += 1
 
         for key, slot in agg.items():
             r = slot["row"]
@@ -147,18 +156,40 @@ def scan_active_keywords() -> list[dict]:
                 violations.append(base)
                 continue
 
-            # QS + IS-lost combined check (rule: 2026-05-06)
+            # QS + IS-lost combined check
             qs_seen      = slot["qs_seen"]
             is_lost_seen = slot["is_lost_seen"]
             spend        = slot["cost_micros"] / 1_000_000
+            conversions  = slot["conversions"]
 
             if qs_seen and is_lost_seen:
                 latest_qs    = qs_seen[-1]
                 max_is_lost  = max(is_lost_seen)
                 if latest_qs < LOW_QS and max_is_lost > HIGH_LOST_IS:
-                    base["qs"]       = latest_qs
-                    base["is_lost"]  = round(max_is_lost, 2)
-                    base["spend"]    = round(spend, 2)
+
+                    # Guard 1 — converting keyword exception.
+                    # conv > 4 AND $10 ≤ CPA ≤ $70 → keyword is working despite
+                    # low QS; pausing it would cut real lead volume.
+                    cpa = spend / conversions if conversions > 0 else None
+                    if conversions > 4 and cpa is not None and 10 <= cpa <= 70:
+                        continue
+
+                    # Guard 2 — zero-active-keyword guard.
+                    # Never flag the last enabled keyword in an ad group for
+                    # pause/delete — that would leave the group with 0 active
+                    # keywords and silently kill the campaign.
+                    ag_rn = r.ad_group.resource_name
+                    if enabled_kw_per_adgroup.get(ag_rn, 0) <= 1:
+                        print(f"[kw-audit] zero-kw guard: skipping sole keyword "
+                              f"{term!r!s} in {r.ad_group.name!r!s} "
+                              f"(would leave 0 active keywords)")
+                        continue
+
+                    base["qs"]          = latest_qs
+                    base["is_lost"]     = round(max_is_lost, 2)
+                    base["spend"]       = round(spend, 2)
+                    base["conversions"] = round(conversions, 1)
+                    base["cpa"]         = round(cpa, 2) if cpa is not None else None
                     if spend == 0:
                         base["violation"] = "low_qs_high_lost_is_delete"
                     else:
