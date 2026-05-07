@@ -65,22 +65,42 @@ def _load_pipelines():
     _CACHE["stages"] = stages
 
 
-def _classify_stage(stage_id):
-    """Return (pipeline_label, stage_label, status) where status ∈ {won,lost,open,unknown}."""
+def _classify_stage(stage_id, hs_is_closed_won=None, hs_is_closed=None):
+    """Return (pipeline_label, stage_label, status) where status ∈ {won,lost,open,unknown}.
+
+    Priority order for `status`:
+      1. HubSpot's `hs_is_closed_won` flag (authoritative — set by HubSpot whenever
+         the deal sits in a stage marked Closed Won in pipeline settings).
+      2. HubSpot's `hs_is_closed` flag combined with stage label/probability for
+         distinguishing closed-lost from closed-won.
+      3. Stage label substring match ("won" / "lost") — fallback for older deals
+         where the hs_is_closed_* flags weren't set.
+      4. Stage probability (1.0 = won, 0.0 = lost, between = open).
+    """
     if not stage_id:
         return None, None, "unknown"
     info = _CACHE["stages"].get(stage_id)
     if not info:
         return None, None, "unknown"
     _pid, plabel, slabel, prob = info
-    # Check stage label FIRST — stage names (e.g. "Closed Won") are the
-    # authoritative signal. Probability alone is unreliable because custom
-    # pipelines often leave prob<1.0 on won stages.
+
+    # 1. Authoritative HubSpot flag — only count revenue when HS itself says won.
+    if (str(hs_is_closed_won or "").lower() == "true"):
+        return plabel, slabel, "won"
+
     sl = (slabel or "").lower()
+    closed = str(hs_is_closed or "").lower() == "true"
+
+    # 2. If HS says closed but NOT closed_won, treat as lost (regardless of label).
+    if closed:
+        return plabel, slabel, "lost"
+
+    # 3. Stage-label fallback for legacy deals with missing flags.
     if "won" in sl:
         status = "won"
     elif "lost" in sl or "closed lost" in sl:
         status = "lost"
+    # 4. Probability fallback.
     elif prob == 1.0:
         status = "won"
     elif prob == 0.0:
@@ -186,7 +206,11 @@ def collect_and_write(days: int = None, start_date: date = None,
                 if not created:
                     continue
                 closed = (p.get("closedate") or "")[:10] or None
-                plabel, slabel, status = _classify_stage(p.get("dealstage"))
+                plabel, slabel, status = _classify_stage(
+                    p.get("dealstage"),
+                    hs_is_closed_won=p.get("hs_is_closed_won"),
+                    hs_is_closed=p.get("hs_is_closed"),
+                )
                 amount_native = _to_float(p.get("amount"))
                 native_cur = normalize_currency(
                     p.get("deal_currency_code") or DEFAULT_DEAL_CURRENCY
