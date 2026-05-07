@@ -434,8 +434,14 @@ def _list_ads(token: str, ad_account_id: str,
         ad = item.get("ad", {})
         if updated_since is not None:
             # updated_at is a Unix timestamp in milliseconds
-            updated_ms = ad.get("updated_at") or 0
-            ad_updated = datetime.fromtimestamp(updated_ms / 1000, tz=timezone.utc)
+            updated_raw = ad.get("updated_at") or ""
+            try:
+                # Snap returns ISO 8601 string: '2025-06-21T18:10:46.076Z'
+                ad_updated = datetime.fromisoformat(
+                    updated_raw.replace("Z", "+00:00")
+                ) if updated_raw else datetime.min.replace(tzinfo=timezone.utc)
+            except (ValueError, AttributeError):
+                ad_updated = datetime.min.replace(tzinfo=timezone.utc)
             if ad_updated < updated_since:
                 continue
         sq_id = ad.get("ad_squad_id", "")
@@ -511,18 +517,14 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         cur    = normalize_currency(meta.get("currency"))
         tz     = meta.get("timezone") or "UTC"
         adsquads = _list_adsquads(token, acct)
-        # Incremental: only ads updated within the window (new spend, status changes,
-        # creative edits). Ads untouched for months won't have data in the window.
-        # Full backfill: include ALL ads to capture complete historical data.
-        if incremental:
-            # Give a 1-day buffer before window start to avoid clock-skew misses
-            updated_since = datetime(start.year, start.month, start.day,
-                                     tzinfo=timezone.utc) - timedelta(days=1)
-        else:
-            updated_since = None
-        ads   = _list_ads(token, acct, updated_since=updated_since)
-        label = f"ads updated since {updated_since.date()}" if incremental else "total ads"
-        print(f"[snap]   ads account {acct}: {len(ads)} {label}")
+        # Always fetch all ads — updated_at on Snap ad objects reflects the last
+        # metadata change (creative edit, status toggle), NOT the last spend event.
+        # An ad running daily for months with no edits has an old updated_at and
+        # would be incorrectly excluded from incremental runs if filtered by that.
+        # The date window (start→end) is the only filter needed — the stats API
+        # returns empty for days with no activity, so no over-fetching occurs.
+        ads   = _list_ads(token, acct, updated_since=None)
+        print(f"[snap]   ads account {acct}: {len(ads)} total ads")
         acct_count = 0
 
         for ad_id, ad_meta in ads.items():
