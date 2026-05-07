@@ -165,6 +165,21 @@ def _run_microsoft_ads_audit() -> list:
         return []
 
 
+def _run_display_audit() -> list:
+    """Per-channel display/social audit (Meta, Snap, TikTok, LinkedIn) —
+    creative fatigue, frequency saturation, zero-conv high-spend pause.
+    Logs under role=performance_audit with channel as a dimension."""
+    try:
+        from analysers.display_audit_tasks import create_audit_tasks
+        tasks = create_audit_tasks()
+        print(f"[ops-scheduler] Display audit (Meta/Snap/TT/LI): {len(tasks)} task(s) created")
+        return tasks
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Display audit error: {e}")
+        return []
+
+
 def _run_campaign_health() -> tuple[list, list]:
     """Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause.
     Returns (tasks, findings) so findings can be used in the Slack recommendations message.
@@ -199,11 +214,14 @@ def _nightly():
     # 3. Spike detector — returns list, folded into summary message.
     spikes = _run_spike_detector()
 
-    # 3b. Per-channel performance audits — IS, QS, search terms (Google + MS),
-    # creative fatigue (Meta/Snap/TT — TODO), all logged under role=performance_audit
-    # with channel as a dimension. Asana tasks created per channel.
+    # 3b. Per-channel performance audits, all under role=performance_audit:
+    #   - Google Ads:        IS / QS / search terms / keyword auto-pause
+    #   - Microsoft Ads:     IS / QS / search terms (mirror of Google)
+    #   - Meta/Snap/TT/LI:   creative fatigue / frequency saturation / zero-conv pause
+    # Asana tasks created per channel × bucket.
     audit_tasks = _run_google_ads_audit()
     audit_tasks += _run_microsoft_ads_audit()
+    audit_tasks += _run_display_audit()
 
     # 3c. Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause
     #     Cost: channel source | Leads: HubSpot Lead Module | Window: 14d
