@@ -73,21 +73,22 @@ def _classify_stage(stage_id):
     if not info:
         return None, None, "unknown"
     _pid, plabel, slabel, prob = info
-    if prob == 1.0:
+    # Check stage label FIRST — stage names (e.g. "Closed Won") are the
+    # authoritative signal. Probability alone is unreliable because custom
+    # pipelines often leave prob<1.0 on won stages.
+    sl = (slabel or "").lower()
+    if "won" in sl:
+        status = "won"
+    elif "lost" in sl or "closed lost" in sl:
+        status = "lost"
+    elif prob == 1.0:
         status = "won"
     elif prob == 0.0:
         status = "lost"
     elif prob is not None:
         status = "open"
     else:
-        # fallback by stage label
-        sl = (slabel or "").lower()
-        if "won" in sl:
-            status = "won"
-        elif "lost" in sl:
-            status = "lost"
-        else:
-            status = "open"
+        status = "open"
     return plabel, slabel, status
 
 

@@ -385,3 +385,82 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 
 - **QS < 5 CPA exception:** Do NOT pause a low-QS keyword if conv >= 3 AND CPA <= $90 AND 30+ days running. Only pause if CPA > $90 or conv < 3. Always re-check before acting.
 - **Ad pause thresholds:** spend > $70 / 7 days / 0 conv → pause. 60%+ disqualified leads (10+ days) → pause. CPL > $50 (10+ days) → pause. Never remove ads, only pause.
+
+## HubSpot collector
+
+- **Incremental lookback must be 30 days, not 2.** A lead created Apr 22 but qualified May 4 is never
+  reprocessed with a 2-day window → BQ stays at 0 qualified while HubSpot UI shows Qualified.
+  Fix: `INCREMENTAL_LOOKBACK_DAYS = 30` (still filters by `hs_createdate`, not `hs_lastmodifieddate`).
+- **`hubspot_lists.py` must never be deleted.** It creates `LIST_won_deals_lookalike_seed` and
+  `LIST_existing_customers_exclude` — used for Meta Custom Audiences and LinkedIn Matched Audiences.
+  Was deleted in a dead-code audit; user demanded restore. It is not dead code.
+
+## BQ views — join traps
+
+- **`paid_channel_campaign_daily` join must use `LOWER()` on both sides.** Case-sensitive `=` between
+  `campaign_name` (platform, mixed-case) and HubSpot `lead_utm_campaign` (often lower-case) silently
+  produces 0 leads in every dashboard cell. Root cause of "correct in direct query, wrong in Slack."
+  Always use `LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)`.
+- **Snapchat `qoyod_source` is `'Snapchat'` — NOT `'Snapchat Ads'`.** `v_channel_key_map` must use
+  `WHEN 'snapchat' THEN 'Snapchat'` or all Snapchat leads show as 0 in HubSpot joins. HubSpot stores
+  exactly `'Snapchat'` (no "Ads" suffix) — confirmed from live HubSpot lead records.
+
+## Railway deployment (extended)
+
+- **`/tmp` is wiped on every redeploy.** `pending_approvals.json` (and any ephemeral state written to
+  `/tmp`) is lost on each deploy. If the team pushes code between the 03:00 nightly approval post and
+  morning reaction, the approval metadata is gone. Always write persistent state to BQ or the repo
+  volume — never `/tmp`.
+- **Teardown must be ON.** With Teardown OFF, old and new deployments overlap during transitions →
+  two instances of the scheduler run simultaneously → double Slack posts + double Asana tasks.
+  Set `teardown = true` in `railway.toml` AND enable Teardown in the Railway UI deploy tab.
+- **gunicorn `--workers 1` is mandatory.** Multiple workers each spawn their own `operational_scheduler`
+  thread → N duplicate nightly runs. Always: `gunicorn app_server:app --workers 1 --threads 4`.
+- **Activity log CSV is ephemeral.** `logs/activity_log.csv` was wiped on every redeploy. All activity
+  logging writes directly to BQ `agent_activity_log` via `log_activity_async()`. No CSV intermediary.
+- **Canonical domain is `nexa-performance-agent.up.railway.app`.** The old domain
+  `nexa-web-production-c859.up.railway.app` is retired. Any hardcoded URL in scheduled tasks or
+  SKILL.md files must use the canonical domain — stale URLs return 404.
+
+## Slack
+
+- **Slack event body must be read ONCE before signature check.** `request.get_data()` called after
+  `request.get_json()` returns an empty body — HMAC computed on empty bytes → always 403. Fix: call
+  `raw = request.get_data()` first, parse JSON from those bytes, pass same `raw` to HMAC check.
+  Also: handle `url_verification` challenge BEFORE signature check (Slack sends it unconfigured).
+- **Slack MCP returns `invalid_auth` from scheduled/unattended tasks.** The MCP uses an OAuth session
+  that doesn't exist in headless contexts. Fall back to direct Slack API with `SLACK_BOT_TOKEN`
+  (`xoxb-` prefix) for all automated/Railway calls.
+
+## Asana task format
+
+- **Always write explicit date ranges in task titles and bodies.** Write `YYYY-MM-DD to YYYY-MM-DD`
+  (never "last 14 days"). This lets the team open HubSpot and filter the exact same window to verify
+  numbers. `date_from`/`date_to` must always be present in every finding dict.
+
+## Adspirer MCP
+
+- **Adspirer does not support Snapchat or Microsoft Ads.** Standard plan: 1 account per platform.
+  Snap and MS must use direct API executors (`executors/snapchat.py`, `executors/microsoft_ads.py`).
+  Adspirer is for interactive on-demand execution in Claude Code sessions — the Railway agent cannot
+  use it (no browser OAuth).
+
+## Hex API
+
+- **Cannot use `updatePublishedResults: true` AND `inputParams` together.** Hex API v1 returns
+  `"Cannot update app results if specifying custom input parameters"` (400) if both are set.
+  You must choose one: update published results (with notebook's saved defaults) OR run with
+  custom params (results not published). Workaround: set the date input's **default value** to a
+  relative "Today" in the Hex UI — then API triggers with `updatePublishedResults: true` will
+  always publish today's data without needing inputParams.
+- **Date input default must be relative ("Today"), not absolute ("2026-05-02").** If a date
+  parameter's default is an absolute date, every API-triggered run publishes that frozen date
+  forever. Fix: open the notebook, click the date input cell, change its default from a specific
+  date to the relative "Today" option. Then republish. This is a one-time UI fix — cannot be
+  done via API.
+
+## Looker Studio
+
+- **No public API — all report building is manual.** BQ views can be created via code, but the
+  Looker Studio layer above them (charts, data sources, filters, scorecards) requires manual UI work
+  at lookerstudio.google.com. Hex is the canonical automated dashboard.
