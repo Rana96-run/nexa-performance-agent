@@ -22,7 +22,6 @@ from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
 from collectors.views import refresh_all_views
 from collectors.hex_refresh import refresh_all as refresh_hex
-from notifications.notify import send_heartbeat
 from logs.logger import get_logger, setup_global_logging
 from logs.activity_logger import log_activity_async
 
@@ -277,13 +276,6 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] Hex refresh failed (non-fatal): {e}")
 
-    # ── BQ staleness check — catches silent 0-row bugs that still mark OK ────
-    stale_warnings = _check_bq_staleness()
-    if stale_warnings:
-        log.warning(f"staleness check found issues: {stale_warnings}")
-    else:
-        log.info("staleness check: all paid channels up to date")
-
     ended = datetime.now(timezone.utc)
     elapsed = (ended - started).total_seconds()
     print(f"\n[scheduler] Done in {elapsed:.0f}s")
@@ -291,19 +283,11 @@ def run_refresh(incremental: bool = True, days: int | None = None):
         flag = "OK " if ok else "ERR"
         print(f"  [{flag}] {name}: {val}")
 
-    # Heartbeat: one-line beacon so the team notices if the refresh stops.
     ok_items  = [n for n, (o, _, _) in results.items() if o]
     bad_items = [n for n, (o, _, _) in results.items() if not o]
     total_rows = sum(v for _, (o, v, _) in results.items()
                      if o and isinstance(v, int))
     status = "ok" if not bad_items else "failed"
-    detail = (f"{total_rows:,} rows across {len(ok_items)} collectors"
-              + (f" | FAILED: {', '.join(bad_items)}" if bad_items else ""))
-    try:
-        send_heartbeat("bq-refresh", status=status,
-                       detail=detail, duration_s=elapsed)
-    except Exception as e:
-        log.warning(f"heartbeat emit failed: {e}")
 
     log_activity_async(
         role="bq_refresh", action="refresh_complete", status=status,
@@ -312,7 +296,8 @@ def run_refresh(incremental: bool = True, days: int | None = None):
                  "collectors_failed": bad_items, "total_rows": total_rows},
     )
 
-    _post_refresh_digest(results, elapsed, utc_hour, stale_warnings=stale_warnings)
+    # Slack notifications for BQ refresh are intentionally disabled.
+    # All results are logged to BQ activity log only.
 
     return results
 
