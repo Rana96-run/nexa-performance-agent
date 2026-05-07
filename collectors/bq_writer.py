@@ -162,7 +162,8 @@ ACTIVITY_LOG_SCHEMA = [
     bigquery.SchemaField("ts",             "TIMESTAMP", mode="REQUIRED"),  # when it ran
     bigquery.SchemaField("session_id",     "STRING"),                      # groups one agent run
     # What ran
-    bigquery.SchemaField("role",           "STRING"),   # daily_digest | bq_refresh | pause_watcher | junk_leads | slack_poster | asana_creator | airbyte_normalizer
+    bigquery.SchemaField("role",           "STRING"),   # bq_refresh | performance_audit | keyword_management | daily_digest | ops_scheduler | spike_detector | llm_cadence
+                                                          # NB: 'pause_watcher', 'google_ads_audit', 'keyword_approval', 'daily_agent' are the legacy names — renamed 2026-05-06.
     bigquery.SchemaField("action",         "STRING"),   # posted_digest | paused_campaign | created_task | refreshed_views …
     bigquery.SchemaField("status",         "STRING"),   # success | failed | skipped | pending_approval | approved | rejected
     # Context

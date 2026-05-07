@@ -121,7 +121,7 @@ def _run_weekly_keyword_autofix() -> dict:
         # Log to BQ so Monday's summary can pick it up
         from logs.activity_logger import log_activity_async
         log_activity_async(
-            role="keyword_approval",
+            role="keyword_management",
             action="weekly_autofix",
             status="success",
             details=counts,

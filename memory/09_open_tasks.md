@@ -44,7 +44,7 @@ the bottom of the relevant section.
 - [x] **Leads Funnel (Hex)** — completed 2026-05-04. Text header + SQL 104 (dataframe_21) querying `hubspot_leads_module_daily` for `top_disq_reason` + `top_disq_sub_reason` grouped by disqualified count. Hex published.
 - [x] **Insights & Recommendations (Hex)** — completed 2026-05-04. Markdown header + SQL 106 (dataframe_22) querying `v_campaign_leaderboard` with PAUSE/SCALE/OK/WATCH rules (CPQL thresholds $40/$80, min $70 spend). Hex published.
 - [x] **Paid Overview (Hex)** — completed 2026-05-05. Markdown header (Markdown 19) + SQL 20 (`dataframe_23`) querying `paid_channel_daily` for channel × spend/leads/sqls/CPL/CPQL/qual_rate_pct/ROAS (30 days). SQL 21 (`dataframe_24`) querying `organic_page_daily` UNION ALL across Meta FB/IG/YouTube/LinkedIn with platform-specific engagement metrics. BQ columns verified before publish. Hex published.
-- [ ] **"(no UTM — click-ID only)" explicit row** in every campaign table
+- [x] **"(no UTM — click-ID only)" explicit row** in every campaign table — completed 2026-05-07. All 6 channel campaign SQL cells updated (Google, Snap, TikTok, Meta, Microsoft, LinkedIn). Each now has `lead_utm_campaign != '__none__'` filter in the `hs` CTE + a `no_utm_hs` CTE + UNION ALL row at bottom. Meta uses `lead_utm_content` (ad-level join). Row shows 2410 leads / 904 qualified / 1374 disqualified across all channels. Hex published.
 
 ## P2 — Ops hardening
 

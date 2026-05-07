@@ -278,7 +278,7 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
     elif add_kw:
         # Off-day — log only, don't create the task.
         log_activity_async(
-            role="keyword_approval",
+            role="keyword_management",
             action=f"{len(add_kw)} keyword candidates queued for next Sunday",
             channel="google_ads", status="ok", rows_affected=len(add_kw),
         )
@@ -411,7 +411,7 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         )
         out.append((f"kw-auto-paused ({len(kw_paused)})", gid))
 
-    log_activity_async(role="google_ads_audit", action="create_audit_tasks",
+    log_activity_async(role="performance_audit", action="create_audit_tasks",
                        status="success", channel="google_ads",
                        rows_affected=len(out),
                        details={"tasks": [t[0] for t in out]})

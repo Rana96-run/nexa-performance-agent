@@ -433,14 +433,14 @@ def _bq_log(role, action, status="success", channel=None, campaign=None,
 def run_cadence(cadence: str, force: bool = False):
     today = str(date.today())
     log.info(f"=== {cadence.upper()} cadence starting ===")
-    _bq_log(role="daily_agent", _action_type="health",
+    _bq_log(role="llm_cadence", _action_type="health",
             action=f"{cadence} cadence started", status="ok",
             details={"cadence": cadence})
 
     if cadence != "on_demand" and not force:
         if not can_run_analysis(cadence):
             log.info(f"Already ran {cadence} today — skipping. Use --force to override.")
-            _bq_log(role="daily_agent", _action_type="health",
+            _bq_log(role="llm_cadence", _action_type="health",
                     action=f"{cadence} cadence skipped — already ran today", status="skipped")
             return
 
@@ -449,14 +449,14 @@ def run_cadence(cadence: str, force: bool = False):
         try:
             st_summary = weekly_search_term_review()
             log.info(f"Search term review: {st_summary}")
-            _bq_log(role="daily_agent", _action_type="analyse",
+            _bq_log(role="llm_cadence", _action_type="analyse",
                     action=f"weekly search term review: {st_summary.get('negatives_added', 0)} negatives added, "
                            f"{st_summary.get('approvals_sent', 0)} converting terms → Asana",
                     channel="google_ads", status="ok",
                     rows_affected=st_summary.get("terms", 0))
         except Exception as e:
             log.warning(f"Search term review failed (non-fatal): {e}")
-            _bq_log(role="daily_agent", _action_type="analyse",
+            _bq_log(role="llm_cadence", _action_type="analyse",
                     action="weekly search term review FAILED", status="failed",
                     details={"error": str(e)})
 
@@ -466,7 +466,7 @@ def run_cadence(cadence: str, force: bool = False):
                           if k not in ("date", "cadence", "hubspot")
                           and (v.get("campaigns") or v.get("ads"))]
     log.info(f"Data collected from: {', '.join(channels_with_data)}")
-    _bq_log(role="daily_agent", _action_type="collect",
+    _bq_log(role="llm_cadence", _action_type="collect",
             action=f"data collected from BQ cache: {', '.join(channels_with_data)}",
             channel="all", status="ok", rows_affected=len(channels_with_data))
 
@@ -509,7 +509,7 @@ def run_cadence(cadence: str, force: bool = False):
             created += 1
     log.info(f"Asana batch complete: {created}/{len(tasks)} tasks created.")
     if tasks:
-        _bq_log(role="daily_agent", _action_type="task",
+        _bq_log(role="llm_cadence", _action_type="task",
                 action=f"created {created}/{len(tasks)} Asana tasks",
                 status="ok", rows_affected=created,
                 details={"cadence": cadence, "total_attempted": len(tasks)})
@@ -527,7 +527,7 @@ def run_cadence(cadence: str, force: bool = False):
                         "on_demand": "daily_summary"}.get(cadence, "daily_summary"),
             meta={"Cadence": cadence, "Tasks": created, "Roles": len(results)},
         )
-        _bq_log(role="daily_agent", _action_type="notify",
+        _bq_log(role="llm_cadence", _action_type="notify",
                 action=f"posted {cadence} Slack summary to #notify",
                 status="ok", details={"cadence": cadence, "tasks": created})
 
@@ -539,14 +539,14 @@ def run_cadence(cadence: str, force: bool = False):
         dec = res.get("decision") or {}
         result = send_approval_request(res)
         ts = result.get("slack_ts") if result else None
-        _bq_log(role="daily_agent", _action_type="approve",
+        _bq_log(role="llm_cadence", _action_type="approve",
                 action=f"approval requested: {dec.get('action', '?')} on {dec.get('campaign', '?')}",
                 channel=dec.get("channel", ""), campaign=dec.get("campaign", ""),
                 status="ok" if ts else "failed")
         if ts:
             approval = wait_for_approval(ts, timeout_minutes=60)
             print(f"[approval] Response: {approval}")
-            _bq_log(role="daily_agent", _action_type="approve",
+            _bq_log(role="llm_cadence", _action_type="approve",
                     action=f"approval {approval}: {dec.get('action', '?')} on {dec.get('campaign', '?')}",
                     channel=dec.get("channel", ""), campaign=dec.get("campaign", ""),
                     status=approval or "timeout")
@@ -560,7 +560,7 @@ def run_cadence(cadence: str, force: bool = False):
         mark_analysis_done(cadence)
 
     log.info(f"{cadence} cadence complete — Tasks: {created}  Approvals: {len(approvals)}")
-    _bq_log(role="daily_agent", _action_type="health",
+    _bq_log(role="llm_cadence", _action_type="health",
             action=f"{cadence} cadence complete: {created} tasks, {len(approvals)} approvals",
             status="ok", rows_affected=created,
             details={"cadence": cadence, "approvals": len(approvals), "roles": len(results)})

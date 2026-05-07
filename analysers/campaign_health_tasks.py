@@ -381,7 +381,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             )
             out.append((f"scale-pending {f['campaign']}", gid))
             log_activity_async(
-                role="pause_watcher", action="scale_task_created",
+                role="performance_audit", action="scale_task_created",
                 status="pending_approval",
                 channel=f.get("channel"), campaign_name=f.get("campaign"),
                 details={"avg_spend": f.get("avg_spend"), "new_budget": f.get("new_budget"),
@@ -437,7 +437,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             )
             out.append((f"pause-pending {f['campaign']}", gid))
             log_activity_async(
-                role="pause_watcher",
+                role="performance_audit",
                 action="junk_leads_task_created" if f.get("junk_leads") else "pause_task_created",
                 status="pending_approval",
                 channel=f.get("channel"), campaign_name=f.get("campaign"),
@@ -514,7 +514,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             )
             out.append((f"drilldown {channel} {f['campaign']}", gid))
             log_activity_async(
-                role="pause_watcher", action="drilldown_task_created",
+                role="performance_audit", action="drilldown_task_created",
                 status="pending_approval",
                 channel=channel, campaign_name=f.get("campaign"),
                 details={"cpql": f.get("cpql"), "cpl": f.get("cpl"), "asana_gid": gid},
@@ -590,7 +590,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             )
             out.append((f"optimize {channel} {f['campaign']}", gid))
             log_activity_async(
-                role="pause_watcher", action="optimize_task_created",
+                role="performance_audit", action="optimize_task_created",
                 status="pending_approval",
                 channel=channel, campaign_name=f.get("campaign"),
                 details={"cpql": f.get("cpql"), "cpl": f.get("cpl"),
