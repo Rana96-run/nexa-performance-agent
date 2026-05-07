@@ -151,6 +151,20 @@ def _run_google_ads_audit() -> list:
         return []
 
 
+def _run_microsoft_ads_audit() -> list:
+    """Daily Microsoft Ads IS, QS, and search-terms audit. Mirrors the Google
+    Ads audit shape, logged under role=performance_audit, channel=microsoft_ads."""
+    try:
+        from analysers.microsoft_ads_audit_tasks import create_audit_tasks
+        tasks = create_audit_tasks()
+        print(f"[ops-scheduler] Microsoft Ads audit: {len(tasks)} task(s) created")
+        return tasks
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Microsoft Ads audit error: {e}")
+        return []
+
+
 def _run_campaign_health() -> tuple[list, list]:
     """Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause.
     Returns (tasks, findings) so findings can be used in the Slack recommendations message.
@@ -185,9 +199,11 @@ def _nightly():
     # 3. Spike detector — returns list, folded into summary message.
     spikes = _run_spike_detector()
 
-    # 3b. Google Ads daily audit — IS, QS, search terms, keyword auto-pause -> Asana tasks
-    # (Keyword Slack-approval flow has been removed — keywords go to Asana, negatives direct-execute.)
+    # 3b. Per-channel performance audits — IS, QS, search terms (Google + MS),
+    # creative fatigue (Meta/Snap/TT — TODO), all logged under role=performance_audit
+    # with channel as a dimension. Asana tasks created per channel.
     audit_tasks = _run_google_ads_audit()
+    audit_tasks += _run_microsoft_ads_audit()
 
     # 3c. Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause
     #     Cost: channel source | Leads: HubSpot Lead Module | Window: 14d
