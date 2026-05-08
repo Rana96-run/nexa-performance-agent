@@ -55,6 +55,17 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
 - **Spend is always reported in USD.** `campaigns_daily.spend` stores USD regardless
   of channel. Never label spend figures as SAR. Platforms returning micros (Google Ads
   `cost_micros`, Snap `spend`) are divided by 1,000,000 to get USD before writing to BQ.
+- **HubSpot deal amounts in BQ are SAR — always divide by 3.75 before reporting.**
+  Despite the collector having a `to_usd()` step, in practice every deal/revenue
+  column in BQ is SAR: `hubspot_deals_daily.amount_total`, `amount_won`,
+  `paid_channel_campaign_daily.deal_amount`, `paid_channel_daily.deal_amount`,
+  `v_adset_performance.revenue_won`, `v_ad_performance.revenue_won`. Before
+  reporting Total Deal Amount, Closed-Won Amount, Revenue Won, or computing ROAS,
+  divide deal/revenue by **3.75** (1 USD = 3.75 SAR peg). Ad spend stays USD —
+  never divide spend. Confirmed by Rana 2026-05-08. Hex SQL in
+  `.claude/hex_drilldown/` already does this; Slack daily ROAS / Asana ROAS / any
+  pause-scale rule reading these columns must do the same divide. Proper
+  source-fix is P0 in `memory/09_open_tasks.md`.
 - **Time zone is Asia/Riyadh (UTC+3)** for user-facing times; BQ stores UTC.
 
 ## KPI measurement rules (non-negotiable)
@@ -292,6 +303,7 @@ Before building anything new, ask: does a tool already in use solve this?
 - **Prefer editing over rebuilding** — update a Hex cell before writing a new page; update a BQ view before adding a new collector.
 - **If two options exist**, pick the one with fewer moving parts, fewer credentials to manage, and fewer things that can break.
 - **Consolidate, don't duplicate** — if a folder already has a sibling file doing related work (e.g. `audit_active_keywords.py`), extend the unified CLI (`scripts/audit.py`) with a subcommand instead of adding a third top-level script. Same rule for env vars, Slack channels, and config keys: pick one canonical name, add a fallback for the legacy. See `.claude/skills/consolidate-no-duplicates.md`.
+- **Don't delete env vars based on "no Python import" alone.** Before removing any env var from `.env`, Railway, or GitHub Secrets, ask: (1) is it reserved for a feature currently disabled but expected to be re-enabled (e.g. `EMAIL_*` for the future Slack-→-email switch)? (2) does it hold real human/entity metadata (e.g. `ASANA_ASSIGNEE_<NAME>`)? (3) is it consumed by a different runtime than the one I'm grepping (GH Actions YAML, not Railway Python)? If any answer is yes-or-unsure, keep it. Env vars are free; surprise outages aren't.
 - **Call it out** — if asked to build something that already exists elsewhere in the stack, say so and propose the simpler path instead.
 
 ## When unsure
