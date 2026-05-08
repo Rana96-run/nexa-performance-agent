@@ -224,13 +224,22 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 
 ### Audit scripts (run on demand)
 
-- `python scripts/audit_active_keywords.py` — scans all ENABLED keywords for
+Unified CLI — one command, three subcommands:
+
+- `python scripts/audit.py keywords` — scans all ENABLED keywords for
   policy violations (always-negative-as-keyword, قيود-in-non-brand,
   competitor-in-generic, language-mismatch). Read-only; creates an Asana task.
-- `python scripts/audit_active_negatives.py` — scans all ACTIVE negative
+- `python scripts/audit.py negatives` — scans all ACTIVE negative
   keywords (campaign + ad-group level). Removes any that match competitor or
   brand-only patterns (removing a negative is safe — re-opens a query). Logs
   removals to Asana.
+- `python scripts/audit.py violations [--csv FILE] [--dry-run]` — executes
+  rule-mandated PAUSE/DELETE on entries in a violations CSV (defaults to
+  today's). Comments counts back to the originating Asana task.
+
+Legacy direct invocations (`python scripts/audit_active_keywords.py`,
+`audit_active_negatives.py`, `action_audit_violations.py`) still work for
+backwards compatibility but the unified CLI above is preferred.
 
 ## Ad pause rules (non-negotiable)
 
