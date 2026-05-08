@@ -6,12 +6,20 @@ a list of per-role decisions for the orchestrator to act on.
 import anthropic
 import json
 import re
+import time
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
 from claude.roles import load_prompt, roles_for_trigger
+from logs.activity_logger import log_activity_async
+from executors.cost_tracking import extract_anthropic_usage, llm_cost_usd
 
 
 def run_role(role: str, trigger: str, data: dict) -> dict:
-    """Invoke a single role agent and return its structured decision."""
+    """Invoke a single role agent and return its structured decision.
+
+    Logs Anthropic token usage + USD cost to agent_activity_log under
+    role='llm_cadence', action='llm_role_ran'. Tracking is silent on failure
+    so the role still returns its decision even if logging breaks.
+    """
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     system_prompt = load_prompt(role)
 
@@ -34,12 +42,32 @@ def run_role(role: str, trigger: str, data: dict) -> dict:
         f"Performance data:\n{json.dumps(data, indent=2, default=str)}"
     )
 
+    t0 = time.time()
     message = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=4096,
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
+    duration_s = time.time() - t0
+
+    # ── Log token consumption ────────────────────────────────────────────────
+    tokens_in, tokens_out = extract_anthropic_usage(message)
+    cost = llm_cost_usd(tokens_in, tokens_out)
+    try:
+        log_activity_async(
+            role="llm_cadence",
+            action="llm_role_ran",
+            status="success",
+            details={"role_invoked": role, "trigger": trigger, "model": CLAUDE_MODEL},
+            duration_s=duration_s,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=cost,
+        )
+    except Exception:
+        pass  # never let logging break the role
+
     raw = message.content[0].text
     return {"role": role, "raw_response": raw, "decision": _extract_json(raw)}
 

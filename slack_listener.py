@@ -157,7 +157,11 @@ Format replies for Slack (*bold*, bullet points). Never make up data — state i
 
 
 def _ask_claude(user_msg: str) -> str:
-    msg = claude.messages.create(
+    from executors.cost_tracking import call_anthropic_tracked
+    msg = call_anthropic_tracked(
+        claude,
+        log_role="llm_cadence",
+        log_action="slack_listener_reply",
         model="claude-sonnet-4-6",
         max_tokens=1500,
         system=AGENT_SYSTEM,

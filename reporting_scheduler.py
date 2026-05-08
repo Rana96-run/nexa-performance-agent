@@ -215,20 +215,37 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     print(f"\n{'='*60}\n[scheduler] Refresh start @ {started.isoformat()}"
           f"  (mode={mode}{f' days={days}' if days else ''})\n{'='*60}")
 
+    # Import here so a missing dep in cost_tracking can never block the refresh
+    try:
+        from executors.cost_tracking import track_api_calls, track_bq_bytes
+    except Exception:
+        track_api_calls = None
+        track_bq_bytes  = None
+    from contextlib import nullcontext
+
     results = {}
     for name, fn in COLLECTORS:
         t0 = time.time()
+        # Count outbound HTTP calls + BQ bytes scanned this collector consumes.
+        api_tracker = track_api_calls() if track_api_calls else nullcontext({"count": None})
+        bq_tracker  = track_bq_bytes()  if track_bq_bytes  else nullcontext({"bytes": None})
         try:
-            if days is not None:
-                n = fn(days=days)
-            else:
-                n = fn(incremental=incremental)
+            with api_tracker as api_counter, bq_tracker as bq_counter:
+                if days is not None:
+                    n = fn(days=days)
+                else:
+                    n = fn(incremental=incremental)
             dt = time.time() - t0
             results[name] = (True, n, dt)
-            log.info(f"{name}: {n} rows in {dt:.1f}s")
+            api_calls   = api_counter.get("count") if isinstance(api_counter, dict) else None
+            bq_bytes    = bq_counter.get("bytes")  if isinstance(bq_counter,  dict) else None
+            log.info(f"{name}: {n} rows in {dt:.1f}s ({api_calls} api calls, "
+                     f"{(bq_bytes or 0)/1e6:.1f} MB BQ scan)")
             log_activity_async(
                 role="bq_refresh", action=f"collect_{name}", status="success",
                 channel=name, rows_affected=n, duration_s=dt,
+                api_calls=api_calls,
+                bq_bytes_scanned=bq_bytes,
                 details={"mode": mode},
             )
         except Exception as e:
@@ -236,9 +253,14 @@ def run_refresh(incremental: bool = True, days: int | None = None):
             results[name] = (False, str(e), dt)
             log.error(f"{name} FAILED after {dt:.1f}s: {e}")
             traceback.print_exc()
+            api_calls = api_counter.get("count") if isinstance(api_counter, dict) else None
+            bq_bytes  = bq_counter.get("bytes")  if isinstance(bq_counter,  dict) else None
             log_activity_async(
                 role="bq_refresh", action=f"collect_{name}", status="failed",
-                channel=name, duration_s=dt, details={"error": str(e), "mode": mode},
+                channel=name, duration_s=dt,
+                api_calls=api_calls,
+                bq_bytes_scanned=bq_bytes,
+                details={"error": str(e), "mode": mode},
             )
 
     try:

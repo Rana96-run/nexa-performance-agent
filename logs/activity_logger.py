@@ -54,15 +54,21 @@ def _get_client():
 
 
 def log_activity(
-    role:          str,
-    action:        str,
-    status:        str         = "success",   # success | failed | skipped | pending_approval | approved | rejected
-    channel:       str | None  = None,
-    campaign_name: str | None  = None,
-    details:       Any         = None,        # dict, list, or str — serialised to JSON
-    rows_affected: int | None  = None,
-    duration_s:    float | None = None,
-    session_id:    str | None  = None,
+    role:             str,
+    action:           str,
+    status:           str          = "success",   # success | failed | skipped | pending_approval | approved | rejected
+    channel:          str | None   = None,
+    campaign_name:    str | None   = None,
+    details:          Any          = None,        # dict, list, or str — serialised to JSON
+    rows_affected:    int | None   = None,
+    duration_s:       float | None = None,
+    session_id:       str | None   = None,
+    # ── Resource-consumption fields (added 2026-05-08, all nullable) ─────────
+    tokens_in:        int | None   = None,        # Anthropic input tokens
+    tokens_out:       int | None   = None,        # Anthropic output tokens
+    cost_usd:         float | None = None,        # total $ cost (LLM + BQ + …)
+    api_calls:        int | None   = None,        # outbound HTTP calls to platform APIs
+    bq_bytes_scanned: int | None   = None,        # bytes processed by BQ queries
 ) -> None:
     """
     Fire-and-forget: writes one row to agent_activity_log in BQ.
@@ -80,17 +86,22 @@ def log_activity(
             return
 
         row = {
-            "activity_id":   str(uuid.uuid4()),
-            "ts":            datetime.now(timezone.utc).isoformat(),
-            "session_id":    session_id or _SESSION_ID,
-            "role":          role,
-            "action":        action,
-            "status":        status,
-            "channel":       channel,
-            "campaign_name": campaign_name,
-            "details":       json.dumps(details, default=str) if details is not None else None,
-            "rows_affected": rows_affected,
-            "duration_s":    round(duration_s, 3) if duration_s is not None else None,
+            "activity_id":      str(uuid.uuid4()),
+            "ts":               datetime.now(timezone.utc).isoformat(),
+            "session_id":       session_id or _SESSION_ID,
+            "role":             role,
+            "action":           action,
+            "status":           status,
+            "channel":          channel,
+            "campaign_name":    campaign_name,
+            "details":          json.dumps(details, default=str) if details is not None else None,
+            "rows_affected":    rows_affected,
+            "duration_s":       round(duration_s, 3) if duration_s is not None else None,
+            "tokens_in":        tokens_in,
+            "tokens_out":       tokens_out,
+            "cost_usd":         round(cost_usd, 6) if cost_usd is not None else None,
+            "api_calls":        api_calls,
+            "bq_bytes_scanned": bq_bytes_scanned,
         }
 
         table_id = f"{project}.{dataset}.agent_activity_log"
@@ -114,14 +125,20 @@ def log_activity(
 
 
 def log_activity_async(
-    role:          str,
-    action:        str,
-    status:        str          = "success",
-    channel:       str | None   = None,
-    campaign_name: str | None   = None,
-    details:       Any          = None,
-    rows_affected: int | None   = None,
-    duration_s:    float | None = None,
+    role:             str,
+    action:           str,
+    status:           str          = "success",
+    channel:          str | None   = None,
+    campaign_name:    str | None   = None,
+    details:          Any          = None,
+    rows_affected:    int | None   = None,
+    duration_s:       float | None = None,
+    # ── Resource-consumption fields (added 2026-05-08, all nullable) ─────────
+    tokens_in:        int | None   = None,
+    tokens_out:       int | None   = None,
+    cost_usd:         float | None = None,
+    api_calls:        int | None   = None,
+    bq_bytes_scanned: int | None   = None,
 ) -> None:
     """
     Same as log_activity() but fire-and-forget in a background thread.
@@ -135,6 +152,9 @@ def log_activity_async(
             channel=channel, campaign_name=campaign_name,
             details=details, rows_affected=rows_affected,
             duration_s=duration_s,
+            tokens_in=tokens_in, tokens_out=tokens_out,
+            cost_usd=cost_usd, api_calls=api_calls,
+            bq_bytes_scanned=bq_bytes_scanned,
         ),
         daemon=False,   # non-daemon so the thread survives process keepalive cycles
     )

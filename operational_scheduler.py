@@ -21,18 +21,63 @@ from notifications.notify import send_heartbeat
 
 
 def _run_with_heartbeat(cadence: str):
-    """Run a cadence and emit a heartbeat on completion or failure."""
+    """Run a cadence and emit a heartbeat on completion or failure.
+
+    Wraps the cadence in track_bq_bytes() + track_api_calls() so all
+    consumption (BQ scans, outbound HTTP) is attributed to this cadence
+    run and surfaces in the consumption dashboard.
+    """
+    from contextlib import nullcontext
+    try:
+        from executors.cost_tracking import track_api_calls, track_bq_bytes
+        from logs.activity_logger import log_activity_async
+    except Exception:
+        track_api_calls = track_bq_bytes = None
+        log_activity_async = None
+
+    api_tracker = track_api_calls() if track_api_calls else nullcontext({"count": None})
+    bq_tracker  = track_bq_bytes()  if track_bq_bytes  else nullcontext({"bytes": None})
+
     t0 = time.time()
     try:
-        run_cadence(cadence)
+        with api_tracker as api_counter, bq_tracker as bq_counter:
+            run_cadence(cadence)
+        duration = time.time() - t0
         send_heartbeat(f"agent-{cadence}", status="ok",
                        detail=f"{cadence} cadence completed",
-                       duration_s=time.time() - t0)
+                       duration_s=duration)
+        if log_activity_async:
+            try:
+                log_activity_async(
+                    role="ops_scheduler",
+                    action=f"cadence_{cadence}_complete",
+                    status="success",
+                    duration_s=duration,
+                    api_calls=api_counter.get("count") if isinstance(api_counter, dict) else None,
+                    bq_bytes_scanned=bq_counter.get("bytes") if isinstance(bq_counter, dict) else None,
+                    details={"cadence": cadence},
+                )
+            except Exception:
+                pass
     except Exception as e:
+        duration = time.time() - t0
         traceback.print_exc()
         send_heartbeat(f"agent-{cadence}", status="failed",
                        detail=str(e)[:200],
-                       duration_s=time.time() - t0)
+                       duration_s=duration)
+        if log_activity_async:
+            try:
+                log_activity_async(
+                    role="ops_scheduler",
+                    action=f"cadence_{cadence}_complete",
+                    status="failed",
+                    duration_s=duration,
+                    api_calls=api_counter.get("count") if isinstance(api_counter, dict) else None,
+                    bq_bytes_scanned=bq_counter.get("bytes") if isinstance(bq_counter, dict) else None,
+                    details={"cadence": cadence, "error": str(e)[:500]},
+                )
+            except Exception:
+                pass
 
 
 def _refresh_bigquery():

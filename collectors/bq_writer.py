@@ -173,6 +173,12 @@ ACTIVITY_LOG_SCHEMA = [
     # Metrics
     bigquery.SchemaField("rows_affected",  "INT64"),    # nullable
     bigquery.SchemaField("duration_s",     "FLOAT64"),  # nullable
+    # ── Resource consumption (added 2026-05-08) ──────────────────────────────
+    bigquery.SchemaField("tokens_in",        "INT64"),    # Anthropic input tokens
+    bigquery.SchemaField("tokens_out",       "INT64"),    # Anthropic output tokens
+    bigquery.SchemaField("cost_usd",         "FLOAT64"),  # total $ cost (LLM + BQ + …)
+    bigquery.SchemaField("api_calls",        "INT64"),    # outbound HTTP calls to platform APIs
+    bigquery.SchemaField("bq_bytes_scanned", "INT64"),    # bytes processed by BQ queries
 ]
 
 TABLES = {
