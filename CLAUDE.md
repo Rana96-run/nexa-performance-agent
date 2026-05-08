@@ -291,6 +291,7 @@ Before building anything new, ask: does a tool already in use solve this?
 - **No new infrastructure** unless the existing tool genuinely can't do it.
 - **Prefer editing over rebuilding** — update a Hex cell before writing a new page; update a BQ view before adding a new collector.
 - **If two options exist**, pick the one with fewer moving parts, fewer credentials to manage, and fewer things that can break.
+- **Consolidate, don't duplicate** — if a folder already has a sibling file doing related work (e.g. `audit_active_keywords.py`), extend the unified CLI (`scripts/audit.py`) with a subcommand instead of adding a third top-level script. Same rule for env vars, Slack channels, and config keys: pick one canonical name, add a fallback for the legacy. See `.claude/skills/consolidate-no-duplicates.md`.
 - **Call it out** — if asked to build something that already exists elsewhere in the stack, say so and propose the simpler path instead.
 
 ## When unsure
