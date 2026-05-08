@@ -1,12 +1,17 @@
 name: Qoyod Performance Agent
 
-# Runs the agent on four cadences, all converted to UTC from Riyadh (08:00 AST = 05:00 UTC).
+# Manual-trigger only.
+#
+# The cadence schedules used to live here (cron entries for daily/weekly/
+# monthly/quarterly) but they duplicated Railway's operational_scheduler.py
+# which fires the same run_cadence() function at 03:00 Riyadh. Running both
+# meant the daily Slack digest posted twice and Asana audit tasks were
+# duplicated.
+#
+# Railway is now the single source of truth for scheduled runs. This
+# workflow remains for ad-hoc manual runs from the GitHub Actions UI:
+#   Actions → "Qoyod Performance Agent" → "Run workflow" → pick cadence.
 on:
-  schedule:
-    - cron: "0 5 * * *"        # daily     08:00 Riyadh
-    - cron: "5 5 * * 1"        # weekly    Mon 08:05 Riyadh
-    - cron: "10 5 1 * *"       # monthly   1st 08:10 Riyadh
-    - cron: "15 5 1 1,4,7,10 *"  # quarterly Jan/Apr/Jul/Oct 1st 08:15 Riyadh
   workflow_dispatch:
     inputs:
       cadence:
