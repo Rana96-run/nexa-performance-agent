@@ -17,15 +17,13 @@ Called from:
 """
 from __future__ import annotations
 
-import os
 from datetime import date, timedelta
 
-from google.cloud import bigquery
-from google.oauth2 import service_account
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+from collectors.bq_writer import get_client, PROJECT_ID, DATASET
 from config import (
     CPL_SCALE, CPL_ACCEPTABLE, CPL_WARNING,
     CPQL_SCALE, CPQL_ACCEPTABLE, CPQL_WARNING,
@@ -35,14 +33,6 @@ from config import (
     SCALE_REQUIRES_ROAS, DRILL_DOWN_CPQL, DRILL_DOWN_CPL, DRILL_DOWN_DAYS,
     SOCIAL_CHANNELS, SEARCH_CHANNELS,
 )
-
-
-def _bq_client():
-    project  = os.getenv("BQ_PROJECT_ID")
-    dataset  = os.getenv("BQ_DATASET", "qoyod_marketing")
-    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
-    creds    = service_account.Credentials.from_service_account_file(key_path)
-    return bigquery.Client(project=project, credentials=creds), project, dataset
 
 
 def _is_awareness(campaign_name: str) -> bool:
@@ -84,7 +74,7 @@ def audit_campaign_health(
       - Leads/SQLs from hubspot_leads_module_daily (Lead Module)
       - HubSpot pre-aggregated by CTE to prevent spend fan-out
     """
-    client, project, dataset = _bq_client()
+    client = get_client()
 
     today = date.today()
     since = (today - timedelta(days=days)).isoformat()
@@ -100,7 +90,7 @@ def audit_campaign_health(
             lead_utm_campaign,
             SUM(leads_total)     AS leads,
             SUM(leads_qualified) AS sqls
-          FROM `{project}.{dataset}.hubspot_leads_module_daily`
+          FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
           GROUP BY date, lead_utm_campaign
         ),
         deals AS (
@@ -108,7 +98,7 @@ def audit_campaign_health(
           SELECT
             deal_utm_campaign,
             SUM(amount_won) AS revenue_won
-          FROM `{project}.{dataset}.hubspot_deals_daily`
+          FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
           WHERE date >= '{since}'
           GROUP BY deal_utm_campaign
         )
@@ -126,7 +116,7 @@ def audit_campaign_health(
           MAX(d.revenue_won)                                                    AS revenue_won,
           SAFE_DIVIDE(MAX(d.revenue_won), NULLIF(SUM(c.spend), 0))             AS roas,
           MAX(c.updated_at)                                                     AS last_updated
-        FROM `{project}.{dataset}.campaigns_daily` c
+        FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
         LEFT JOIN hs
           ON  c.date = hs.date
           AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)

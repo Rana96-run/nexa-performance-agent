@@ -18,21 +18,12 @@ from __future__ import annotations
 import os
 from datetime import date, timedelta
 
-from google.cloud import bigquery
-from google.oauth2 import service_account
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+from collectors.bq_writer import get_client, PROJECT_ID, DATASET
 from config import KEYWORD_PAUSE_SPEND, KEYWORD_PAUSE_CPL, KEYWORD_PAUSE_DAYS
-
-
-def _bq_client():
-    project  = os.getenv("BQ_PROJECT_ID")
-    dataset  = os.getenv("BQ_DATASET", "qoyod_marketing")
-    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
-    creds    = service_account.Credentials.from_service_account_file(key_path)
-    return bigquery.Client(project=project, credentials=creds), project, dataset
 
 
 # ── Social: Ad-level drill-down ───────────────────────────────────────────────
@@ -44,7 +35,7 @@ def get_ad_drilldown_table(channel: str, campaign_name: str, days: int = 14) -> 
 
     Flags ads for pause: spend > $8 with 0 leads for 7+ days.
     """
-    client, project, dataset = _bq_client()
+    client = get_client()
     since = (date.today() - timedelta(days=days)).isoformat()
 
     sql = f"""
@@ -58,7 +49,7 @@ def get_ad_drilldown_table(channel: str, campaign_name: str, days: int = 14) -> 
           SUM(leads)       AS leads,
           SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)) AS cpl,
           COUNT(DISTINCT date) AS active_days
-        FROM `{project}.{dataset}.ads_daily`
+        FROM `{PROJECT_ID}.{DATASET}.ads_daily`
         WHERE channel = '{channel}'
           AND LOWER(campaign_name) = LOWER('{campaign_name.replace("'", "''")}')
           AND date >= '{since}'
@@ -127,7 +118,7 @@ def get_keyword_drilldown_table(channel: str, campaign_name: str, days: int = 14
     Falls back to a guidance note if keywords_daily table doesn't exist yet.
     Pause rule: spend > $4, 0 conversions, running ≥ 14 days.
     """
-    client, project, dataset = _bq_client()
+    client = get_client()
     since = (date.today() - timedelta(days=days)).isoformat()
 
     # Try keywords_daily table first
@@ -142,7 +133,7 @@ def get_keyword_drilldown_table(channel: str, campaign_name: str, days: int = 14
           SUM(clicks)                          AS clicks,
           SUM(conversions)                     AS conversions,
           COUNT(DISTINCT segments_date)        AS active_days
-        FROM `{project}.{dataset}.google_keywords_daily`
+        FROM `{PROJECT_ID}.{DATASET}.google_keywords_daily`
         WHERE campaign_name = '{campaign_name.replace("'", "''")}'
           AND segments_date >= '{since}'
         GROUP BY ad_group_name, keyword_text, match_type, status

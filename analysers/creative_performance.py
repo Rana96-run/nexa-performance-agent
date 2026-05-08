@@ -25,11 +25,11 @@ import os
 from collections import defaultdict
 from datetime import date, timedelta
 
-from google.cloud import bigquery
-from google.oauth2 import service_account
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+
+from collectors.bq_writer import get_client, PROJECT_ID, DATASET
 
 # Channels whose identifier is utm_term (keyword)
 _SEARCH_CHANNELS = {"google", "bing", "microsoft", "google ads", "microsoft ads"}
@@ -39,14 +39,6 @@ _AUDIENCE_TOKENS = [
     "interests", "lookalike", "retargeting", "broad", "competitor",
     "impressionshare", "websitetraffic", "reach",
 ]
-
-
-def _bq_client():
-    project  = os.getenv("BQ_PROJECT_ID")
-    dataset  = os.getenv("BQ_DATASET", "qoyod_marketing")
-    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
-    creds    = service_account.Credentials.from_service_account_file(key_path)
-    return bigquery.Client(project=project, credentials=creds), project, dataset
 
 
 def _is_search(channel: str | None) -> bool:
@@ -89,7 +81,7 @@ def audit_creative_performance(
       "campaign_spend": float | None,   # total spend for the campaign (context only)
     }
     """
-    client, project, dataset = _bq_client()
+    client = get_client()
     today   = date.today()
     since   = (today - timedelta(days=days)).isoformat()
     date_to = (today - timedelta(days=1)).isoformat()
@@ -116,7 +108,7 @@ def audit_creative_performance(
           lead_utm_campaign     AS campaign,
           SUM(leads_total)      AS leads,
           SUM(leads_qualified)  AS sqls
-        FROM `{project}.{dataset}.hubspot_leads_module_daily`
+        FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
         WHERE date >= '{since}'
           AND date <= '{date_to}'
           AND {id_field} IS NOT NULL
@@ -171,7 +163,7 @@ def audit_creative_performance(
             safe = campaign_name.replace("'", "''")
             sql_spend = f"""
                 SELECT SUM(spend) AS total_spend
-                FROM `{project}.{dataset}.campaigns_daily`
+                FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
                 WHERE date >= '{since}' AND date <= '{date_to}'
                   AND LOWER(campaign_name) = LOWER('{safe}')
             """
@@ -255,7 +247,7 @@ def audit_creative_by_campaign_type(
       "insights": [str, ...]
     }
     """
-    client, project, dataset = _bq_client()
+    client = get_client()
     today   = date.today()
     since   = (today - timedelta(days=days)).isoformat()
     date_to = (today - timedelta(days=1)).isoformat()
@@ -266,7 +258,7 @@ def audit_creative_by_campaign_type(
           lead_utm_campaign  AS campaign,
           SUM(leads_total)   AS leads,
           SUM(leads_qualified) AS sqls
-        FROM `{project}.{dataset}.hubspot_leads_module_daily`
+        FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
         WHERE date >= '{since}'
           AND date <= '{date_to}'
           AND lead_utm_content IS NOT NULL AND lead_utm_content != ''

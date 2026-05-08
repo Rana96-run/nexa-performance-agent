@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from google.cloud import bigquery
-from google.oauth2 import service_account
+from collectors.bq_writer import get_client as _get_bq_client, PROJECT_ID, DATASET
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -68,15 +68,6 @@ CHANNEL_MAP = {
     "snapchat": CHANNEL_SNAP,
     "tiktok": CHANNEL_TIKTOK,
 }
-
-
-# ── BQ client ─────────────────────────────────────────────────────────────────
-
-def _bq_client() -> bigquery.Client:
-    project  = os.getenv("BQ_PROJECT_ID")
-    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
-    creds    = service_account.Credentials.from_service_account_file(key_path)
-    return bigquery.Client(project=project, credentials=creds)
 
 
 # ── BQ queries ────────────────────────────────────────────────────────────────
@@ -126,10 +117,8 @@ ORDER BY a.total_spend DESC
 
 def _fetch_ad_perf(days: int) -> list[dict]:
     """Pull ad-level performance + HubSpot data from BigQuery."""
-    client  = _bq_client()
-    project = os.getenv("BQ_PROJECT_ID")
-    dataset = os.getenv("BQ_DATASET", "qoyod_marketing")
-    sql     = _AD_PERF_SQL.format(project=project, dataset=dataset, days=days)
+    client  = _get_bq_client()
+    sql     = _AD_PERF_SQL.format(project=PROJECT_ID, dataset=DATASET, days=days)
     rows    = list(client.query(sql).result())
     return [dict(row) for row in rows]
 

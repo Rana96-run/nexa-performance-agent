@@ -21,11 +21,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from collectors.bq_writer import get_client
-
-
-PROJECT = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
-DATASET = os.getenv("BQ_DATASET", "qoyod_marketing")
+from collectors.bq_writer import get_client, PROJECT_ID, DATASET
 
 
 # ── 1. Schema migration ──────────────────────────────────────────────────────
@@ -38,7 +34,7 @@ MIGRATION_SQL = (REPO / "scripts" / "migrate_activity_log_consumption.sql").read
 # One row per (date, role) summing tokens, cost, api calls, bytes scanned.
 # Used by the Hex dashboard to render Single Value cards + per-role breakdown.
 CONSUMPTION_VIEW_SQL = f"""
-CREATE OR REPLACE VIEW `{PROJECT}.{DATASET}.v_agent_consumption_daily` AS
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_agent_consumption_daily` AS
 SELECT
   DATE(ts, 'Asia/Riyadh')                                AS day,
   role,
@@ -55,7 +51,7 @@ SELECT
     SUM(COALESCE(bq_bytes_scanned, 0)) / POW(1024, 4) * 6.25,
     4
   )                                                      AS bq_cost_usd_estimate
-FROM `{PROJECT}.{DATASET}.agent_activity_log`
+FROM `{PROJECT_ID}.{DATASET}.agent_activity_log`
 WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
 GROUP BY day, role
 ORDER BY day DESC, cost_usd_total DESC
@@ -65,12 +61,12 @@ ORDER BY day DESC, cost_usd_total DESC
 def main() -> None:
     client = get_client()
 
-    print(f"Running schema migration on {PROJECT}.{DATASET}.agent_activity_log …")
+    print(f"Running schema migration on {PROJECT_ID}.{DATASET}.agent_activity_log …")
     job = client.query(MIGRATION_SQL)
     job.result()
     print("  [OK] schema columns added (or already present)")
 
-    print(f"Creating view {PROJECT}.{DATASET}.v_agent_consumption_daily …")
+    print(f"Creating view {PROJECT_ID}.{DATASET}.v_agent_consumption_daily …")
     job = client.query(CONSUMPTION_VIEW_SQL)
     job.result()
     print("  [OK] view created")
@@ -79,7 +75,7 @@ def main() -> None:
     probe = f"""
     SELECT day, role, actions, tokens_total, cost_usd_total,
            api_calls_total, bq_bytes_scanned_total
-    FROM `{PROJECT}.{DATASET}.v_agent_consumption_daily`
+    FROM `{PROJECT_ID}.{DATASET}.v_agent_consumption_daily`
     LIMIT 10
     """
     rows = list(client.query(probe).result())

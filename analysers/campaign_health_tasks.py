@@ -16,7 +16,6 @@ Keyword auto-pause: keywords running 7+ days with 0 converted leads -> pause.
 """
 from __future__ import annotations
 
-import os
 from datetime import date, timedelta
 
 from analysers.campaign_health import audit_campaign_health
@@ -26,21 +25,10 @@ from analysers.creative_performance import (
 )
 from executors.asana import create_task
 from config import DAYS_FOR_PAUSE_DECISION, DRILL_DOWN_CPQL, DRILL_DOWN_CPL
+from collectors.bq_writer import get_client, PROJECT_ID, DATASET
 from logs.activity_logger import log_activity_async
 
 SCALE_PCT = 0.25   # always 25%
-
-
-# ── BQ helper: junk leads drill-down ──────────────────────────────────────────
-
-def _bq_client():
-    """Return a BQ client using service-account creds from env."""
-    from google.cloud import bigquery as _bq
-    from google.oauth2 import service_account as _sa
-    project  = os.getenv("BQ_PROJECT_ID")
-    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
-    creds    = _sa.Credentials.from_service_account_file(key_path)
-    return _bq.Client(project=project, credentials=creds), project
 
 
 def _get_junk_keyword_detail(channel: str, campaign_name: str, days: int) -> str:
@@ -49,8 +37,7 @@ def _get_junk_keyword_detail(channel: str, campaign_name: str, days: int) -> str
     Flags keywords with qual% < 20% as candidates to pause.
     """
     try:
-        client, project = _bq_client()
-        dataset = os.getenv("BQ_DATASET", "qoyod_marketing")
+        client = get_client()
         safe_campaign = campaign_name.replace("'", "''")
         sql = f"""
             SELECT
@@ -60,7 +47,7 @@ def _get_junk_keyword_detail(channel: str, campaign_name: str, days: int) -> str
               SUM(leads)                                                           AS leads,
               SUM(leads_qualified)                                                 AS sqls,
               ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0))*100, 1) AS qual_pct
-            FROM `{project}.{dataset}.v_keyword_performance`
+            FROM `{PROJECT_ID}.{DATASET}.v_keyword_performance`
             WHERE channel = '{channel}'
               AND utm_campaign = '{safe_campaign}'
               AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
@@ -93,8 +80,7 @@ def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> st
     Flags the worst audience and suggests a replacement.
     """
     try:
-        client, project = _bq_client()
-        dataset = os.getenv("BQ_DATASET", "qoyod_marketing")
+        client = get_client()
         safe_campaign = campaign_name.replace("'", "''")
         sql = f"""
             SELECT
@@ -103,7 +89,7 @@ def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> st
               SUM(leads)                                                           AS leads,
               SUM(leads_qualified)                                                 AS sqls,
               ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0))*100, 1) AS qual_pct
-            FROM `{project}.{dataset}.v_adset_performance`
+            FROM `{PROJECT_ID}.{DATASET}.v_adset_performance`
             WHERE channel = '{channel}'
               AND utm_campaign = '{safe_campaign}'
               AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
@@ -169,18 +155,11 @@ def _avg_daily_spend(channel: str, campaign_name: str, account_id: str,
                      days: int = DAYS_FOR_PAUSE_DECISION) -> float | None:
     """Approximate current daily budget from recent average daily spend in BQ."""
     try:
-        from google.cloud import bigquery as _bq
-        from google.oauth2 import service_account as _sa
-
-        project  = os.getenv("BQ_PROJECT_ID")
-        dataset  = os.getenv("BQ_DATASET", "qoyod_marketing")
-        key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "bigquery-key.json")
-        creds    = _sa.Credentials.from_service_account_file(key_path)
-        client   = _bq.Client(project=project, credentials=creds)
-        since    = (date.today() - timedelta(days=days)).isoformat()
+        client = get_client()
+        since  = (date.today() - timedelta(days=days)).isoformat()
         sql = f"""
             SELECT AVG(spend) AS avg_daily
-            FROM `{project}.{dataset}.campaigns_daily`
+            FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
             WHERE channel = '{channel}'
               AND campaign_name = '{campaign_name.replace("'", "''")}'
               AND account_id = '{account_id}'
