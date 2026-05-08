@@ -1027,7 +1027,7 @@ LEFT JOIN deals d
 """
 
 V_LP_PERFORMANCE_WEEKLY_SQL = f"""
-CREATE OR REPLACE VIEW `{{PROJECT_ID}}.{{DATASET}}.v_lp_performance_weekly` AS
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly` AS
 -- Landing-page type comparison: HubSpot LP (campaigns.qoyod.com) vs
 -- WordPress LP (lp.qoyod.com). Google Ads only — other channels
 -- have no final_url stored yet.
@@ -1049,7 +1049,7 @@ WITH campaign_lp AS (
     END                                            AS lp_type,
     REGEXP_EXTRACT(final_url, r'https?://([^/?#]+)') AS lp_domain,
     SUM(spend)                                     AS spend_check
-  FROM `{{PROJECT_ID}}.{{DATASET}}.ads_daily`
+  FROM `{PROJECT_ID}.{DATASET}.ads_daily`
   WHERE channel = 'google_ads' AND final_url IS NOT NULL
   GROUP BY 1, 2, 3
 ),
@@ -1072,7 +1072,7 @@ platform AS (
     SUM(c.spend)                          AS spend,
     SUM(c.impressions)                    AS impressions,
     SUM(c.clicks)                         AS clicks
-  FROM `{{PROJECT_ID}}.{{DATASET}}.campaigns_daily` c
+  FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
   JOIN lp_map m USING (campaign_name)
   WHERE c.channel = 'google_ads'
   GROUP BY 1, 2, 3, 4
@@ -1084,7 +1084,7 @@ hs AS (
     SUM(leads_total)                      AS hs_leads,
     SUM(leads_qualified)                  AS hs_qualified,
     SUM(leads_disqualified)               AS hs_disqualified
-  FROM `{{PROJECT_ID}}.{{DATASET}}.hubspot_leads_module_daily`
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE qoyod_source = 'Google Ads'
   GROUP BY 1, 2
 )
@@ -1111,7 +1111,7 @@ LEFT JOIN hs h
 
 # Aggregated summary by week × lp_type for the Hex LP comparison card.
 V_LP_WEEKLY_SUMMARY_SQL = f"""
-CREATE OR REPLACE VIEW `{{PROJECT_ID}}.{{DATASET}}.v_lp_weekly_summary` AS
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_weekly_summary` AS
 SELECT
   week_start,
   lp_type,
@@ -1127,7 +1127,7 @@ SELECT
   SAFE_DIVIDE(SUM(hs_disqualified), NULLIF(SUM(hs_leads), 0)) * 100 AS disq_rate_pct,
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_leads), 0))           AS cpl,
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_qualified), 0))       AS cpql
-FROM `{{PROJECT_ID}}.{{DATASET}}.v_lp_performance_weekly`
+FROM `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly`
 GROUP BY 1, 2, 3
 """
 

@@ -24,7 +24,7 @@ SELECT channel AS paid_channel,
        CASE channel
          WHEN 'google_ads'     THEN 'Google Ads'
          WHEN 'meta'           THEN 'Meta Ads'
-         WHEN 'snapchat'       THEN 'Snapchat Ads'
+         WHEN 'snapchat'       THEN 'Snapchat'
          WHEN 'tiktok'         THEN 'Tiktok Ads'
          WHEN 'microsoft_ads'  THEN 'Microsoft Ads'
          WHEN 'linkedin'       THEN 'LinkedIn Ads'
@@ -341,7 +341,7 @@ WITH
   channel_map AS (
     SELECT 'google_ads'    AS channel, 'Google Ads'    AS qoyod_source UNION ALL
     SELECT 'meta',                     'Meta Ads'                       UNION ALL
-    SELECT 'snapchat',                 'Snapchat Ads'                   UNION ALL
+    SELECT 'snapchat',                 'Snapchat'                       UNION ALL
     SELECT 'tiktok',                   'Tiktok Ads'                     UNION ALL
     SELECT 'linkedin',                 'LinkedIn Ads'                   UNION ALL
     SELECT 'microsoft_ads',            'Microsoft Ads'
@@ -455,8 +455,9 @@ def _sub_campaign_views():
         V_ADSET_PERFORMANCE_SQL,
         V_AD_PERFORMANCE_SQL,
         V_KEYWORD_PERFORMANCE_SQL,
+        V_LP_PERFORMANCE_WEEKLY_SQL,
+        V_LP_WEEKLY_SUMMARY_SQL,
     )
-    # Expose under the canonical name used in the task spec and memory docs.
     UTM_ATTRIBUTION_DAILY_SQL = UTM_PAID_ATTRIBUTION_VIEW_SQL
     return [
         # Attribution base — must be created before the grain views below
@@ -464,19 +465,26 @@ def _sub_campaign_views():
         ("v_adset_performance",        V_ADSET_PERFORMANCE_SQL),
         ("v_ad_performance",           V_AD_PERFORMANCE_SQL),
         ("v_keyword_performance",      V_KEYWORD_PERFORMANCE_SQL),
+        # LP A/B test views — v_lp_weekly_summary depends on v_lp_performance_weekly
+        ("v_lp_performance_weekly",    V_LP_PERFORMANCE_WEEKLY_SQL),
+        ("v_lp_weekly_summary",        V_LP_WEEKLY_SUMMARY_SQL),
     ]
 
 
 def refresh_all_views():
     client = get_client()
     all_views = ALL_VIEWS + _sub_campaign_views()
+    failed = []
     for name, sql in all_views:
         try:
             client.query(sql).result()
             print(f"[views] OK: {name}")
         except Exception as e:
             print(f"[views] FAIL: {name}: {e}")
-            raise
+            failed.append((name, str(e)))
+    if failed:
+        names = ", ".join(n for n, _ in failed)
+        raise RuntimeError(f"[views] {len(failed)} view(s) failed: {names}")
     print(f"[views] Refreshed {len(all_views)} views.")
 
 
