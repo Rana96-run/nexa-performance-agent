@@ -73,10 +73,10 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 | Runtime | Purpose | Cadence | Where |
 |---|---|---|---|
-| **Operational scheduler** | Nightly: BQ refresh, spike detector, keyword approvals, Google Ads audit, campaign health, Asana tasks, Slack daily summary | 03:00 Riyadh nightly + 6h health checks | `operational_scheduler.py` → Railway |
+| **Operational scheduler** | Daily: BQ refresh, spike detector, keyword approvals, Google Ads audit, campaign health, Asana tasks, Slack daily summary | 08:00 Riyadh daily + 6h health checks | `operational_scheduler.py` → Railway |
 | **Reporting scheduler** | Refresh BQ tables + views for the Hex dashboard | Every 6h | `reporting_scheduler.py loop` → Railway |
 
-`main.py` = the LLM analysis layer (paid_media_strategist Claude role). Called by `operational_scheduler.py` for weekly/monthly/quarterly cadences only. Daily nightly work is deterministic (no LLM).
+`main.py` = the LLM analysis layer (paid_media_strategist Claude role). Called by `operational_scheduler.py` for weekly/monthly/quarterly cadences only. Daily work is deterministic (no LLM).
 
 ## Repo layout
 
@@ -108,7 +108,7 @@ Nexa Performance Agent/
 ├── logs/                   # activity_logger.py → agent_activity_log BQ
 ├── scripts/                # OAuth flows + bulk_ads + bulk_keywords tools
 ├── reports/app.py          # Flask: /health, /api/refresh, /slack/events
-├── operational_scheduler.py # nightly 03:00 Riyadh orchestrator
+├── operational_scheduler.py # daily 08:00 Riyadh orchestrator
 ├── reporting_scheduler.py  # 6h BQ refresh for Hex dashboards
 ├── main.py                 # LLM cadence runner (weekly/monthly/quarterly)
 ├── config.py               # env-driven config
