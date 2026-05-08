@@ -110,7 +110,11 @@ def get_or_fetch(key: str, fetcher, ttl_hours: int = 22):
     else:
         print(f"[cache] MISS {key!r}")
 
-    data = fetcher()
+    try:
+        data = fetcher()
+    except Exception as e:
+        print(f"[cache] FETCH ERROR {key!r}: {e}")
+        return []
     store[key] = {"fetched_at": _now_utc().isoformat(), "data": data}
     _save(_DATA_CACHE, store)
     print(f"[cache] SAVED {key!r}")

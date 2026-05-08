@@ -21,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.12"
           cache: pip
@@ -103,15 +103,25 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_TEAM_LEAD: ${{ secrets.EMAIL_TEAM_LEAD }}
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          CADENCE: ${{ steps.pick.outputs.cadence }}
         run: |
-          python -c "
+          python - <<'PYEOF'
           import os, smtplib
           from email.mime.text import MIMEText
-          msg = MIMEText('Agent run failed. See GitHub Actions log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')
-          msg['Subject'] = '[Qoyod Agent] FAILED - ${{ steps.pick.outputs.cadence }}'
-          msg['From'] = os.environ['SMTP_USER']
-          msg['To'] = os.environ['EMAIL_TEAM_LEAD']
-          with smtplib.SMTP(os.environ['SMTP_HOST'], int(os.environ['SMTP_PORT'])) as s:
-              s.starttls(); s.login(os.environ['SMTP_USER'], os.environ['SMTP_PASS'])
-              s.sendmail(os.environ['SMTP_USER'], [os.environ['EMAIL_TEAM_LEAD']], msg.as_string())
-          "
+          host  = os.environ.get('SMTP_HOST', '')
+          port  = os.environ.get('SMTP_PORT', '')
+          user  = os.environ.get('SMTP_USER', '')
+          pwd   = os.environ.get('SMTP_PASS', '')
+          to    = os.environ.get('EMAIL_TEAM_LEAD', '')
+          if not all([host, port, user, pwd, to]):
+              print('SMTP not fully configured — skipping failure email')
+              exit(0)
+          msg = MIMEText(f"Agent run failed.\nSee log: {os.environ['RUN_URL']}")
+          msg['Subject'] = f"[Qoyod Agent] FAILED - {os.environ['CADENCE']}"
+          msg['From'] = user
+          msg['To'] = to
+          with smtplib.SMTP(host, int(port)) as s:
+              s.starttls(); s.login(user, pwd)
+              s.sendmail(user, [to], msg.as_string())
+          PYEOF

@@ -376,10 +376,11 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
     emoji    = CADENCE_EMOJI.get(cadence, "📋")
     # Dashboard URL — must be set in .env / Railway secrets
     url = os.getenv("DASHBOARD_URL") or "https://app.hex.tech"
+    dashboard_short = os.getenv("DASHBOARD_SHORT_URL") or url
 
     lines = [
         f"{emoji} *{cadence.title()} Performance Check — {today_str}*",
-        f"Dashboard: <{url}|{_DASHBOARD_SHORT}>",
+        f"Dashboard: <{url}|{dashboard_short}>",
         "",
     ]
 
