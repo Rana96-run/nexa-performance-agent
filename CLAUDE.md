@@ -55,17 +55,19 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
 - **Spend is always reported in USD.** `campaigns_daily.spend` stores USD regardless
   of channel. Never label spend figures as SAR. Platforms returning micros (Google Ads
   `cost_micros`, Snap `spend`) are divided by 1,000,000 to get USD before writing to BQ.
-- **HubSpot deal amounts in BQ are SAR — always divide by 3.75 before reporting.**
-  Despite the collector having a `to_usd()` step, in practice every deal/revenue
-  column in BQ is SAR: `hubspot_deals_daily.amount_total`, `amount_won`,
-  `paid_channel_campaign_daily.deal_amount`, `paid_channel_daily.deal_amount`,
-  `v_adset_performance.revenue_won`, `v_ad_performance.revenue_won`. Before
-  reporting Total Deal Amount, Closed-Won Amount, Revenue Won, or computing ROAS,
-  divide deal/revenue by **3.75** (1 USD = 3.75 SAR peg). Ad spend stays USD —
-  never divide spend. Confirmed by Rana 2026-05-08. Hex SQL in
-  `.claude/hex_drilldown/` already does this; Slack daily ROAS / Asana ROAS / any
-  pause-scale rule reading these columns must do the same divide. Proper
-  source-fix is P0 in `memory/09_open_tasks.md`.
+- **HubSpot deal amounts in BQ are USD — DO NOT divide by 3.75.** The collector
+  (`collectors/hubspot_deals_bq.py`) calls `to_usd()` at write time using the
+  3.75 SAR peg. `hubspot_deals_daily.amount_total` / `amount_won` / `amount_lost`
+  are USD; the `*_native` columns retain the original SAR for audit. All
+  downstream views (`paid_channel_campaign_daily.deal_amount`,
+  `paid_channel_daily.deal_amount`, `v_adset_performance.revenue_won`,
+  `v_ad_performance.revenue_won`, `channel_roas_daily.amount_total`/
+  `revenue_won`) inherit USD. **Use them as-is.** Spend is USD, deal/revenue is
+  USD, ROAS is unitless. Verified by direct HubSpot API check on 2026-05-09 —
+  see `memory/08_pitfalls.md` for the deal-level proof. A previous instruction
+  to divide by 3.75 in dashboards was wrong (caused by comparing Hex output
+  against Funnel/Looker which displays in SAR); reverted across all Hex SQL
+  and `analysers/campaign_health.py` on 2026-05-09.
 - **Time zone is Asia/Riyadh (UTC+3)** for user-facing times; BQ stores UTC.
 
 ## KPI measurement rules (non-negotiable)

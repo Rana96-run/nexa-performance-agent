@@ -15,26 +15,19 @@ the fix, not just the symptom.
   `WHERE date >= CURRENT_DATE() - INTERVAL 7 DAY` in a view definition; use
   it in queries, or pass params.
 
-## HubSpot deal amounts in BQ are SAR (despite collector "USD" label) — LOCKED
+## HubSpot deal amounts in BQ are correctly USD — verified 2026-05-09
 
-- **`hubspot_deals_daily.amount_total` and `amount_won` are SAR**, even though
-  `collectors/hubspot_deals_bq.py` calls `to_usd()` and labels the column USD.
-  Confirmed by Rana 2026-05-08 — the displayed numbers are SAR. Treat collector
-  metadata as wrong; trust the operator. Possible causes (to be investigated by
-  the proper-fix task): missing `deal_currency_code` falling through silently,
-  historical backfill bypassing conversion, or the rate not being applied at all.
-- **Every downstream view inherits the SAR.** `paid_channel_campaign_daily.deal_amount`,
-  `paid_channel_daily.deal_amount`, `v_adset_performance.revenue_won`,
-  `v_ad_performance.revenue_won` — all SAR.
-- **Rule (non-negotiable):** Before reporting Total Deal Amount, Closed-Won Amount,
-  Revenue Won, or computing ROAS — divide by **3.75** to convert SAR → USD.
-  Ad spend stays USD; only the deal/revenue side needs the divide.
-- All Hex drill-down SQL in `.claude/hex_drilldown/` already does `/ 3.75`.
-- Slack daily summaries, Asana ROAS comments, and any pause/scale rule that reads
-  these columns must do the same divide. Currently most do NOT — fix at the source
-  is the proper resolution (see `memory/09_open_tasks.md` P0).
-- **Why 3.75:** SAR is officially pegged to USD at 1 USD = 3.75 SAR (Saudi Central
-  Bank, since June 1986). Constant lives in `config.USD_SAR_PEG`.
+- **`hubspot_deals_daily.amount_total` and `amount_won` ARE USD** (the collector's
+  `to_usd()` works correctly). `amount_*_native` columns hold the original SAR.
+- Verified by direct API check on 2026-05-09: deal `499825686757`
+  ("مؤسسة عجوة نخلة"), HubSpot raw `amount`=12255, `deal_currency_code='SAR'`,
+  BQ `amount_won`=$3268, `amount_won_native`=12255 SAR. Math: 12255/3.75=3268 ✓.
+- A previous "rule" instructing to divide by 3.75 in dashboards was based on an
+  incorrect comparison against Funnel/Looker (which displays SAR). It was
+  reverted across all Hex SQL and `analysers/campaign_health.py` on 2026-05-09.
+- **Use BQ deal/revenue columns as-is. Do NOT divide by 3.75.** Spend is USD,
+  deal/revenue is USD, ROAS is unitless.
+- The `_native` columns remain available for users who explicitly want SAR.
 
 ## Channel name mismatch: `microsoft` vs `microsoft_ads`
 

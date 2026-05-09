@@ -95,11 +95,9 @@ def audit_campaign_health(
         ),
         deals AS (
           -- Campaign-level revenue from won deals (for ROAS override check).
-          -- amount_won is SAR in BQ — divide by 3.75 to get USD before any
-          -- comparison against ROAS_GOOD (USD/USD threshold). See CLAUDE.md.
           SELECT
             deal_utm_campaign,
-            SUM(amount_won) / 3.75 AS revenue_won
+            SUM(amount_won) AS revenue_won
           FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
           WHERE date >= '{since}'
           GROUP BY deal_utm_campaign
