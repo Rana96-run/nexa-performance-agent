@@ -5,6 +5,20 @@ the bottom of the relevant section.
 
 ## P0 — Unblocks everything else
 
+- [ ] **Fix HubSpot deal amounts SAR → USD at source.** `hubspot_deals_daily.amount_total`
+  and `amount_won` are stored as SAR despite the collector running them through
+  `to_usd()`. All downstream views inherit the SAR (paid_channel_campaign_daily.deal_amount,
+  v_adset_performance.revenue_won, v_ad_performance.revenue_won). Hex SQL files
+  in `.claude/hex_drilldown/` already work around it with `/ 3.75`, but Slack daily
+  ROAS, Asana ROAS lines, and any pause/scale rule that reads these fields are
+  overstated 3.75x. Investigate why `to_usd()` isn't taking effect — likely
+  `deal_currency_code` missing on most deals so the fallback path doesn't trigger,
+  or historical backfill ran before the conversion was added. Then: re-run with
+  conversion + backfill, drop `/3.75` from Hex SQL afterward. See
+  `memory/08_pitfalls.md` for full context. Confirmed by Rana 2026-05-08.
+
+
+
 - [ ] **Re-mint LinkedIn tokens** — `LI_ACCESS_TOKEN/ORG_URN/AD_ACCOUNT_URN`
   currently empty. Run `python scripts/linkedin_oauth.py` then `... orgs`,
   paste outputs to `.env`. Follow-ups via `scripts/linkedin_refresh.py`.
