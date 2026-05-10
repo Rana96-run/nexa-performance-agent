@@ -1,9 +1,17 @@
 """
 HubSpot Lead module -> BigQuery.
-Writes one row per lead per day (by createdate) with qoyod_source,
-pipeline, stage, qualification status, disqualification reasons, and UTMs.
+
+Two write modes:
+  1. collect_and_write()     — legacy createdate-window aggregation (kept for backfill).
+  2. sync_cursor_and_write() — cursor-based CDC that exactly mirrors HubSpot.
+     Fetches every lead modified since last checkpoint (hs_lastmodifieddate),
+     upserts into hubspot_leads_individual (one row per hs_object_id), then
+     re-aggregates only the affected dates into hubspot_leads_module_daily.
+     Handles leads from ANY year — no window boundary.
 """
 import os
+import json as _json
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 from collections import defaultdict
 import requests
@@ -16,7 +24,7 @@ BASE = "https://api.hubapi.com"
 LEAD_OBJ = "0-136"
 
 PROPERTIES = [
-    "hs_createdate", "hs_pipeline", "hs_pipeline_stage", "hs_lead_is_open",
+    "hs_createdate", "hs_lastmodifieddate", "hs_pipeline", "hs_pipeline_stage", "hs_lead_is_open",
     "lead_qoyod_source",
     "lead_utm_campaign", "lead_utm_audience", "lead_utm_content",
     "lead_utm_term", "lead_utm_source", "lead_utm_medium",
@@ -288,8 +296,440 @@ def _ensure_table_exists():
     client.create_table(table, exists_ok=True)
 
 
+# ── Cursor-based CDC (exact HubSpot mirror) ──────────────────────────────────
+
+from google.cloud import bigquery as _bq
+
+_INDIVIDUAL_TABLE = "hubspot_leads_individual"
+
+_INDIVIDUAL_SCHEMA = [
+    _bq.SchemaField("hs_object_id",        "STRING",    mode="REQUIRED"),
+    _bq.SchemaField("hs_createdate",        "DATE",      mode="REQUIRED"),
+    _bq.SchemaField("hs_lastmodifieddate",  "TIMESTAMP"),
+    _bq.SchemaField("pipeline_id",          "STRING"),
+    _bq.SchemaField("pipeline",             "STRING"),
+    _bq.SchemaField("stage_id",             "STRING"),
+    _bq.SchemaField("stage",               "STRING"),
+    _bq.SchemaField("is_qualified",         "BOOL"),
+    _bq.SchemaField("is_disqualified",      "BOOL"),
+    _bq.SchemaField("is_open",              "BOOL"),
+    _bq.SchemaField("qoyod_source",         "STRING"),
+    _bq.SchemaField("lead_utm_campaign",    "STRING"),
+    _bq.SchemaField("lead_utm_audience",    "STRING"),
+    _bq.SchemaField("lead_utm_content",     "STRING"),
+    _bq.SchemaField("lead_utm_source",      "STRING"),
+    _bq.SchemaField("lead_utm_medium",      "STRING"),
+    _bq.SchemaField("lead_utm_term",        "STRING"),
+    _bq.SchemaField("top_disq_reason",      "STRING"),
+    _bq.SchemaField("top_disq_sub_reason",  "STRING"),
+    _bq.SchemaField("updated_at",           "TIMESTAMP"),
+]
+
+
+def _ensure_individual_table_exists():
+    client = get_client()
+    project = os.getenv("BQ_PROJECT_ID")
+    dataset = os.getenv("BQ_DATASET")
+    table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
+    table = _bq.Table(table_id, schema=_INDIVIDUAL_SCHEMA)
+    table.time_partitioning = _bq.TimePartitioning(field="hs_createdate")
+    table.clustering_fields = ["qoyod_source", "pipeline"]
+    client.create_table(table, exists_ok=True)
+
+
+def _get_cursor() -> datetime:
+    """
+    Read the high-water mark from hubspot_leads_individual.
+    Returns MAX(hs_lastmodifieddate) minus 5 minutes for overlap safety.
+    Defaults to Jan 1 of current year if the table is empty.
+    """
+    try:
+        client = get_client()
+        project = os.getenv("BQ_PROJECT_ID")
+        dataset = os.getenv("BQ_DATASET")
+        result = list(client.query(
+            f"SELECT MAX(hs_lastmodifieddate) AS max_ts "
+            f"FROM `{project}.{dataset}.{_INDIVIDUAL_TABLE}`"
+        ).result())
+        max_ts = result[0].max_ts if result else None
+        if max_ts:
+            # 5-min overlap so clock skew never drops a record
+            return max_ts - timedelta(minutes=5)
+    except Exception as e:
+        print(f"[leads-cursor] cursor read failed: {e}")
+    return datetime(datetime.now(timezone.utc).year, 1, 1, tzinfo=timezone.utc)
+
+
+def _search_by_modified(since_ms: int, until_ms: int, after=None) -> dict:
+    """Search leads by hs_lastmodifieddate within a 1-hour window."""
+    body = {
+        "filterGroups": [{"filters": [
+            {"propertyName": "hs_lastmodifieddate", "operator": "GTE", "value": str(since_ms)},
+            {"propertyName": "hs_lastmodifieddate", "operator": "LT",  "value": str(until_ms)},
+        ]}],
+        "properties": PROPERTIES,
+        "limit": 100,
+        "sorts": [{"propertyName": "hs_lastmodifieddate", "direction": "ASCENDING"}],
+    }
+    if after:
+        body["after"] = after
+    r = requests.post(f"{BASE}/crm/v3/objects/{LEAD_OBJ}/search",
+                      headers={"Authorization": f"Bearer {TOKEN}",
+                               "Content-Type": "application/json"},
+                      json=body)
+    r.raise_for_status()
+    return r.json()
+
+
+def _row_from_lead(lead: dict) -> dict | None:
+    """
+    Convert a raw HubSpot lead result into a hubspot_leads_individual row.
+    Returns None if hs_createdate is missing (can't partition without it).
+    """
+    _load_pipelines()
+    p = lead.get("properties", {})
+    created = (p.get("hs_createdate") or "")[:10]
+    if not created:
+        return None
+
+    modified_str = p.get("hs_lastmodifieddate") or ""
+    modified_iso = modified_str.replace("Z", "+00:00") if modified_str else None
+
+    pid, plabel, slabel = _stage_info(p.get("hs_pipeline_stage"))
+    is_open = str(p.get("hs_lead_is_open", "0")) == "1"
+    qual    = _is_qualified(slabel)
+    disq    = _is_disqualified(slabel)
+
+    from analysers.channel_inference import resolve_channel, CHANNEL_TO_QOYOD_SOURCE
+    explicit_src  = (p.get("lead_qoyod_source") or "").strip()
+    inferred_slug = resolve_channel(
+        qoyod_source=explicit_src,
+        lead_utm_source=p.get("lead_utm_source") or "",
+        lead_utm_campaign=p.get("lead_utm_campaign") or "",
+        lead_original_traffic_source=p.get("lead_original_traffic_source") or "",
+        lead_latest_traffic_source=p.get("lead_latest_traffic_source") or "",
+        lead_original_traffic_source_drilldown_1=p.get("lead_original_traffic_source_drilldown_1") or "",
+        lead_latest_traffic_source_drilldown_1=p.get("lead_latest_traffic_source_drilldown_1") or "",
+        lead_original_traffic_source_drilldown_2=p.get("lead_original_traffic_source_drilldown_2") or "",
+        lead_latest_traffic_source_drilldown_2=p.get("lead_latest_traffic_source_drilldown_2") or "",
+        lead_utm_audience=p.get("lead_utm_audience") or "",
+        lead_utm_content=p.get("lead_utm_content") or "",
+        lead_utm_medium=p.get("lead_utm_medium") or "",
+    )
+    if explicit_src and explicit_src != "Other":
+        src_label = explicit_src
+    elif inferred_slug:
+        src_label = CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug, inferred_slug)
+    else:
+        src_label = explicit_src or "Other"
+
+    disq_reason = (
+        p.get("leads_disqualification_reason__ops") or
+        p.get("leads_disqualification_reason__ops_qflavour") or
+        p.get("disqualification_reason_bookkeeping") or None
+    ) if disq else None
+    disq_sub = (p.get("leads_disqualification_reason__sub_reasons") or None) if disq else None
+
+    return {
+        "hs_object_id":        lead["id"],
+        "hs_createdate":       created,
+        "hs_lastmodifieddate": modified_iso,
+        "pipeline_id":         pid or "",
+        "pipeline":            plabel or "Unknown",
+        "stage_id":            p.get("hs_pipeline_stage") or "",
+        "stage":               slabel or "Unknown",
+        "is_qualified":        qual,
+        "is_disqualified":     disq,
+        "is_open":             is_open,
+        "qoyod_source":        src_label,
+        "lead_utm_campaign":   (p.get("lead_utm_campaign") or "").strip() or "__none__",
+        "lead_utm_audience":   (p.get("lead_utm_audience") or "").strip() or None,
+        "lead_utm_content":    (p.get("lead_utm_content") or "").strip() or None,
+        "lead_utm_source":     (p.get("lead_utm_source") or "").strip() or None,
+        "lead_utm_medium":     (p.get("lead_utm_medium") or "").strip() or None,
+        "lead_utm_term":       (p.get("lead_utm_term") or "").strip() or None,
+        "top_disq_reason":     disq_reason,
+        "top_disq_sub_reason": disq_sub,
+        "updated_at":          datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _delete_leads_by_ids(client, ids: list[str]) -> None:
+    """Targeted DELETE on hubspot_leads_individual by hs_object_id list."""
+    if not ids:
+        return
+    project = os.getenv("BQ_PROJECT_ID")
+    dataset = os.getenv("BQ_DATASET")
+    table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
+    params    = [_bq.ArrayQueryParameter("ids", "STRING", ids)]
+    client.query(
+        f"DELETE FROM `{table_id}` WHERE hs_object_id IN UNNEST(@ids)",
+        job_config=_bq.QueryJobConfig(query_parameters=params)
+    ).result()
+
+
+def _rebuild_daily_buckets(client, affected_dates: set) -> int:
+    """
+    Re-aggregate hubspot_leads_individual for the given set of createdate dates,
+    then upsert into hubspot_leads_module_daily.
+    Called after every cursor sync so the aggregated table stays current.
+    """
+    if not affected_dates:
+        return 0
+
+    project  = os.getenv("BQ_PROJECT_ID")
+    dataset  = os.getenv("BQ_DATASET")
+    table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
+    date_list = sorted(str(d) for d in affected_dates)
+
+    params = [_bq.ArrayQueryParameter("dates", "DATE", date_list)]
+    rows_iter = client.query(
+        f"SELECT * FROM `{table_id}` WHERE hs_createdate IN UNNEST(@dates)",
+        job_config=_bq.QueryJobConfig(query_parameters=params)
+    ).result()
+
+    buckets = defaultdict(lambda: {
+        "total": 0, "qualified": 0, "disqualified": 0, "open": 0,
+        "disq_reasons": defaultdict(int), "disq_sub_reasons": defaultdict(int),
+    })
+    for row in rows_iter:
+        key = (
+            str(row.hs_createdate),
+            row.qoyod_source or "Other",
+            row.pipeline or "Unknown",
+            row.stage or "Unknown",
+            row.lead_utm_campaign or "__none__",
+            row.lead_utm_audience,
+            row.lead_utm_content,
+            row.lead_utm_source,
+            row.lead_utm_medium,
+            row.lead_utm_term,
+        )
+        b = buckets[key]
+        b["total"] += 1
+        if row.is_qualified:
+            b["qualified"] += 1
+        elif row.is_disqualified:
+            b["disqualified"] += 1
+            if row.top_disq_reason:
+                b["disq_reasons"][row.top_disq_reason] += 1
+            if row.top_disq_sub_reason:
+                b["disq_sub_reasons"][row.top_disq_sub_reason] += 1
+        if row.is_open:
+            b["open"] += 1
+
+    now = datetime.now(timezone.utc).isoformat()
+    daily_rows = []
+    for key, b in buckets.items():
+        d, src, pipeline, stage, utm_c, utm_a, utm_co, utm_s, utm_m, utm_t = key
+        top_reason = max(b["disq_reasons"], key=b["disq_reasons"].get) if b["disq_reasons"] else None
+        top_sub    = max(b["disq_sub_reasons"], key=b["disq_sub_reasons"].get) if b["disq_sub_reasons"] else None
+        daily_rows.append({
+            "date":                d,
+            "qoyod_source":        src,
+            "pipeline":            pipeline,
+            "stage":               stage,
+            "lead_utm_campaign":   utm_c,
+            "lead_utm_audience":   utm_a,
+            "lead_utm_content":    utm_co,
+            "lead_utm_source":     utm_s,
+            "lead_utm_medium":     utm_m,
+            "lead_utm_term":       utm_t,
+            "leads_total":         b["total"],
+            "leads_qualified":     b["qualified"],
+            "leads_disqualified":  b["disqualified"],
+            "leads_open":          b["open"],
+            "top_disq_reason":     top_reason,
+            "top_disq_sub_reason": top_sub,
+            "updated_at":          now,
+        })
+
+    _ensure_table_exists()
+    return upsert_rows("hubspot_leads_module_daily", daily_rows,
+                       key_fields=["date", "qoyod_source", "pipeline", "stage",
+                                   "lead_utm_campaign", "lead_utm_audience",
+                                   "lead_utm_content", "lead_utm_term"])
+
+
+def sync_cursor_and_write(incremental: bool = False, days: int = None) -> int:
+    # incremental / days are ignored — the BQ cursor determines the window.
+    """
+    Cursor-based sync — exactly mirrors HubSpot regardless of lead age.
+
+    Algorithm:
+      1. Read high-water mark = MAX(hs_lastmodifieddate) from hubspot_leads_individual
+      2. Walk 1-hour windows from checkpoint -> now, fetching leads by hs_lastmodifieddate
+         (1-hour windows keep each search well under HubSpot's 10k cap)
+      3. Upsert modified leads into hubspot_leads_individual (DELETE by id + INSERT)
+      4. Collect affected hs_createdates -> rebuild those dates in hubspot_leads_module_daily
+
+    Run this in the scheduler instead of (or after) collect_and_write for incremental runs.
+    Keep collect_and_write for historical backfills.
+    """
+    _load_pipelines()
+    _ensure_individual_table_exists()
+
+    client     = get_client()
+    checkpoint = _get_cursor()
+    now_utc    = datetime.now(timezone.utc)
+
+    print(f"[leads-cursor] checkpoint={checkpoint.isoformat()}")
+    print(f"[leads-cursor] syncing {checkpoint.strftime('%Y-%m-%d %H:%M')} -> {now_utc.strftime('%Y-%m-%d %H:%M')}")
+
+    all_rows       = []
+    affected_dates = set()
+    win_hours      = timedelta(hours=1)
+    win_start      = checkpoint
+    total_fetched  = 0
+
+    while win_start < now_utc:
+        win_end  = min(win_start + win_hours, now_utc)
+        since_ms = int(win_start.timestamp() * 1000)
+        until_ms = int(win_end.timestamp() * 1000)
+        after    = None
+        pages    = 0
+        win_count = 0
+
+        while True:
+            try:
+                data = _search_by_modified(since_ms, until_ms, after=after)
+            except Exception as e:
+                print(f"[leads-cursor] search error at {win_start}: {e}")
+                break
+
+            for lead in data.get("results", []):
+                row = _row_from_lead(lead)
+                if row:
+                    all_rows.append(row)
+                    affected_dates.add(row["hs_createdate"])
+                    win_count += 1
+
+            pages += 1
+            paging = data.get("paging", {}).get("next", {})
+            after  = paging.get("after")
+            if not after or pages >= 100:   # 100 × 100 = 10k cap per window
+                break
+
+        if win_count:
+            print(f"[leads-cursor]   {win_start.strftime('%m-%d %H:%M')}: {win_count} leads")
+        total_fetched += win_count
+        win_start = win_end
+
+    print(f"[leads-cursor] {total_fetched} leads modified -> {len(affected_dates)} affected dates")
+
+    if not all_rows:
+        print("[leads-cursor] nothing to sync")
+        return 0
+
+    # DELETE old rows by hs_object_id (batches of 500 — safe under BQ param limit)
+    ids = [r["hs_object_id"] for r in all_rows]
+    for i in range(0, len(ids), 500):
+        _delete_leads_by_ids(client, ids[i:i + 500])
+
+    # INSERT fresh rows via load job (never streaming — see pitfalls)
+    _flush_individual(client, all_rows)
+    print(f"[leads-cursor] wrote {len(all_rows)} rows -> hubspot_leads_individual")
+
+    # Rebuild only the affected date buckets in the aggregated table
+    n = _rebuild_daily_buckets(client, affected_dates)
+    print(f"[leads-cursor] rebuilt {len(affected_dates)} dates -> {n} bucket rows -> hubspot_leads_module_daily")
+    return n
+
+
+def initial_load_individual(start_date: date = None) -> int:
+    """
+    One-time full load of hubspot_leads_individual from HubSpot by createdate.
+    After this runs, sync_cursor_and_write() takes over for ongoing incremental sync.
+
+    Usage:
+        python -m collectors.hubspot_leads_bq initial_load
+        python -m collectors.hubspot_leads_bq initial_load 2024-01-01
+    """
+    _load_pipelines()
+    _ensure_individual_table_exists()
+
+    client = get_client()
+    start  = start_date or date(2024, 1, 1)
+    end    = date.today() + timedelta(days=1)
+    print(f"[leads-initial] full load {start} -> {date.today()}")
+
+    all_rows      = []
+    window        = timedelta(days=7)
+    win_start     = start
+    total_fetched = 0
+
+    while win_start < end:
+        win_end  = min(win_start + window, end)
+        w_since  = int(datetime(win_start.year, win_start.month, win_start.day, tzinfo=timezone.utc).timestamp() * 1000)
+        w_until  = int(datetime(win_end.year,   win_end.month,   win_end.day,   tzinfo=timezone.utc).timestamp() * 1000)
+        after    = None
+        pages    = 0
+        win_count = 0
+
+        while True:
+            try:
+                data = _search_leads(w_since, until_ms=w_until, after=after)
+            except Exception as e:
+                print(f"[leads-initial] error at {win_start}: {e}")
+                break
+            for lead in data.get("results", []):
+                row = _row_from_lead(lead)
+                if row:
+                    all_rows.append(row)
+                    win_count += 1
+            pages += 1
+            paging = data.get("paging", {}).get("next", {})
+            after  = paging.get("after")
+            if not after or pages >= 100:
+                break
+
+        print(f"[leads-initial] {win_start}..{win_end}: {win_count} leads")
+        total_fetched += win_count
+        win_start = win_end
+
+        # Flush every 5k rows to avoid large in-memory batches
+        if len(all_rows) >= 5000:
+            _flush_individual(client, all_rows)
+            all_rows = []
+
+    if all_rows:
+        _flush_individual(client, all_rows)
+
+    print(f"[leads-initial] done — {total_fetched} leads loaded into hubspot_leads_individual")
+    return total_fetched
+
+
+def _flush_individual(client, rows: list[dict]) -> None:
+    """Append a batch of rows to hubspot_leads_individual via load job."""
+    project  = os.getenv("BQ_PROJECT_ID")
+    dataset  = os.getenv("BQ_DATASET")
+    table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
+    ndjson   = "\n".join(_json.dumps(r, default=str) for r in rows).encode()
+    job_cfg  = _bq.LoadJobConfig(
+        schema=_INDIVIDUAL_SCHEMA,
+        source_format=_bq.SourceFormat.NEWLINE_DELIMITED_JSON,
+        write_disposition="WRITE_APPEND",
+    )
+    client.load_table_from_file(BytesIO(ndjson), table_id, job_config=job_cfg).result()
+    print(f"[leads-initial] flushed {len(rows)} rows")
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     import sys
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    n = collect_and_write(days=days)
-    print(f"HubSpot Lead module backfill complete: {n} rows")
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "backfill"
+
+    if cmd == "initial_load":
+        start = date.fromisoformat(sys.argv[2]) if len(sys.argv) > 2 else None
+        n = initial_load_individual(start_date=start)
+        print(f"Initial load complete: {n} leads")
+
+    elif cmd == "cursor":
+        n = sync_cursor_and_write()
+        print(f"Cursor sync complete: {n} daily bucket rows updated")
+
+    else:  # backfill / legacy
+        days = int(sys.argv[1]) if sys.argv[1].isdigit() else None
+        n = collect_and_write(days=days)
+        print(f"HubSpot Lead module backfill complete: {n} rows")

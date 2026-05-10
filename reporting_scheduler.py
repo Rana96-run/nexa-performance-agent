@@ -86,7 +86,8 @@ COLLECTORS = [
     ("youtube",         youtube_bq.collect_and_write),
     ("linkedin",        linkedin_bq.collect_and_write),
     # CRM
-    ("hubspot_leads",   hubspot_leads_bq.collect_and_write),
+    # cursor-based CDC — reads BQ high-water mark, no window boundary problem
+    ("hubspot_leads",   hubspot_leads_bq.sync_cursor_and_write),
     ("hubspot_deals",   hubspot_deals_bq.collect_and_write),
 
     # ── Sub-campaign collectors (adset / ad / keyword grain) ──────────────────
