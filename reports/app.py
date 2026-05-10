@@ -808,7 +808,7 @@ def activity_dashboard():
                 campaign_name,
                 CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
               FROM `{T}.agent_activity_log`
-              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 60 DAY)
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
                 AND action IN ('campaign_paused','campaign_scaled','campaign_created','ads_paused')
                 AND campaign_name IS NOT NULL
             ),

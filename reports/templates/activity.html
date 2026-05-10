@@ -915,7 +915,22 @@ a:hover{text-decoration:underline}
   {% endif %}
 
   <!-- ── Channel Follow-up ── -->
-  <div class="section-head">Channel Follow-up — Outcomes of Agent Actions</div>
+  <div class="section-head">Channel Follow-up — {{ date_label }}</div>
+
+  <!-- Coverage legend -->
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 18px;margin-bottom:16px;font-size:12px">
+    <div style="font-weight:600;color:#e6edf3;margin-bottom:10px">What's tracked in this window</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px">
+      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Campaigns paused via agent</span></div>
+      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Campaigns scaled via agent</span></div>
+      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Asana tasks you completed</span></div>
+      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Tasks you created in Asana</span></div>
+      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">New creatives spending in last 14d</span></div>
+      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Spend change after each action</span></div>
+      <div><span style="color:#484f58">✗</span> <span style="color:#484f58">Direct platform pauses (no agent)</span></div>
+      <div><span style="color:#484f58">✗</span> <span style="color:#484f58">Manual budget edits in ad platform</span></div>
+    </div>
+  </div>
 
   <!-- Campaign actions outcome table -->
   <div class="card" style="margin-bottom:16px" id="followup_campaigns">
