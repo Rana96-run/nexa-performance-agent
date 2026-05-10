@@ -327,8 +327,21 @@ def activity_dashboard():
         GROUP BY day, category
     """
     heatmap_raw: dict[str, dict[str, int]] = {}
-    for row in bq.query(heatmap_sql).result():
-        heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
+    try:
+        for row in bq.query(heatmap_sql).result():
+            heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
+    except Exception as e:
+        if "Not found" in str(e) and "v_agent_activity_dashboard" in str(e):
+            # View hasn't been created yet — trigger it silently and continue
+            try:
+                from collectors.views import refresh_all_views
+                refresh_all_views()
+                for row in bq.query(heatmap_sql).result():
+                    heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
+            except Exception:
+                pass  # heatmap will be empty; all other sections still render
+        else:
+            raise
 
     CATEGORIES = [
         "Campaigns Created", "Campaigns Paused", "Campaigns Scaled",
