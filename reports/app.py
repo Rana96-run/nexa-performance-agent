@@ -44,14 +44,232 @@ def health():
     }), 200
 
 
+_WORKFLOWS = {
+    "campaigns_created": {
+        "title": "Campaign Creation",
+        "subtitle": "How new Google Ads campaigns are built from the best performer",
+        "steps": [
+            ("Trigger", "Manual prompt to agent or python scripts/create_campaign_from_best.py"),
+            ("Template lookup", "BQ query on campaigns_daily — find lowest CPQL campaign last 30d"),
+            ("Naming validation", "executors/naming.py: Channel_Type_Language_Product_Audience format enforced"),
+            ("Budget created", "Google Ads API — CampaignBudgetService.mutate_campaign_budgets"),
+            ("Campaign created (PAUSED)", "CampaignService.mutate_campaigns — status=PAUSED until reviewed"),
+            ("Ad groups cloned", "Source campaign ad groups renamed to new campaign name"),
+            ("Keywords filtered", "Keep only QS ≥ 5 OR (conv ≥ 3 AND CPA ≤ $90)"),
+            ("UTM params auto-set", "Final URLs tagged via naming convention"),
+            ("Logged to BQ", "agent_activity_log: action=campaign_created"),
+        ],
+    },
+    "campaigns_paused": {
+        "title": "Campaign Pause via Approval",
+        "subtitle": "How underperforming campaigns get paused through the approval gate",
+        "steps": [
+            ("Daily audit at 08:00 Riyadh", "operational_scheduler.py triggers campaign_health.py"),
+            ("BQ query", "campaigns_daily + hubspot_leads_module_daily — last 14 days"),
+            ("CPQL threshold check", "CPQL > 3× channel warning threshold → flagged for pause"),
+            ("Junk leads check", "disqualified/total ≥ 60% over 10+ days → also flagged"),
+            ("Asana task created", "Pause recommendation with full campaign card and reason"),
+            ("Nightly #approvals digest", "Single Slack message covering all scale + pause items"),
+            ("Team reacts ✅ or ❌", "Slack Events API: reaction_added webhook fires in reports/app.py"),
+            ("execute_approved_action()", "Channel-specific pause API called (Google/Meta/Snap/TikTok/LinkedIn)"),
+            ("Logged to BQ", "agent_activity_log: action=campaign_paused"),
+        ],
+    },
+    "campaigns_scaled": {
+        "title": "Campaign Scale via Approval",
+        "subtitle": "How high-performing campaigns get budget increases",
+        "steps": [
+            ("Daily audit at 08:00 Riyadh", "campaign_health.py checks CPQL + spend trend"),
+            ("Scale flag set", "CPQL < warning threshold AND spend capacity available"),
+            ("New budget calculated", "Current daily budget × 1.25 (always +25%)"),
+            ("Asana task created", "Scale recommendation with projected budget and CPQL"),
+            ("Nightly #approvals digest", "Bundled with pauses in one Slack message"),
+            ("Team reacts ✅", "Reaction triggers execute_approved_action() → scale path"),
+            ("Budget mutated", "set_campaign_budget() via channel-specific executor"),
+            ("Logged to BQ", "agent_activity_log: action=campaign_scaled"),
+        ],
+    },
+    "campaign_audits": {
+        "title": "Campaign Health Audit",
+        "subtitle": "Daily audit that generates all optimization recommendations",
+        "steps": [
+            ("Scheduled at 08:00 Riyadh", "operational_scheduler.py daily cadence"),
+            ("Multi-channel BQ query", "All campaigns: spend, leads, CPQL, CPL last 14 days"),
+            ("Classification", "Scale / Pause / Drilldown / Optimize / Awareness buckets"),
+            ("Asana tasks batch-created", "One task per finding, routed to correct project + section"),
+            ("Nightly digest posted", "Single #approvals Slack message; separate #notify Slack summary"),
+            ("Logged to BQ", "action=create_audit_tasks, rows_affected = task count"),
+        ],
+    },
+    "keywords_added": {
+        "title": "Keyword Expansion",
+        "subtitle": "How new keyword candidates are found and added",
+        "steps": [
+            ("Weekly trigger (Sunday Riyadh)", "google_ads_audit.py searches search_term_view last 14 days"),
+            ("Policy filter", "keyword_policy.py removes ALWAYS_NEGATIVE, brand-only, competitor terms"),
+            ("QS + IS-lost check", "Skip if QS < 5 AND > 80% impression share lost"),
+            ("Age guard", "Keyword must have impressions ≥ 10 days old"),
+            ("30-keyword cap", "Per ad group: only (30 − existing) candidates kept"),
+            ("Asana task created", "Keyword list posted to Asana for human review"),
+            ("Human executes", "python scripts/bulk_keywords.py add after Asana review"),
+            ("Logged to BQ", "action=keyword_candidates_queued_for_weekly_review, rows_affected=count"),
+        ],
+    },
+    "keywords_paused": {
+        "title": "Keyword Auto-Pause",
+        "subtitle": "How non-converting keywords get paused automatically",
+        "steps": [
+            ("Daily audit", "audit_and_pause_nonconverting_keywords(days=7) in google_ads_audit.py"),
+            ("Threshold check", "spend > $4 over 7 days AND 0 HubSpot-qualified leads"),
+            ("Age guard", "Keyword must be ≥ 10 days old (first impression date from keyword_view)"),
+            ("Sole-keyword guard", "Skip if this is the last enabled keyword in its ad group"),
+            ("QS exception", "If QS < 5 but conv > 4 AND $10 ≤ CPA ≤ $70 → leave ENABLED"),
+            ("Google Ads API call", "AdGroupCriterionService.mutate: status = PAUSED"),
+            ("Asana task created", "Confirmation task: EXECUTED prefix + full keyword list"),
+            ("Logged to BQ", "action=keywords_paused, rows_affected = keywords paused"),
+        ],
+    },
+    "negatives_added": {
+        "title": "Negative Keyword Execution",
+        "subtitle": "How wasted search terms get blocked automatically",
+        "steps": [
+            ("Search term report scanned", "google_ads_audit.py: search_term_view last 14 days"),
+            ("ALWAYS_NEGATIVE policy", "login/free/course/download/loan/job patterns → auto-exclude"),
+            ("Wasted spend check", "$25+ per term with 0 conversions → negative candidate"),
+            ("Competitor guard", "Competitor terms NEVER negated — routed to pause-watch instead"),
+            ("Add as EXACT negative", "Campaign-level via add_negative_keywords() in executors/google_ads.py"),
+            ("Logged to BQ", "action=negative_keywords_added, details.terms = list of blocked terms"),
+        ],
+    },
+    "optimizations": {
+        "title": "Optimization Recommendation",
+        "subtitle": "How the agent surfaces actionable improvements in Asana",
+        "steps": [
+            ("Health audit classifies campaign", "CPQL vs warning threshold; CPL vs $50; spend vs 14d window"),
+            ("Drilldown flag", "Borderline CPQL (1–3× warning) → investigate creative/audience mix"),
+            ("Optimize flag", "Stable CPL but declining trends or low IS → structural review"),
+            ("Scale flag", "CPQL < warning AND capacity → budget increase recommendation"),
+            ("Asana task created", "Full campaign card with metric context and suggested action"),
+            ("Logged to BQ", "action=optimize/drilldown/scale_task_created, campaign_name stored"),
+        ],
+    },
+    "asana_tasks": {
+        "title": "Asana Task Creation",
+        "subtitle": "How every agent recommendation becomes a trackable Asana task",
+        "steps": [
+            ("Analysis completes", "campaign_health, google_ads_audit, display_audit, microsoft_ads_audit"),
+            ("Deduplication check", "cache/cache_manager.py: skip if identical task already created today"),
+            ("Project routed", "daily_activity / optimization / campaigns_hub / seasonal"),
+            ("Section routed", "Per-channel × per-asset-level section within project"),
+            ("Task created via Asana API", "TasksApi.create_task with assignee, due_on, notes + footer"),
+            ("Logged to BQ", "action=asana_task_created, details.title + project_key + asset_level"),
+        ],
+    },
+    "creative_reviews": {
+        "title": "Creative Review Task",
+        "subtitle": "How ad-level creative performance triggers a review task",
+        "steps": [
+            ("Ad drilldown audit", "creative_performance.py or ad_drilldown.py pulls ads_daily"),
+            ("Qual rate check", "disqualified/total ≥ 60% AND spend > threshold → junk flag"),
+            ("CPL check per ad", "spend / hs_leads > $50 over 10+ days → high CPL flag"),
+            ("Asana task created", "asset_level=ad, action=optimize — includes creative name + CPQL"),
+            ("Creative name in details", "asana_task_created.details.title contains creative identifier"),
+            ("Logged to BQ", "action=asana_task_created, asana_asset_level=ad"),
+        ],
+    },
+    "slack_messages": {
+        "title": "Daily Slack Summary",
+        "subtitle": "How the agent sends its nightly performance digest",
+        "steps": [
+            ("Scheduled at 08:00 Riyadh", "operational_scheduler.py daily cadence post-audit"),
+            ("BQ query", "paid_channel_daily: yesterday spend + HubSpot leads + CPQL per channel"),
+            ("Top + worst identified", "Lowest and highest CPQL channels selected"),
+            ("Main message formatted", "Dashboard URL (plain text) + peak numbers per channel"),
+            ("Follow-up message", "Recommendations referencing Asana task GIDs + #approvals link"),
+            ("Logged to BQ", "action=posted_slack_digest or slack_summary_posted"),
+        ],
+    },
+    "slack_approvals": {
+        "title": "Nightly Approvals Digest",
+        "subtitle": "How scale + pause candidates reach the team for approval",
+        "steps": [
+            ("Audit findings compiled", "Scale + pause + review findings collected after full audit"),
+            ("Single digest built", "campaign_health_tasks._send_nightly_digest()"),
+            ("Slack block formatted", "Scale section (execute on ✅), Pause section, Review summary"),
+            ("Posted to #approvals", "Pending approval stored in cache/pending_approvals.json"),
+            ("Team reacts ✅ or ❌", "Slack Events API fires reaction_added within 24h"),
+            ("Execute or skip", "✅ → execute_approved_action(); ❌ → log rejection, no change"),
+            ("Logged to BQ", "action=posted_approvals_digest, details.scale/pause/review counts"),
+        ],
+    },
+    "llm_runs": {
+        "title": "LLM Analysis Run",
+        "subtitle": "How Claude performs deep strategic analysis on a cadence",
+        "steps": [
+            ("Cadence check", "main.py checks weekly/monthly/quarterly cadence vs last-run date"),
+            ("BQ data loaded", "Paid channel daily, HubSpot leads, deal pipeline — last 30/90d"),
+            ("Claude prompt built", "Role-specific system prompt + structured channel data"),
+            ("Claude API called", "claude-sonnet-4-6, max 8k tokens, tracked via cost_tracking.py"),
+            ("Recommendations extracted", "Asana tasks created from LLM output"),
+            ("Logged to BQ", "action=llm_role_ran, tokens_in/out/cost_usd recorded"),
+        ],
+    },
+    "spike_detections": {
+        "title": "Anomaly / Spike Detection",
+        "subtitle": "How the agent spots sudden performance changes and alerts the team",
+        "steps": [
+            ("Runs daily post-refresh", "spike_detector.detect_spikes() in operational_scheduler"),
+            ("BQ query", "paid_channel_daily: yesterday vs 7-day rolling baseline per channel"),
+            ("Threshold check", "Spend/leads/CPQL deviation > configured threshold (e.g. 30%)"),
+            ("Disqualification rate check", "Sudden disqual spike > 15 pp above baseline flagged"),
+            ("Slack alert posted", "formatted block to #notify with direction arrows and % change"),
+            ("Logged to BQ", "action=detect_spikes, rows_affected = spike count"),
+        ],
+    },
+    "slack_bot_replies": {
+        "title": "Slack Bot Reply (@Nexa)",
+        "subtitle": "How the agent responds to direct mentions in Slack",
+        "steps": [
+            ("@Nexa mention received", "Slack Events API sends event to /slack/events endpoint"),
+            ("Event type check", "app_mention event type → handle_mention() in slack_listener.py"),
+            ("BQ context loaded", "Latest spend, leads, CPQL data pulled for grounding"),
+            ("Claude API called", "claude-sonnet-4-6, 1.5k tokens, MSA Arabic or English detected"),
+            ("Reply posted", "slack_client.chat_postMessage() in the same thread"),
+            ("Logged to BQ", "action=slack_listener_reply, tokens_in/out/cost_usd recorded"),
+        ],
+    },
+    "bq_collections": {
+        "title": "BQ Data Collection",
+        "subtitle": "How ad platform data flows into BigQuery every 6 hours",
+        "steps": [
+            ("Scheduled every 6h", "reporting_scheduler.py loop — run_refresh()"),
+            ("Platform API called", "Channel-specific collector: google_ads_bq, meta_bq, snap_bq, etc."),
+            ("Currency normalized", "Micros → USD; SAR → USD at 3.75 peg where needed"),
+            ("MERGE into BQ", "bq_writer.py: MERGE ON date + campaign_id — idempotent, no duplicates"),
+            ("Views refreshed", "collectors/views.py: paid_channel_daily, v_adset_performance, etc."),
+            ("Logged to BQ", "action=collect_{channel}, rows_affected = rows written"),
+        ],
+    },
+    "data_quality": {
+        "title": "Data Quality Autoheal",
+        "subtitle": "How the agent detects and fixes data gaps automatically",
+        "steps": [
+            ("Runs daily", "analysers/data_quality.py checks all BQ source tables"),
+            ("Gap detection", "Missing dates, zero-spend days, stale collection timestamps"),
+            ("Autoheal triggered", "Re-runs the relevant collector for the missing window"),
+            ("Verification", "Confirms data present after heal attempt"),
+            ("Logged to BQ", "action=data_quality_autoheal, details.issue_type"),
+        ],
+    },
+}
+
+
 @app.route("/activity")
 def activity_dashboard():
-    """
-    Agent Activity Dashboard — GitHub-style heatmap + expandable metric cards.
-    All data comes from agent_activity_log in BQ.  Renders activity.html.
-    """
+    """HTML agent activity dashboard — GitHub-style heatmap + expandable cards + workflow modals."""
     from datetime import date, timedelta, timezone
-    import json as _json
+
+    days = min(max(int(request.args.get("days", 90)), 7), 365)
 
     try:
         from collectors.bq_writer import get_client
@@ -62,15 +280,44 @@ def activity_dashboard():
     except Exception as e:
         return f"<pre>BQ unavailable: {e}</pre>", 503
 
-    riyadh = timezone(timedelta(hours=3))
-    today  = datetime.now(riyadh).date()
-    now_str = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M")
+    riyadh    = timezone(timedelta(hours=3))
+    today     = datetime.now(riyadh).date()
+    now_str   = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M")
+    start_day = today - timedelta(days=days - 1)
+    date_label = f"{start_day.strftime('%b %d')} – {today.strftime('%b %d, %Y')}"
 
-    # ── 1. Heatmap data (91d, from view) ──────────────────────────────────────
+    # ── _CAT_MAP used for sidebar + recent activity ────────────────────────────
+    _CAT_MAP = {
+        "campaign_created":                            "Campaigns Created",
+        "campaign_paused":                             "Campaigns Paused",
+        "campaign_scaled":                             "Campaigns Scaled",
+        "launch":                                      "Keywords Added",
+        "keyword_candidates_queued_for_weekly_review": "Keywords Added",
+        "keywords_paused":                             "Keywords Paused",
+        "negative_keywords_added":                     "Negatives Added",
+        "asana_task_created":                          "Asana Tasks",
+        "posted_slack_digest":                         "Slack Messages",
+        "slack_summary_posted":                        "Slack Messages",
+        "post_weekly_summary":                         "Slack Messages",
+        "nightly_audit_complete":                      "Slack Messages",
+        "posted_approvals_digest":                     "Approvals",
+        "approval_requested":                          "Approvals",
+        "create_audit_tasks":                          "Campaign Audits",
+        "optimize_task_created":                       "Optimizations",
+        "drilldown_task_created":                      "Optimizations",
+        "scale_task_created":                          "Optimizations",
+        "pause_task_created":                          "Optimizations",
+        "junk_leads_task_created":                     "Optimizations",
+        "pause_task_created":                          "Ads Paused",
+        "junk_leads_task_created":                     "Ads Paused",
+        "ads_paused":                                  "Ads Paused",
+    }
+
+    # ── 1. Heatmap data (from view, parameterised by days) ─────────────────────
     heatmap_sql = f"""
         SELECT day, category, SUM(count) AS count
         FROM {T}.v_agent_activity_dashboard
-        WHERE day >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 91 DAY)
+        WHERE day >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days + 1} DAY)
         GROUP BY day, category
     """
     heatmap_raw: dict[str, dict[str, int]] = {}
@@ -82,7 +329,7 @@ def activity_dashboard():
         "Keywords Added", "Keywords Paused", "Negatives Added",
         "Ads Paused", "Asana Tasks", "Slack Messages", "Approvals",
     ]
-    dates_91 = [today - timedelta(days=i) for i in range(90, -1, -1)]
+    all_dates = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
 
     def _level(n):
         if n == 0: return 0
@@ -91,12 +338,19 @@ def activity_dashboard():
         if n <= 10: return 3
         return 4
 
+    # Pad so the grid's first column starts on the correct weekday (Mon=0)
+    first_weekday = start_day.weekday()
+    pad_cells = [{"date": "", "count": 0, "level": -1}] * first_weekday
+
     heatmap_rows = []
     for cat in CATEGORIES:
         data  = heatmap_raw.get(cat, {})
-        cells = [{"date": str(d), "count": data.get(str(d), 0),
-                  "level": _level(data.get(str(d), 0))} for d in dates_91]
-        total = sum(c["count"] for c in cells)
+        cells = pad_cells + [
+            {"date": str(d), "count": data.get(str(d), 0),
+             "level": _level(data.get(str(d), 0))}
+            for d in all_dates
+        ]
+        total = sum(data.get(str(d), 0) for d in all_dates)
         heatmap_rows.append((cat, cells, total))
 
     # ── 2. All detail rows (90d, relevant actions only) ───────────────────────
@@ -118,7 +372,7 @@ def activity_dashboard():
           JSON_VALUE(details, '$.pause')                    AS dig_pause,
           JSON_VALUE(details, '$.review')                   AS dig_review
         FROM {T}.agent_activity_log
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
           AND status NOT IN ('failed', 'skipped')
           AND action IN (
             'campaign_created','campaign_paused','campaign_scaled',
@@ -144,7 +398,7 @@ def activity_dashboard():
           action,
           COALESCE(rows_affected, 1) AS cnt
         FROM {T}.agent_activity_log
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
           AND status NOT IN ('failed','skipped')
           AND (action LIKE 'collect_%' OR action IN (
                'refresh_hex_notebooks','refresh_complete','refresh_views'))
@@ -354,29 +608,24 @@ def activity_dashboard():
         "active_apis":   sum(1 for r in channel_rows if r.active),
     }
 
+    # ── Sidebar categories (totals over selected window) ──────────────────────
+    sidebar_raw: dict[str, int] = {}
+    for r in detail_rows:
+        cat = _CAT_MAP.get(r.action)
+        if cat:
+            sidebar_raw[cat] = sidebar_raw.get(cat, 0) + int(r.cnt)
+    for r in infra_rows:
+        if r.action.startswith("collect_"):
+            sidebar_raw["Data Collections"] = sidebar_raw.get("Data Collections", 0) + int(r.cnt)
+        elif r.action in ("refresh_hex_notebooks", "refresh_complete", "refresh_views"):
+            sidebar_raw["Reports Refreshed"] = sidebar_raw.get("Reports Refreshed", 0) + int(r.cnt)
+    total_sidebar = max(sum(sidebar_raw.values()), 1)
+    sidebar_cats = [
+        {"name": k, "count": v, "pct": round(v / total_sidebar * 100)}
+        for k, v in sorted(sidebar_raw.items(), key=lambda x: -x[1])
+    ]
+
     # ── Recent activity feed ───────────────────────────────────────────────────
-    _CAT_MAP = {
-        "campaign_created":                           "Campaigns Created",
-        "campaign_paused":                            "Campaigns Paused",
-        "campaign_scaled":                            "Campaigns Scaled",
-        "launch":                                     "Keywords Added",
-        "keyword_candidates_queued_for_weekly_review":"Keywords Added",
-        "keywords_paused":                            "Keywords Paused",
-        "negative_keywords_added":                    "Negatives Added",
-        "asana_task_created":                         "Asana Tasks",
-        "posted_slack_digest":                        "Slack Messages",
-        "slack_summary_posted":                       "Slack Messages",
-        "post_weekly_summary":                        "Slack Messages",
-        "nightly_audit_complete":                     "Slack Messages",
-        "posted_approvals_digest":                    "Approvals",
-        "approval_requested":                         "Approvals",
-        "create_audit_tasks":                         "Campaign Audits",
-        "optimize_task_created":                      "Optimizations",
-        "drilldown_task_created":                     "Optimizations",
-        "scale_task_created":                         "Optimizations",
-        "pause_task_created":                         "Optimizations",
-        "junk_leads_task_created":                    "Optimizations",
-    }
     recent_activity = [
         {
             "ts":       str(r.day),
@@ -409,10 +658,14 @@ def activity_dashboard():
     return render_template(
         "activity.html",
         last_updated=now_str,
+        date_label=date_label,
+        days=days,
         heatmap_rows=heatmap_rows,
         metrics=metrics,
         totals=totals,
         recent_activity=recent_activity,
+        sidebar_cats=sidebar_cats,
+        workflows=_WORKFLOWS,
     )
 
 
