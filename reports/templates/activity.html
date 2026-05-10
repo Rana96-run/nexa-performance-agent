@@ -973,36 +973,56 @@ a:hover{text-decoration:underline}
   </div><!-- /cards-grid -->
 
   <!-- ── Asana Task Completion ── -->
-  <div class="section-head">Asana Tasks — Completion Status</div>
+  <div class="section-head">Asana Tasks — Created by Agent</div>
 
   {% if asana_completion.total == 0 %}
   <div style="color:#484f58;font-size:12px;margin-bottom:24px">
-    No task status data yet. Status syncs every 6 hours via the reporting scheduler.
-    Run <code>python reporting_scheduler.py</code> to trigger a sync.
+    No Asana tasks logged yet for this period. Tasks are logged every time the agent creates one.
   </div>
   {% else %}
 
-  <!-- Progress bar -->
-  <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
-    <div style="flex:1;height:8px;background:#21262d;border-radius:4px;overflow:hidden">
-      <div style="height:8px;background:#238636;border-radius:4px;width:{{ asana_completion.pct_done }}%;transition:width .4s"></div>
+  <!-- Summary bar -->
+  <div style="display:flex;align-items:center;gap:24px;margin-bottom:16px;flex-wrap:wrap">
+    <!-- Progress bar -->
+    <div style="flex:1;min-width:200px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <div style="font-size:13px;color:#e6edf3;font-weight:600">
+          {{ asana_completion.completed }}/{{ asana_completion.total }} completed
+          <span style="color:#8b949e;font-weight:400"> ({{ asana_completion.pct_done }}%)</span>
+        </div>
+        {% if not asana_completion.synced %}
+        <span style="font-size:11px;color:#8b949e;background:#21262d;border:1px solid #30363d;border-radius:10px;padding:1px 8px">
+          completion sync pending
+        </span>
+        {% endif %}
+      </div>
+      <div style="height:8px;background:#21262d;border-radius:4px;overflow:hidden">
+        <div style="height:8px;background:#238636;border-radius:4px;width:{{ asana_completion.pct_done }}%;transition:width .4s"></div>
+      </div>
     </div>
-    <div style="font-size:13px;color:#e6edf3;font-weight:600;white-space:nowrap">
-      {{ asana_completion.completed }}/{{ asana_completion.total }} done
-      <span style="color:#8b949e;font-weight:400"> ({{ asana_completion.pct_done }}%)</span>
+    <!-- Per-project pills -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% for proj, counts in asana_completion.projects %}
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 14px;font-size:12px;text-align:center">
+        <div style="color:#8b949e;margin-bottom:2px">{{ proj }}</div>
+        <div style="color:#e6edf3;font-weight:600">{{ counts.total }} tasks
+          {% if counts.done > 0 %}<span style="color:#39d353"> · {{ counts.done }} done</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
     </div>
   </div>
 
   <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
 
     <!-- Completed tasks card -->
-    <div class="card" style="flex:1;min-width:280px" id="tasks_completed">
+    <div class="card" style="flex:1;min-width:300px" id="tasks_completed">
       <div class="card-header" onclick="toggleCard(this)">
         <div class="card-left">
           <div class="card-icon">✅</div>
           <div>
-            <div class="card-name">Completed Tasks</div>
-            <div class="card-counts">{{ asana_completion.completed }} tasks done</div>
+            <div class="card-name">Completed by Team</div>
+            <div class="card-counts">{{ asana_completion.completed }} tasks marked done</div>
           </div>
         </div>
         <div class="card-right">
@@ -1013,52 +1033,57 @@ a:hover{text-decoration:underline}
       <div class="card-body">
         {% if asana_completion.completed_rows %}
         <table class="dtable">
-          <tr><th>Done</th><th>Task</th><th>Project</th><th>Assignee</th></tr>
+          <tr><th>Completed</th><th>Task</th><th>Project</th><th>Level</th><th>By</th></tr>
           {% for r in asana_completion.completed_rows %}
           <tr>
-            <td style="white-space:nowrap">{{ r.completed_at[:10] if r.completed_at else r.created_day }}</td>
+            <td style="white-space:nowrap">{{ r.completed_at[:10] if r.completed_at and r.completed_at != 'None' else r.created_day }}</td>
             <td>{{ r.title }}</td>
             <td><span class="tag">{{ r.project_key }}</span></td>
+            <td>{{ r.asset_level or '—' }}</td>
             <td>{{ r.assignee }}</td>
           </tr>
           {% endfor %}
         </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No completed tasks in this period.</div>{% endif %}
+        {% else %}
+        <div style="color:#484f58;font-size:12px;padding:4px 0">
+          No completed tasks yet{% if not asana_completion.synced %} — completion status syncs every 6h from Asana{% endif %}.
+        </div>
+        {% endif %}
       </div>
     </div>
 
-    <!-- Pending tasks card -->
-    <div class="card" style="flex:1;min-width:280px" id="tasks_pending">
+    <!-- Open tasks card -->
+    <div class="card" style="flex:1;min-width:300px" id="tasks_open">
       <div class="card-header" onclick="toggleCard(this)">
         <div class="card-left">
           <div class="card-icon">⏳</div>
           <div>
             <div class="card-name">Open Tasks</div>
-            <div class="card-counts">{{ asana_completion.pending }} awaiting action</div>
+            <div class="card-counts">{{ asana_completion.open }} awaiting action</div>
           </div>
         </div>
         <div class="card-right">
-          <div class="card-num" style="color:#e3b341">{{ asana_completion.pending }}</div>
+          <div class="card-num" style="color:#e3b341">{{ asana_completion.open }}</div>
           <div class="card-arrow">▾</div>
         </div>
       </div>
       <div class="card-body">
-        {% if asana_completion.pending_rows %}
+        {% if asana_completion.open_rows %}
         <table class="dtable">
-          <tr><th>Created</th><th>Task</th><th>Project</th><th>Due</th><th>Assignee</th></tr>
-          {% for r in asana_completion.pending_rows %}
+          <tr><th>Created</th><th>Task</th><th>Project</th><th>Level</th><th>Due</th></tr>
+          {% for r in asana_completion.open_rows %}
           <tr>
             <td style="white-space:nowrap">{{ r.created_day }}</td>
             <td>{{ r.title }}</td>
             <td><span class="tag">{{ r.project_key }}</span></td>
-            <td style="{% if r.due_on and r.due_on < today|string %}color:#f85149{% endif %}">
-              {{ r.due_on or '—' }}
+            <td>{{ r.asset_level or '—' }}</td>
+            <td style="{% if r.due_on and r.due_on != 'None' and r.due_on < today|string %}color:#f85149{% endif %}">
+              {{ r.due_on if r.due_on and r.due_on != 'None' else '—' }}
             </td>
-            <td>{{ r.assignee }}</td>
           </tr>
           {% endfor %}
         </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">All tasks completed!</div>{% endif %}
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">All tasks completed — great work!</div>{% endif %}
       </div>
     </div>
   </div>

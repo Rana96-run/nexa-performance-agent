@@ -864,63 +864,115 @@ def activity_dashboard():
     }
 
     # ── 5. Asana task completion status ───────────────────────────────────────
+    # Pull every created task from agent_activity_log (source of truth for what
+    # the agent created). LEFT JOIN asana_task_status for completion status —
+    # if that table is empty the task just shows as open.
     task_status_rows = []
     try:
         ts_sql = f"""
-            SELECT
-              a.gid,
-              COALESCE(s.title, a.title, JSON_VALUE(al.details, '$.title')) AS title,
-              COALESCE(s.project_key, a.project_key)                         AS project_key,
-              COALESCE(s.completed, FALSE)                                    AS completed,
-              s.completed_at,
-              s.assignee_name,
-              s.due_on,
-              DATE(al.ts, 'Asia/Riyadh')                                      AS created_day
-            FROM (
-              SELECT DISTINCT
-                JSON_VALUE(details, '$.gid')        AS gid,
-                JSON_VALUE(details, '$.title')      AS title,
-                JSON_VALUE(details, '$.project_key') AS project_key,
-                ts
+            WITH created AS (
+              SELECT
+                JSON_VALUE(details, '$.gid')         AS gid,
+                JSON_VALUE(details, '$.title')        AS title,
+                JSON_VALUE(details, '$.project_key')  AS project_key,
+                JSON_VALUE(details, '$.asset_level')  AS asset_level,
+                DATE(ts, 'Asia/Riyadh')               AS created_day,
+                ROW_NUMBER() OVER (
+                  PARTITION BY JSON_VALUE(details, '$.gid')
+                  ORDER BY ts DESC
+                ) AS rn
               FROM `{T}.agent_activity_log`
               WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
                 AND action = 'asana_task_created'
-                AND JSON_VALUE(details, '$.gid') IS NOT NULL
-            ) a
-            LEFT JOIN `{T}.agent_activity_log` al
-              ON JSON_VALUE(al.details, '$.gid') = a.gid
-              AND al.action = 'asana_task_created'
-            LEFT JOIN (
-              SELECT gid, title, project_key, completed, completed_at,
-                     assignee_name, due_on,
+            ),
+            status AS (
+              SELECT gid, completed, completed_at, assignee_name, due_on,
                      ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
               FROM `{T}.asana_task_status`
-            ) s ON s.gid = a.gid AND s.rn = 1
-            ORDER BY a.ts DESC
-            LIMIT 150
+            )
+            SELECT
+              c.gid,
+              c.title,
+              c.project_key,
+              c.asset_level,
+              c.created_day,
+              COALESCE(s.completed, FALSE)  AS completed,
+              s.completed_at,
+              s.assignee_name,
+              s.due_on
+            FROM created c
+            LEFT JOIN status s ON s.gid = c.gid AND s.rn = 1
+            WHERE c.rn = 1
+            ORDER BY c.created_day DESC
+            LIMIT 300
         """
         task_status_rows = list(bq.query(ts_sql).result())
     except Exception as e:
-        print(f"[activity] asana_task_status query failed (non-fatal): {e}")
+        err_str = str(e)
+        if "asana_task_status" in err_str and "Not found" in err_str:
+            # Table doesn't exist yet — fall back to agent_activity_log only
+            try:
+                ts_sql_fallback = f"""
+                    SELECT
+                      JSON_VALUE(details, '$.gid')         AS gid,
+                      JSON_VALUE(details, '$.title')        AS title,
+                      JSON_VALUE(details, '$.project_key')  AS project_key,
+                      JSON_VALUE(details, '$.asset_level')  AS asset_level,
+                      DATE(ts, 'Asia/Riyadh')               AS created_day,
+                      FALSE                                  AS completed,
+                      NULL                                   AS completed_at,
+                      NULL                                   AS assignee_name,
+                      NULL                                   AS due_on
+                    FROM `{T}.agent_activity_log`
+                    WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+                      AND action = 'asana_task_created'
+                    QUALIFY ROW_NUMBER() OVER (
+                      PARTITION BY JSON_VALUE(details, '$.gid') ORDER BY ts DESC
+                    ) = 1
+                    ORDER BY ts DESC
+                    LIMIT 300
+                """
+                task_status_rows = list(bq.query(ts_sql_fallback).result())
+            except Exception as e2:
+                print(f"[activity] asana fallback query failed (non-fatal): {e2}")
+        else:
+            print(f"[activity] asana_task_status query failed (non-fatal): {e}")
 
-    completed_tasks  = [r for r in task_status_rows if r.completed]
-    pending_tasks    = [r for r in task_status_rows if not r.completed]
+    completed_tasks = [r for r in task_status_rows if r.completed]
+    open_tasks      = [r for r in task_status_rows if not r.completed]
+
+    # Per-project breakdown
+    proj_task_counts: dict[str, dict] = {}
+    for r in task_status_rows:
+        pk = r.project_key or "general"
+        if pk not in proj_task_counts:
+            proj_task_counts[pk] = {"total": 0, "done": 0}
+        proj_task_counts[pk]["total"] += 1
+        if r.completed:
+            proj_task_counts[pk]["done"] += 1
+
     asana_completion = {
         "total":     len(task_status_rows),
         "completed": len(completed_tasks),
-        "pending":   len(pending_tasks),
+        "open":      len(open_tasks),
         "pct_done":  round(len(completed_tasks) / max(len(task_status_rows), 1) * 100),
+        "projects":  sorted(proj_task_counts.items(), key=lambda x: -x[1]["total"]),
+        "synced":    any(r.completed_at for r in task_status_rows),
         "completed_rows": [
-            {"gid": r.gid, "title": r.title or "—", "project_key": r.project_key or "—",
-             "created_day": str(r.created_day or ""), "completed_at": str(r.completed_at or ""),
+            {"gid": r.gid or "", "title": r.title or "—",
+             "project_key": r.project_key or "—", "asset_level": r.asset_level or "—",
+             "created_day": str(r.created_day or ""),
+             "completed_at": str(r.completed_at or ""),
              "assignee": r.assignee_name or "—"}
-            for r in completed_tasks[:60]
+            for r in completed_tasks[:80]
         ],
-        "pending_rows": [
-            {"gid": r.gid, "title": r.title or "—", "project_key": r.project_key or "—",
-             "created_day": str(r.created_day or ""), "due_on": str(r.due_on or ""),
+        "open_rows": [
+            {"gid": r.gid or "", "title": r.title or "—",
+             "project_key": r.project_key or "—", "asset_level": r.asset_level or "—",
+             "created_day": str(r.created_day or ""),
+             "due_on": str(r.due_on or ""),
              "assignee": r.assignee_name or "—"}
-            for r in pending_tasks[:60]
+            for r in open_tasks[:80]
         ],
     }
 
