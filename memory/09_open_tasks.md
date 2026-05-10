@@ -121,6 +121,19 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## P2 — Second Microsoft Ads account
+
+- [ ] **Identify second MS Ads account ID** — `MS_ACCOUNT_NUMBER=K120006V95` in Railway
+  doesn't match any account accessible via current OAuth token. The SOAP API confirms
+  only ONE account accessible: `188176729` (number `G1206XJR`, customer 254476670).
+  To resolve: Amar should open https://ads.microsoft.com, note the second account's
+  **numeric Account ID** (9-10 digits, visible in URL as `?aid=XXXXXXXXXX`), and share it.
+  If the second account uses different login credentials, a new OAuth flow is needed:
+  `python collectors/microsoft_ads.py auth` → log in with that account.
+  Once ID is confirmed: add `MS_ACCOUNT_ID_2=XXXXXXXXXX` to Railway + `.env`,
+  then update collector to support comma-separated `MS_ACCOUNT_IDS` (same as
+  `GOOGLE_ADS_CUSTOMER_IDS`) and pass `[int(id) for id in ids]` to `Scope.AccountIds`.
+
 ## Done this session (2026-05-10)
 
 - [x] **HubSpot deals dual-pass fix** — incremental window extended 2→30 days; closedate pass now runs in ALL modes (not just incremental); explicit `deal_qoyod_source` only (no UTM inference). Eliminated 15–20% count inflation from inference. Fixed undercounting from 721→818 for 90-day Sales Pipeline paid deals (target 789).
