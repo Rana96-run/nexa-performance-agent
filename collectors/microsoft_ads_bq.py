@@ -2,8 +2,13 @@
 Microsoft Advertising (Bing Ads) -> BigQuery collector.
 Pulls campaign-level performance reports -> campaigns_daily.
 
-Requires MS_REFRESH_TOKEN in .env.
-Run `python collectors/microsoft_ads.py auth` once to get the token.
+Supports multiple accounts via env vars:
+  Primary:   MS_ACCOUNT_ID / MS_CUSTOMER_ID / MS_REFRESH_TOKEN
+             (confidential client — obtained via authorization_code, sends client_secret)
+  Secondary: MS_ACCOUNT_ID_2 / MS_CUSTOMER_ID_2 / MS_REFRESH_TOKEN_2
+             (public client — obtained via device_code, NO client_secret)
+
+Run `python collectors/microsoft_ads.py auth` once per account to get tokens.
 """
 import os
 import csv
@@ -22,43 +27,91 @@ CLIENT_ID       = os.getenv("MS_CLIENT_ID", "")
 CLIENT_SECRET   = os.getenv("MS_CLIENT_SECRET", "")
 TENANT_ID       = os.getenv("MS_TENANT_ID", "")
 DEVELOPER_TOKEN = os.getenv("MS_DEVELOPER_TOKEN", "")
-CUSTOMER_ID     = os.getenv("MS_CUSTOMER_ID", "")
-ACCOUNT_ID      = os.getenv("MS_ACCOUNT_ID", "")
-REFRESH_TOKEN   = os.getenv("MS_REFRESH_TOKEN", "")
 
 TOKEN_URL     = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 SCOPE         = "https://ads.microsoft.com/msads.manage offline_access"
 REPORTING_URL = "https://reporting.api.bingads.microsoft.com/Reporting/v13"
 
+# ---------------------------------------------------------------------------
+# Legacy single-account vars kept for backward compat (used below in _accounts)
+# ---------------------------------------------------------------------------
+CUSTOMER_ID     = os.getenv("MS_CUSTOMER_ID", "")
+ACCOUNT_ID      = os.getenv("MS_ACCOUNT_ID", "")
+REFRESH_TOKEN   = os.getenv("MS_REFRESH_TOKEN", "")
 
-def _get_access_token() -> str:
-    if not REFRESH_TOKEN:
-        raise RuntimeError("MS_REFRESH_TOKEN is empty — run auth flow first")
-    r = requests.post(TOKEN_URL, data={
+
+def _accounts() -> list[dict]:
+    """Return all configured MS Ads accounts.
+
+    Each entry: {account_id, customer_id, refresh_token, public_client}
+    public_client=True  → device_code token, do NOT send client_secret on refresh
+    public_client=False → authorization_code token, send client_secret on refresh
+    """
+    accs = []
+    if os.getenv("MS_ACCOUNT_ID") and os.getenv("MS_REFRESH_TOKEN"):
+        accs.append({
+            "account_id":    os.getenv("MS_ACCOUNT_ID", ""),
+            "customer_id":   os.getenv("MS_CUSTOMER_ID", ""),
+            "refresh_token": os.getenv("MS_REFRESH_TOKEN", ""),
+            "public_client": False,  # confidential client (authorization_code)
+        })
+    if os.getenv("MS_ACCOUNT_ID_2") and os.getenv("MS_REFRESH_TOKEN_2"):
+        accs.append({
+            "account_id":    os.getenv("MS_ACCOUNT_ID_2", ""),
+            "customer_id":   os.getenv("MS_CUSTOMER_ID_2", ""),
+            "refresh_token": os.getenv("MS_REFRESH_TOKEN_2", ""),
+            "public_client": True,   # public client (device_code — no client_secret)
+        })
+    return accs
+
+
+def _get_access_token_for(refresh_token: str, public_client: bool = False) -> str:
+    """Exchange refresh token for access token.
+    public_client=True omits client_secret (device_code tokens reject it).
+    """
+    data = {
         "grant_type":    "refresh_token",
         "client_id":     CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": REFRESH_TOKEN,
+        "refresh_token": refresh_token,
         "scope":         SCOPE,
-    }, timeout=15)
+    }
+    if not public_client:
+        data["client_secret"] = CLIENT_SECRET
+    r = requests.post(TOKEN_URL, data=data, timeout=15)
     r.raise_for_status()
     return r.json()["access_token"]
 
 
-def _headers(access_token: str) -> dict:
+def _get_access_token() -> str:
+    """Legacy single-account helper (used by existing callers)."""
+    if not REFRESH_TOKEN:
+        raise RuntimeError("MS_REFRESH_TOKEN is empty — run auth flow first")
+    return _get_access_token_for(REFRESH_TOKEN, public_client=False)
+
+
+def _headers_for(access_token: str, account_id: str, customer_id: str) -> dict:
     return {
-        "Authorization":      f"Bearer {access_token}",
-        "DeveloperToken":     DEVELOPER_TOKEN,
-        "CustomerId":         CUSTOMER_ID,
-        "CustomerAccountId":  ACCOUNT_ID,
-        "Content-Type":       "application/json",
+        "Authorization":     f"Bearer {access_token}",
+        "DeveloperToken":    DEVELOPER_TOKEN,
+        "CustomerId":        customer_id,
+        "CustomerAccountId": account_id,
+        "Content-Type":      "application/json",
     }
+
+
+def _headers(access_token: str) -> dict:
+    """Legacy single-account headers (backward compat)."""
+    return _headers_for(access_token, ACCOUNT_ID, CUSTOMER_ID)
 
 
 def _submit_report_generic(access_token: str, start: date, end: date,
                            report_type: str, columns: list[str],
-                           report_name: str = "NexaReport") -> str | None:
+                           report_name: str = "NexaReport",
+                           account_id: str = "",
+                           customer_id: str = "") -> str | None:
     """Generic async report submission. Returns report request ID or None."""
+    act_id  = account_id  or ACCOUNT_ID
+    cust_id = customer_id or CUSTOMER_ID
     body = {
         "ReportRequest": {
             "Type":                   report_type,   # REST discriminator — required
@@ -71,7 +124,7 @@ def _submit_report_generic(access_token: str, start: date, end: date,
             "ExcludeReportFooter":    True,
             "ExcludeReportHeader":    True,
             "Columns":                columns,
-            "Scope":                  {"AccountIds": [int(ACCOUNT_ID)]},
+            "Scope":                  {"AccountIds": [int(act_id)]},
             "Time": {
                 "CustomDateRangeStart": {
                     "Day": start.day, "Month": start.month, "Year": start.year
@@ -84,15 +137,16 @@ def _submit_report_generic(access_token: str, start: date, end: date,
     }
     r = requests.post(
         f"{REPORTING_URL}/GenerateReport/Submit",
-        json=body, headers=_headers(access_token), timeout=20,
+        json=body, headers=_headers_for(access_token, act_id, cust_id), timeout=20,
     )
     if r.status_code >= 400:
-        print(f"[ms-bq] submit {report_type} {r.status_code}: {r.text[:200]}")
+        print(f"[ms-bq] submit {report_type} acct={act_id} {r.status_code}: {r.text[:200]}")
         return None
     return r.json().get("ReportRequestId")
 
 
-def _submit_report(access_token: str, start: date, end: date) -> str | None:
+def _submit_report(access_token: str, start: date, end: date,
+                   account_id: str = "", customer_id: str = "") -> str | None:
     """Submit campaign-level async performance report. Returns request ID."""
     return _submit_report_generic(
         access_token, start, end,
@@ -104,17 +158,21 @@ def _submit_report(access_token: str, start: date, end: date) -> str | None:
             "CampaignStatus", "Impressions", "Clicks", "Spend",
             "Conversions", "CostPerConversion", "Ctr",
         ],
+        account_id=account_id,
+        customer_id=customer_id,
     )
 
 
 def _poll_report(access_token: str, request_id: str,
-                 max_wait: int = 300) -> str | None:
+                 max_wait: int = 300,
+                 account_id: str = "", customer_id: str = "") -> str | None:
     """Poll until report is ready. Returns download URL or None."""
+    hdrs = _headers_for(access_token, account_id or ACCOUNT_ID, customer_id or CUSTOMER_ID)
     for _ in range(max_wait // 5):
         r = requests.post(
             f"{REPORTING_URL}/GenerateReport/Poll",
             json={"ReportRequestId": request_id},
-            headers=_headers(access_token), timeout=15,
+            headers=hdrs, timeout=15,
         )
         if r.status_code >= 400:
             print(f"[ms-bq] poll {r.status_code}: {r.text[:100]}")
@@ -157,37 +215,10 @@ def _download_and_parse(url: str) -> list[dict]:
 
 
 def collect_and_write(days: int = None, incremental: bool = False) -> int:
-    if not REFRESH_TOKEN:
-        print("[ms-bq] MS_REFRESH_TOKEN not set — skipping Microsoft Ads")
+    accs = _accounts()
+    if not accs:
+        print("[ms-bq] No MS Ads accounts configured — skipping")
         return 0
-
-    try:
-        access_token = _get_access_token()
-    except Exception as e:
-        print(f"[ms-bq] auth failed: {e}")
-        return 0
-
-    end = date.today() - timedelta(days=1)
-    if incremental:
-        start = end - timedelta(days=2)
-    elif days:
-        start = end - timedelta(days=days - 1)
-    else:
-        start = date(end.year, 1, 1)
-
-    print(f"[ms-bq] Window {start} -> {end}")
-
-    request_id = _submit_report(access_token, start, end)
-    if not request_id:
-        return 0
-
-    download_url = _poll_report(access_token, request_id)
-    if not download_url:
-        return 0
-
-    csv_rows = _download_and_parse(download_url)
-    now = datetime.now(timezone.utc).isoformat()
-    bq_rows = []
 
     def _f(val, default=0.0):
         """Parse a CSV numeric string that may have commas, % signs, or be blank."""
@@ -196,59 +227,90 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
         except (TypeError, ValueError):
             return float(default)
 
-    for row in csv_rows:
-        day  = (row.get("TimePeriod") or "")[:10]
-        if not day:
+    end = date.today() - timedelta(days=1)
+    if incremental:
+        start = end - timedelta(days=2)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(end.year, 1, 1)
+
+    total = 0
+    for acc in accs:
+        act_id  = acc["account_id"]
+        cust_id = acc["customer_id"]
+        try:
+            access_token = _get_access_token_for(acc["refresh_token"], acc["public_client"])
+        except Exception as e:
+            print(f"[ms-bq] auth failed for account {act_id}: {e}")
             continue
-        native_cur   = normalize_currency(row.get("CurrencyCode"))
-        spend_native = _f(row.get("Spend"))
-        spend        = to_usd(spend_native, native_cur)
-        leads        = int(_f(row.get("Conversions")))
-        impr         = int(_f(row.get("Impressions")))
-        clicks       = int(_f(row.get("Clicks")))
-        cpl_native   = _f(row.get("CostPerConversion"))
-        cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
-        # Ctr field is "N %" (e.g. "1.23 %") — strip % then divide by 100
-        ctr = _f(row.get("Ctr")) / 100
 
-        bq_rows.append({
-            "date":           day,
-            "channel":        "microsoft_ads",
-            "account_id":     ACCOUNT_ID,
-            "campaign_id":    str(row.get("CampaignId", "")),
-            "campaign_name":  row.get("CampaignName", ""),
-            "status":         row.get("CampaignStatus", ""),
-            "objective":      None,
-            "spend":          round(spend, 2),
-            "impressions":    impr,
-            "clicks":         clicks,
-            "ctr":            round(ctr, 6),
-            "leads":          leads,
-            "conversions":    float(leads),
-            "cpl":            round(cpl_usd, 2) if cpl_usd else None,
-            "currency":       "USD",
-            "spend_native":   round(spend_native, 2),
-            "currency_native": native_cur,
-            "updated_at":     now,
-        })
+        print(f"[ms-bq] campaigns window {start} -> {end} (account {act_id})")
+        request_id = _submit_report(access_token, start, end,
+                                    account_id=act_id, customer_id=cust_id)
+        if not request_id:
+            continue
+        download_url = _poll_report(access_token, request_id,
+                                    account_id=act_id, customer_id=cust_id)
+        if not download_url:
+            continue
 
-    print(f"[ms-bq] parsed {len(bq_rows)} rows")
-    return upsert_rows("campaigns_daily", bq_rows,
-                       key_fields=["date", "channel", "campaign_id"])
+        csv_rows = _download_and_parse(download_url)
+        now = datetime.now(timezone.utc).isoformat()
+        bq_rows = []
+        for row in csv_rows:
+            day  = (row.get("TimePeriod") or "")[:10]
+            if not day:
+                continue
+            native_cur   = normalize_currency(row.get("CurrencyCode"))
+            spend_native = _f(row.get("Spend"))
+            spend        = to_usd(spend_native, native_cur)
+            leads        = int(_f(row.get("Conversions")))
+            impr         = int(_f(row.get("Impressions")))
+            clicks       = int(_f(row.get("Clicks")))
+            cpl_native   = _f(row.get("CostPerConversion"))
+            cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
+            ctr          = _f(row.get("Ctr")) / 100
+            bq_rows.append({
+                "date":            day,
+                "channel":         "microsoft_ads",
+                "account_id":      act_id,
+                "campaign_id":     str(row.get("CampaignId", "")),
+                "campaign_name":   row.get("CampaignName", ""),
+                "status":          row.get("CampaignStatus", ""),
+                "objective":       None,
+                "spend":           round(spend, 2),
+                "impressions":     impr,
+                "clicks":          clicks,
+                "ctr":             round(ctr, 6),
+                "leads":           leads,
+                "conversions":     float(leads),
+                "cpl":             round(cpl_usd, 2) if cpl_usd else None,
+                "currency":        "USD",
+                "spend_native":    round(spend_native, 2),
+                "currency_native": native_cur,
+                "updated_at":      now,
+            })
+        print(f"[ms-bq] campaigns parsed {len(bq_rows)} rows (account {act_id})")
+        total += upsert_rows("campaigns_daily", bq_rows,
+                             key_fields=["date", "channel", "campaign_id"])
+    return total
 
 
 # ── Ad Group level → adsets_daily ────────────────────────────────────────────
 
 def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int:
     """Ad group grain → adsets_daily. utm_audience maps to AdGroupName."""
-    if not REFRESH_TOKEN:
-        print("[ms-bq] MS_REFRESH_TOKEN not set — skipping adgroups")
+    accs = _accounts()
+    if not accs:
+        print("[ms-bq] No MS Ads accounts configured — skipping adgroups")
         return 0
-    try:
-        access_token = _get_access_token()
-    except Exception as e:
-        print(f"[ms-bq] adgroups auth failed: {e}")
-        return 0
+
+    def _f(val, default=0.0):
+        try:
+            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
+        except (TypeError, ValueError):
+            return float(default)
 
     end = date.today() - timedelta(days=1)
     if incremental:
@@ -258,83 +320,89 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     else:
         start = date(end.year, 1, 1)
 
-    print(f"[ms-bq] adgroups window {start} -> {end}")
-
-    request_id = _submit_report_generic(
-        access_token, start, end,
-        report_type="AdGroupPerformanceReportRequest",
-        report_name="NexaAdGroupPerformance",
-        columns=[
-            "TimePeriod", "AccountId", "CurrencyCode",
-            "CampaignId", "CampaignName",
-            "AdGroupId", "AdGroupName", "Status",   # REST API uses "Status" not "AdGroupStatus"
-            "Impressions", "Clicks", "Spend",
-            "Conversions", "CostPerConversion", "Ctr",
-        ],
-    )
-    if not request_id:
-        return 0
-    download_url = _poll_report(access_token, request_id)
-    if not download_url:
-        return 0
-
-    csv_rows = _download_and_parse(download_url)
-    now = datetime.now(timezone.utc).isoformat()
-    bq_rows = []
-
-    def _f(val, default=0.0):
+    total = 0
+    for acc in accs:
+        act_id  = acc["account_id"]
+        cust_id = acc["customer_id"]
         try:
-            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
-        except (TypeError, ValueError):
-            return float(default)
-
-    for row in csv_rows:
-        day = (row.get("TimePeriod") or "")[:10]
-        if not day:
+            access_token = _get_access_token_for(acc["refresh_token"], acc["public_client"])
+        except Exception as e:
+            print(f"[ms-bq] adgroups auth failed for account {act_id}: {e}")
             continue
-        native_cur   = normalize_currency(row.get("CurrencyCode"))
-        spend_native = _f(row.get("Spend"))
-        spend        = to_usd(spend_native, native_cur)
-        leads        = int(_f(row.get("Conversions")))
-        impr         = int(_f(row.get("Impressions")))
-        clicks       = int(_f(row.get("Clicks")))
-        ctr          = _f(row.get("Ctr")) / 100
-        bq_rows.append({
-            "date":          day,
-            "channel":       "microsoft_ads",
-            "account_id":    ACCOUNT_ID,
-            "campaign_id":   str(row.get("CampaignId", "")),
-            "campaign_name": row.get("CampaignName", ""),
-            "adset_id":      str(row.get("AdGroupId", "")),
-            "adset_name":    row.get("AdGroupName", ""),   # utm_audience
-            "status":        row.get("Status", ""),
-            "spend":         round(spend, 2),
-            "impressions":   impr,
-            "clicks":        clicks,
-            "ctr":           round(ctr, 6),
-            "leads":         leads,
-            "conversions":   float(leads),
-            "currency":      "USD",
-            "updated_at":    now,
-        })
 
-    print(f"[ms-bq] adgroups parsed {len(bq_rows)} rows")
-    return upsert_rows("adsets_daily", bq_rows,
-                       key_fields=["date", "channel", "adset_id"])
+        print(f"[ms-bq] adgroups window {start} -> {end} (account {act_id})")
+        request_id = _submit_report_generic(
+            access_token, start, end,
+            report_type="AdGroupPerformanceReportRequest",
+            report_name="NexaAdGroupPerformance",
+            columns=[
+                "TimePeriod", "AccountId", "CurrencyCode",
+                "CampaignId", "CampaignName",
+                "AdGroupId", "AdGroupName", "Status",
+                "Impressions", "Clicks", "Spend",
+                "Conversions", "CostPerConversion", "Ctr",
+            ],
+            account_id=act_id, customer_id=cust_id,
+        )
+        if not request_id:
+            continue
+        download_url = _poll_report(access_token, request_id,
+                                    account_id=act_id, customer_id=cust_id)
+        if not download_url:
+            continue
+
+        csv_rows = _download_and_parse(download_url)
+        now = datetime.now(timezone.utc).isoformat()
+        bq_rows = []
+        for row in csv_rows:
+            day = (row.get("TimePeriod") or "")[:10]
+            if not day:
+                continue
+            native_cur   = normalize_currency(row.get("CurrencyCode"))
+            spend_native = _f(row.get("Spend"))
+            spend        = to_usd(spend_native, native_cur)
+            leads        = int(_f(row.get("Conversions")))
+            impr         = int(_f(row.get("Impressions")))
+            clicks       = int(_f(row.get("Clicks")))
+            ctr          = _f(row.get("Ctr")) / 100
+            bq_rows.append({
+                "date":          day,
+                "channel":       "microsoft_ads",
+                "account_id":    act_id,
+                "campaign_id":   str(row.get("CampaignId", "")),
+                "campaign_name": row.get("CampaignName", ""),
+                "adset_id":      str(row.get("AdGroupId", "")),
+                "adset_name":    row.get("AdGroupName", ""),
+                "status":        row.get("Status", ""),
+                "spend":         round(spend, 2),
+                "impressions":   impr,
+                "clicks":        clicks,
+                "ctr":           round(ctr, 6),
+                "leads":         leads,
+                "conversions":   float(leads),
+                "currency":      "USD",
+                "updated_at":    now,
+            })
+        print(f"[ms-bq] adgroups parsed {len(bq_rows)} rows (account {act_id})")
+        total += upsert_rows("adsets_daily", bq_rows,
+                             key_fields=["date", "channel", "adset_id"])
+    return total
 
 
 # ── Keyword level → keywords_daily ───────────────────────────────────────────
 
 def collect_keywords_and_write(days: int = None, incremental: bool = False) -> int:
     """Keyword grain → keywords_daily. utm_term maps to Keyword text."""
-    if not REFRESH_TOKEN:
-        print("[ms-bq] MS_REFRESH_TOKEN not set — skipping keywords")
+    accs = _accounts()
+    if not accs:
+        print("[ms-bq] No MS Ads accounts configured — skipping keywords")
         return 0
-    try:
-        access_token = _get_access_token()
-    except Exception as e:
-        print(f"[ms-bq] keywords auth failed: {e}")
-        return 0
+
+    def _f(val, default=0.0):
+        try:
+            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
+        except (TypeError, ValueError):
+            return float(default)
 
     end = date.today() - timedelta(days=1)
     if incremental:
@@ -344,79 +412,83 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
     else:
         start = date(end.year, 1, 1)
 
-    print(f"[ms-bq] keywords window {start} -> {end}")
-
-    request_id = _submit_report_generic(
-        access_token, start, end,
-        report_type="KeywordPerformanceReportRequest",
-        report_name="NexaKeywordPerformance",
-        columns=[
-            "TimePeriod", "AccountId", "CurrencyCode",
-            "CampaignId", "CampaignName",
-            "AdGroupId", "AdGroupName",
-            "KeywordId", "Keyword", "BidMatchType", "QualityScore",  # REST uses BidMatchType
-            "Impressions", "Clicks", "Spend",
-            "Conversions", "CostPerConversion", "Ctr", "AverageCpc",
-        ],
-    )
-    if not request_id:
-        return 0
-    download_url = _poll_report(access_token, request_id)
-    if not download_url:
-        return 0
-
-    csv_rows = _download_and_parse(download_url)
-    now = datetime.now(timezone.utc).isoformat()
-    bq_rows = []
-
-    def _f(val, default=0.0):
+    total = 0
+    for acc in accs:
+        act_id  = acc["account_id"]
+        cust_id = acc["customer_id"]
         try:
-            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
-        except (TypeError, ValueError):
-            return float(default)
-
-    for row in csv_rows:
-        day = (row.get("TimePeriod") or "")[:10]
-        if not day:
+            access_token = _get_access_token_for(acc["refresh_token"], acc["public_client"])
+        except Exception as e:
+            print(f"[ms-bq] keywords auth failed for account {act_id}: {e}")
             continue
-        native_cur     = normalize_currency(row.get("CurrencyCode"))
-        spend_native   = _f(row.get("Spend"))
-        spend          = to_usd(spend_native, native_cur)
-        avg_cpc_native = _f(row.get("AverageCpc"))
-        avg_cpc        = to_usd(avg_cpc_native, native_cur)
-        conv           = _f(row.get("Conversions"))
-        ctr            = _f(row.get("Ctr")) / 100
-        qs_raw         = row.get("QualityScore", "")
-        try:
-            qs = int(float(qs_raw)) if qs_raw and qs_raw not in ("--", "") else None
-        except (ValueError, TypeError):
-            qs = None
-        bq_rows.append({
-            "date":          day,
-            "channel":       "microsoft_ads",
-            "account_id":    ACCOUNT_ID,
-            "campaign_id":   str(row.get("CampaignId", "")),
-            "campaign_name": row.get("CampaignName", ""),
-            "adgroup_id":    str(row.get("AdGroupId", "")),
-            "adgroup_name":  row.get("AdGroupName", ""),
-            "keyword_id":    str(row.get("KeywordId", "")),
-            "keyword_text":  row.get("Keyword", ""),     # utm_term
-            "match_type":    row.get("BidMatchType", ""),
-            "status":        None,
-            "quality_score": qs,
-            "spend":         round(spend, 2),
-            "impressions":   int(_f(row.get("Impressions"))),
-            "clicks":        int(_f(row.get("Clicks"))),
-            "ctr":           round(ctr, 6),
-            "avg_cpc":       round(avg_cpc, 4),
-            "conversions":   float(conv),
-            "currency":      "USD",
-            "updated_at":    now,
-        })
 
-    print(f"[ms-bq] keywords parsed {len(bq_rows)} rows")
-    return upsert_rows("keywords_daily", bq_rows,
-                       key_fields=["date", "channel", "adgroup_id", "keyword_id"])
+        print(f"[ms-bq] keywords window {start} -> {end} (account {act_id})")
+        request_id = _submit_report_generic(
+            access_token, start, end,
+            report_type="KeywordPerformanceReportRequest",
+            report_name="NexaKeywordPerformance",
+            columns=[
+                "TimePeriod", "AccountId", "CurrencyCode",
+                "CampaignId", "CampaignName",
+                "AdGroupId", "AdGroupName",
+                "KeywordId", "Keyword", "BidMatchType", "QualityScore",
+                "Impressions", "Clicks", "Spend",
+                "Conversions", "CostPerConversion", "Ctr", "AverageCpc",
+            ],
+            account_id=act_id, customer_id=cust_id,
+        )
+        if not request_id:
+            continue
+        download_url = _poll_report(access_token, request_id,
+                                    account_id=act_id, customer_id=cust_id)
+        if not download_url:
+            continue
+
+        csv_rows = _download_and_parse(download_url)
+        now = datetime.now(timezone.utc).isoformat()
+        bq_rows = []
+        for row in csv_rows:
+            day = (row.get("TimePeriod") or "")[:10]
+            if not day:
+                continue
+            native_cur     = normalize_currency(row.get("CurrencyCode"))
+            spend_native   = _f(row.get("Spend"))
+            spend          = to_usd(spend_native, native_cur)
+            avg_cpc_native = _f(row.get("AverageCpc"))
+            avg_cpc        = to_usd(avg_cpc_native, native_cur)
+            conv           = _f(row.get("Conversions"))
+            ctr            = _f(row.get("Ctr")) / 100
+            qs_raw         = row.get("QualityScore", "")
+            try:
+                qs = int(float(qs_raw)) if qs_raw and qs_raw not in ("--", "") else None
+            except (ValueError, TypeError):
+                qs = None
+            bq_rows.append({
+                "date":          day,
+                "channel":       "microsoft_ads",
+                "account_id":    act_id,
+                "campaign_id":   str(row.get("CampaignId", "")),
+                "campaign_name": row.get("CampaignName", ""),
+                "adgroup_id":    str(row.get("AdGroupId", "")),
+                "adgroup_name":  row.get("AdGroupName", ""),
+                "keyword_id":    str(row.get("KeywordId", "")),
+                "keyword_text":  row.get("Keyword", ""),
+                "match_type":    row.get("BidMatchType", ""),
+                "status":        None,
+                "quality_score": qs,
+                "spend":         round(spend, 2),
+                "impressions":   int(_f(row.get("Impressions"))),
+                "clicks":        int(_f(row.get("Clicks"))),
+                "ctr":           round(ctr, 6),
+                "avg_cpc":       round(avg_cpc, 4),
+                "conversions":   float(conv),
+                "currency":      "USD",
+                "updated_at":    now,
+            })
+        print(f"[ms-bq] keywords parsed {len(bq_rows)} rows (account {act_id})")
+        total += upsert_rows("keywords_daily", bq_rows,
+                             key_fields=["date", "channel", "adgroup_id", "keyword_id"])
+    return total
 
 
 # ── Ad level → ads_daily ───────────────────────────────────────────────────────
@@ -429,14 +501,16 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
       KeywordPerformanceReport uses 'KeywordStatus'
       AdPerformanceReport      uses 'AdStatus' (NOT Status — would 400)
     """
-    if not REFRESH_TOKEN:
-        print("[ms-bq] MS_REFRESH_TOKEN not set — skipping ads")
+    accs = _accounts()
+    if not accs:
+        print("[ms-bq] No MS Ads accounts configured — skipping ads")
         return 0
-    try:
-        access_token = _get_access_token()
-    except Exception as e:
-        print(f"[ms-bq] ads auth failed: {e}")
-        return 0
+
+    def _f(val, default=0.0):
+        try:
+            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
+        except (TypeError, ValueError):
+            return float(default)
 
     end = date.today() - timedelta(days=1)
     if incremental:
@@ -446,78 +520,81 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     else:
         start = date(end.year, 1, 1)
 
-    print(f"[ms-bq] ads window {start} -> {end}")
-
-    request_id = _submit_report_generic(
-        access_token, start, end,
-        report_type="AdPerformanceReportRequest",
-        report_name="NexaAdPerformance",
-        columns=[
-            "TimePeriod", "AccountId", "CurrencyCode",
-            "CampaignId", "CampaignName",
-            "AdGroupId", "AdGroupName",
-            "AdId", "AdTitle", "AdDescription", "AdType", "AdStatus",
-            "FinalUrl",
-            "Impressions", "Clicks", "Spend",
-            "Conversions", "CostPerConversion", "Ctr",
-        ],
-    )
-    if not request_id:
-        return 0
-    download_url = _poll_report(access_token, request_id)
-    if not download_url:
-        return 0
-
-    csv_rows = _download_and_parse(download_url)
-    now = datetime.now(timezone.utc).isoformat()
-    bq_rows = []
-
-    def _f(val, default=0.0):
+    total = 0
+    for acc in accs:
+        act_id  = acc["account_id"]
+        cust_id = acc["customer_id"]
         try:
-            return float(str(val or "").replace(",", "").replace("%", "").strip() or default)
-        except (TypeError, ValueError):
-            return float(default)
-
-    for row in csv_rows:
-        day = (row.get("TimePeriod") or "")[:10]
-        if not day:
+            access_token = _get_access_token_for(acc["refresh_token"], acc["public_client"])
+        except Exception as e:
+            print(f"[ms-bq] ads auth failed for account {act_id}: {e}")
             continue
-        native_cur   = normalize_currency(row.get("CurrencyCode"))
-        spend_native = _f(row.get("Spend"))
-        spend        = to_usd(spend_native, native_cur)
-        leads        = int(_f(row.get("Conversions")))
-        ctr          = _f(row.get("Ctr")) / 100
-        cpl_native   = _f(row.get("CostPerConversion"))
-        cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
-        # Ad name fallback: AdTitle, then AdDescription, then AdId
-        ad_name = (row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
-        bq_rows.append({
-            "date":          day,
-            "channel":       "microsoft_ads",
-            "account_id":    ACCOUNT_ID,
-            "campaign_id":   str(row.get("CampaignId", "")),
-            "campaign_name": row.get("CampaignName", ""),
-            "adset_id":      str(row.get("AdGroupId", "")),
-            "adset_name":    row.get("AdGroupName", ""),
-            "ad_id":         str(row.get("AdId", "")),    # utm_content
-            "ad_name":       ad_name,
-            "status":        row.get("AdStatus", ""),
-            "spend":         round(spend, 2),
-            "impressions":   int(_f(row.get("Impressions"))),
-            "clicks":        int(_f(row.get("Clicks"))),
-            "ctr":           round(ctr, 6),
-            "leads":         leads,
-            "conversions":   float(leads),
-            "cpl":           round(cpl_usd, 2) if cpl_usd else None,
-            "frequency":     None,
-            "currency":      "USD",
-            "final_url":     row.get("FinalUrl", ""),
-            "updated_at":    now,
-        })
 
-    print(f"[ms-bq] ads parsed {len(bq_rows)} rows")
-    return upsert_rows("ads_daily", bq_rows,
-                       key_fields=["date", "channel", "ad_id"])
+        print(f"[ms-bq] ads window {start} -> {end} (account {act_id})")
+        request_id = _submit_report_generic(
+            access_token, start, end,
+            report_type="AdPerformanceReportRequest",
+            report_name="NexaAdPerformance",
+            columns=[
+                "TimePeriod", "AccountId", "CurrencyCode",
+                "CampaignId", "CampaignName",
+                "AdGroupId", "AdGroupName",
+                "AdId", "AdTitle", "AdDescription", "AdType", "AdStatus",
+                "FinalUrl",
+                "Impressions", "Clicks", "Spend",
+                "Conversions", "CostPerConversion", "Ctr",
+            ],
+            account_id=act_id, customer_id=cust_id,
+        )
+        if not request_id:
+            continue
+        download_url = _poll_report(access_token, request_id,
+                                    account_id=act_id, customer_id=cust_id)
+        if not download_url:
+            continue
+
+        csv_rows = _download_and_parse(download_url)
+        now = datetime.now(timezone.utc).isoformat()
+        bq_rows = []
+        for row in csv_rows:
+            day = (row.get("TimePeriod") or "")[:10]
+            if not day:
+                continue
+            native_cur   = normalize_currency(row.get("CurrencyCode"))
+            spend_native = _f(row.get("Spend"))
+            spend        = to_usd(spend_native, native_cur)
+            leads        = int(_f(row.get("Conversions")))
+            ctr          = _f(row.get("Ctr")) / 100
+            cpl_native   = _f(row.get("CostPerConversion"))
+            cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
+            ad_name = (row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
+            bq_rows.append({
+                "date":          day,
+                "channel":       "microsoft_ads",
+                "account_id":    act_id,
+                "campaign_id":   str(row.get("CampaignId", "")),
+                "campaign_name": row.get("CampaignName", ""),
+                "adset_id":      str(row.get("AdGroupId", "")),
+                "adset_name":    row.get("AdGroupName", ""),
+                "ad_id":         str(row.get("AdId", "")),
+                "ad_name":       ad_name,
+                "status":        row.get("AdStatus", ""),
+                "spend":         round(spend, 2),
+                "impressions":   int(_f(row.get("Impressions"))),
+                "clicks":        int(_f(row.get("Clicks"))),
+                "ctr":           round(ctr, 6),
+                "leads":         leads,
+                "conversions":   float(leads),
+                "cpl":           round(cpl_usd, 2) if cpl_usd else None,
+                "frequency":     None,
+                "currency":      "USD",
+                "final_url":     row.get("FinalUrl", ""),
+                "updated_at":    now,
+            })
+        print(f"[ms-bq] ads parsed {len(bq_rows)} rows (account {act_id})")
+        total += upsert_rows("ads_daily", bq_rows,
+                             key_fields=["date", "channel", "ad_id"])
+    return total
 
 
 if __name__ == "__main__":

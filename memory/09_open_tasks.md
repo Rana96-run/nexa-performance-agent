@@ -121,18 +121,15 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
-## P2 — Second Microsoft Ads account
+## P2 — Second Microsoft Ads account — DONE 2026-05-10
 
-- [ ] **Identify second MS Ads account ID** — `MS_ACCOUNT_NUMBER=K120006V95` in Railway
-  doesn't match any account accessible via current OAuth token. The SOAP API confirms
-  only ONE account accessible: `188176729` (number `G1206XJR`, customer 254476670).
-  To resolve: Amar should open https://ads.microsoft.com, note the second account's
-  **numeric Account ID** (9-10 digits, visible in URL as `?aid=XXXXXXXXXX`), and share it.
-  If the second account uses different login credentials, a new OAuth flow is needed:
-  `python collectors/microsoft_ads.py auth` → log in with that account.
-  Once ID is confirmed: add `MS_ACCOUNT_ID_2=XXXXXXXXXX` to Railway + `.env`,
-  then update collector to support comma-separated `MS_ACCOUNT_IDS` (same as
-  `GOOGLE_ADS_CUSTOMER_IDS`) and pass `[int(id) for id in ids]` to `Scope.AccountIds`.
+- [x] **Second MS Ads account wired** — `nexa-qoyod@outlook.com` → customer 254851652
+  → account **187231519** (G145REZA, "Automated Cloud Company").
+  OAuth via device_code flow (public client — no client_secret on refresh).
+  Env vars added: `MS_ACCOUNT_ID_2`, `MS_CUSTOMER_ID_2`, `MS_REFRESH_TOKEN_2` in both
+  `.env` and Railway. Collector (`collectors/microsoft_ads_bq.py`) refactored to loop
+  over all accounts via `_accounts()` / `_get_access_token_for(public_client=True/False)`.
+  Both accounts authenticate. Backfill needed: run collector YTD to populate BQ.
 
 ## Done this session (2026-05-10)
 
