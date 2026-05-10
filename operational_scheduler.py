@@ -90,6 +90,19 @@ def _refresh_bigquery():
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] BQ refresh failed: {e}")
 
+    # Freshness audit: catch silent collector failures (collector ran but
+    # fetched zero rows). Distinguishes platform-paused (legitimate, e.g.
+    # Microsoft/LinkedIn currently dark) from collector-broken (real bug).
+    # Posts a Slack alert to #notifications when any channel is ≥2 days stale.
+    try:
+        from scripts.check_freshness import audit, post_slack_alert
+        stale = audit()
+        if stale:
+            print(f"[ops-scheduler] Freshness: {len(stale)} stale channel(s)")
+            post_slack_alert(stale)
+    except Exception as e:
+        print(f"[ops-scheduler] Freshness check failed (non-fatal): {e}")
+
 
 def _refresh_drive_index():
     """Re-index Drive assets so role prompts reference the latest files."""
@@ -225,6 +238,52 @@ def _run_display_audit() -> list:
         return []
 
 
+# ── Scale/pause digest cadence ──────────────────────────────────────────────
+# The team asked for the #approvals digest every N days, not nightly.
+# Tracked via a state file under .cache/ so the cadence survives restarts.
+_SCALE_PAUSE_STATE_FILE = ".cache/last_scale_pause_run.txt"
+
+
+def _read_last_scale_pause_date() -> "date | None":
+    from pathlib import Path
+    p = Path(_SCALE_PAUSE_STATE_FILE)
+    if not p.exists():
+        return None
+    try:
+        return date.fromisoformat(p.read_text().strip())
+    except Exception:
+        return None
+
+
+def _should_run_scale_pause() -> bool:
+    """Return True if SCALE_PAUSE_DIGEST_INTERVAL_DAYS+ days since last run.
+
+    Returns True on first ever run (state file missing) so we don't lock the
+    team out of digests until the file is bootstrapped.
+    """
+    from config import SCALE_PAUSE_DIGEST_INTERVAL_DAYS
+    last = _read_last_scale_pause_date()
+    if last is None:
+        return True
+    return (date.today() - last).days >= SCALE_PAUSE_DIGEST_INTERVAL_DAYS
+
+
+def _days_until_next_scale_pause() -> int:
+    from config import SCALE_PAUSE_DIGEST_INTERVAL_DAYS
+    last = _read_last_scale_pause_date()
+    if last is None:
+        return 0
+    elapsed = (date.today() - last).days
+    return max(0, SCALE_PAUSE_DIGEST_INTERVAL_DAYS - elapsed)
+
+
+def _mark_scale_pause_ran() -> None:
+    from pathlib import Path
+    p = Path(_SCALE_PAUSE_STATE_FILE)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(date.today().isoformat())
+
+
 def _run_campaign_health() -> tuple[list, list]:
     """Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause.
     Returns (tasks, findings) so findings can be used in the Slack recommendations message.
@@ -270,7 +329,18 @@ def _nightly():
 
     # 3c. Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause
     #     Cost: channel source | Leads: HubSpot Lead Module | Window: 14d
-    health_tasks, health_findings = _run_campaign_health()
+    #     Cadence: every SCALE_PAUSE_DIGEST_INTERVAL_DAYS days (default 4) — NOT daily.
+    #     Tracked via .cache/last_scale_pause_run.txt; resets across restarts.
+    if _should_run_scale_pause():
+        health_tasks, health_findings = _run_campaign_health()
+        _mark_scale_pause_ran()
+    else:
+        from config import SCALE_PAUSE_DIGEST_INTERVAL_DAYS
+        days_until = _days_until_next_scale_pause()
+        print(f"[ops-scheduler] Skipping campaign health digest "
+              f"(cadence {SCALE_PAUSE_DIGEST_INTERVAL_DAYS}d, "
+              f"next run in {days_until}d)")
+        health_tasks, health_findings = [], []
 
     # 3d. Asana housekeeping — roll stale due dates forward, send overdue reminders
     try:

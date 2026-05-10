@@ -61,14 +61,20 @@ def post_nightly_approvals_digest(
     scale_findings: list,
     pause_findings: list,
     review_findings: list,
+    window_days: int | None = None,
 ) -> str | None:
     """
-    THE ONE #approvals message per night.
+    THE ONE #approvals message — posted on the cadence configured by
+    SCALE_PAUSE_DIGEST_INTERVAL_DAYS (default every 4 days, not nightly).
 
     Covers everything in a single post:
       - Scale candidates  (✅ executes +25% budget)
       - Pause candidates  (✅ executes pause)
       - Review summary    (optimize / junk / drilldown — tasks already in Asana)
+
+    The header shows the data window so the team can verify numbers in
+    HubSpot for the same date range:
+      "Nightly approvals — May 8 · 14d window: Apr 24 → May 7"
 
     ✅ = execute all scale + pause actions  ·  ❌ = skip all
     Returns the Slack message ts, or None on failure.
@@ -78,8 +84,23 @@ def post_nightly_approvals_digest(
     if not scale_findings and not pause_findings and not review_findings:
         return None
 
-    today = datetime.now(timezone.utc).strftime("%b %-d")
-    lines = [f":arrows_counterclockwise: *Nightly approvals — {today}*"]
+    # Default window comes from DAYS_FOR_PAUSE_DECISION; callers may override.
+    if window_days is None:
+        try:
+            from config import DAYS_FOR_PAUSE_DECISION
+            window_days = DAYS_FOR_PAUSE_DECISION
+        except Exception:
+            window_days = 14
+
+    # Compute the explicit data window: yesterday minus N..yesterday inclusive.
+    # Yesterday is the last *complete* day of data — today is partial.
+    from datetime import date as _date, timedelta as _td
+    end_d   = _date.today() - _td(days=1)
+    start_d = end_d - _td(days=window_days - 1)
+
+    today_label  = datetime.now(timezone.utc).strftime("%b %-d")
+    window_label = f"{window_days}d window: {start_d.strftime('%b %-d')} → {end_d.strftime('%b %-d')}"
+    lines = [f":arrows_counterclockwise: *Nightly approvals — {today_label}*  ·  _{window_label}_"]
 
     executable_findings = []
 

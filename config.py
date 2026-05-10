@@ -239,6 +239,7 @@ QFLAVOURS_PIPELINE_CHECK = True
 
 # Pause decision rules (USD, days)
 DAYS_FOR_PAUSE_DECISION    = 14
+SCALE_PAUSE_DIGEST_INTERVAL_DAYS = 4   # Slack #approvals digest cadence — only post every N days
 ZERO_CONV_SPEND_THRESHOLD  = 8     # pause ad if spend > $8 with zero conv
 ZERO_CONV_DAYS_THRESHOLD   = 7
 # Keyword pause rules (Google Ads / Microsoft Ads) — two independent triggers:
