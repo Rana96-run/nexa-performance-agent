@@ -958,7 +958,7 @@ def activity_dashboard():
           SELECT *,
             ROW_NUMBER() OVER (
               PARTITION BY COALESCE(gid, CAST(ts AS STRING))
-              ORDER BY ts DESC
+              ORDER BY ts ASC  -- oldest record wins: preserves original creation date, not backfill stamp
             ) AS rn
           FROM all_tasks
         )
@@ -997,6 +997,29 @@ def activity_dashboard():
             task_status_rows = list(bq.query(ts_sql_fb).result())
         except Exception as e2:
             print(f"[activity] asana task query failed (non-fatal): {e2}")
+
+    # Rebuild m_asana_tasks from task_status_rows: it uses a 365-day window and
+    # captures all historical asana_task_created logs, unlike detail_rows (days window).
+    if task_status_rows:
+        _ts_proj: dict[str, int] = {}
+        for r in task_status_rows:
+            pk = r.project_key or "—"
+            _ts_proj[pk] = _ts_proj.get(pk, 0) + 1
+        _ts_c30 = sum(1 for r in task_status_rows if r.created_day and r.created_day >= cutoff_30)
+        _ts_c7  = sum(1 for r in task_status_rows if r.created_day and r.created_day >= cutoff_7)
+        _ts_p30 = {r.project_key for r in task_status_rows
+                   if r.created_day and r.created_day >= cutoff_30 and r.project_key and r.project_key != "—"}
+        m_asana_tasks = {
+            "count_30d":      _ts_c30,
+            "count_7d":       _ts_c7,
+            "projects_30d":   len(_ts_p30),
+            "project_counts": sorted(_ts_proj.items(), key=lambda x: -x[1]),
+            "rows": [{"day": str(r.created_day or "—"), "title": r.title or "—",
+                      "project_key": r.project_key or "—", "task_action": "—"}
+                     for r in task_status_rows[:100]],
+        }
+        metrics["asana_tasks"]   = m_asana_tasks
+        totals["asana_tasks"]    = _ts_c30
 
     # ── 5b. Executed actions: pauses / scales / keyword actions the team ran ──
     # These are "completed" in the sense that the action was actually executed
