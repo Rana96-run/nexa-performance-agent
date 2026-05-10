@@ -1042,6 +1042,7 @@ def activity_dashboard():
             WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
               AND action IN (
                 'campaign_paused', 'campaign_scaled',
+                'positive_keywords_added',
                 'keywords_paused', 'keywords_deleted',
                 'negative_keywords_added', 'negative_keywords_removed',
                 'ads_paused', 'ads_enabled',
@@ -1073,6 +1074,7 @@ def activity_dashboard():
     _ACTION_VERB = {
         "campaign_paused":              "Paused campaign",
         "campaign_scaled":              "Scaled campaign",
+        "positive_keywords_added":      "Added keywords",
         "keywords_paused":              "Paused keywords",
         "keywords_deleted":             "Deleted keywords",
         "negative_keywords_added":      "Added negatives",
