@@ -416,9 +416,11 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   `campaign_name` (platform, mixed-case) and HubSpot `lead_utm_campaign` (often lower-case) silently
   produces 0 leads in every dashboard cell. Root cause of "correct in direct query, wrong in Slack."
   Always use `LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)`.
-- **Snapchat `qoyod_source` is `'Snapchat'` — NOT `'Snapchat Ads'`.** `v_channel_key_map` must use
-  `WHEN 'snapchat' THEN 'Snapchat'` or all Snapchat leads show as 0 in HubSpot joins. HubSpot stores
-  exactly `'Snapchat'` (no "Ads" suffix) — confirmed from live HubSpot lead records.
+- **Snapchat `qoyod_source` is `'Snapchat Ads'` — NOT `'Snapchat'`.** `v_channel_key_map` must use
+  `WHEN 'snapchat' THEN 'Snapchat Ads'` or all Snapchat leads are silently dropped in HubSpot joins.
+  Confirmed 2026-05-09: BQ had 168 Snapchat leads stored as `'Snapchat Ads'`; the old `'Snapchat'`
+  mapping caused Hex to show 795 leads instead of 963 for the 7-day window — all Snapchat leads invisible.
+  Fixed in `collectors/views.py` line 27. Previous pitfall entry had this backwards — disregard any note saying `'Snapchat'` is correct.
 
 ## Railway deployment (extended)
 
@@ -479,3 +481,17 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 - **No public API — all report building is manual.** BQ views can be created via code, but the
   Looker Studio layer above them (charts, data sources, filters, scorecards) requires manual UI work
   at lookerstudio.google.com. Hex is the canonical automated dashboard.
+
+## Freshness checks
+
+- **Don't trust `updated_at` for freshness.** A collector that runs successfully but fetches
+  zero rows still updates table metadata. Use `MAX(date)` per channel against
+  `CURRENT_DATE('Asia/Riyadh')` instead. Helper: `scripts/check_freshness.py`.
+- **Microsoft Ads (and LinkedIn) "Success + null ReportDownloadUrl" = no activity, NOT a bug.**
+  When a Bing Ads account has zero spend/clicks/impressions in the queried window, the API
+  returns `ReportRequestStatus.Status='Success'` with `ReportDownloadUrl=null`. The collector
+  reads this as "no rows to write" and exits silently. This causes `MAX(date)` to lag, which
+  looks like a stale collector — but the underlying integration is healthy. Verified
+  2026-05-09: Microsoft Ads stopped on 2026-04-24 after campaigns were paused; LinkedIn
+  stopped 2026-02-08 for the same reason. Always sanity-check against the platform UI before
+  declaring a collector broken. The MS collector now logs this case explicitly.

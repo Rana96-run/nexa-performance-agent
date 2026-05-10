@@ -24,7 +24,7 @@ SELECT channel AS paid_channel,
        CASE channel
          WHEN 'google_ads'     THEN 'Google Ads'
          WHEN 'meta'           THEN 'Meta Ads'
-         WHEN 'snapchat'       THEN 'Snapchat'
+         WHEN 'snapchat'       THEN 'Snapchat Ads'
          WHEN 'tiktok'         THEN 'Tiktok Ads'
          WHEN 'microsoft_ads'  THEN 'Microsoft Ads'
          WHEN 'linkedin'       THEN 'LinkedIn Ads'

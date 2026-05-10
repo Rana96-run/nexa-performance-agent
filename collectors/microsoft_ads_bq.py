@@ -123,7 +123,16 @@ def _poll_report(access_token: str, request_id: str,
         status = data.get("ReportRequestStatus", {})
         state  = status.get("Status", "")
         if state == "Success":
-            return status.get("ReportDownloadUrl")
+            url = status.get("ReportDownloadUrl")
+            if not url:
+                # Microsoft returns Success + null URL when the account has
+                # ZERO activity in the queried window. NOT a bug — the
+                # platform legitimately has nothing to report. Most common
+                # cause: campaigns paused on the Bing Ads side. Verify in UI:
+                # https://ui.ads.microsoft.com
+                print("[ms-bq] WARNING: report Success but ReportDownloadUrl=null "
+                      "-> no spend/activity in window. Likely campaigns paused.")
+            return url
         if state in ("Error", "Failed"):
             print(f"[ms-bq] report failed: {status}")
             return None
