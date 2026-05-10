@@ -256,9 +256,15 @@ IG insights:
   causes 400 "Projected field not present in schema CampaignGroupV4/CampaignV8/
   AdAnalyticsV6" on every endpoint. Remove it entirely — v202502 works correctly
   without it.
-- **DO NOT pass `fields=` projection params** on `adCampaignGroups`, `adCampaigns`,
-  or `adAnalytics` calls. They are rejected when Restli 2.0 header is absent.
-  Return full objects and read what you need from the response.
+- **DO NOT pass `fields=` projection params** on `adCampaignGroups` or `adCampaigns`.
+  They are rejected when the Restli 2.0 header is absent. Return full objects and
+  read what you need from the response.
+- **MUST pass `fields=` on `adAnalytics`.** Unlike the metadata endpoints, the
+  analytics endpoint silently omits any field you don't explicitly request. Without
+  `"fields": "costInLocalCurrency,impressions,clicks,externalWebsiteConversions,dateRange,pivotValues"`,
+  `costInLocalCurrency` is absent from every row → all spend appears as $0 in BQ.
+  Verified 2026-05-10: account had $2,769 YTD real spend but BQ showed $0 until
+  the `fields` param was added. Fixed in `_fetch_analytics()` in `collectors/linkedin_bq.py`.
 - **Campaigns must use the account-scoped URL:**
   `/rest/adAccounts/{acct_id}/adCampaigns` — NOT `/rest/adCampaigns`.
   The global endpoint needs `search.account.values[0]` param which conflicts
@@ -519,6 +525,11 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   returns `ReportRequestStatus.Status='Success'` with `ReportDownloadUrl=null`. The collector
   reads this as "no rows to write" and exits silently. This causes `MAX(date)` to lag, which
   looks like a stale collector — but the underlying integration is healthy. Verified
-  2026-05-09: Microsoft Ads stopped on 2026-04-24 after campaigns were paused; LinkedIn
-  stopped 2026-02-08 for the same reason. Always sanity-check against the platform UI before
-  declaring a collector broken. The MS collector now logs this case explicitly.
+  2026-05-09: Microsoft Ads stopped on 2026-04-24 after campaigns were paused.
+  Always sanity-check against the platform UI before declaring a collector broken.
+  The MS collector now logs this case explicitly.
+- **LinkedIn data stopped Feb 2026 due to missing `fields=` param, NOT zero activity.**
+  The `adAnalytics` call omitted `fields`, so `costInLocalCurrency` was silently missing.
+  All rows were written with spend=$0, causing the upsert to look unchanged and BQ freshness
+  to lag. Real spend ($2,769 YTD) was recovered by adding the `fields` param. Fixed
+  2026-05-10. See LinkedIn section above for the correct `fields` value.
