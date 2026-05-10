@@ -283,13 +283,14 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.campaigns_created.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Budget</th></tr>
+          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Budget</th><th>By</th></tr>
           {% for r in metrics.campaigns_created.rows %}
           <tr>
             <td>{{ r.day }}</td>
             <td>{{ r.campaign_name or '—' }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
             <td>{% if r.budget %}${{ r.budget }}{% else %}—{% endif %}</td>
+            <td>{{ r.source or 'agent' }}</td>
           </tr>
           {% endfor %}
         </table>

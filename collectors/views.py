@@ -452,7 +452,7 @@ categorised AS (
     COALESCE(channel, 'general')  AS channel,
     campaign_name,
     CASE
-      WHEN action = 'campaign_created'
+      WHEN action IN ('campaign_created', 'user_created_campaign')
         THEN 'Campaigns Created'
       WHEN action IN ('launch', 'keyword_candidates_queued_for_weekly_review')
            AND role = 'keyword_management'
@@ -467,12 +467,15 @@ categorised AS (
         THEN 'Campaigns Scaled'
       WHEN action IN ('pause_task_created', 'junk_leads_task_created', 'ads_paused')
         THEN 'Ads Paused'
-      WHEN action = 'asana_task_created'
+      WHEN action IN ('asana_task_created', 'asana_tasks_created')
         THEN 'Asana Tasks'
       WHEN action IN ('posted_slack_digest', 'slack_summary_posted',
-                      'post_weekly_summary', 'nightly_audit_complete')
+                      'post_weekly_summary', 'nightly_audit_complete',
+                      'cadence_daily_complete', 'cadence_nightly_complete',
+                      'cadence_weekly_complete', 'cadence_monthly_complete')
         THEN 'Slack Messages'
-      WHEN action IN ('posted_approvals_digest', 'approval_requested')
+      WHEN action IN ('posted_approvals_digest', 'approval_requested',
+                      'action_approved_via_slack', 'action_rejected_via_slack')
         THEN 'Approvals'
       WHEN action IN (
         'user_completed_task', 'user_created_task',
@@ -480,7 +483,7 @@ categorised AS (
         'user_added_negative', 'user_reviewed_recommendation',
         'user_paused_campaign', 'user_enabled_campaign',
         'user_changed_budget', 'user_changed_status',
-        'user_paused_ad', 'user_enabled_ad'
+        'user_paused_ad', 'user_enabled_ad', 'user_created_campaign'
       ) OR role = 'user'
         THEN 'User Actions'
     END AS category,

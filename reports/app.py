@@ -289,19 +289,28 @@ def activity_dashboard():
     # ── _CAT_MAP used for sidebar + recent activity ────────────────────────────
     _CAT_MAP = {
         "campaign_created":                            "Campaigns Created",
+        "user_created_campaign":                       "Campaigns Created",
         "campaign_paused":                             "Campaigns Paused",
         "campaign_scaled":                             "Campaigns Scaled",
+        "ads_paused":                                  "Ads Paused",
         "launch":                                      "Keywords Added",
         "keyword_candidates_queued_for_weekly_review": "Keywords Added",
         "keywords_paused":                             "Keywords Paused",
         "negative_keywords_added":                     "Negatives Added",
         "asana_task_created":                          "Asana Tasks",
+        "asana_tasks_created":                         "Asana Tasks",
         "posted_slack_digest":                         "Slack Messages",
         "slack_summary_posted":                        "Slack Messages",
         "post_weekly_summary":                         "Slack Messages",
         "nightly_audit_complete":                      "Slack Messages",
+        "cadence_daily_complete":                      "Slack Messages",
+        "cadence_nightly_complete":                    "Slack Messages",
+        "cadence_weekly_complete":                     "Slack Messages",
+        "cadence_monthly_complete":                    "Slack Messages",
         "posted_approvals_digest":                     "Approvals",
         "approval_requested":                          "Approvals",
+        "action_approved_via_slack":                   "Approvals",
+        "action_rejected_via_slack":                   "Approvals",
         "user_completed_task":                         "User Actions",
         "user_created_task":                           "User Actions",
         "user_executed_scale":                         "User Actions",
@@ -401,19 +410,30 @@ def activity_dashboard():
         WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
           AND status NOT IN ('failed', 'skipped')
           AND action IN (
-            'campaign_created','campaign_paused','campaign_scaled',
+            -- Campaign actions
+            'campaign_created','campaign_paused','campaign_scaled','ads_paused',
+            'user_created_campaign',
+            -- Keyword actions
             'launch','keyword_candidates_queued_for_weekly_review',
             'keywords_paused','negative_keywords_added',
-            'asana_task_created',
+            -- Asana
+            'asana_task_created','asana_tasks_created',
+            -- Slack
             'posted_slack_digest','slack_summary_posted','post_weekly_summary',
             'nightly_audit_complete',
+            -- Approvals
             'posted_approvals_digest','approval_requested',
+            'action_approved_via_slack','action_rejected_via_slack',
+            -- Audits & optimizations
             'create_audit_tasks',
             'optimize_task_created','drilldown_task_created',
-            'scale_task_created','pause_task_created','junk_leads_task_created'
+            'scale_task_created','pause_task_created','junk_leads_task_created',
+            -- Cadence completions (these fire after each daily/nightly Slack round)
+            'cadence_daily_complete','cadence_nightly_complete',
+            'cadence_weekly_complete','cadence_monthly_complete'
           )
         ORDER BY ts DESC
-        LIMIT 600
+        LIMIT 2000
     """
     detail_rows = list(bq.query(detail_sql).result())
 
@@ -433,15 +453,17 @@ def activity_dashboard():
     """
     infra_rows = list(bq.query(infra_sql).result())
 
-    # ── 4. Linked channels ─────────────────────────────────────────────────────
+    # ── 4. Linked channels — from collector activity (covers all APIs incl. organic/CRM) ──
     chan_sql = f"""
         SELECT
-          channel,
-          MAX(date)                                                   AS latest_date,
-          DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) <= 3 AS active
-        FROM {T}.campaigns_daily
-        WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 60 DAY)
-          AND channel IS NOT NULL
+          REGEXP_REPLACE(action, r'^collect_', '')               AS channel,
+          MAX(DATE(ts, 'Asia/Riyadh'))                           AS latest_date,
+          DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),
+                    MAX(DATE(ts, 'Asia/Riyadh')), DAY) <= 2      AS active
+        FROM {T}.agent_activity_log
+        WHERE action LIKE 'collect_%'
+          AND status = 'success'
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
         GROUP BY channel
         ORDER BY latest_date DESC
     """
@@ -468,13 +490,15 @@ def activity_dashboard():
 
     # ── Build each metric ──────────────────────────────────────────────────────
 
-    # Campaigns created
-    c_created_rows = _filter(detail_rows, {"campaign_created"})
-    c30, c7 = _counts(detail_rows, {"campaign_created"})
+    # Campaigns created (agent-created Google Ads + user-created across all channels)
+    _created_actions = {"campaign_created", "user_created_campaign"}
+    c_created_rows = _filter(detail_rows, _created_actions)
+    c30, c7 = _counts(detail_rows, _created_actions)
     m_campaigns_created = {
         "count_30d": c30, "count_7d": c7,
         "rows": [{"day": r.day, "campaign_name": r.campaign_name,
-                  "channel": r.channel, "budget": r.create_budget}
+                  "channel": r.channel, "budget": r.create_budget,
+                  "source": "agent" if r.action == "campaign_created" else "user"}
                  for r in c_created_rows[:50]],
     }
 
@@ -572,18 +596,23 @@ def activity_dashboard():
                  for r in creative_rows[:100]],
     }
 
-    # Slack messages
+    # Slack messages (incl. cadence-complete events that trigger Slack posts)
     slack_actions = {"posted_slack_digest", "slack_summary_posted",
-                     "post_weekly_summary", "nightly_audit_complete"}
+                     "post_weekly_summary", "nightly_audit_complete",
+                     "cadence_daily_complete", "cadence_nightly_complete",
+                     "cadence_weekly_complete", "cadence_monthly_complete"}
     c30, c7 = _counts(detail_rows, slack_actions)
     m_slack_messages = {
         "count_30d": c30, "count_7d": c7,
         "rows": [{"day": r.day, "action": r.action}
-                 for r in _filter(detail_rows, slack_actions)[:60]],
+                 for r in _filter(detail_rows, slack_actions)[:120]],
     }
 
-    # Slack approvals — show scale/pause/review breakdown from details
-    approval_rows = _filter(detail_rows, {"posted_approvals_digest", "approval_requested"})
+    # Slack approvals — include explicit approve/reject reactions
+    approval_rows = _filter(detail_rows, {
+        "posted_approvals_digest", "approval_requested",
+        "action_approved_via_slack", "action_rejected_via_slack",
+    })
     apr_c30 = sum(1 for r in approval_rows if r.day >= cutoff_30)
     apr_c7  = sum(1 for r in approval_rows if r.day >= cutoff_7)
     m_slack_approvals = {
@@ -685,6 +714,7 @@ def activity_dashboard():
         "user_changed_status":          "Changed status (direct)",
         "user_paused_ad":               "Paused ad (direct)",
         "user_enabled_ad":              "Enabled ad (direct)",
+        "user_created_campaign":        "Created campaign (direct)",
     }
     m_user_actions = {
         "count_30d": ua_c30, "count_7d": ua_c7,

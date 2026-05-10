@@ -210,6 +210,45 @@ def _detect_and_log(bq, P: str, D: str, now_utc: datetime) -> None:
     except Exception:
         agent_touched = set()
 
+    # ── New campaigns: campaign_ids in latest snapshot not seen in any prior snapshot ──
+    new_camp_sql = f"""
+        WITH latest AS (
+          SELECT DISTINCT channel, campaign_id, campaign_name, status, budget_raw
+          FROM `{P}.{D}.{_TABLE}`
+          WHERE snapped_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 HOUR)
+        ),
+        ever_seen AS (
+          SELECT DISTINCT channel, campaign_id
+          FROM `{P}.{D}.{_TABLE}`
+          WHERE snapped_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 HOUR)
+        )
+        SELECT l.channel, l.campaign_id, l.campaign_name, l.status, l.budget_raw
+        FROM latest l
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ever_seen e
+          WHERE e.channel = l.channel AND e.campaign_id = l.campaign_id
+        )
+    """
+    try:
+        new_camps = list(bq.query(new_camp_sql).result())
+    except Exception as e:
+        print(f"[snapshot] new-campaign query failed (non-fatal): {e}")
+        new_camps = []
+
+    for nc in new_camps:
+        if nc.campaign_name and nc.campaign_name in agent_touched:
+            continue  # agent created it
+        log_activity_async(
+            role="user", action="user_created_campaign", status="success",
+            channel=nc.channel, campaign_name=nc.campaign_name,
+            details={
+                "campaign_id": nc.campaign_id,
+                "status": nc.status,
+                "budget_usd": round(nc.budget_raw or 0, 2),
+            },
+        )
+        print(f"[snapshot] new campaign detected: {nc.campaign_name} ({nc.channel})")
+
     # Campaigns where status or budget changed between last two snapshots
     diff_sql = f"""
         WITH ranked AS (
