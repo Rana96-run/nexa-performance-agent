@@ -965,7 +965,7 @@ def activity_dashboard():
             JSON_VALUE(details, '$.asset_level')  AS asset_level,
             DATE(ts, 'Asia/Riyadh')               AS created_day,
             ts
-          FROM `{T}.agent_activity_log`
+          FROM {T}.agent_activity_log
           WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
             AND action = 'asana_task_created'
 
@@ -989,7 +989,7 @@ def activity_dashboard():
             'campaign'                            AS asset_level,
             DATE(ts, 'Asia/Riyadh')               AS created_day,
             ts
-          FROM `{T}.agent_activity_log`
+          FROM {T}.agent_activity_log
           WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
             AND action IN (
               'scale_task_created', 'pause_task_created', 'junk_leads_task_created',
@@ -1010,7 +1010,7 @@ def activity_dashboard():
         , status AS (
           SELECT gid, completed, completed_at, assignee_name, due_on,
                  ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
-          FROM `{T}.asana_task_status`
+          FROM {T}.asana_task_status
         )
         SELECT
           c.gid, c.title, c.project_key, c.asset_level, c.created_day,
@@ -1078,7 +1078,7 @@ def activity_dashboard():
               JSON_VALUE(details, '$.old_status')   AS old_status,
               JSON_VALUE(details, '$.new_budget')   AS new_budget,
               JSON_VALUE(details, '$.direction')    AS direction
-            FROM `{T}.agent_activity_log`
+            FROM {T}.agent_activity_log
             WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
               AND action IN (
                 'campaign_paused', 'campaign_scaled',
@@ -1213,7 +1213,7 @@ def activity_dashboard():
                 channel,
                 campaign_name,
                 CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
-              FROM `{T}.agent_activity_log`
+              FROM {T}.agent_activity_log
               WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
                 AND action IN ('campaign_paused','campaign_scaled','campaign_created','ads_paused')
                 AND campaign_name IS NOT NULL
@@ -1234,7 +1234,7 @@ def activity_dashboard():
                 channel,
                 campaign_name,
                 CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
-              FROM `{T}.agent_activity_log`
+              FROM {T}.agent_activity_log
               WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
                 AND action IN ('pause_task_created','scale_task_created',
                                'junk_leads_task_created','optimize_task_created')
@@ -1288,7 +1288,7 @@ def activity_dashboard():
               ad_name,
               ROUND(SUM(spend), 2) AS total_spend,
               SUM(impressions)     AS impressions
-            FROM `{T}.ads_daily`
+            FROM {T}.ads_daily
             WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
             GROUP BY channel, campaign_name, ad_name
             HAVING MIN(date) >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
