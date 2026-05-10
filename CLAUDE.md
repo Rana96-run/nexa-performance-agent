@@ -33,6 +33,12 @@ You build on accumulated knowledge every session — never from scratch:
 - When a task completes, close it in `memory/09_open_tasks.md` and update `memory/01_architecture.md` if the structure changed
 - Each session must leave the agent more capable than it arrived
 
+## Auto-commit & push (non-negotiable)
+
+After every successful change to production code, **immediately commit and push to `origin/main`** — Railway auto-deploys from there, and uncommitted work is invisible to production. No "should I commit?" prompt; the user already opted in. One commit per logical task, conventional-commit format, `Co-Authored-By: Claude` footer. See `.claude/skills/auto-commit-and-push.md` for the full protocol — when to skip (secrets, logs, .cache/), how to handle pre-existing uncommitted changes from prior sessions, and the verification step (`git log --oneline origin/main..HEAD` should be empty after push).
+
+This rule exists because on 2026-05-10 we found a Snapchat-slug bug fix that had been done, verified, and documented in a prior session — but never committed. Snapchat leads were silently dropped from the dashboard for days. Won't repeat.
+
 ## Pre-send review (non-negotiable)
 
 Before posting to Slack or creating Asana tasks, always verify:
