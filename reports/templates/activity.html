@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexa Agent Activity</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    background: #f6f8fa;
+    color: #24292f;
+    line-height: 1.5;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  .page-wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; padding-bottom: 16px;
+    border-bottom: 1px solid #d0d7de;
+  }
+  header h1 { font-size: 20px; font-weight: 600; }
+  .header-meta { color: #57606a; font-size: 12px; }
+
+  section { margin-bottom: 32px; }
+  section h2 {
+    font-size: 14px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: #57606a;
+    margin-bottom: 12px; padding-bottom: 6px;
+    border-bottom: 1px solid #d0d7de;
+  }
+
+  /* ── Heatmap ────────────────────────────────────────────── */
+  .heatmap-section { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; }
+  .heatmap-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px; font-size: 12px; color: #57606a;
+  }
+  .heatmap-header strong { color: #24292f; font-size: 13px; margin-right: auto; }
+
+  .heatmap-legend { display: flex; align-items: center; gap: 4px; }
+  .heatmap-legend span { font-size: 11px; color: #57606a; }
+
+  .contrib-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  }
+  .contrib-label {
+    width: 160px; font-size: 11px; color: #57606a;
+    text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .contrib-label a {
+    color: #57606a; text-decoration: none;
+  }
+  .contrib-label a:hover { color: #0969da; text-decoration: underline; }
+  .contrib-count { width: 40px; font-size: 11px; color: #57606a; text-align: right; flex-shrink: 0; }
+
+  .heatmap-grid {
+    display: flex; flex-wrap: nowrap; gap: 2px;
+    overflow: hidden;
+  }
+  .heatmap-cell {
+    width: 11px; height: 11px; border-radius: 2px;
+    flex-shrink: 0;
+    position: relative; cursor: default;
+  }
+  .heatmap-cell:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    background: #24292f; color: #fff; padding: 3px 6px; border-radius: 4px;
+    font-size: 11px; white-space: nowrap; pointer-events: none; z-index: 10;
+  }
+  .lv0 { background: #ebedf0; }
+  .lv1 { background: #9be9a8; }
+  .lv2 { background: #40c463; }
+  .lv3 { background: #30a14e; }
+  .lv4 { background: #216e39; }
+
+  /* ── Metric cards grid ──────────────────────────────────── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  details.metric-card {
+    background: #fff; border: 1px solid #d0d7de; border-radius: 6px;
+    overflow: hidden;
+  }
+  details.metric-card[open] { border-color: #0969da; }
+
+  details.metric-card > summary {
+    list-style: none; cursor: pointer;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+    user-select: none;
+  }
+  details.metric-card > summary::-webkit-details-marker { display: none; }
+  details.metric-card > summary::marker { content: ""; }
+
+  .mc-top { display: flex; align-items: center; justify-content: space-between; }
+  .mc-label { font-size: 12px; color: #57606a; font-weight: 500; }
+  .mc-arrow { font-size: 11px; color: #57606a; transition: transform .15s; }
+  details[open] .mc-arrow { transform: rotate(180deg); }
+
+  .mc-counts { display: flex; gap: 12px; align-items: baseline; }
+  .mc-big { font-size: 22px; font-weight: 600; color: #24292f; }
+  .mc-sub { font-size: 11px; color: #57606a; }
+
+  .mc-badge {
+    font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 10px;
+    background: #ddf4ff; color: #0550ae;
+  }
+  .mc-badge.red { background: #ffebe9; color: #cf222e; }
+  .mc-badge.green { background: #dafbe1; color: #116329; }
+  .mc-badge.gray { background: #f6f8fa; color: #57606a; }
+
+  /* ── Drill-down table ──────────────────────────────────── */
+  .drill-down {
+    border-top: 1px solid #d0d7de;
+    max-height: 320px; overflow-y: auto;
+  }
+  .drill-down table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .drill-down th {
+    background: #f6f8fa; padding: 6px 10px; text-align: left;
+    font-weight: 600; color: #57606a; position: sticky; top: 0;
+    border-bottom: 1px solid #d0d7de;
+  }
+  .drill-down td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; color: #24292f; }
+  .drill-down tr:last-child td { border-bottom: none; }
+  .drill-down tr:hover td { background: #f6f8fa; }
+  .drill-down .empty { padding: 12px 10px; color: #57606a; font-style: italic; }
+
+  .kw-pill {
+    display: inline-block; background: #f0f0f0; border-radius: 3px;
+    padding: 1px 5px; margin: 1px 2px; font-size: 10px;
+  }
+
+  /* ── Recent activity ────────────────────────────────────── */
+  .recent-table-wrap {
+    background: #fff; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden;
+  }
+  .recent-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .recent-table-wrap th {
+    background: #f6f8fa; padding: 8px 12px; text-align: left;
+    font-weight: 600; color: #57606a; border-bottom: 1px solid #d0d7de;
+  }
+  .recent-table-wrap td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; }
+  .recent-table-wrap tr:last-child td { border-bottom: none; }
+  .recent-table-wrap tr:hover td { background: #f6f8fa; }
+
+  .badge {
+    display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 500;
+  }
+  .badge-blue   { background: #ddf4ff; color: #0550ae; }
+  .badge-green  { background: #dafbe1; color: #116329; }
+  .badge-orange { background: #fff1e5; color: #953800; }
+  .badge-red    { background: #ffebe9; color: #cf222e; }
+  .badge-purple { background: #fbefff; color: #6e40c9; }
+  .badge-gray   { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+
+  /* ── Channel tags ──────────────────────────────────────── */
+  .channel-grid {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0;
+  }
+  .channel-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: #fff; border: 1px solid #d0d7de; border-radius: 20px;
+    padding: 4px 12px; font-size: 12px;
+  }
+  .channel-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── Stat strip ─────────────────────────────────────────── */
+  .stat-strip {
+    display: flex; gap: 0; background: #fff;
+    border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stat-item {
+    flex: 1; padding: 16px 20px; border-right: 1px solid #d0d7de; text-align: center;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num { font-size: 24px; font-weight: 700; color: #24292f; }
+  .stat-lbl { font-size: 11px; color: #57606a; margin-top: 2px; }
+
+  @media (max-width: 700px) {
+    .contrib-label { width: 100px; }
+    .metric-grid { grid-template-columns: 1fr 1fr; }
+    .stat-strip { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Header -->
+  <header>
+    <div>
+      <h1>⚡ Nexa Agent Activity</h1>
+    </div>
+    <div class="header-meta">
+      Last updated: {{ last_updated }} (Riyadh) &nbsp;·&nbsp;
+      Last 90 days
+    </div>
+  </header>
+
+  <!-- Stat strip (top-line numbers) -->
+  <div class="stat-strip">
+    <div class="stat-item">
+      <div class="stat-num">{{ totals.total_actions }}</div>
+      <div class="stat-lbl">Total Actions (30d)</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">{{ totals.active_days }}</div>
+      <div class="stat-lbl">Active Days (30d)</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">{{ totals.asana_tasks }}</div>
+      <div class="stat-lbl">Asana Tasks Created (30d)</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">{{ totals.linked_channels }}</div>
+      <div class="stat-lbl">Linked Ad Channels</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">{{ totals.active_apis }}</div>
+      <div class="stat-lbl">Active APIs (7d)</div>
+    </div>
+  </div>
+
+  <!-- Contribution Heatmap -->
+  <section>
+    <h2>Contributions — Last 91 Days</h2>
+    <div class="heatmap-section">
+      <div class="heatmap-header">
+        <strong>Activity by category</strong>
+        Less
+        <div class="heatmap-legend">
+          <div class="heatmap-cell lv0" style="display:inline-block;width:11px;height:11px;border-radius:2px;"></div>
+          <div class="heatmap-cell lv1" style="display:inline-block;width:11px;height:11px;border-radius:2px;"></div>
+          <div class="heatmap-cell lv2" style="display:inline-block;width:11px;height:11px;border-radius:2px;"></div>
+          <div class="heatmap-cell lv3" style="display:inline-block;width:11px;height:11px;border-radius:2px;"></div>
+          <div class="heatmap-cell lv4" style="display:inline-block;width:11px;height:11px;border-radius:2px;"></div>
+        </div>
+        More
+      </div>
+
+      {% for cat, cells, total in heatmap_rows %}
+      <div class="contrib-row">
+        <div class="contrib-label">{{ cat }}</div>
+        <div class="heatmap-grid">
+          {% for cell in cells %}
+          <div class="heatmap-cell lv{{ cell.level }}" data-tip="{{ cell.date }}: {{ cell.count }}"></div>
+          {% endfor %}
+        </div>
+        <div class="contrib-count">{{ total }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- ── Campaign Operations ─────────────────────────────── -->
+  <section>
+    <h2>Campaign Operations</h2>
+    <div class="metric-grid">
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Campaigns Created</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.campaigns_created.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge gray">7d: {{ metrics.campaigns_created.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.campaigns_created.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Budget/day</th></tr></thead>
+            <tbody>
+              {% for r in metrics.campaigns_created.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.campaign_name or "—" }}</td>
+                <td>{{ r.channel or "—" }}</td>
+                <td>{{ ("$" + r.budget) if r.budget else "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No campaigns created in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Campaigns Paused</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.campaigns_paused.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge red">7d: {{ metrics.campaigns_paused.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.campaigns_paused.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Campaign</th><th>Channel</th></tr></thead>
+            <tbody>
+              {% for r in metrics.campaigns_paused.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.campaign_name or "—" }}</td>
+                <td>{{ r.channel or "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No campaigns paused in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Campaigns Scaled</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.campaigns_scaled.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge green">7d: {{ metrics.campaigns_scaled.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.campaigns_scaled.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Campaign</th><th>Channel</th><th>New Budget</th></tr></thead>
+            <tbody>
+              {% for r in metrics.campaigns_scaled.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.campaign_name or "—" }}</td>
+                <td>{{ r.channel or "—" }}</td>
+                <td>{{ ("$" + r.budget) if r.budget else "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No campaigns scaled in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Campaign Audits Run</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.campaign_audits.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge gray">7d: {{ metrics.campaign_audits.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.campaign_audits.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Channel</th><th>Tasks Created</th></tr></thead>
+            <tbody>
+              {% for r in metrics.campaign_audits.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.channel or "all" }}</td>
+                <td>{{ r.cnt }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No audit runs in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ── Keywords ──────────────────────────────────────────── -->
+  <section>
+    <h2>Keywords</h2>
+    <div class="metric-grid">
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Keywords Added</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.keywords_added.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge green">7d: {{ metrics.keywords_added.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.keywords_added.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Channel</th><th>Candidates</th></tr></thead>
+            <tbody>
+              {% for r in metrics.keywords_added.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.channel or "google_ads" }}</td>
+                <td>{{ r.cnt }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No keyword additions in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Keywords Paused</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.keywords_paused.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge red">7d: {{ metrics.keywords_paused.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.keywords_paused.kw_rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Keyword</th><th>Channel</th></tr></thead>
+            <tbody>
+              {% for r in metrics.keywords_paused.kw_rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td><span class="kw-pill">{{ r.keyword }}</span></td>
+                <td>{{ r.channel or "google_ads" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No keyword pauses in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Negatives Added</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.negatives_added.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge gray">7d: {{ metrics.negatives_added.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.negatives_added.term_rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Term</th></tr></thead>
+            <tbody>
+              {% for r in metrics.negatives_added.term_rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td><span class="kw-pill">{{ r.term }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No negatives added in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ── Tasks & Recommendations ───────────────────────────── -->
+  <section>
+    <h2>Tasks &amp; Recommendations</h2>
+    <div class="metric-grid">
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Optimization Steps Recommended</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.optimizations.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge blue">7d: {{ metrics.optimizations.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.optimizations.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Type</th></tr></thead>
+            <tbody>
+              {% for r in metrics.optimizations.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.campaign_name or "—" }}</td>
+                <td>{{ r.channel or "—" }}</td>
+                <td>{{ r.action | replace("_task_created","") | replace("_"," ") | title }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No optimization recommendations in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Asana Tasks Created</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.asana_tasks.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge blue">7d: {{ metrics.asana_tasks.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.asana_tasks.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Task Title</th><th>Project</th><th>Action</th></tr></thead>
+            <tbody>
+              {% for r in metrics.asana_tasks.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ r.title }}">{{ r.title }}</td>
+                <td>{{ r.project_key or "—" }}</td>
+                <td>{{ r.task_action or "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No Asana tasks in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Creative Reviews</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.creative_reviews.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge purple">7d: {{ metrics.creative_reviews.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.creative_reviews.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Creative / Task</th><th>Campaign</th><th>Channel</th></tr></thead>
+            <tbody>
+              {% for r in metrics.creative_reviews.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ r.title }}">{{ r.title }}</td>
+                <td>{{ r.campaign_name or "—" }}</td>
+                <td>{{ r.channel or "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No creative reviews in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ── Communications ────────────────────────────────────── -->
+  <section>
+    <h2>Communications</h2>
+    <div class="metric-grid">
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Slack Messages Sent</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.slack_messages.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge blue">7d: {{ metrics.slack_messages.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.slack_messages.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Type</th></tr></thead>
+            <tbody>
+              {% for r in metrics.slack_messages.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.action | replace("_"," ") | title }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No Slack messages in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Approval Messages Sent</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.slack_approvals.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge orange">7d: {{ metrics.slack_approvals.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.slack_approvals.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Scale</th><th>Pause</th><th>Review</th></tr></thead>
+            <tbody>
+              {% for r in metrics.slack_approvals.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.scale or 0 }}</td>
+                <td>{{ r.pause or 0 }}</td>
+                <td>{{ r.review or 0 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No approval messages in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ── Data & Infrastructure ─────────────────────────────── -->
+  <section>
+    <h2>Data &amp; Infrastructure</h2>
+    <div class="metric-grid">
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">BQ Collections Run</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.bq_collections.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge gray">7d: {{ metrics.bq_collections.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.bq_collections.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Collector</th><th>Rows</th></tr></thead>
+            <tbody>
+              {% for r in metrics.bq_collections.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.action | replace("collect_","") | replace("_"," ") | title }}</td>
+                <td>{{ r.cnt }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No BQ collections logged in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Reports / Dashboards Refreshed</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.reports_refreshed.count_30d }}</span>
+            <span class="mc-sub">30d</span>
+            <span class="mc-badge gray">7d: {{ metrics.reports_refreshed.count_7d }}</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.reports_refreshed.rows %}
+          <table>
+            <thead><tr><th>Date</th><th>Type</th></tr></thead>
+            <tbody>
+              {% for r in metrics.reports_refreshed.rows %}
+              <tr>
+                <td>{{ r.day }}</td>
+                <td>{{ r.action | replace("_"," ") | title }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No dashboard refreshes in last 90d</div>{% endif %}
+        </div>
+      </details>
+
+      <details class="metric-card">
+        <summary>
+          <div class="mc-top">
+            <span class="mc-label">Linked Ad Channels</span>
+            <span class="mc-arrow">▾</span>
+          </div>
+          <div class="mc-counts">
+            <span class="mc-big">{{ metrics.linked_channels.count }}</span>
+            <span class="mc-sub">total</span>
+          </div>
+        </summary>
+        <div class="drill-down">
+          {% if metrics.linked_channels.rows %}
+          <table>
+            <thead><tr><th>Channel</th><th>Latest Data</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for r in metrics.linked_channels.rows %}
+              <tr>
+                <td>{{ r.channel }}</td>
+                <td>{{ r.latest_date }}</td>
+                <td>
+                  {% if r.active %}
+                  <span class="badge badge-green">Active</span>
+                  {% else %}
+                  <span class="badge badge-gray">Stale</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<div class="empty">No channel data found</div>{% endif %}
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ── Recent Activity ───────────────────────────────────── -->
+  <section>
+    <h2>Recent Activity</h2>
+    <div class="recent-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (Riyadh)</th>
+            <th>Category</th>
+            <th>Channel</th>
+            <th>Campaign</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recent_activity %}
+          <tr>
+            <td style="white-space:nowrap;color:#57606a;">{{ r.ts }}</td>
+            <td>
+              <span class="badge
+                {%- if 'Keyword' in r.category or 'Negative' in r.category %} badge-green
+                {%- elif 'Pause' in r.category %} badge-red
+                {%- elif 'Slack' in r.category or 'Approval' in r.category %} badge-orange
+                {%- elif 'Asana' in r.category %} badge-purple
+                {%- elif 'Campaign' in r.category %} badge-blue
+                {%- else %} badge-gray
+                {%- endif %}">{{ r.category }}</span>
+            </td>
+            <td>{{ r.channel }}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.campaign }}</td>
+            <td>{{ r.count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

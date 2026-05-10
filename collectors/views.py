@@ -461,6 +461,10 @@ categorised AS (
         THEN 'Keywords Paused'
       WHEN action = 'negative_keywords_added'
         THEN 'Negatives Added'
+      WHEN action = 'campaign_paused'
+        THEN 'Campaigns Paused'
+      WHEN action = 'campaign_scaled'
+        THEN 'Campaigns Scaled'
       WHEN action IN ('pause_task_created', 'junk_leads_task_created', 'ads_paused')
         THEN 'Ads Paused'
       WHEN action = 'asana_task_created'

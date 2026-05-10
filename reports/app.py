@@ -4,6 +4,7 @@ reports/app.py
 Flask server that:
   GET  /health                 -> 200 OK (Railway health check)
   GET  /                       -> 301 → Hex performance dashboard
+  GET  /activity               -> HTML agent activity dashboard (BQ-backed)
   GET  /paid-performance/*     -> 301 → Hex performance dashboard
   GET  /reports/*              -> 301 → Hex performance dashboard
   POST /api/refresh            -> kick off BQ data refresh in background
@@ -11,21 +12,21 @@ Flask server that:
   POST /slack/events           -> Slack Events API (reaction_added → approve/reject)
   POST /hubspot/webhook        -> HubSpot lead webhooks (via hubspot_bp blueprint)
 
-Both dashboards live in Hex (read from BigQuery — persistent, survives redeploys):
+Performance dashboard lives in Hex (read from BQ):
   Performance → qoyod-marketing-performance  (paid media KPIs)
-  Activity    → nexa-agent-activity          (agent_activity_log BQ table)
+Activity dashboard is served as HTML from this server at /activity.
 
-Deploy on Railway (single dyno). Railway runs the agent — Hex serves the dashboards.
+Deploy on Railway (single dyno). Railway runs the agent — Flask serves /activity.
 """
 from __future__ import annotations
 
 import os
 from datetime import datetime
 
-from flask import Flask, jsonify, redirect, request, Response
+from flask import Flask, jsonify, redirect, render_template, request, Response
 from collectors.hubspot_webhook import hubspot_bp
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
 app.register_blueprint(hubspot_bp)
 
 
@@ -41,6 +42,378 @@ def health():
         "uptime_seconds": uptime_s,
         "utc_now": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     }), 200
+
+
+@app.route("/activity")
+def activity_dashboard():
+    """
+    Agent Activity Dashboard — GitHub-style heatmap + expandable metric cards.
+    All data comes from agent_activity_log in BQ.  Renders activity.html.
+    """
+    from datetime import date, timedelta, timezone
+    import json as _json
+
+    try:
+        from collectors.bq_writer import get_client
+        bq = get_client()
+        P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+        D  = os.getenv("BQ_DATASET", "qoyod_marketing")
+        T  = f"`{P}.{D}`"
+    except Exception as e:
+        return f"<pre>BQ unavailable: {e}</pre>", 503
+
+    riyadh = timezone(timedelta(hours=3))
+    today  = datetime.now(riyadh).date()
+    now_str = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M")
+
+    # ── 1. Heatmap data (91d, from view) ──────────────────────────────────────
+    heatmap_sql = f"""
+        SELECT day, category, SUM(count) AS count
+        FROM {T}.v_agent_activity_dashboard
+        WHERE day >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 91 DAY)
+        GROUP BY day, category
+    """
+    heatmap_raw: dict[str, dict[str, int]] = {}
+    for row in bq.query(heatmap_sql).result():
+        heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
+
+    CATEGORIES = [
+        "Campaigns Created", "Campaigns Paused", "Campaigns Scaled",
+        "Keywords Added", "Keywords Paused", "Negatives Added",
+        "Ads Paused", "Asana Tasks", "Slack Messages", "Approvals",
+    ]
+    dates_91 = [today - timedelta(days=i) for i in range(90, -1, -1)]
+
+    def _level(n):
+        if n == 0: return 0
+        if n <= 2:  return 1
+        if n <= 5:  return 2
+        if n <= 10: return 3
+        return 4
+
+    heatmap_rows = []
+    for cat in CATEGORIES:
+        data  = heatmap_raw.get(cat, {})
+        cells = [{"date": str(d), "count": data.get(str(d), 0),
+                  "level": _level(data.get(str(d), 0))} for d in dates_91]
+        total = sum(c["count"] for c in cells)
+        heatmap_rows.append((cat, cells, total))
+
+    # ── 2. All detail rows (90d, relevant actions only) ───────────────────────
+    detail_sql = f"""
+        SELECT
+          DATE(ts, 'Asia/Riyadh')                          AS day,
+          action, role, channel, campaign_name, status,
+          COALESCE(rows_affected, 1)                        AS cnt,
+          JSON_VALUE(details, '$.title')                    AS asana_title,
+          JSON_VALUE(details, '$.task_action')              AS asana_task_action,
+          JSON_VALUE(details, '$.asset_level')              AS asana_asset_level,
+          JSON_VALUE(details, '$.project_key')              AS asana_project_key,
+          JSON_VALUE(details, '$.new_budget_usd')           AS new_budget,
+          JSON_VALUE(details, '$.budget_usd')               AS create_budget,
+          JSON_VALUE(details, '$.candidate_count')          AS candidate_count,
+          JSON_EXTRACT_STRING_ARRAY(details, '$.keywords')  AS kw_list,
+          JSON_EXTRACT_STRING_ARRAY(details, '$.terms')     AS terms_list,
+          JSON_VALUE(details, '$.scale')                    AS dig_scale,
+          JSON_VALUE(details, '$.pause')                    AS dig_pause,
+          JSON_VALUE(details, '$.review')                   AS dig_review
+        FROM {T}.agent_activity_log
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+          AND status NOT IN ('failed', 'skipped')
+          AND action IN (
+            'campaign_created','campaign_paused','campaign_scaled',
+            'launch','keyword_candidates_queued_for_weekly_review',
+            'keywords_paused','negative_keywords_added',
+            'asana_task_created',
+            'posted_slack_digest','slack_summary_posted','post_weekly_summary',
+            'nightly_audit_complete',
+            'posted_approvals_digest','approval_requested',
+            'create_audit_tasks',
+            'optimize_task_created','drilldown_task_created',
+            'scale_task_created','pause_task_created','junk_leads_task_created'
+          )
+        ORDER BY ts DESC
+        LIMIT 600
+    """
+    detail_rows = list(bq.query(detail_sql).result())
+
+    # ── 3. BQ collections & refreshes ─────────────────────────────────────────
+    infra_sql = f"""
+        SELECT
+          DATE(ts, 'Asia/Riyadh') AS day,
+          action,
+          COALESCE(rows_affected, 1) AS cnt
+        FROM {T}.agent_activity_log
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+          AND status NOT IN ('failed','skipped')
+          AND (action LIKE 'collect_%' OR action IN (
+               'refresh_hex_notebooks','refresh_complete','refresh_views'))
+        ORDER BY ts DESC
+        LIMIT 300
+    """
+    infra_rows = list(bq.query(infra_sql).result())
+
+    # ── 4. Linked channels ─────────────────────────────────────────────────────
+    chan_sql = f"""
+        SELECT
+          channel,
+          MAX(date)                                                   AS latest_date,
+          DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) <= 3 AS active
+        FROM {T}.campaigns_daily
+        WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 60 DAY)
+          AND channel IS NOT NULL
+        GROUP BY channel
+        ORDER BY latest_date DESC
+    """
+    channel_rows = []
+    try:
+        channel_rows = list(bq.query(chan_sql).result())
+    except Exception:
+        pass
+
+    # ── Helper: count rows by action set, filtered to window ──────────────────
+    cutoff_30 = today - timedelta(days=30)
+    cutoff_7  = today - timedelta(days=7)
+
+    def _counts(rows, actions):
+        c30 = sum(r.cnt for r in rows if r.action in actions and r.day >= cutoff_30)
+        c7  = sum(r.cnt for r in rows if r.action in actions and r.day >= cutoff_7)
+        return c30, c7
+
+    def _filter(rows, actions, *, extra=None):
+        out = [r for r in rows if r.action in actions]
+        if extra:
+            out = [r for r in out if extra(r)]
+        return out
+
+    # ── Build each metric ──────────────────────────────────────────────────────
+
+    # Campaigns created
+    c_created_rows = _filter(detail_rows, {"campaign_created"})
+    c30, c7 = _counts(detail_rows, {"campaign_created"})
+    m_campaigns_created = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "campaign_name": r.campaign_name,
+                  "channel": r.channel, "budget": r.create_budget}
+                 for r in c_created_rows[:50]],
+    }
+
+    # Campaigns paused (via approval execution)
+    c30, c7 = _counts(detail_rows, {"campaign_paused"})
+    m_campaigns_paused = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "campaign_name": r.campaign_name, "channel": r.channel}
+                 for r in _filter(detail_rows, {"campaign_paused"})[:50]],
+    }
+
+    # Campaigns scaled
+    c30, c7 = _counts(detail_rows, {"campaign_scaled"})
+    m_campaigns_scaled = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "campaign_name": r.campaign_name,
+                  "channel": r.channel, "budget": r.new_budget}
+                 for r in _filter(detail_rows, {"campaign_scaled"})[:50]],
+    }
+
+    # Campaign audits
+    audit_actions = {"create_audit_tasks"}
+    c30, c7 = _counts(detail_rows, audit_actions)
+    m_campaign_audits = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "channel": r.channel, "cnt": r.cnt}
+                 for r in _filter(detail_rows, audit_actions)[:60]],
+    }
+
+    # Keywords added
+    kw_add_actions = {"launch", "keyword_candidates_queued_for_weekly_review"}
+    c30, c7 = _counts(detail_rows, kw_add_actions)
+    m_keywords_added = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "channel": r.channel or "google_ads", "cnt": r.cnt}
+                 for r in _filter(detail_rows, kw_add_actions)[:60]],
+    }
+
+    # Keywords paused — expand kw_list from JSON array
+    kw_paused_flat = []
+    for r in _filter(detail_rows, {"keywords_paused"}):
+        kws = r.kw_list or []
+        for kw in kws:
+            kw_paused_flat.append({"day": r.day, "keyword": kw, "channel": r.channel})
+    kp_c30 = sum(r.cnt for r in detail_rows if r.action == "keywords_paused" and r.day >= cutoff_30)
+    kp_c7  = sum(r.cnt for r in detail_rows if r.action == "keywords_paused" and r.day >= cutoff_7)
+    m_keywords_paused = {
+        "count_30d": kp_c30, "count_7d": kp_c7,
+        "kw_rows": kw_paused_flat[:120],
+    }
+
+    # Negatives added — expand terms_list
+    neg_flat = []
+    for r in _filter(detail_rows, {"negative_keywords_added"}):
+        for term in (r.terms_list or []):
+            neg_flat.append({"day": r.day, "term": term})
+    neg_c30 = sum(r.cnt for r in detail_rows if r.action == "negative_keywords_added" and r.day >= cutoff_30)
+    neg_c7  = sum(r.cnt for r in detail_rows if r.action == "negative_keywords_added" and r.day >= cutoff_7)
+    m_negatives_added = {
+        "count_30d": neg_c30, "count_7d": neg_c7,
+        "term_rows": neg_flat[:120],
+    }
+
+    # Optimization recommendations
+    opt_actions = {"optimize_task_created", "drilldown_task_created",
+                   "scale_task_created", "pause_task_created", "junk_leads_task_created"}
+    c30, c7 = _counts(detail_rows, opt_actions)
+    m_optimizations = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "campaign_name": r.campaign_name,
+                  "channel": r.channel, "action": r.action}
+                 for r in _filter(detail_rows, opt_actions)[:100]],
+    }
+
+    # Asana tasks (all, excluding creative reviews)
+    asana_rows = _filter(detail_rows, {"asana_task_created"})
+    asana_c30 = sum(1 for r in asana_rows if r.day >= cutoff_30)
+    asana_c7  = sum(1 for r in asana_rows if r.day >= cutoff_7)
+    m_asana_tasks = {
+        "count_30d": asana_c30, "count_7d": asana_c7,
+        "rows": [{"day": r.day, "title": r.asana_title or "—",
+                  "project_key": r.asana_project_key or "—",
+                  "task_action": r.asana_task_action or "—"}
+                 for r in asana_rows[:100]],
+    }
+
+    # Creative reviews — Asana tasks where asset_level = 'ad'
+    creative_rows = [r for r in asana_rows if r.asana_asset_level in ("ad", "creative")]
+    cr_c30 = sum(1 for r in creative_rows if r.day >= cutoff_30)
+    cr_c7  = sum(1 for r in creative_rows if r.day >= cutoff_7)
+    m_creative_reviews = {
+        "count_30d": cr_c30, "count_7d": cr_c7,
+        "rows": [{"day": r.day, "title": r.asana_title or "—",
+                  "campaign_name": r.campaign_name or "—", "channel": r.channel or "—"}
+                 for r in creative_rows[:100]],
+    }
+
+    # Slack messages
+    slack_actions = {"posted_slack_digest", "slack_summary_posted",
+                     "post_weekly_summary", "nightly_audit_complete"}
+    c30, c7 = _counts(detail_rows, slack_actions)
+    m_slack_messages = {
+        "count_30d": c30, "count_7d": c7,
+        "rows": [{"day": r.day, "action": r.action}
+                 for r in _filter(detail_rows, slack_actions)[:60]],
+    }
+
+    # Slack approvals — show scale/pause/review breakdown from details
+    approval_rows = _filter(detail_rows, {"posted_approvals_digest", "approval_requested"})
+    apr_c30 = sum(1 for r in approval_rows if r.day >= cutoff_30)
+    apr_c7  = sum(1 for r in approval_rows if r.day >= cutoff_7)
+    m_slack_approvals = {
+        "count_30d": apr_c30, "count_7d": apr_c7,
+        "rows": [{"day": r.day,
+                  "scale":  r.dig_scale  or 0,
+                  "pause":  r.dig_pause  or 0,
+                  "review": r.dig_review or 0}
+                 for r in approval_rows[:60]],
+    }
+
+    # BQ collections
+    bq_col_rows = [r for r in infra_rows if r.action.startswith("collect_")]
+    bc_c30 = sum(r.cnt for r in bq_col_rows if r.day >= cutoff_30)
+    bc_c7  = sum(r.cnt for r in bq_col_rows if r.day >= cutoff_7)
+    m_bq_collections = {
+        "count_30d": bc_c30, "count_7d": bc_c7,
+        "rows": [{"day": r.day, "action": r.action, "cnt": r.cnt}
+                 for r in bq_col_rows[:100]],
+    }
+
+    # Reports refreshed
+    rep_rows = [r for r in infra_rows if r.action in
+                ("refresh_hex_notebooks", "refresh_complete", "refresh_views")]
+    rr_c30 = len([r for r in rep_rows if r.day >= cutoff_30])
+    rr_c7  = len([r for r in rep_rows if r.day >= cutoff_7])
+    m_reports_refreshed = {
+        "count_30d": rr_c30, "count_7d": rr_c7,
+        "rows": [{"day": r.day, "action": r.action} for r in rep_rows[:60]],
+    }
+
+    # Linked channels
+    linked_ch = [{"channel": r.channel, "latest_date": str(r.latest_date),
+                  "active": bool(r.active)} for r in channel_rows]
+    m_linked_channels = {
+        "count": len(linked_ch),
+        "rows": linked_ch,
+    }
+
+    # ── Top-level totals ───────────────────────────────────────────────────────
+    _all_30d_actions = [r for r in detail_rows if r.day >= cutoff_30]
+    active_days = len({r.day for r in _all_30d_actions})
+    totals = {
+        "total_actions": sum(r.cnt for r in _all_30d_actions),
+        "active_days":   active_days,
+        "asana_tasks":   asana_c30,
+        "linked_channels": len(linked_ch),
+        "active_apis":   sum(1 for r in channel_rows if r.active),
+    }
+
+    # ── Recent activity feed ───────────────────────────────────────────────────
+    _CAT_MAP = {
+        "campaign_created":                           "Campaigns Created",
+        "campaign_paused":                            "Campaigns Paused",
+        "campaign_scaled":                            "Campaigns Scaled",
+        "launch":                                     "Keywords Added",
+        "keyword_candidates_queued_for_weekly_review":"Keywords Added",
+        "keywords_paused":                            "Keywords Paused",
+        "negative_keywords_added":                    "Negatives Added",
+        "asana_task_created":                         "Asana Tasks",
+        "posted_slack_digest":                        "Slack Messages",
+        "slack_summary_posted":                       "Slack Messages",
+        "post_weekly_summary":                        "Slack Messages",
+        "nightly_audit_complete":                     "Slack Messages",
+        "posted_approvals_digest":                    "Approvals",
+        "approval_requested":                         "Approvals",
+        "create_audit_tasks":                         "Campaign Audits",
+        "optimize_task_created":                      "Optimizations",
+        "drilldown_task_created":                     "Optimizations",
+        "scale_task_created":                         "Optimizations",
+        "pause_task_created":                         "Optimizations",
+        "junk_leads_task_created":                    "Optimizations",
+    }
+    recent_activity = [
+        {
+            "ts":       str(r.day),
+            "category": _CAT_MAP.get(r.action, r.action.replace("_", " ").title()),
+            "channel":  r.channel or "—",
+            "campaign": r.campaign_name or "—",
+            "count":    r.cnt,
+        }
+        for r in detail_rows[:80]
+    ]
+
+    metrics = {
+        "campaigns_created":  m_campaigns_created,
+        "campaigns_paused":   m_campaigns_paused,
+        "campaigns_scaled":   m_campaigns_scaled,
+        "campaign_audits":    m_campaign_audits,
+        "keywords_added":     m_keywords_added,
+        "keywords_paused":    m_keywords_paused,
+        "negatives_added":    m_negatives_added,
+        "optimizations":      m_optimizations,
+        "asana_tasks":        m_asana_tasks,
+        "creative_reviews":   m_creative_reviews,
+        "slack_messages":     m_slack_messages,
+        "slack_approvals":    m_slack_approvals,
+        "bq_collections":     m_bq_collections,
+        "reports_refreshed":  m_reports_refreshed,
+        "linked_channels":    m_linked_channels,
+    }
+
+    return render_template(
+        "activity.html",
+        last_updated=now_str,
+        heatmap_rows=heatmap_rows,
+        metrics=metrics,
+        totals=totals,
+        recent_activity=recent_activity,
+    )
 
 
 _REFRESH_STATUS: dict = {"running": False, "started_at": None,
@@ -288,6 +661,12 @@ def _execute_approved_action(meta: dict) -> str:
                 set_campaign_budget(campaign_id, new_budget)
             else:
                 return f"Channel `{channel}` not supported for auto-scale. Set budget to ${new_budget:.0f}/day manually."
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="execution", action="campaign_scaled",
+                channel=channel, campaign_name=campaign,
+                details={"new_budget_usd": new_budget, "campaign_id": campaign_id},
+            )
             return f"Budget increased to ${new_budget:.0f}/day (+25%). Done."
         except Exception as e:
             return f"Scale execution failed: {e}. Set to ${new_budget:.0f}/day manually."
@@ -313,6 +692,12 @@ def _execute_approved_action(meta: dict) -> str:
                 pause_campaign(campaign_id)
             else:
                 return f"Channel `{channel}` not supported for auto-pause. Pause `{campaign}` manually."
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="execution", action="campaign_paused",
+                channel=channel, campaign_name=campaign,
+                details={"campaign_id": campaign_id},
+            )
             return f"Campaign paused. Done."
         except Exception as e:
             return f"Pause execution failed: {e}. Pause `{campaign}` manually."
