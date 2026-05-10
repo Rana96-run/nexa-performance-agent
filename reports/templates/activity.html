@@ -305,7 +305,12 @@ a:hover{text-decoration:underline}
           <div class="card-icon">⏸</div>
           <div>
             <div class="card-name">Campaigns Paused</div>
-            <div class="card-counts">30d: {{ metrics.campaigns_paused.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_paused.count_7d }}</div>
+            <div class="card-counts">
+              30d: {{ metrics.campaigns_paused.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_paused.count_7d }}
+              {% if metrics.campaigns_paused.exec_30d is defined %}
+              &nbsp;·&nbsp; <span style="color:#8b949e;font-size:11px">{{ metrics.campaigns_paused.exec_30d }} executed · {{ metrics.campaigns_paused.rec_30d }} recommended</span>
+              {% endif %}
+            </div>
           </div>
         </div>
         <div class="card-right">
@@ -319,16 +324,23 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.campaigns_paused.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Campaign</th><th>Channel</th></tr>
+          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Status</th></tr>
           {% for r in metrics.campaigns_paused.rows %}
           <tr>
             <td>{{ r.day }}</td>
             <td>{{ r.campaign_name or '—' }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
+            <td>
+              {% if r.status == 'executed' %}
+              <span style="color:#39d353;font-size:11px">✅ Executed</span>
+              {% else %}
+              <span style="color:#e3b341;font-size:11px">⏳ Pending approval</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No campaigns paused in this period.</div>{% endif %}
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No pause actions in this period.</div>{% endif %}
       </div>
     </div>
 
@@ -339,7 +351,12 @@ a:hover{text-decoration:underline}
           <div class="card-icon">📈</div>
           <div>
             <div class="card-name">Campaigns Scaled</div>
-            <div class="card-counts">30d: {{ metrics.campaigns_scaled.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_scaled.count_7d }}</div>
+            <div class="card-counts">
+              30d: {{ metrics.campaigns_scaled.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_scaled.count_7d }}
+              {% if metrics.campaigns_scaled.exec_30d is defined %}
+              &nbsp;·&nbsp; <span style="color:#8b949e;font-size:11px">{{ metrics.campaigns_scaled.exec_30d }} executed · {{ metrics.campaigns_scaled.rec_30d }} recommended</span>
+              {% endif %}
+            </div>
           </div>
         </div>
         <div class="card-right">
@@ -353,17 +370,24 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.campaigns_scaled.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>New Budget</th></tr>
+          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>New Budget</th><th>Status</th></tr>
           {% for r in metrics.campaigns_scaled.rows %}
           <tr>
             <td>{{ r.day }}</td>
             <td>{{ r.campaign_name or '—' }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
             <td>{% if r.budget %}${{ r.budget }}{% else %}—{% endif %}</td>
+            <td>
+              {% if r.status == 'executed' %}
+              <span style="color:#39d353;font-size:11px">✅ Executed</span>
+              {% else %}
+              <span style="color:#e3b341;font-size:11px">⏳ Pending approval</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No campaigns scaled in this period.</div>{% endif %}
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No scale actions in this period.</div>{% endif %}
       </div>
     </div>
 

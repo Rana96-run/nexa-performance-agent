@@ -502,21 +502,33 @@ def activity_dashboard():
                  for r in c_created_rows[:50]],
     }
 
-    # Campaigns paused (via approval execution)
-    c30, c7 = _counts(detail_rows, {"campaign_paused"})
+    # Campaigns paused: count executed pauses + pending-approval pause tasks
+    _pause_exec   = {"campaign_paused"}
+    _pause_rec    = {"pause_task_created", "junk_leads_task_created"}
+    exec_c30, exec_c7 = _counts(detail_rows, _pause_exec)
+    rec_c30,  rec_c7  = _counts(detail_rows, _pause_rec)
     m_campaigns_paused = {
-        "count_30d": c30, "count_7d": c7,
-        "rows": [{"day": r.day, "campaign_name": r.campaign_name, "channel": r.channel}
-                 for r in _filter(detail_rows, {"campaign_paused"})[:50]],
+        "count_30d": exec_c30 + rec_c30,
+        "count_7d":  exec_c7  + rec_c7,
+        "exec_30d": exec_c30, "rec_30d": rec_c30,
+        "rows": [{"day": r.day, "campaign_name": r.campaign_name, "channel": r.channel,
+                  "status": "executed" if r.action == "campaign_paused" else "recommended"}
+                 for r in _filter(detail_rows, _pause_exec | _pause_rec)[:50]],
     }
 
-    # Campaigns scaled
-    c30, c7 = _counts(detail_rows, {"campaign_scaled"})
+    # Campaigns scaled: count executed scales + pending-approval scale tasks
+    _scale_exec = {"campaign_scaled"}
+    _scale_rec  = {"scale_task_created"}
+    exec_c30, exec_c7 = _counts(detail_rows, _scale_exec)
+    rec_c30,  rec_c7  = _counts(detail_rows, _scale_rec)
     m_campaigns_scaled = {
-        "count_30d": c30, "count_7d": c7,
+        "count_30d": exec_c30 + rec_c30,
+        "count_7d":  exec_c7  + rec_c7,
+        "exec_30d": exec_c30, "rec_30d": rec_c30,
         "rows": [{"day": r.day, "campaign_name": r.campaign_name,
-                  "channel": r.channel, "budget": r.new_budget}
-                 for r in _filter(detail_rows, {"campaign_scaled"})[:50]],
+                  "channel": r.channel, "budget": r.new_budget,
+                  "status": "executed" if r.action == "campaign_scaled" else "recommended"}
+                 for r in _filter(detail_rows, _scale_exec | _scale_rec)[:50]],
     }
 
     # Campaign audits
@@ -573,8 +585,13 @@ def activity_dashboard():
                  for r in _filter(detail_rows, opt_actions)[:100]],
     }
 
-    # Asana tasks (all, excluding creative reviews)
-    asana_rows = _filter(detail_rows, {"asana_task_created", "asana_tasks_created"})
+    # Asana tasks — include direct task creates AND audit-generated recommendation tasks
+    _all_asana_actions = {
+        "asana_task_created", "asana_tasks_created",
+        "scale_task_created", "pause_task_created", "junk_leads_task_created",
+        "optimize_task_created", "drilldown_task_created",
+    }
+    asana_rows = _filter(detail_rows, _all_asana_actions)
     asana_c30 = sum(1 for r in asana_rows if r.day >= cutoff_30)
     asana_c7  = sum(1 for r in asana_rows if r.day >= cutoff_7)
     # Count distinct projects that received tasks in the 30d window
@@ -885,24 +902,57 @@ def activity_dashboard():
     # the null-partition collapse that previously reduced 100+ tasks to 1.
     task_status_rows = []
     _ASANA_WINDOW = 365
+    # Pull ALL task-creation events.
+    # executors/asana.py logs 'asana_task_created' with details.gid + details.title + details.project_key
+    # campaign_health_tasks.py logs scale/pause/optimize/drilldown_task_created with details.asana_gid + campaign_name
     _ts_base_sql = f"""
-        WITH created AS (
+        WITH all_tasks AS (
+          -- executors/asana.py: full details
           SELECT
             JSON_VALUE(details, '$.gid')         AS gid,
             JSON_VALUE(details, '$.title')        AS title,
             JSON_VALUE(details, '$.project_key')  AS project_key,
             JSON_VALUE(details, '$.asset_level')  AS asset_level,
             DATE(ts, 'Asia/Riyadh')               AS created_day,
-            ROW_NUMBER() OVER (
-              PARTITION BY COALESCE(
-                JSON_VALUE(details, '$.gid'),
-                FORMAT_TIMESTAMP('%Y%m%d%H%M%E6S', ts)
-              )
-              ORDER BY ts DESC
-            ) AS rn
+            ts
           FROM `{T}.agent_activity_log`
           WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
             AND action = 'asana_task_created'
+
+          UNION ALL
+
+          -- campaign_health_tasks.py: uses asana_gid field, title from campaign_name
+          SELECT
+            JSON_VALUE(details, '$.asana_gid')    AS gid,
+            CONCAT(
+              CASE action
+                WHEN 'scale_task_created'      THEN 'Scale: '
+                WHEN 'pause_task_created'      THEN 'Pause: '
+                WHEN 'junk_leads_task_created' THEN 'Junk Leads: '
+                WHEN 'optimize_task_created'   THEN 'Optimize: '
+                WHEN 'drilldown_task_created'  THEN 'Review: '
+                ELSE ''
+              END,
+              COALESCE(campaign_name, action)
+            )                                     AS title,
+            'optimization'                        AS project_key,
+            'campaign'                            AS asset_level,
+            DATE(ts, 'Asia/Riyadh')               AS created_day,
+            ts
+          FROM `{T}.agent_activity_log`
+          WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+            AND action IN (
+              'scale_task_created', 'pause_task_created', 'junk_leads_task_created',
+              'optimize_task_created', 'drilldown_task_created'
+            )
+        ),
+        created AS (
+          SELECT *,
+            ROW_NUMBER() OVER (
+              PARTITION BY COALESCE(gid, CAST(ts AS STRING))
+              ORDER BY ts DESC
+            ) AS rn
+          FROM all_tasks
         )
     """
     try:
