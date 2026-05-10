@@ -839,6 +839,42 @@ def activity_dashboard():
                  for r in intel_rows if r.action == "data_quality_autoheal"][:60],
     }
 
+    # Ads paused / enabled
+    ads_rows = _filter(detail_rows, {"ads_paused", "ads_enabled"})
+    ap_c30 = sum(int(r.cnt) for r in ads_rows if r.day >= cutoff_30)
+    ap_c7  = sum(int(r.cnt) for r in ads_rows if r.day >= cutoff_7)
+    m_ads_paused = {
+        "count_30d": ap_c30, "count_7d": ap_c7,
+        "rows": [{"day": str(r.day), "action": r.action,
+                  "channel": r.channel or "—", "cnt": int(r.cnt)}
+                 for r in ads_rows[:80]],
+    }
+
+    # Approval rate — how often the team acts on recommendations
+    approved_30d = sum(1 for r in detail_rows
+                       if r.action == "action_approved_via_slack" and r.day >= cutoff_30)
+    rejected_30d = sum(1 for r in detail_rows
+                       if r.action == "action_rejected_via_slack" and r.day >= cutoff_30)
+    total_decisions = approved_30d + rejected_30d
+    m_approval_rate = {
+        "approved_30d": approved_30d,
+        "rejected_30d": rejected_30d,
+        "total_30d":    total_decisions,
+        "rate_pct":     round(approved_30d / max(total_decisions, 1) * 100),
+        "rows": [{"day": str(r.day),
+                  "verdict": "✅ Approved" if r.action == "action_approved_via_slack" else "❌ Rejected"}
+                 for r in _filter(detail_rows,
+                     {"action_approved_via_slack", "action_rejected_via_slack"})[:60]],
+    }
+
+    # Weekly autofix — autonomous Sunday keyword fixes (no Asana task, no approval)
+    af_c30, af_c7 = _icounts("weekly_autofix")
+    m_weekly_autofix = {
+        "count_30d": af_c30, "count_7d": af_c7,
+        "rows": [{"day": str(r.day), "cnt": int(r.cnt)}
+                 for r in intel_rows if r.action == "weekly_autofix"][:30],
+    }
+
     # ── Sidebar categories (totals over selected window) ──────────────────────
     sidebar_raw: dict[str, int] = {}
     for r in detail_rows:
@@ -904,6 +940,9 @@ def activity_dashboard():
         "spike_detections":   m_spike_detections,
         "slack_bot":          m_slack_bot,
         "data_quality":       m_data_quality,
+        "ads_paused":         m_ads_paused,
+        "approval_rate":      m_approval_rate,
+        "weekly_autofix":     m_weekly_autofix,
     }
 
     # ── 5. Asana task completion status ───────────────────────────────────────

@@ -841,6 +841,111 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
+    <!-- Ads Paused / Enabled -->
+    <div class="card" id="ads_paused">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">⏸</div>
+          <div>
+            <div class="card-name">Ads Paused / Enabled</div>
+            <div class="card-counts">30d: {{ metrics.ads_paused.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.ads_paused.count_7d }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.ads_paused.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if metrics.ads_paused.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Channel</th><th>Action</th><th>Count</th></tr>
+          {% for r in metrics.ads_paused.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+            <td>{{ "⏸ Paused" if r.action == "ads_paused" else "▶ Enabled" }}</td>
+            <td>{{ r.cnt }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No ad state changes in this period.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Approval Rate -->
+    <div class="card" id="approval_rate">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">✅</div>
+          <div>
+            <div class="card-name">Approval Rate</div>
+            <div class="card-counts">
+              {{ metrics.approval_rate.approved_30d }} approved &nbsp;·&nbsp;
+              {{ metrics.approval_rate.rejected_30d }} rejected (30d)
+            </div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.approval_rate.rate_pct }}%</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if metrics.approval_rate.total_30d > 0 %}
+        <div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <span style="color:#39d353;font-size:13px;font-weight:600">✅ {{ metrics.approval_rate.approved_30d }}</span>
+            <span style="color:#f85149;font-size:13px;font-weight:600">❌ {{ metrics.approval_rate.rejected_30d }}</span>
+            <span style="color:#8b949e;font-size:12px">of {{ metrics.approval_rate.total_30d }} decisions</span>
+          </div>
+          <div style="height:6px;background:#21262d;border-radius:4px;overflow:hidden">
+            <div style="height:6px;background:#238636;border-radius:4px;width:{{ metrics.approval_rate.rate_pct }}%"></div>
+          </div>
+        </div>
+        <table class="dtable">
+          <tr><th>Date</th><th>Decision</th></tr>
+          {% for r in metrics.approval_rate.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td>{{ r.verdict }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No approval decisions logged yet.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Weekly Autofix -->
+    <div class="card" id="weekly_autofix">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">🔁</div>
+          <div>
+            <div class="card-name">Weekly Autofix</div>
+            <div class="card-counts">30d: {{ metrics.weekly_autofix.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.weekly_autofix.count_7d }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.weekly_autofix.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if metrics.weekly_autofix.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Keywords Fixed</th></tr>
+          {% for r in metrics.weekly_autofix.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td>{{ r.cnt }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No Sunday autofix runs in this period.</div>{% endif %}
+      </div>
+    </div>
+
   </div><!-- /cards-grid -->
 
   <!-- ── Asana Task Completion ── -->
