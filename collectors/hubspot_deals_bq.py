@@ -112,15 +112,21 @@ def _classify_stage(stage_id, hs_is_closed_won=None, hs_is_closed=None):
     return plabel, slabel, status
 
 
-def _search_deals(since_ms, until_ms=None, after=None):
-    filters = [{"propertyName": "createdate", "operator": "GTE", "value": str(since_ms)}]
+def _search_deals(since_ms, until_ms=None, after=None, date_field="createdate"):
+    """Search deals by createdate (default) or closedate.
+
+    Using closedate in incremental mode catches deals created months ago
+    that recently closed — these are missed by createdate-only searches
+    because their createdate falls outside the short lookback window.
+    """
+    filters = [{"propertyName": date_field, "operator": "GTE", "value": str(since_ms)}]
     if until_ms is not None:
-        filters.append({"propertyName": "createdate", "operator": "LT", "value": str(until_ms)})
+        filters.append({"propertyName": date_field, "operator": "LT", "value": str(until_ms)})
     body = {
         "filterGroups": [{"filters": filters}],
         "properties": PROPERTIES,
         "limit": 100,
-        "sorts": [{"propertyName": "createdate", "direction": "ASCENDING"}],
+        "sorts": [{"propertyName": date_field, "direction": "ASCENDING"}],
     }
     if after:
         body["after"] = after
@@ -129,7 +135,7 @@ def _search_deals(since_ms, until_ms=None, after=None):
                                "Content-Type": "application/json"},
                       json=body)
     if r.status_code >= 400:
-        print(f"[deals] HTTP {r.status_code} on search:")
+        print(f"[deals] HTTP {r.status_code} on search ({date_field}):")
         print(r.text[:1500].encode("ascii", "replace").decode())
     r.raise_for_status()
     return r.json()
@@ -146,18 +152,27 @@ def collect_and_write(days: int = None, start_date: date = None,
                        incremental: bool = False):
     """
     Modes:
-      - incremental=True: only last 2 days (normal 12h scheduled runs, light on BQ)
+      - incremental=True: last 30 days by createdate + last 30 days by closedate.
+        The closedate pass catches deals created >30 days ago that recently closed
+        (long sales cycles) — these are invisible to a createdate-only search.
       - days=N: last N days (for a targeted re-pull)
       - start_date=date(Y,M,D): custom window
       - default: YTD (Jan 1 of current year) — use once for initial backfill
     """
+    # How far back to look for recently-closed deals in incremental mode.
+    # 90 days covers the longest realistic sales cycle in HubSpot.
+    CLOSEDATE_LOOKBACK_DAYS = 90
+
     _load_pipelines()
     print(f"[deals] Loaded {len(_CACHE['pipelines'])} pipelines, "
           f"{len(_CACHE['stages'])} stages")
 
     end = date.today()
     if incremental:
-        start = end - timedelta(days=2)
+        # 30-day createdate window: catches new deals and recently-created ones.
+        # A separate closedate pass below handles deals created earlier that
+        # just closed within the window.
+        start = end - timedelta(days=30)
     elif start_date:
         start = start_date
     elif days:
@@ -180,6 +195,10 @@ def collect_and_write(days: int = None, start_date: date = None,
         "native_currencies": set(),
     })
 
+    # Track deal IDs processed in the createdate pass so the closedate pass
+    # (incremental only) can skip duplicates and avoid double-counting.
+    seen_ids: set = set()
+
     # HubSpot Search is capped at 10,000 results per query. Walk 7-day windows.
     # pages counter resets per window so long backfills never exhaust the cap.
     total_fetched = 0
@@ -201,6 +220,11 @@ def collect_and_write(days: int = None, start_date: date = None,
                 print(f"[deals] search error: {e}")
                 break
             for row in data.get("results", []):
+                deal_id = row.get("id")
+                if deal_id in seen_ids:
+                    continue
+                if deal_id:
+                    seen_ids.add(deal_id)
                 p = row.get("properties", {})
                 created = (p.get("createdate") or "")[:10]
                 if not created:
@@ -307,6 +331,124 @@ def collect_and_write(days: int = None, start_date: date = None,
                 break
         print(f"[deals] {win_start}..{win_end}: {win_count} deals")
         win_start = win_end
+
+    # ── Closedate pass (incremental only) ────────────────────────────────────
+    # Catches deals created >30 days ago that recently closed (long sales cycles).
+    # Searches by closedate so we find ANY deal that closed in the window,
+    # regardless of when it was created. Deduplicates against seen_ids so
+    # deals already fetched by createdate above are not double-counted.
+    if incremental:
+        cd_start = end - timedelta(days=CLOSEDATE_LOOKBACK_DAYS)
+        cd_win_start = cd_start
+        cd_end_dt = end + timedelta(days=1)
+        closedate_fetched = 0
+        while cd_win_start < cd_end_dt:
+            cd_win_end = min(cd_win_start + window, cd_end_dt)
+            w_since = int(datetime(cd_win_start.year, cd_win_start.month,
+                                   cd_win_start.day).timestamp() * 1000)
+            w_until = int(datetime(cd_win_end.year, cd_win_end.month,
+                                   cd_win_end.day).timestamp() * 1000)
+            after = None
+            pages = 0
+            while True:
+                try:
+                    data = _search_deals(w_since, until_ms=w_until, after=after,
+                                         date_field="closedate")
+                except Exception as e:
+                    print(f"[deals][closedate] search error: {e}")
+                    break
+                for row in data.get("results", []):
+                    deal_id = row.get("id")
+                    if deal_id in seen_ids:
+                        continue          # already processed in createdate pass
+                    if deal_id:
+                        seen_ids.add(deal_id)
+                    p = row.get("properties", {})
+                    created = (p.get("createdate") or "")[:10]
+                    if not created:
+                        continue
+                    closed = (p.get("closedate") or "")[:10] or None
+                    plabel, slabel, status = _classify_stage(
+                        p.get("dealstage"),
+                        hs_is_closed_won=p.get("hs_is_closed_won"),
+                        hs_is_closed=p.get("hs_is_closed"),
+                    )
+                    # Only care about won deals in the closedate pass —
+                    # open/lost deals are correctly captured by createdate.
+                    if status != "won":
+                        continue
+                    amount_native = _to_float(p.get("amount"))
+                    native_cur = normalize_currency(
+                        p.get("deal_currency_code") or DEFAULT_DEAL_CURRENCY
+                    )
+                    amount = to_usd(amount_native, native_cur)
+                    tis = _to_float(p.get("hs_v2_time_in_current_stage"))
+                    from analysers.channel_inference import (
+                        resolve_channel, CHANNEL_TO_QOYOD_SOURCE,
+                    )
+                    explicit_src = (p.get("deal_qoyod_source") or "").strip()
+                    inferred_slug = resolve_channel(
+                        qoyod_source=explicit_src,
+                        lead_utm_source=p.get("deal_utm_source") or "",
+                        lead_utm_campaign=p.get("deal_utm_campaign") or "",
+                        lead_original_traffic_source=p.get("deal_original_traffic_source") or "",
+                        lead_latest_traffic_source=p.get("deal_latest_traffic_source") or "",
+                        lead_original_traffic_source_drilldown_1=
+                            p.get("deal_original_traffic_source_drilldown_1") or "",
+                        lead_latest_traffic_source_drilldown_1=
+                            p.get("deal_latest_traffic_source_drilldown_1") or "",
+                        lead_original_traffic_source_drilldown_2=
+                            p.get("deal_original_traffic_source_drilldown_2") or "",
+                        lead_latest_traffic_source_drilldown_2=
+                            p.get("deal_latest_traffic_source_drilldown_2") or "",
+                        lead_utm_audience=p.get("deal_utm_audience") or "",
+                        lead_utm_content=p.get("deal_utm_content") or "",
+                        lead_utm_medium=p.get("deal_utm_medium") or "",
+                    )
+                    if explicit_src and explicit_src != "Other":
+                        src_label = explicit_src
+                    elif inferred_slug:
+                        src_label = CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug, inferred_slug)
+                    else:
+                        src_label = explicit_src or "Other"
+                    from datetime import date as _date
+                    today_str = _date.today().isoformat()
+                    if closed and closed > today_str:
+                        closed = created
+                    elif created and closed and (closed < created):
+                        closed = created
+                    partition_date = closed if closed else created
+                    key = (
+                        partition_date, src_label, plabel or "Unknown", status,
+                        (p.get("deal_utm_campaign") or "").strip() or "__none__",
+                        (p.get("deal_utm_audience") or "").strip() or None,
+                        (p.get("deal_utm_content") or "").strip() or None,
+                        (p.get("deal_utm_source") or "").strip() or None,
+                        (p.get("deal_utm_medium") or "").strip() or None,
+                        (p.get("deal_utm_term") or "").strip() or None,
+                    )
+                    b = buckets[key]
+                    b["n"] += 1
+                    b["amount"] += amount
+                    b["amount_native"] += amount_native
+                    b["native_currencies"].add(native_cur)
+                    b["won"] += 1
+                    b["won_amount"] += amount
+                    b["won_amount_native"] += amount_native
+                    if tis:
+                        b["time_in_stage_sum"] += tis
+                        b["time_in_stage_n"] += 1
+                    total_fetched += 1
+                    closedate_fetched += 1
+                pages += 1
+                paging = data.get("paging", {}).get("next", {})
+                after = paging.get("after")
+                if not after or pages >= 100:
+                    break
+            cd_win_start = cd_win_end
+        print(f"[deals][closedate] {closedate_fetched} additional won deals "
+              f"captured via closedate pass (created before createdate window)")
+    # ── end closedate pass ────────────────────────────────────────────────────
 
     now = datetime.now(timezone.utc).isoformat()
     rows = []
