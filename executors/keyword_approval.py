@@ -37,5 +37,15 @@ def _execute_negatives(add_neg: list[dict]) -> None:
             )
             terms = ", ".join(f"`{neg['term']}`" for neg in batch)
             print(f"[keyword-approval] EXECUTED: negatives added to {camp_rn}: {terms}")
+            try:
+                from logs.activity_logger import log_activity_async
+                log_activity_async(
+                    role="keyword_management", action="negative_keywords_added",
+                    channel="google_ads", rows_affected=len(batch),
+                    details={"terms": [neg["term"] for neg in batch[:20]],
+                             "campaign_resource": camp_rn},
+                )
+            except Exception:
+                pass
         except Exception as e:
             print(f"[keyword-approval] add_negative_keywords failed for {camp_rn}: {e}")

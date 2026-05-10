@@ -462,6 +462,19 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
             print(f"[kw-pause] {status}: '{r.ad_group_criterion.keyword.text}' "
                   f"({r.campaign.name}) spend=${spend:.2f} conv=0")
 
+    actually_paused = [p for p in paused if p["status"] == "paused"]
+    if actually_paused:
+        try:
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="keyword_management", action="keywords_paused",
+                channel="google_ads", rows_affected=len(actually_paused),
+                details={"keywords": [p["keyword"] for p in actually_paused[:20]],
+                         "days_window": days},
+            )
+        except Exception:
+            pass
+
     return paused
 
 

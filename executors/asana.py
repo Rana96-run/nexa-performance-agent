@@ -275,6 +275,17 @@ def create_task(
         bits = [b for b in (channel, asset_level, action) if b]
         chan_note = f" [{' / '.join(bits)}]" if bits else ""
         print(f"[asana] created{chan_note}: {full_title[:60]!r}  gid={gid}")
+        try:
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="task_creator", action="asana_task_created",
+                channel=channel or None, rows_affected=1,
+                details={"project_key": project_key, "task_action": action,
+                         "asset_level": asset_level, "gid": gid,
+                         "title": full_title[:120]},
+            )
+        except Exception:
+            pass
         return gid
     except AsanaApiException as e:
         print(f"[asana] error: {e}")

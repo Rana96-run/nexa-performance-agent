@@ -430,6 +430,60 @@ GROUP BY date, channel
 """
 
 
+AGENT_ACTIVITY_DASHBOARD_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.v_agent_activity_dashboard` AS
+-- Daily counts per category, last 180 days. Powers the Hex activity dashboard heatmap.
+WITH raw AS (
+  SELECT
+    DATE(ts, 'Asia/Riyadh') AS day,
+    action,
+    role,
+    channel,
+    campaign_name,
+    status,
+    COALESCE(rows_affected, 1) AS cnt
+  FROM `{P}.{D}.agent_activity_log`
+  WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 180 DAY)
+    AND status NOT IN ('failed', 'skipped')
+),
+categorised AS (
+  SELECT
+    day,
+    COALESCE(channel, 'general')  AS channel,
+    campaign_name,
+    CASE
+      WHEN action = 'campaign_created'
+        THEN 'Campaigns Created'
+      WHEN action IN ('launch', 'keyword_candidates_queued_for_weekly_review')
+           AND role = 'keyword_management'
+        THEN 'Keywords Added'
+      WHEN action = 'keywords_paused'
+        THEN 'Keywords Paused'
+      WHEN action = 'negative_keywords_added'
+        THEN 'Negatives Added'
+      WHEN action IN ('pause_task_created', 'junk_leads_task_created', 'ads_paused')
+        THEN 'Ads Paused'
+      WHEN action = 'asana_task_created'
+        THEN 'Asana Tasks'
+      WHEN action IN ('posted_slack_digest', 'slack_summary_posted',
+                      'post_weekly_summary', 'nightly_audit_complete')
+        THEN 'Slack Messages'
+      WHEN action IN ('posted_approvals_digest', 'approval_requested')
+        THEN 'Approvals'
+    END AS category,
+    cnt
+  FROM raw
+)
+SELECT
+  day,
+  category,
+  channel,
+  SUM(cnt) AS count
+FROM categorised
+WHERE category IS NOT NULL
+GROUP BY day, category, channel
+"""
+
 ALL_VIEWS = [
     ("v_channel_key_map",          CHANNEL_MAP_SQL),
     ("campaign_performance_daily", CAMPAIGN_PERFORMANCE_DAILY_SQL),
@@ -441,6 +495,8 @@ ALL_VIEWS = [
     # Unified views — single source of truth for the dashboard
     ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
     ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
+    # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
+    ("v_agent_activity_dashboard",  AGENT_ACTIVITY_DASHBOARD_SQL),
 ]
 
 # Sub-campaign views (adset / ad / keyword grain).

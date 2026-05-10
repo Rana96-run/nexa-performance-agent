@@ -238,6 +238,16 @@ def create_campaign(
     cr = csvc.mutate_campaigns(customer_id=customer_id, operations=[cop])
     rn = cr.results[0].resource_name
     print(f"[gads] campaign created (PAUSED): {name} -> {rn}")
+    try:
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="campaign_creator", action="campaign_created",
+            channel="google_ads", campaign_name=name, rows_affected=1,
+            details={"resource_name": rn, "budget_usd": daily_budget_usd,
+                     "bidding_strategy": bidding_strategy},
+        )
+    except Exception:
+        pass
     return {"resource_name": rn, "name": name}
 
 
