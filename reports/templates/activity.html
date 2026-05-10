@@ -774,6 +774,195 @@ a:hover{text-decoration:underline}
 
   </div><!-- /cards-grid -->
 
+  <!-- ── Asana Task Completion ── -->
+  <div class="section-head">Asana Tasks — Completion Status</div>
+
+  {% if asana_completion.total == 0 %}
+  <div style="color:#484f58;font-size:12px;margin-bottom:24px">
+    No task status data yet. Status syncs every 6 hours via the reporting scheduler.
+    Run <code>python reporting_scheduler.py</code> to trigger a sync.
+  </div>
+  {% else %}
+
+  <!-- Progress bar -->
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+    <div style="flex:1;height:8px;background:#21262d;border-radius:4px;overflow:hidden">
+      <div style="height:8px;background:#238636;border-radius:4px;width:{{ asana_completion.pct_done }}%;transition:width .4s"></div>
+    </div>
+    <div style="font-size:13px;color:#e6edf3;font-weight:600;white-space:nowrap">
+      {{ asana_completion.completed }}/{{ asana_completion.total }} done
+      <span style="color:#8b949e;font-weight:400"> ({{ asana_completion.pct_done }}%)</span>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+
+    <!-- Completed tasks card -->
+    <div class="card" style="flex:1;min-width:280px" id="tasks_completed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">✅</div>
+          <div>
+            <div class="card-name">Completed Tasks</div>
+            <div class="card-counts">{{ asana_completion.completed }} tasks done</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#39d353">{{ asana_completion.completed }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if asana_completion.completed_rows %}
+        <table class="dtable">
+          <tr><th>Done</th><th>Task</th><th>Project</th><th>Assignee</th></tr>
+          {% for r in asana_completion.completed_rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.completed_at[:10] if r.completed_at else r.created_day }}</td>
+            <td>{{ r.title }}</td>
+            <td><span class="tag">{{ r.project_key }}</span></td>
+            <td>{{ r.assignee }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No completed tasks in this period.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Pending tasks card -->
+    <div class="card" style="flex:1;min-width:280px" id="tasks_pending">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">⏳</div>
+          <div>
+            <div class="card-name">Open Tasks</div>
+            <div class="card-counts">{{ asana_completion.pending }} awaiting action</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#e3b341">{{ asana_completion.pending }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if asana_completion.pending_rows %}
+        <table class="dtable">
+          <tr><th>Created</th><th>Task</th><th>Project</th><th>Due</th><th>Assignee</th></tr>
+          {% for r in asana_completion.pending_rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.created_day }}</td>
+            <td>{{ r.title }}</td>
+            <td><span class="tag">{{ r.project_key }}</span></td>
+            <td style="{% if r.due_on and r.due_on < today|string %}color:#f85149{% endif %}">
+              {{ r.due_on or '—' }}
+            </td>
+            <td>{{ r.assignee }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">All tasks completed!</div>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Channel Follow-up ── -->
+  <div class="section-head">Channel Follow-up — Outcomes of Agent Actions</div>
+
+  <!-- Campaign actions outcome table -->
+  <div class="card" style="margin-bottom:16px" id="followup_campaigns">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-left">
+        <div class="card-icon">📋</div>
+        <div>
+          <div class="card-name">Campaign Action Outcomes</div>
+          <div class="card-counts">{{ followup.campaign_actions|length }} tracked · scale / pause / create</div>
+        </div>
+      </div>
+      <div class="card-right">
+        <div class="card-num">{{ followup.campaign_actions|length }}</div>
+        <div class="card-arrow">▾</div>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if followup.campaign_actions %}
+      <table class="dtable">
+        <tr>
+          <th>Date</th><th>Action</th><th>Channel</th><th>Campaign</th>
+          <th>Spend Before</th><th>Spend After</th><th>Outcome</th>
+        </tr>
+        {% for r in followup.campaign_actions %}
+        <tr>
+          <td style="white-space:nowrap">{{ r.action_date }}</td>
+          <td>
+            {% if r.action == 'campaign_paused' %}<span style="color:#f85149">⏸ Paused</span>
+            {% elif r.action == 'campaign_scaled' %}<span style="color:#39d353">📈 Scaled</span>
+            {% elif r.action == 'campaign_created' %}<span style="color:#58a6ff">🚀 Created</span>
+            {% else %}<span>{{ r.action }}</span>
+            {% endif %}
+          </td>
+          <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.campaign_name }}">{{ r.campaign_name }}</td>
+          <td>${{ r.avg_spend_before or 0 }}/d</td>
+          <td>${{ r.avg_spend_after or 0 }}/d</td>
+          <td>
+            {% if r.outcome == 'Confirmed paused' %}<span style="color:#484f58">✓ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Re-enabled' %}<span style="color:#e3b341">⚠ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Spend increased' %}<span style="color:#39d353">✓ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Running' %}<span style="color:#58a6ff">● {{ r.outcome }}</span>
+            {% else %}<span style="color:#8b949e">{{ r.outcome }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="color:#484f58;font-size:12px;padding:4px 0">
+        No campaign actions to reconcile yet. Data appears after campaigns are paused/scaled.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- New ads / creatives detected in platform -->
+  <div class="card" style="margin-bottom:24px" id="followup_new_ads">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-left">
+        <div class="card-icon">🆕</div>
+        <div>
+          <div class="card-name">New Creatives in Platform (last 14d)</div>
+          <div class="card-counts">{{ followup.new_ads|length }} ads first seen recently</div>
+        </div>
+      </div>
+      <div class="card-right">
+        <div class="card-num">{{ followup.new_ads|length }}</div>
+        <div class="card-arrow">▾</div>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if followup.new_ads %}
+      <p style="font-size:11px;color:#484f58;margin-bottom:8px">
+        Ads that started spending in the last 14 days — likely user-added creatives.
+      </p>
+      <table class="dtable">
+        <tr><th>First Seen</th><th>Channel</th><th>Campaign</th><th>Ad Name</th><th>Spend</th><th>Impressions</th></tr>
+        {% for r in followup.new_ads %}
+        <tr>
+          <td style="white-space:nowrap">{{ r.first_seen }}</td>
+          <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.campaign_name }}">{{ r.campaign_name }}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.ad_name }}">{{ r.ad_name }}</td>
+          <td>${{ r.total_spend }}</td>
+          <td>{{ "{:,}".format(r.impressions) }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="color:#484f58;font-size:12px;padding:4px 0">No new ads detected in the last 14 days.</div>
+      {% endif %}
+    </div>
+  </div>
+
   <!-- ── Recent Activity ── -->
   <div class="section-head">Recent Activity Feed</div>
   <table class="activity-table">

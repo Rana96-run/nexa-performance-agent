@@ -283,6 +283,15 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] auto-heal failed (non-fatal): {e}")
 
+    # ── Sync Asana task completion status to BQ ──────────────────────────────
+    try:
+        from collectors.asana_sync import sync_asana_tasks
+        n_synced = sync_asana_tasks()
+        results["asana_sync"] = (True, n_synced, 0)
+    except Exception as e:
+        print(f"[scheduler] asana_sync failed (non-fatal): {e}")
+        results["asana_sync"] = (False, str(e), 0)
+
     # ── Trigger Hex notebook re-runs so dashboards reflect fresh BQ data ─────
     try:
         hex_results = refresh_hex(wait=False)   # fire-and-forget; Hex queues the run

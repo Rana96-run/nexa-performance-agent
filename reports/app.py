@@ -655,6 +655,158 @@ def activity_dashboard():
         "linked_channels":    m_linked_channels,
     }
 
+    # ── 5. Asana task completion status ───────────────────────────────────────
+    task_status_rows = []
+    try:
+        ts_sql = f"""
+            SELECT
+              a.gid,
+              COALESCE(s.title, a.title, JSON_VALUE(al.details, '$.title')) AS title,
+              COALESCE(s.project_key, a.project_key)                         AS project_key,
+              COALESCE(s.completed, FALSE)                                    AS completed,
+              s.completed_at,
+              s.assignee_name,
+              s.due_on,
+              DATE(al.ts, 'Asia/Riyadh')                                      AS created_day
+            FROM (
+              SELECT DISTINCT
+                JSON_VALUE(details, '$.gid')        AS gid,
+                JSON_VALUE(details, '$.title')      AS title,
+                JSON_VALUE(details, '$.project_key') AS project_key,
+                ts
+              FROM `{T}.agent_activity_log`
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+                AND action = 'asana_task_created'
+                AND JSON_VALUE(details, '$.gid') IS NOT NULL
+            ) a
+            LEFT JOIN `{T}.agent_activity_log` al
+              ON JSON_VALUE(al.details, '$.gid') = a.gid
+              AND al.action = 'asana_task_created'
+            LEFT JOIN (
+              SELECT gid, title, project_key, completed, completed_at,
+                     assignee_name, due_on,
+                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+              FROM `{T}.asana_task_status`
+            ) s ON s.gid = a.gid AND s.rn = 1
+            ORDER BY a.ts DESC
+            LIMIT 150
+        """
+        task_status_rows = list(bq.query(ts_sql).result())
+    except Exception as e:
+        print(f"[activity] asana_task_status query failed (non-fatal): {e}")
+
+    completed_tasks  = [r for r in task_status_rows if r.completed]
+    pending_tasks    = [r for r in task_status_rows if not r.completed]
+    asana_completion = {
+        "total":     len(task_status_rows),
+        "completed": len(completed_tasks),
+        "pending":   len(pending_tasks),
+        "pct_done":  round(len(completed_tasks) / max(len(task_status_rows), 1) * 100),
+        "completed_rows": [
+            {"gid": r.gid, "title": r.title or "—", "project_key": r.project_key or "—",
+             "created_day": str(r.created_day or ""), "completed_at": str(r.completed_at or ""),
+             "assignee": r.assignee_name or "—"}
+            for r in completed_tasks[:60]
+        ],
+        "pending_rows": [
+            {"gid": r.gid, "title": r.title or "—", "project_key": r.project_key or "—",
+             "created_day": str(r.created_day or ""), "due_on": str(r.due_on or ""),
+             "assignee": r.assignee_name or "—"}
+            for r in pending_tasks[:60]
+        ],
+    }
+
+    # ── 6. Channel follow-up: outcome of agent actions ─────────────────────────
+    followup_rows = []
+    try:
+        fu_sql = f"""
+            WITH actions AS (
+              SELECT
+                DATE(ts, 'Asia/Riyadh')                         AS action_date,
+                action,
+                channel,
+                campaign_name,
+                CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
+              FROM `{T}.agent_activity_log`
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 60 DAY)
+                AND action IN ('campaign_paused','campaign_scaled','campaign_created','ads_paused')
+                AND campaign_name IS NOT NULL
+            ),
+            perf AS (
+              SELECT
+                a.action,
+                a.action_date,
+                a.channel,
+                a.campaign_name,
+                a.target_budget,
+                ROUND(AVG(CASE WHEN c.date > a.action_date THEN c.spend END), 2)  AS avg_spend_after,
+                ROUND(AVG(CASE WHEN c.date BETWEEN DATE_SUB(a.action_date, INTERVAL 7 DAY)
+                                           AND a.action_date THEN c.spend END), 2) AS avg_spend_before,
+                MAX(CASE WHEN c.date > a.action_date THEN c.status END)            AS latest_status,
+                COUNT(CASE WHEN c.date > a.action_date AND c.spend > 0 THEN 1 END) AS active_days_after
+              FROM actions a
+              LEFT JOIN `{T}.campaigns_daily` c USING (campaign_name)
+              GROUP BY 1,2,3,4,5
+            )
+            SELECT *,
+              CASE
+                WHEN action = 'campaign_paused' AND active_days_after > 0 THEN 'Re-enabled'
+                WHEN action = 'campaign_paused' AND active_days_after = 0 THEN 'Confirmed paused'
+                WHEN action = 'campaign_scaled' AND avg_spend_after > avg_spend_before THEN 'Spend increased'
+                WHEN action = 'campaign_scaled' AND avg_spend_after IS NULL THEN 'No data yet'
+                WHEN action = 'campaign_scaled' THEN 'Spend unchanged'
+                WHEN action = 'campaign_created' THEN
+                  CASE WHEN active_days_after > 0 THEN 'Running' ELSE 'Not spending' END
+                ELSE 'Paused'
+              END AS outcome
+            FROM perf
+            ORDER BY action_date DESC
+            LIMIT 80
+        """
+        followup_rows = list(bq.query(fu_sql).result())
+    except Exception as e:
+        print(f"[activity] follow-up query failed (non-fatal): {e}")
+
+    # New ads in platform (first seen recently — not from agent campaign creation)
+    new_ads_rows = []
+    try:
+        new_ads_sql = f"""
+            SELECT
+              MIN(date)        AS first_seen,
+              channel,
+              campaign_name,
+              ad_name,
+              ROUND(SUM(spend), 2) AS total_spend,
+              SUM(impressions)     AS impressions
+            FROM `{T}.ads_daily`
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            GROUP BY channel, campaign_name, ad_name
+            HAVING MIN(date) >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
+               AND SUM(spend) > 0
+            ORDER BY first_seen DESC
+            LIMIT 60
+        """
+        new_ads_rows = [
+            {"first_seen": str(r.first_seen), "channel": r.channel or "—",
+             "campaign_name": r.campaign_name or "—", "ad_name": r.ad_name or "—",
+             "total_spend": r.total_spend or 0, "impressions": r.impressions or 0}
+            for r in bq.query(new_ads_sql).result()
+        ]
+    except Exception as e:
+        print(f"[activity] new_ads query failed (non-fatal): {e}")
+
+    followup = {
+        "campaign_actions": [
+            {"action_date": str(r.action_date), "action": r.action,
+             "channel": r.channel or "—", "campaign_name": r.campaign_name or "—",
+             "target_budget": r.target_budget, "avg_spend_after": r.avg_spend_after,
+             "avg_spend_before": r.avg_spend_before, "latest_status": r.latest_status or "—",
+             "active_days_after": r.active_days_after, "outcome": r.outcome}
+            for r in followup_rows
+        ],
+        "new_ads": new_ads_rows,
+    }
+
     return render_template(
         "activity.html",
         last_updated=now_str,
@@ -666,6 +818,8 @@ def activity_dashboard():
         recent_activity=recent_activity,
         sidebar_cats=sidebar_cats,
         workflows=_WORKFLOWS,
+        asana_completion=asana_completion,
+        followup=followup,
     )
 
 
