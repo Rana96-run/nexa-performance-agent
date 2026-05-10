@@ -729,6 +729,24 @@ if __name__ == "__main__":
         n = sync_cursor_and_write()
         print(f"Cursor sync complete: {n} daily bucket rows updated")
 
+    elif cmd == "rebuild_all":
+        # Full rebuild of hubspot_leads_module_daily from hubspot_leads_individual.
+        # Run this once after initial_load_individual completes.
+        from collectors.bq_writer import get_client
+        import os as _os
+        _client = get_client()
+        _project = _os.getenv("BQ_PROJECT_ID")
+        _dataset = _os.getenv("BQ_DATASET")
+        print("[rebuild_all] querying all distinct hs_createdate from individual table...")
+        _dates_rows = _client.query(
+            f"SELECT DISTINCT hs_createdate FROM `{_project}.{_dataset}.{_INDIVIDUAL_TABLE}`"
+            f" WHERE hs_createdate IS NOT NULL ORDER BY 1"
+        ).result()
+        all_dates = {row.hs_createdate for row in _dates_rows}
+        print(f"[rebuild_all] rebuilding {len(all_dates)} dates...")
+        n = _rebuild_daily_buckets(_client, all_dates)
+        print(f"[rebuild_all] done — {n} rows written to hubspot_leads_module_daily")
+
     else:  # backfill / legacy
         days = int(sys.argv[1]) if sys.argv[1].isdigit() else None
         n = collect_and_write(days=days)
