@@ -401,6 +401,33 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 - **Zero-active-keyword guard:** Never pause the last enabled keyword in an ad group — campaign goes dark silently. `scan_active_keywords()` counts enabled keywords per ad group before flagging and skips sole keywords with a console warning.
 - **Ad pause thresholds:** spend > $70 / 7 days / 0 conv → pause. 60%+ disqualified leads (10+ days) → pause. CPL > $50 (10+ days) → pause. Never remove ads, only pause.
 
+## HubSpot deals collector — dual-pass architecture (2026-05-10)
+
+- **2-day incremental window missed long-cycle deals.** A deal created Jan 15 and won Apr 20 would never
+  be reprocessed by a 2-day createdate window — BQ showed 721 won deals for Sales Pipeline while HubSpot
+  showed 789. Fix: extended to 30-day createdate lookback + a separate closedate pass that covers all won
+  deals regardless of when they were created.
+- **Closedate pass must run in ALL modes, not just incremental.** Backfills with `--start-date` also need
+  the closedate pass; deals closed in the window but created before it are otherwise missed.
+- **Do NOT infer `qoyod_source` from UTMs.** Calling `resolve_channel()` on utm fields would inflate counts
+  by ~15–20% vs HubSpot's explicit `deal_qoyod_source` filter. Use explicit source only:
+  `explicit_src = p.get("deal_qoyod_source") or ""; src_label = explicit_src if (explicit_src and explicit_src != "Other") else "Other"`.
+- **Stale rows survive when upsert key changes.** If inference is turned off, old rows with `qoyod_source='Google Ads'`
+  (inferred) survive alongside new rows with `qoyod_source='Other'` because the upsert key changed. Fix:
+  DELETE the affected pipelines explicitly (`DELETE WHERE pipeline IN (...)`) before re-running backfill.
+  SDR Offline Sales and Partnerships Revenue were affected (847 rows deleted 2026-05-10).
+- **`seen_ids` deduplication is mandatory.** Deals found in both createdate pass (because they were recently
+  created AND won) and closedate pass must be deduplicated with a `seen_ids: set[str]`. Without it, double
+  rows inflate counts further.
+
+## Leads gap — Eid Al-Fitr seasonality (2026-05-10)
+
+- **Mid-March 2026 lead dip is NOT a data collection gap.** Week of Mar-16 and Mar-23 show ~950–1,000
+  leads vs ~2,000 either side. This is Eid Al-Fitr 2026 (holiday falls Mar 20–22 with extended business
+  closure). All sources dropped together — Google went from ~110/day to ~8–22/day, Snapchat from ~50 to
+  ~8–22/day. Date coverage is complete (no missing dates in BQ). When reviewing 90-day trends, annotate
+  this dip as Eid rather than a reporting issue.
+
 ## HubSpot collector
 
 - **Incremental lookback must be 30 days, not 2.** A lead created Apr 22 but qualified May 4 is never
