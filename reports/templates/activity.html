@@ -541,7 +541,7 @@ a:hover{text-decoration:underline}
           <div class="card-icon">✅</div>
           <div>
             <div class="card-name">Asana Tasks Created</div>
-            <div class="card-counts">30d: {{ metrics.asana_tasks.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.asana_tasks.count_7d }}</div>
+            <div class="card-counts">30d: {{ metrics.asana_tasks.count_30d }} tasks in {{ metrics.asana_tasks.projects_30d }} projects &nbsp;·&nbsp; 7d: {{ metrics.asana_tasks.count_7d }}</div>
           </div>
         </div>
         <div class="card-right">
@@ -553,9 +553,18 @@ a:hover{text-decoration:underline}
         <div class="card-actions">
           <button class="btn-workflow" onclick="openWorkflow('asana_tasks')">⚙ How this works</button>
         </div>
+        {% if metrics.asana_tasks.project_counts %}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          {% for proj, cnt in metrics.asana_tasks.project_counts %}
+          <span style="background:#21262d;border:1px solid #30363d;border-radius:12px;padding:2px 10px;font-size:11px;color:#e6edf3">
+            {{ proj }} <span style="color:#39d353;font-weight:600">{{ cnt }}</span>
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
         {% if metrics.asana_tasks.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Title</th><th>Project</th><th>Action</th></tr>
+          <tr><th>Date</th><th>Title</th><th>Project</th><th>Type</th></tr>
           {% for r in metrics.asana_tasks.rows %}
           <tr>
             <td>{{ r.day }}</td>
@@ -821,14 +830,14 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
-    <!-- LLM Analysis Runs -->
+    <!-- Claude AI Analysis -->
     <div class="card" id="llm_runs">
       <div class="card-header" onclick="toggleCard(this)">
         <div class="card-left">
           <div class="card-icon">🧠</div>
           <div>
-            <div class="card-name">LLM Analysis Runs</div>
-            <div class="card-counts">30d: {{ metrics.llm_runs.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.llm_runs.count_7d }} &nbsp;·&nbsp; cost: ${{ "%.4f"|format(metrics.llm_runs.total_cost) }}</div>
+            <div class="card-name">Claude AI Analysis</div>
+            <div class="card-counts">30d: {{ metrics.llm_runs.count_30d }} reports &nbsp;·&nbsp; 7d: {{ metrics.llm_runs.count_7d }} &nbsp;·&nbsp; API cost: ${{ "%.4f"|format(metrics.llm_runs.total_cost) }}</div>
           </div>
         </div>
         <div class="card-right">
@@ -842,7 +851,7 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.llm_runs.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Model</th><th>Tokens In</th><th>Tokens Out</th><th>Cost</th></tr>
+          <tr><th>Date</th><th>Model</th><th>Words Read</th><th>Words Written</th><th>API Cost</th></tr>
           {% for r in metrics.llm_runs.rows %}
           <tr>
             <td>{{ r.day }}</td>
@@ -853,7 +862,7 @@ a:hover{text-decoration:underline}
           </tr>
           {% endfor %}
         </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No LLM runs logged in this period.</div>{% endif %}
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No AI analysis reports in this period.</div>{% endif %}
       </div>
     </div>
 

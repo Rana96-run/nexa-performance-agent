@@ -574,11 +574,21 @@ def activity_dashboard():
     }
 
     # Asana tasks (all, excluding creative reviews)
-    asana_rows = _filter(detail_rows, {"asana_task_created"})
+    asana_rows = _filter(detail_rows, {"asana_task_created", "asana_tasks_created"})
     asana_c30 = sum(1 for r in asana_rows if r.day >= cutoff_30)
     asana_c7  = sum(1 for r in asana_rows if r.day >= cutoff_7)
+    # Count distinct projects that received tasks in the 30d window
+    projects_30d = {r.asana_project_key for r in asana_rows
+                    if r.day >= cutoff_30 and r.asana_project_key and r.asana_project_key != "—"}
+    # Per-project breakdown (count of tasks per project key)
+    project_counts: dict[str, int] = {}
+    for r in asana_rows:
+        if r.day >= cutoff_30 and r.asana_project_key:
+            project_counts[r.asana_project_key] = project_counts.get(r.asana_project_key, 0) + 1
     m_asana_tasks = {
         "count_30d": asana_c30, "count_7d": asana_c7,
+        "projects_30d": len(projects_30d),
+        "project_counts": sorted(project_counts.items(), key=lambda x: -x[1]),
         "rows": [{"day": r.day, "title": r.asana_title or "—",
                   "project_key": r.asana_project_key or "—",
                   "task_action": r.asana_task_action or "—"}
