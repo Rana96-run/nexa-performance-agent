@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS `{P}.{D}.{T}` (
 PARTITION BY DATE(synced_at)
 OPTIONS(require_partition_filter=false)
 """
-_WINDOW_DAYS = 90
+_WINDOW_DAYS = 365
 
 
 def _asana_client():
@@ -315,9 +315,11 @@ def sync_user_tasks() -> int:
 
 def backfill_from_projects() -> int:
     """
-    Scan all ASANA_PROJECTS and seed agent_activity_log with any tasks
-    not already recorded there. Runs once to bring BQ up to date with
-    Asana tasks that existed before BQ logging was added (2026-05-10).
+    Scan ALL ASANA_PROJECTS (including completed tasks, all pages) and seed
+    agent_activity_log for any task GID not already recorded there.
+
+    Safe to call every sync — skips already-known GIDs in O(1).
+    Covers the full project history since agent creation.
 
     Returns count of newly seeded tasks.
     """
@@ -327,7 +329,7 @@ def backfill_from_projects() -> int:
     P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
 
-    # All GIDs already in agent_activity_log (either source)
+    # All GIDs already in agent_activity_log (either logging path)
     known_sql = f"""
         SELECT DISTINCT gid FROM (
           SELECT JSON_VALUE(details, '$.gid')       AS gid
@@ -360,19 +362,18 @@ def backfill_from_projects() -> int:
         if not project_id:
             continue
         try:
-            page = tasks_api.get_tasks_for_project(
-                project_id,
-                {
-                    "opt_fields": "gid,name,completed,completed_at,assignee.name,created_at,due_on",
-                    "limit": 100,
-                },
-            )
-            for task in page:
+            # completed_since="1970-01-01" returns ALL tasks including completed ones.
+            # The SDK handles pagination automatically when iterating the generator.
+            opts = {
+                "opt_fields": "gid,name,completed,completed_at,assignee.name,created_at,due_on",
+                "completed_since": "1970-01-01T00:00:00.000Z",
+                "limit": 100,
+            }
+            for task in tasks_api.get_tasks_for_project(project_id, opts):
                 gid = task.get("gid")
                 if not gid or gid in already_known:
                     continue
                 name = task.get("name", "")
-                # Infer asset_level from title
                 asset_level = "campaign"
                 if any(w in name.lower() for w in ("keyword", "negative", "kw")):
                     asset_level = "keyword"
@@ -400,10 +401,10 @@ def backfill_from_projects() -> int:
     return seeded
 
 
-def run_full_sync(backfill: bool = False) -> int:
-    """Entry point called from reporting_scheduler."""
-    if backfill:
-        backfill_from_projects()
+def run_full_sync() -> int:
+    """Entry point called from reporting_scheduler.
+    Always runs backfill first — idempotent, skips known GIDs instantly."""
+    backfill_from_projects()
     n = sync_asana_tasks()
     m = sync_user_tasks()
     return n + m
