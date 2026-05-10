@@ -1306,6 +1306,34 @@ def refresh_status():
     return jsonify(_REFRESH_STATUS)
 
 
+@app.route("/api/asana-backfill", methods=["POST", "GET"])
+def asana_backfill():
+    """
+    One-time backfill: scan all Asana projects and seed agent_activity_log
+    with any tasks not already recorded there.  Run this once to populate
+    the dashboard with historical Asana tasks created before BQ logging existed.
+    Then the next /api/refresh will pick up their completion status.
+    """
+    import threading
+
+    def _do_backfill():
+        try:
+            from collectors.asana_sync import backfill_from_projects, run_full_sync
+            n = backfill_from_projects()
+            # Follow up with a sync to capture completion status for seeded tasks
+            run_full_sync()
+            print(f"[asana-backfill] done — seeded {n} tasks, sync complete")
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            print(f"[asana-backfill] failed: {e}")
+
+    threading.Thread(target=_do_backfill, daemon=True).start()
+    return jsonify({
+        "queued": True,
+        "message": "Scanning all Asana projects and seeding BQ. Refresh the dashboard in ~60s.",
+    })
+
+
 
 # DASHBOARD_URL / ACTIVITY_DASHBOARD_URL = short Railway URLs shown in Slack/email/Asana
 # DASHBOARD_DEST_URL / ACTIVITY_DEST_URL = full Hex URLs that /dashboard and /activity redirect to

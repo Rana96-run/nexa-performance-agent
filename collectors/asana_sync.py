@@ -313,8 +313,97 @@ def sync_user_tasks() -> int:
     return found
 
 
-def run_full_sync() -> int:
+def backfill_from_projects() -> int:
+    """
+    Scan all ASANA_PROJECTS and seed agent_activity_log with any tasks
+    not already recorded there. Runs once to bring BQ up to date with
+    Asana tasks that existed before BQ logging was added (2026-05-10).
+
+    Returns count of newly seeded tasks.
+    """
+    from config import ASANA_PROJECTS
+
+    bq = get_bq()
+    P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+    D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
+
+    # All GIDs already in agent_activity_log (either source)
+    known_sql = f"""
+        SELECT DISTINCT gid FROM (
+          SELECT JSON_VALUE(details, '$.gid')       AS gid
+          FROM `{P}.{D}.agent_activity_log`
+          WHERE action = 'asana_task_created'
+            AND JSON_VALUE(details, '$.gid') IS NOT NULL
+
+          UNION ALL
+
+          SELECT JSON_VALUE(details, '$.asana_gid') AS gid
+          FROM `{P}.{D}.agent_activity_log`
+          WHERE action IN (
+            'scale_task_created', 'pause_task_created', 'junk_leads_task_created',
+            'optimize_task_created', 'drilldown_task_created'
+          )
+            AND JSON_VALUE(details, '$.asana_gid') IS NOT NULL
+        )
+        WHERE gid IS NOT NULL
+    """
+    try:
+        already_known = {r.gid for r in bq.query(known_sql).result() if r.gid}
+    except Exception:
+        already_known = set()
+
+    client    = _asana_client()
+    tasks_api = asana.TasksApi(client)
+    seeded    = 0
+
+    for project_key, project_id in ASANA_PROJECTS.items():
+        if not project_id:
+            continue
+        try:
+            page = tasks_api.get_tasks_for_project(
+                project_id,
+                {
+                    "opt_fields": "gid,name,completed,completed_at,assignee.name,created_at,due_on",
+                    "limit": 100,
+                },
+            )
+            for task in page:
+                gid = task.get("gid")
+                if not gid or gid in already_known:
+                    continue
+                name = task.get("name", "")
+                # Infer asset_level from title
+                asset_level = "campaign"
+                if any(w in name.lower() for w in ("keyword", "negative", "kw")):
+                    asset_level = "keyword"
+                elif any(w in name.lower() for w in ("ad ", " ad", "creative")):
+                    asset_level = "ad"
+                log_activity_async(
+                    role="task_creator",
+                    action="asana_task_created",
+                    status="success",
+                    details={
+                        "gid":         gid,
+                        "title":       name[:120],
+                        "project_key": project_key,
+                        "asset_level": asset_level,
+                        "backfilled":  True,
+                    },
+                )
+                already_known.add(gid)
+                seeded += 1
+        except Exception as e:
+            print(f"[asana_backfill] project {project_key} failed: {e}")
+
+    if seeded:
+        print(f"[asana_backfill] seeded {seeded} historical tasks into agent_activity_log")
+    return seeded
+
+
+def run_full_sync(backfill: bool = False) -> int:
     """Entry point called from reporting_scheduler."""
+    if backfill:
+        backfill_from_projects()
     n = sync_asana_tasks()
     m = sync_user_tasks()
     return n + m
