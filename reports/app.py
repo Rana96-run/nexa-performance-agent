@@ -295,6 +295,7 @@ def activity_dashboard():
         "ads_paused":                                  "Ads Paused",
         "launch":                                      "Keywords Added",
         "keyword_candidates_queued_for_weekly_review": "Keywords Added",
+        "positive_keywords_added":                     "Keywords Added",
         "keywords_paused":                             "Keywords Paused",
         "negative_keywords_added":                     "Negatives Added",
         "negative_keywords_removed":                   "Negatives Added",
@@ -420,7 +421,7 @@ def activity_dashboard():
             'campaign_created','campaign_paused','campaign_scaled','ads_paused',
             'user_created_campaign',
             -- Keyword actions
-            'launch','keyword_candidates_queued_for_weekly_review',
+            'launch','keyword_candidates_queued_for_weekly_review','positive_keywords_added',
             'keywords_paused','keywords_deleted',
             'negative_keywords_added','negative_keywords_removed',
             'ads_enabled',
@@ -548,12 +549,13 @@ def activity_dashboard():
                  for r in _filter(detail_rows, audit_actions)[:60]],
     }
 
-    # Keywords added
-    kw_add_actions = {"launch", "keyword_candidates_queued_for_weekly_review"}
+    # Keywords added — positive: from weekly expansion queue + direct API adds during campaign creation
+    kw_add_actions = {"launch", "keyword_candidates_queued_for_weekly_review", "positive_keywords_added"}
     c30, c7 = _counts(detail_rows, kw_add_actions)
     m_keywords_added = {
         "count_30d": c30, "count_7d": c7,
-        "rows": [{"day": r.day, "channel": r.channel or "google_ads", "cnt": r.cnt}
+        "rows": [{"day": r.day, "channel": r.channel or "google_ads", "cnt": r.cnt,
+                  "type": "positive"}
                  for r in _filter(detail_rows, kw_add_actions)[:60]],
     }
 
@@ -1155,13 +1157,17 @@ def activity_dashboard():
             row["asana_status"] = "—"
 
     # ── 6. Channel follow-up: outcome of agent actions ─────────────────────────
+    # Two parts: (a) executed actions joined to campaigns_daily for performance data,
+    #            (b) recommended actions (Asana tasks) shown as "Pending approval"
     followup_rows = []
     try:
         fu_sql = f"""
             WITH actions AS (
+              -- Executed: agent or user actually mutated the campaign
               SELECT
                 DATE(ts, 'Asia/Riyadh')                         AS action_date,
                 action,
+                'executed'                                       AS action_type,
                 channel,
                 campaign_name,
                 CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
@@ -1169,10 +1175,33 @@ def activity_dashboard():
               WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
                 AND action IN ('campaign_paused','campaign_scaled','campaign_created','ads_paused')
                 AND campaign_name IS NOT NULL
+
+              UNION ALL
+
+              -- Recommended: Asana tasks created for team approval
+              SELECT
+                DATE(ts, 'Asia/Riyadh')                         AS action_date,
+                CASE action
+                  WHEN 'pause_task_created'      THEN 'campaign_paused'
+                  WHEN 'scale_task_created'      THEN 'campaign_scaled'
+                  WHEN 'junk_leads_task_created' THEN 'ads_paused'
+                  WHEN 'optimize_task_created'   THEN 'campaign_scaled'
+                  ELSE action
+                END                                              AS action,
+                'recommended'                                    AS action_type,
+                channel,
+                campaign_name,
+                CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
+              FROM `{T}.agent_activity_log`
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+                AND action IN ('pause_task_created','scale_task_created',
+                               'junk_leads_task_created','optimize_task_created')
+                AND campaign_name IS NOT NULL
             ),
             perf AS (
               SELECT
                 a.action,
+                a.action_type,
                 a.action_date,
                 a.channel,
                 a.campaign_name,
@@ -1184,22 +1213,23 @@ def activity_dashboard():
                 COUNT(CASE WHEN c.date > a.action_date AND c.spend > 0 THEN 1 END) AS active_days_after
               FROM actions a
               LEFT JOIN `{T}.campaigns_daily` c USING (campaign_name)
-              GROUP BY 1,2,3,4,5
+              GROUP BY 1,2,3,4,5,6
             )
             SELECT *,
               CASE
-                WHEN action = 'campaign_paused' AND active_days_after > 0 THEN 'Re-enabled'
-                WHEN action = 'campaign_paused' AND active_days_after = 0 THEN 'Confirmed paused'
+                WHEN action_type = 'recommended'                                   THEN 'Pending approval'
+                WHEN action = 'campaign_paused' AND active_days_after > 0          THEN 'Re-enabled'
+                WHEN action = 'campaign_paused' AND active_days_after = 0          THEN 'Confirmed paused'
                 WHEN action = 'campaign_scaled' AND avg_spend_after > avg_spend_before THEN 'Spend increased'
-                WHEN action = 'campaign_scaled' AND avg_spend_after IS NULL THEN 'No data yet'
-                WHEN action = 'campaign_scaled' THEN 'Spend unchanged'
-                WHEN action = 'campaign_created' THEN
-                  CASE WHEN active_days_after > 0 THEN 'Running' ELSE 'Not spending' END
+                WHEN action = 'campaign_scaled' AND avg_spend_after IS NULL        THEN 'No data yet'
+                WHEN action = 'campaign_scaled'                                    THEN 'Spend unchanged'
+                WHEN action = 'campaign_created' AND active_days_after > 0         THEN 'Running'
+                WHEN action = 'campaign_created'                                   THEN 'Not spending'
                 ELSE 'Paused'
               END AS outcome
             FROM perf
             ORDER BY action_date DESC
-            LIMIT 80
+            LIMIT 120
         """
         followup_rows = list(bq.query(fu_sql).result())
     except Exception as e:
@@ -1236,6 +1266,7 @@ def activity_dashboard():
     followup = {
         "campaign_actions": [
             {"action_date": str(r.action_date), "action": r.action,
+             "action_type": r.action_type,
              "channel": r.channel or "—", "campaign_name": r.campaign_name or "—",
              "target_budget": r.target_budget, "avg_spend_after": r.avg_spend_after,
              "avg_spend_before": r.avg_spend_before, "latest_status": r.latest_status or "—",

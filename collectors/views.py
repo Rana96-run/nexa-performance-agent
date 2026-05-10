@@ -454,7 +454,8 @@ categorised AS (
     CASE
       WHEN action IN ('campaign_created', 'user_created_campaign')
         THEN 'Campaigns Created'
-      WHEN action IN ('launch', 'keyword_candidates_queued_for_weekly_review')
+      WHEN action IN ('launch', 'keyword_candidates_queued_for_weekly_review',
+                      'positive_keywords_added')
            AND role = 'keyword_management'
         THEN 'Keywords Added'
       WHEN action IN ('keywords_paused', 'keywords_deleted')

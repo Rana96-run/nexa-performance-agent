@@ -432,8 +432,8 @@ a:hover{text-decoration:underline}
         <div class="card-left">
           <div class="card-icon">🔑</div>
           <div>
-            <div class="card-name">Keywords Added</div>
-            <div class="card-counts">30d: {{ metrics.keywords_added.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.keywords_added.count_7d }}</div>
+            <div class="card-name">Positive Keywords Added</div>
+            <div class="card-counts">30d: {{ metrics.keywords_added.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.keywords_added.count_7d }} &nbsp;·&nbsp; <span style="color:#8b949e;font-size:11px">weekly expansion + campaign setup</span></div>
           </div>
         </div>
         <div class="card-right">
@@ -1195,25 +1195,34 @@ a:hover{text-decoration:underline}
       {% if followup.campaign_actions %}
       <table class="dtable">
         <tr>
-          <th>Date</th><th>Action</th><th>Channel</th><th>Campaign</th>
+          <th>Date</th><th>Action</th><th>Type</th><th>Channel</th><th>Campaign</th>
           <th>Spend Before</th><th>Spend After</th><th>Outcome</th>
         </tr>
         {% for r in followup.campaign_actions %}
         <tr>
           <td style="white-space:nowrap">{{ r.action_date }}</td>
           <td>
-            {% if r.action == 'campaign_paused' %}<span style="color:#f85149">⏸ Paused</span>
-            {% elif r.action == 'campaign_scaled' %}<span style="color:#39d353">📈 Scaled</span>
-            {% elif r.action == 'campaign_created' %}<span style="color:#58a6ff">🚀 Created</span>
+            {% if r.action == 'campaign_paused' %}<span style="color:#f85149">⏸ Pause</span>
+            {% elif r.action == 'campaign_scaled' %}<span style="color:#39d353">📈 Scale</span>
+            {% elif r.action == 'campaign_created' %}<span style="color:#58a6ff">🚀 Create</span>
+            {% elif r.action == 'ads_paused' %}<span style="color:#f85149">⏸ Ads Paused</span>
             {% else %}<span>{{ r.action }}</span>
             {% endif %}
           </td>
-          <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.campaign_name }}">{{ r.campaign_name }}</td>
-          <td>${{ r.avg_spend_before or 0 }}/d</td>
-          <td>${{ r.avg_spend_after or 0 }}/d</td>
           <td>
-            {% if r.outcome == 'Confirmed paused' %}<span style="color:#484f58">✓ {{ r.outcome }}</span>
+            {% if r.action_type == 'executed' %}
+            <span style="color:#39d353;font-size:11px">✅ Executed</span>
+            {% else %}
+            <span style="color:#e3b341;font-size:11px">⏳ Recommended</span>
+            {% endif %}
+          </td>
+          <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.campaign_name }}">{{ r.campaign_name }}</td>
+          <td>{% if r.avg_spend_before %}${{ r.avg_spend_before }}/d{% else %}—{% endif %}</td>
+          <td>{% if r.avg_spend_after %}${{ r.avg_spend_after }}/d{% else %}—{% endif %}</td>
+          <td>
+            {% if r.outcome == 'Pending approval' %}<span style="color:#e3b341">⏳ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Confirmed paused' %}<span style="color:#484f58">✓ {{ r.outcome }}</span>
             {% elif r.outcome == 'Re-enabled' %}<span style="color:#e3b341">⚠ {{ r.outcome }}</span>
             {% elif r.outcome == 'Spend increased' %}<span style="color:#39d353">✓ {{ r.outcome }}</span>
             {% elif r.outcome == 'Running' %}<span style="color:#58a6ff">● {{ r.outcome }}</span>
@@ -1225,7 +1234,7 @@ a:hover{text-decoration:underline}
       </table>
       {% else %}
       <div style="color:#484f58;font-size:12px;padding:4px 0">
-        No campaign actions to reconcile yet. Data appears after campaigns are paused/scaled.
+        No campaign actions recorded yet. Executed pauses/scales and pending Asana recommendations both appear here.
       </div>
       {% endif %}
     </div>

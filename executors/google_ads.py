@@ -332,6 +332,16 @@ def add_keywords(adgroup_resource_name: str,
         ops.append(op)
     r = svc.mutate_ad_group_criteria(customer_id=customer_id, operations=ops)
     print(f"[gads] added {len(ops)} keyword(s) to {adgroup_resource_name}")
+    try:
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="keyword_management", action="positive_keywords_added",
+            channel="google_ads", rows_affected=len(ops),
+            details={"keywords": [kw["text"] for kw in keywords[:20]],
+                     "adgroup_resource": adgroup_resource_name},
+        )
+    except Exception:
+        pass
     return [res.resource_name for res in r.results]
 
 
@@ -355,6 +365,16 @@ def add_negative_keywords(campaign_resource_name: str,
         ops.append(op)
     r = svc.mutate_campaign_criteria(customer_id=customer_id, operations=ops)
     print(f"[gads] added {len(ops)} negative keyword(s) to {campaign_resource_name}")
+    try:
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="keyword_management", action="negative_keywords_added",
+            channel="google_ads", rows_affected=len(ops),
+            details={"terms": [kw["text"] for kw in keywords[:20]],
+                     "campaign_resource": campaign_resource_name},
+        )
+    except Exception:
+        pass
     return [res.resource_name for res in r.results]
 
 
