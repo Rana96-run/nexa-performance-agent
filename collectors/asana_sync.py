@@ -92,16 +92,46 @@ def sync_asana_tasks() -> int:
     bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
 
     # ── 1. GIDs from agent_activity_log ──────────────────────────────────────
+    # Two sources:
+    #   a) executors/asana.py  → action='asana_task_created', gid in details.gid
+    #   b) campaign_health_tasks.py → action='*_task_created', gid in details.asana_gid
     gid_sql = f"""
-        SELECT DISTINCT
-          JSON_VALUE(details, '$.gid')          AS gid,
-          JSON_VALUE(details, '$.title')        AS title,
-          JSON_VALUE(details, '$.project_key')  AS project_key
-        FROM `{P}.{D}.agent_activity_log`
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
-          AND action = 'asana_task_created'
-          AND JSON_VALUE(details, '$.gid') IS NOT NULL
-        LIMIT 200
+        SELECT DISTINCT gid, title, project_key FROM (
+          SELECT
+            JSON_VALUE(details, '$.gid')         AS gid,
+            JSON_VALUE(details, '$.title')        AS title,
+            JSON_VALUE(details, '$.project_key')  AS project_key
+          FROM `{P}.{D}.agent_activity_log`
+          WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+            AND action = 'asana_task_created'
+            AND JSON_VALUE(details, '$.gid') IS NOT NULL
+
+          UNION ALL
+
+          SELECT
+            JSON_VALUE(details, '$.asana_gid')   AS gid,
+            CONCAT(
+              CASE action
+                WHEN 'scale_task_created'      THEN 'Scale: '
+                WHEN 'pause_task_created'      THEN 'Pause: '
+                WHEN 'junk_leads_task_created' THEN 'Junk Leads: '
+                WHEN 'optimize_task_created'   THEN 'Optimize: '
+                WHEN 'drilldown_task_created'  THEN 'Review: '
+                ELSE ''
+              END,
+              COALESCE(campaign_name, action)
+            )                                    AS title,
+            'optimization'                       AS project_key
+          FROM `{P}.{D}.agent_activity_log`
+          WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+            AND action IN (
+              'scale_task_created', 'pause_task_created', 'junk_leads_task_created',
+              'optimize_task_created', 'drilldown_task_created'
+            )
+            AND JSON_VALUE(details, '$.asana_gid') IS NOT NULL
+        )
+        WHERE gid IS NOT NULL
+        LIMIT 500
     """
     log_rows  = list(bq.query(gid_sql).result())
     if not log_rows:
@@ -205,13 +235,25 @@ def sync_user_tasks() -> int:
     P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
 
-    # Known agent-created GIDs (last 90 days)
+    # Known agent-created GIDs — both direct creates and audit recommendation tasks
     known_sql = f"""
-        SELECT DISTINCT JSON_VALUE(details, '$.gid') AS gid
-        FROM `{P}.{D}.agent_activity_log`
-        WHERE action = 'asana_task_created'
-          AND JSON_VALUE(details, '$.gid') IS NOT NULL
-          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+        SELECT DISTINCT gid FROM (
+          SELECT JSON_VALUE(details, '$.gid') AS gid
+          FROM `{P}.{D}.agent_activity_log`
+          WHERE action = 'asana_task_created'
+            AND JSON_VALUE(details, '$.gid') IS NOT NULL
+            AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+          UNION ALL
+          SELECT JSON_VALUE(details, '$.asana_gid') AS gid
+          FROM `{P}.{D}.agent_activity_log`
+          WHERE action IN (
+            'scale_task_created', 'pause_task_created', 'junk_leads_task_created',
+            'optimize_task_created', 'drilldown_task_created'
+          )
+            AND JSON_VALUE(details, '$.asana_gid') IS NOT NULL
+            AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+        )
+        WHERE gid IS NOT NULL
     """
     known_gids = {r.gid for r in bq.query(known_sql).result() if r.gid}
 
