@@ -103,6 +103,10 @@ def _fetch_analytics(start: date, end: date) -> list[dict]:
     """
     Fetch DAILY analytics for all campaigns in the account.
     LinkedIn returns one element per (campaign, day).
+
+    IMPORTANT: LinkedIn REST API only returns fields explicitly listed in the
+    'fields' param.  Without it costInLocalCurrency is silently omitted and
+    every row appears as $0 spend even when real spend exists.
     """
     if not AD_ACCT_URN:
         return []
@@ -117,13 +121,27 @@ def _fetch_analytics(start: date, end: date) -> list[dict]:
         "dateRange.end.day":     end.day,
         "dateRange.end.month":   end.month,
         "dateRange.end.year":    end.year,
+        # Must explicitly request cost — LinkedIn omits it otherwise
+        "fields": "costInLocalCurrency,impressions,clicks,externalWebsiteConversions,dateRange,pivotValues",
+        "count":  1000,
     }
-    r = requests.get(f"{BASE}/adAnalytics", headers=_headers(),
-                     params=params, timeout=30)
-    if r.status_code >= 400:
-        print(f"[li-bq] analytics {r.status_code}: {r.text[:200]}")
-        return []
-    return r.json().get("elements", [])
+    elements = []
+    start_idx = 0
+    while True:
+        params["start"] = start_idx
+        r = requests.get(f"{BASE}/adAnalytics", headers=_headers(),
+                         params=params, timeout=30)
+        if r.status_code >= 400:
+            print(f"[li-bq] analytics {r.status_code}: {r.text[:200]}")
+            break
+        data = r.json()
+        page = data.get("elements", [])
+        elements.extend(page)
+        # Stop if we got fewer than requested (last page)
+        if len(page) < params["count"]:
+            break
+        start_idx += len(page)
+    return elements
 
 
 def collect_and_write(days: int = None, incremental: bool = False) -> int:
