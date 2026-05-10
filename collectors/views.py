@@ -457,17 +457,20 @@ categorised AS (
       WHEN action IN ('launch', 'keyword_candidates_queued_for_weekly_review')
            AND role = 'keyword_management'
         THEN 'Keywords Added'
-      WHEN action = 'keywords_paused'
+      WHEN action IN ('keywords_paused', 'keywords_deleted')
         THEN 'Keywords Paused'
-      WHEN action = 'negative_keywords_added'
+      WHEN action IN ('negative_keywords_added', 'negative_keywords_removed')
         THEN 'Negatives Added'
-      WHEN action = 'campaign_paused'
+      WHEN action IN ('campaign_paused', 'pause_task_created', 'junk_leads_task_created')
         THEN 'Campaigns Paused'
-      WHEN action = 'campaign_scaled'
+      WHEN action IN ('campaign_scaled', 'scale_task_created')
         THEN 'Campaigns Scaled'
-      WHEN action IN ('pause_task_created', 'junk_leads_task_created', 'ads_paused')
+      WHEN action IN ('ads_paused', 'ads_enabled')
         THEN 'Ads Paused'
-      WHEN action IN ('asana_task_created', 'asana_tasks_created')
+      WHEN action IN (
+        'asana_task_created', 'asana_tasks_created',
+        'optimize_task_created', 'drilldown_task_created'
+      )
         THEN 'Asana Tasks'
       WHEN action IN ('posted_slack_digest', 'slack_summary_posted',
                       'post_weekly_summary', 'nightly_audit_complete',
