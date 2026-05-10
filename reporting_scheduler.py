@@ -283,6 +283,15 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] auto-heal failed (non-fatal): {e}")
 
+    # ── Platform state snapshot (detects manual user changes across channels) ─
+    try:
+        from collectors.platform_snapshot import take_snapshot
+        n_snap = take_snapshot()
+        results["platform_snapshot"] = (True, n_snap, 0)
+    except Exception as e:
+        print(f"[scheduler] platform_snapshot failed (non-fatal): {e}")
+        results["platform_snapshot"] = (False, str(e), 0)
+
     # ── Sync Asana task completion status to BQ ──────────────────────────────
     try:
         from collectors.asana_sync import run_full_sync

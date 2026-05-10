@@ -477,7 +477,10 @@ categorised AS (
       WHEN action IN (
         'user_completed_task', 'user_created_task',
         'user_executed_scale', 'user_executed_pause',
-        'user_added_negative', 'user_reviewed_recommendation'
+        'user_added_negative', 'user_reviewed_recommendation',
+        'user_paused_campaign', 'user_enabled_campaign',
+        'user_changed_budget', 'user_changed_status',
+        'user_paused_ad', 'user_enabled_ad'
       ) OR role = 'user'
         THEN 'User Actions'
     END AS category,

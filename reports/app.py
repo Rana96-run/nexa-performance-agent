@@ -308,6 +308,12 @@ def activity_dashboard():
         "user_executed_pause":                         "User Actions",
         "user_added_negative":                         "User Actions",
         "user_reviewed_recommendation":                "User Actions",
+        "user_paused_campaign":                        "User Actions",
+        "user_enabled_campaign":                       "User Actions",
+        "user_changed_budget":                         "User Actions",
+        "user_changed_status":                         "User Actions",
+        "user_paused_ad":                              "User Actions",
+        "user_enabled_ad":                             "User Actions",
         "create_audit_tasks":                          "Campaign Audits",
         "optimize_task_created":                       "Optimizations",
         "drilldown_task_created":                      "Optimizations",
@@ -632,6 +638,8 @@ def activity_dashboard():
     _USER_ACTIONS = {
         "user_completed_task", "user_created_task", "user_executed_scale",
         "user_executed_pause", "user_added_negative", "user_reviewed_recommendation",
+        "user_paused_campaign", "user_enabled_campaign", "user_changed_budget",
+        "user_changed_status", "user_paused_ad", "user_enabled_ad",
     }
     user_sql = f"""
         SELECT
@@ -671,6 +679,12 @@ def activity_dashboard():
         "user_executed_pause":          "Executed pause",
         "user_added_negative":          "Added negative keyword",
         "user_reviewed_recommendation": "Reviewed recommendation",
+        "user_paused_campaign":         "Paused campaign (direct)",
+        "user_enabled_campaign":        "Enabled campaign (direct)",
+        "user_changed_budget":          "Changed budget (direct)",
+        "user_changed_status":          "Changed status (direct)",
+        "user_paused_ad":               "Paused ad (direct)",
+        "user_enabled_ad":              "Enabled ad (direct)",
     }
     m_user_actions = {
         "count_30d": ua_c30, "count_7d": ua_c7,
