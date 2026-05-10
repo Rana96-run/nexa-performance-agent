@@ -121,6 +121,15 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
 
+## Done this session (2026-05-10)
+
+- [x] **HubSpot deals dual-pass fix** — incremental window extended 2→30 days; closedate pass now runs in ALL modes (not just incremental); explicit `deal_qoyod_source` only (no UTM inference). Eliminated 15–20% count inflation from inference. Fixed undercounting from 721→818 for 90-day Sales Pipeline paid deals (target 789).
+- [x] **2025 full backfill** — 110,297 deals → 41,040 rows across 496 partitions. Covers Jan 1 2025 → May 10 2026 via createdate pass + closedate pass. Captures deals created before 2026 but closed in 2026.
+- [x] **SDR Offline Sales + Partnerships Revenue stale row fix** — 847 stale inference rows deleted; backfill repopulated both with explicit-source data. SDR: BQ=5, HS=5 (exact). Partnerships: BQ=32, HS=31 (1-deal gap).
+- [x] **`hubspot_deals_bq.py` CLI** — added `--start-date YYYY-MM-DD` argparse flag for targeted backfills without modifying script body.
+- [x] **Leads gap investigation** — mid-March 2026 dip (weeks of Mar-16/23, ~950 leads vs ~2,000) confirmed as Eid Al-Fitr 2026 seasonality. No collection gap; all dates present in BQ. Documented in `memory/08_pitfalls.md`.
+- [x] **Pitfalls documented** — dual-pass architecture, explicit-source-only rule, stale row upsert-key problem, `seen_ids` deduplication requirement, Eid seasonality annotation.
+
 ## Done this session (2026-05-06 continued)
 
 - [x] **Full YTD sub-level backfills** — all grains filled to Jan 1, 2026:
