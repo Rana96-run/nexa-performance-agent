@@ -828,17 +828,32 @@ def activity_dashboard():
         for k, v in sorted(sidebar_raw.items(), key=lambda x: -x[1])
     ]
 
-    # ── Recent activity feed ───────────────────────────────────────────────────
-    recent_activity = [
-        {
-            "ts":       str(r.day),
-            "category": _CAT_MAP.get(r.action, r.action.replace("_", " ").title()),
-            "channel":  r.channel or "—",
-            "campaign": r.campaign_name or "—",
-            "count":    r.cnt,
-        }
-        for r in detail_rows[:80]
-    ]
+    # ── Recent activity feed — grouped by (week, category, campaign) ─────────
+    def _week_label(d) -> str:
+        from datetime import date as _date
+        if isinstance(d, str):
+            try: d = _date.fromisoformat(d)
+            except Exception: return str(d)
+        monday = d - timedelta(days=d.weekday())
+        return f"Week of {monday.strftime('%b')} {monday.day}"
+
+    _feed_groups: dict[tuple, dict] = {}
+    for r in detail_rows:
+        wk  = _week_label(r.day)
+        cat = _CAT_MAP.get(r.action, r.action.replace("_", " ").title())
+        cam = r.campaign_name or "—"
+        ch  = r.channel or "—"
+        key = (wk, cat, cam)
+        if key not in _feed_groups:
+            _feed_groups[key] = {"week": wk, "category": cat,
+                                 "channel": ch, "campaign": cam, "count": 0}
+        _feed_groups[key]["count"] += int(r.cnt or 1)
+
+    recent_activity = sorted(
+        _feed_groups.values(),
+        key=lambda x: x["week"],
+        reverse=True,
+    )[:120]
 
     metrics = {
         "campaigns_created":  m_campaigns_created,
@@ -975,6 +990,38 @@ def activity_dashboard():
             for r in open_tasks[:80]
         ],
     }
+
+    # ── Enrich keyword/negative/asana rows with Asana task completion status ──
+    # Build lookup: "YYYY-MM-DD|asset_level" -> "done" | "open"
+    _asana_status: dict[str, str] = {}
+    for r in task_status_rows:
+        if not r.created_day:
+            continue
+        k = f"{r.created_day}|{r.asset_level or 'keyword'}"
+        if r.completed:
+            _asana_status[k] = "done"
+        elif k not in _asana_status:
+            _asana_status[k] = "open"
+
+    def _task_status(day, level="keyword") -> str:
+        return _asana_status.get(f"{day}|{level}", "—")
+
+    for row in metrics["keywords_added"]["rows"]:
+        row["asana_status"] = _task_status(row["day"])
+    for row in metrics["negatives_added"]["term_rows"]:
+        row["asana_status"] = _task_status(row["day"])
+    # Asana tasks card: match by GID via completed_rows lookup
+    _done_gids = {r["gid"] for r in asana_completion["completed_rows"]}
+    for row in metrics["asana_tasks"]["rows"]:
+        gid = next(
+            (r.gid for r in task_status_rows if r.title == row["title"]), None
+        )
+        if gid and gid in _done_gids:
+            row["asana_status"] = "done"
+        elif gid:
+            row["asana_status"] = "open"
+        else:
+            row["asana_status"] = "—"
 
     # ── 6. Channel follow-up: outcome of agent actions ─────────────────────────
     followup_rows = []

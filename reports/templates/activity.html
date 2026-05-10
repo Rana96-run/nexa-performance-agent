@@ -422,12 +422,13 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.keywords_added.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Count</th></tr>
+          <tr><th>Date</th><th>Channel</th><th>Count</th><th>Task Status</th></tr>
           {% for r in metrics.keywords_added.rows %}
           <tr>
             <td>{{ r.day }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
             <td>{{ r.cnt }}</td>
+            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">✅ done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">⏳ open</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </table>
@@ -490,9 +491,13 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.negatives_added.term_rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Term</th></tr>
+          <tr><th>Date</th><th>Term Blocked</th><th>Task Status</th></tr>
           {% for r in metrics.negatives_added.term_rows %}
-          <tr><td>{{ r.day }}</td><td>{{ r.term }}</td></tr>
+          <tr>
+            <td>{{ r.day }}</td>
+            <td>{{ r.term }}</td>
+            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">✅ done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">⏳ open</span>{% else %}—{% endif %}</td>
+          </tr>
           {% endfor %}
         </table>
         {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No negatives added in this period.</div>{% endif %}
@@ -564,13 +569,14 @@ a:hover{text-decoration:underline}
         {% endif %}
         {% if metrics.asana_tasks.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Title</th><th>Project</th><th>Type</th></tr>
+          <tr><th>Date</th><th>Title</th><th>Project</th><th>Type</th><th>Status</th></tr>
           {% for r in metrics.asana_tasks.rows %}
           <tr>
             <td>{{ r.day }}</td>
             <td>{{ r.title }}</td>
             <td><span class="tag">{{ r.project_key }}</span></td>
             <td>{{ r.task_action or '—' }}</td>
+            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">✅ done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">⏳ open</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </table>
@@ -1204,21 +1210,41 @@ a:hover{text-decoration:underline}
   </div>
 
   <!-- ── Recent Activity ── -->
-  <div class="section-head">Recent Activity Feed</div>
-  <table class="activity-table">
-    <tr>
-      <th>Date</th><th>Category</th><th>Channel</th><th>Campaign</th><th>Count</th>
-    </tr>
-    {% for row in recent_activity %}
-    <tr>
-      <td>{{ row.ts }}</td>
-      <td>{{ row.category }}</td>
-      <td><span class="tag {{ (row.channel or '')|lower }}">{{ row.channel }}</span></td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row.campaign }}</td>
-      <td>{{ row.count }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+  <div class="card" id="recent_feed" style="margin-bottom:24px">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-left">
+        <div class="card-icon">📋</div>
+        <div>
+          <div class="card-name">Recent Activity Feed</div>
+          <div class="card-counts">{{ recent_activity|length }} entries — grouped by week &amp; campaign · click to expand</div>
+        </div>
+      </div>
+      <div class="card-right">
+        <div class="card-num">{{ recent_activity|length }}</div>
+        <div class="card-arrow">▾</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <table class="activity-table">
+        <tr>
+          <th>Week</th><th>Category</th><th>Channel</th><th>Campaign</th><th>#</th>
+        </tr>
+        {% for row in recent_activity %}
+        <tr>
+          <td style="white-space:nowrap;color:#8b949e;font-size:11px">{{ row.week }}</td>
+          <td>{{ row.category }}</td>
+          <td><span class="tag {{ (row.channel or '')|lower }}">{{ row.channel }}</span></td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ row.campaign }}">{{ row.campaign }}</td>
+          <td>
+            {% if row.count > 1 %}
+            <span style="background:#1f6feb;color:#e6edf3;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">{{ row.count }}</span>
+            {% else %}1{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
 
 </main>
 </div><!-- /shell -->
