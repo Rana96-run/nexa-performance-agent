@@ -302,6 +302,12 @@ def activity_dashboard():
         "nightly_audit_complete":                      "Slack Messages",
         "posted_approvals_digest":                     "Approvals",
         "approval_requested":                          "Approvals",
+        "user_completed_task":                         "User Actions",
+        "user_created_task":                           "User Actions",
+        "user_executed_scale":                         "User Actions",
+        "user_executed_pause":                         "User Actions",
+        "user_added_negative":                         "User Actions",
+        "user_reviewed_recommendation":                "User Actions",
         "create_audit_tasks":                          "Campaign Audits",
         "optimize_task_created":                       "Optimizations",
         "drilldown_task_created":                      "Optimizations",
@@ -328,6 +334,7 @@ def activity_dashboard():
         "Campaigns Created", "Campaigns Paused", "Campaigns Scaled",
         "Keywords Added", "Keywords Paused", "Negatives Added",
         "Ads Paused", "Asana Tasks", "Slack Messages", "Approvals",
+        "User Actions",
     ]
     all_dates = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
 
@@ -608,6 +615,65 @@ def activity_dashboard():
         "active_apis":   sum(1 for r in channel_rows if r.active),
     }
 
+    # ── User actions ──────────────────────────────────────────────────────────
+    _USER_ACTIONS = {
+        "user_completed_task", "user_created_task", "user_executed_scale",
+        "user_executed_pause", "user_added_negative", "user_reviewed_recommendation",
+    }
+    user_sql = f"""
+        SELECT
+          DATE(ts, 'Asia/Riyadh')             AS day,
+          action,
+          role,
+          JSON_VALUE(details, '$.title')      AS task_title,
+          JSON_VALUE(details, '$.project_key') AS project_key,
+          JSON_VALUE(details, '$.gid')         AS gid,
+          JSON_VALUE(details, '$.completed_at') AS completed_at,
+          campaign_name,
+          channel,
+          COALESCE(rows_affected, 1)           AS cnt
+        FROM {T}.agent_activity_log
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+          AND (action IN UNNEST([
+            'user_completed_task','user_created_task','user_executed_scale',
+            'user_executed_pause','user_added_negative','user_reviewed_recommendation'
+          ]) OR role = 'user')
+          AND status NOT IN ('failed','skipped')
+        ORDER BY ts DESC
+        LIMIT 200
+    """
+    user_rows = []
+    try:
+        user_rows = list(bq.query(user_sql).result())
+    except Exception as e:
+        print(f"[activity] user_actions query failed (non-fatal): {e}")
+
+    ua_c30 = sum(r.cnt for r in user_rows if r.day >= cutoff_30)
+    ua_c7  = sum(r.cnt for r in user_rows if r.day >= cutoff_7)
+
+    _ACTION_LABELS = {
+        "user_completed_task":          "Completed task",
+        "user_created_task":            "Created task",
+        "user_executed_scale":          "Executed scale",
+        "user_executed_pause":          "Executed pause",
+        "user_added_negative":          "Added negative keyword",
+        "user_reviewed_recommendation": "Reviewed recommendation",
+    }
+    m_user_actions = {
+        "count_30d": ua_c30, "count_7d": ua_c7,
+        "rows": [
+            {
+                "day":        str(r.day),
+                "action":     _ACTION_LABELS.get(r.action, r.action.replace("_", " ").title()),
+                "task_title": r.task_title or "—",
+                "project_key": r.project_key or "—",
+                "channel":    r.channel or "—",
+                "campaign":   r.campaign_name or "—",
+            }
+            for r in user_rows[:100]
+        ],
+    }
+
     # ── Sidebar categories (totals over selected window) ──────────────────────
     sidebar_raw: dict[str, int] = {}
     for r in detail_rows:
@@ -653,6 +719,7 @@ def activity_dashboard():
         "bq_collections":     m_bq_collections,
         "reports_refreshed":  m_reports_refreshed,
         "linked_channels":    m_linked_channels,
+        "user_actions":       m_user_actions,
     }
 
     # ── 5. Asana task completion status ───────────────────────────────────────

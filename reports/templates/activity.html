@@ -603,6 +603,54 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
+    <!-- User Actions -->
+    <div class="card" id="user_actions">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">👤</div>
+          <div>
+            <div class="card-name">User Actions</div>
+            <div class="card-counts">30d: {{ metrics.user_actions.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.user_actions.count_7d }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#a78bfa">{{ metrics.user_actions.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <p style="font-size:11px;color:#484f58;margin-bottom:8px">
+          Tasks completed by the team, scale/pause recommendations executed, tasks created in Asana outside the agent.
+          Status syncs every 6 hours.
+        </p>
+        {% if metrics.user_actions.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Action</th><th>Task / Context</th><th>Project</th><th>Channel</th></tr>
+          {% for r in metrics.user_actions.rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.day }}</td>
+            <td>
+              {% if 'scale' in r.action|lower %}<span style="color:#39d353">📈 {{ r.action }}</span>
+              {% elif 'pause' in r.action|lower %}<span style="color:#f85149">⏸ {{ r.action }}</span>
+              {% elif 'negative' in r.action|lower %}<span style="color:#e3b341">🚫 {{ r.action }}</span>
+              {% elif 'completed' in r.action|lower or 'reviewed' in r.action|lower %}<span style="color:#58a6ff">✅ {{ r.action }}</span>
+              {% else %}<span>{{ r.action }}</span>
+              {% endif %}
+            </td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.task_title }}">{{ r.task_title }}</td>
+            <td><span class="tag">{{ r.project_key }}</span></td>
+            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="color:#484f58;font-size:12px;padding:4px 0">
+          No user actions tracked yet. Run the reporting scheduler to sync Asana task completions.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- Slack Messages -->
     <div class="card" id="slack_messages">
       <div class="card-header" onclick="toggleCard(this)">

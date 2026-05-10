@@ -474,6 +474,12 @@ categorised AS (
         THEN 'Slack Messages'
       WHEN action IN ('posted_approvals_digest', 'approval_requested')
         THEN 'Approvals'
+      WHEN action IN (
+        'user_completed_task', 'user_created_task',
+        'user_executed_scale', 'user_executed_pause',
+        'user_added_negative', 'user_reviewed_recommendation'
+      ) OR role = 'user'
+        THEN 'User Actions'
     END AS category,
     cnt
   FROM raw

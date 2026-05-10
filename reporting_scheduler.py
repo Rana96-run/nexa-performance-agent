@@ -285,8 +285,8 @@ def run_refresh(incremental: bool = True, days: int | None = None):
 
     # ── Sync Asana task completion status to BQ ──────────────────────────────
     try:
-        from collectors.asana_sync import sync_asana_tasks
-        n_synced = sync_asana_tasks()
+        from collectors.asana_sync import run_full_sync
+        n_synced = run_full_sync()
         results["asana_sync"] = (True, n_synced, 0)
     except Exception as e:
         print(f"[scheduler] asana_sync failed (non-fatal): {e}")

@@ -1,10 +1,14 @@
 """
-Sync Asana task completion status into BigQuery.
+Sync Asana task status to BQ and detect user actions.
 
-Reads GIDs from agent_activity_log.details, fetches current status from
-Asana API (completed, completed_at), and upserts into asana_task_status.
+Two functions:
+1. sync_asana_tasks()   — fetch completion status for agent-created tasks,
+                          detect transitions (incomplete→complete = user acted),
+                          infer executed recommendations from task title
+2. sync_user_tasks()    — scan ASANA_PROJECTS for tasks NOT created by the agent
+                          and log them as user_created_task
 
-Called from reporting_scheduler.run_refresh() — non-fatal if Asana is down.
+Both are called from reporting_scheduler.run_refresh() — non-fatal.
 """
 import json
 import os
@@ -16,9 +20,10 @@ import asana
 from asana.rest import ApiException as AsanaApiException
 
 from collectors.bq_writer import get_client as get_bq
+from logs.activity_logger import log_activity_async
 
 
-_TABLE = "asana_task_status"
+_TABLE  = "asana_task_status"
 _CREATE_DDL = """
 CREATE TABLE IF NOT EXISTS `{P}.{D}.{T}` (
   gid            STRING  NOT NULL,
@@ -33,7 +38,6 @@ CREATE TABLE IF NOT EXISTS `{P}.{D}.{T}` (
 PARTITION BY DATE(synced_at)
 OPTIONS(require_partition_filter=false)
 """
-
 _WINDOW_DAYS = 90
 
 
@@ -48,57 +52,84 @@ def _fetch_task(api: asana.TasksApi, gid: str) -> dict | None:
     try:
         t = api.get_task(gid, {"opt_fields": "gid,name,completed,completed_at,assignee.name,due_on"})
         return {
-            "gid":           gid,
-            "title":         t.get("name", ""),
-            "completed":     bool(t.get("completed", False)),
-            "completed_at":  t.get("completed_at"),
+            "gid":          gid,
+            "title":        t.get("name", ""),
+            "completed":    bool(t.get("completed", False)),
+            "completed_at": t.get("completed_at"),
             "assignee_name": (t.get("assignee") or {}).get("name", ""),
-            "due_on":        t.get("due_on"),
+            "due_on":       t.get("due_on"),
         }
     except AsanaApiException:
         return None
 
 
-def sync_asana_tasks(project_key_filter: str | None = None) -> int:
+def _infer_user_action(title: str, project_key: str) -> str:
     """
-    Fetch GIDs from BQ, check completion via Asana API, write results to BQ.
-    Returns number of rows synced.
+    Given a completed task, infer what the user actually did.
+    Returns an action string for agent_activity_log.
+    """
+    t = (title or "").lower()
+    if any(w in t for w in ("scale", "increase budget", "raise budget", "📈")):
+        return "user_executed_scale"
+    if any(w in t for w in ("pause", "stop", "disable", "⏸")):
+        return "user_executed_pause"
+    if any(w in t for w in ("negative", "negate", "🚫")):
+        return "user_added_negative"
+    if any(w in t for w in ("review", "creative", "drilldown", "drill down", "optimize")):
+        return "user_reviewed_recommendation"
+    return "user_completed_task"
+
+
+def sync_asana_tasks() -> int:
+    """
+    Fetch Asana status for agent-created tasks, write to BQ, detect transitions.
+    Returns number of rows written.
     """
     bq = get_bq()
     P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
 
-    # Ensure table exists
     bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
 
-    # Pull GIDs from activity log
-    pk_filter = ""
-    if project_key_filter:
-        pk_filter = f"AND JSON_VALUE(details, '$.project_key') = '{project_key_filter}'"
-
+    # ── 1. GIDs from agent_activity_log ──────────────────────────────────────
     gid_sql = f"""
         SELECT DISTINCT
-          JSON_VALUE(details, '$.gid')         AS gid,
+          JSON_VALUE(details, '$.gid')          AS gid,
           JSON_VALUE(details, '$.title')        AS title,
           JSON_VALUE(details, '$.project_key')  AS project_key
         FROM `{P}.{D}.agent_activity_log`
         WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
           AND action = 'asana_task_created'
           AND JSON_VALUE(details, '$.gid') IS NOT NULL
-          {pk_filter}
-        ORDER BY ts DESC
         LIMIT 200
     """
-    rows = list(bq.query(gid_sql).result())
-    if not rows:
+    log_rows  = list(bq.query(gid_sql).result())
+    if not log_rows:
         return 0
 
+    meta = {r.gid: {"title": r.title, "project_key": r.project_key} for r in log_rows}
+    gids = list(meta.keys())
+
+    # ── 2. Get previous completion state for transition detection ─────────────
+    prev_sql = f"""
+        SELECT gid, completed
+        FROM (
+          SELECT gid, completed,
+                 ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+          FROM `{P}.{D}.{_TABLE}`
+          WHERE gid IN UNNEST({json.dumps(gids)})
+        )
+        WHERE rn = 1
+    """
+    try:
+        prev_state = {r.gid: bool(r.completed) for r in bq.query(prev_sql).result()}
+    except Exception:
+        prev_state = {}
+
+    # ── 3. Fetch current status from Asana ───────────────────────────────────
     client  = _asana_client()
     api     = asana.TasksApi(client)
     now_utc = datetime.now(timezone.utc)
-
-    meta = {r.gid: {"title": r.title, "project_key": r.project_key} for r in rows}
-    gids = list(meta.keys())
 
     results = []
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -116,9 +147,8 @@ def sync_asana_tasks(project_key_filter: str | None = None) -> int:
     if not results:
         return 0
 
-    # Build NDJSON and load
-    ndjson = b"\n".join(json.dumps(r).encode() for r in results)
-
+    # ── 4. Write to BQ ───────────────────────────────────────────────────────
+    ndjson    = b"\n".join(json.dumps(r).encode() for r in results)
     table_ref = bq.dataset(D, project=P).table(_TABLE)
     from google.cloud import bigquery as bqlib
     job_cfg = bqlib.LoadJobConfig(
@@ -137,5 +167,112 @@ def sync_asana_tasks(project_key_filter: str | None = None) -> int:
         ],
     )
     bq.load_table_from_file(BytesIO(ndjson), table_ref, job_config=job_cfg).result()
-    print(f"[asana_sync] wrote {len(results)} task statuses to BQ")
+
+    # ── 5. Log transitions: incomplete → complete = user acted ───────────────
+    for r in results:
+        gid  = r["gid"]
+        was  = prev_state.get(gid, False)
+        now_ = r["completed"]
+        if not was and now_:
+            action = _infer_user_action(r["title"], r["project_key"])
+            log_activity_async(
+                role="user",
+                action=action,
+                status="success",
+                details={
+                    "gid":         gid,
+                    "title":       r["title"],
+                    "project_key": r["project_key"],
+                    "completed_at": r.get("completed_at", ""),
+                },
+            )
+            print(f"[asana_sync] user action detected: {action} — {r['title'][:60]!r}")
+
+    print(f"[asana_sync] wrote {len(results)} task statuses")
     return len(results)
+
+
+def sync_user_tasks() -> int:
+    """
+    Scan all ASANA_PROJECTS for tasks NOT created by the agent.
+    These are tasks the user created themselves. Logs each as user_created_task
+    (deduplicates against previous sync runs via a BQ lookup).
+    Returns number of new user tasks found.
+    """
+    from config import ASANA_PROJECTS
+
+    bq = get_bq()
+    P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+    D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
+
+    # Known agent-created GIDs (last 90 days)
+    known_sql = f"""
+        SELECT DISTINCT JSON_VALUE(details, '$.gid') AS gid
+        FROM `{P}.{D}.agent_activity_log`
+        WHERE action = 'asana_task_created'
+          AND JSON_VALUE(details, '$.gid') IS NOT NULL
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+    """
+    known_gids = {r.gid for r in bq.query(known_sql).result() if r.gid}
+
+    # Already-logged user tasks (avoid duplicate log entries)
+    already_sql = f"""
+        SELECT DISTINCT JSON_VALUE(details, '$.gid') AS gid
+        FROM `{P}.{D}.agent_activity_log`
+        WHERE action = 'user_created_task'
+          AND JSON_VALUE(details, '$.gid') IS NOT NULL
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_WINDOW_DAYS} DAY)
+    """
+    already_logged = {r.gid for r in bq.query(already_sql).result() if r.gid}
+
+    client     = _asana_client()
+    tasks_api  = asana.TasksApi(client)
+    cutoff     = datetime.now(timezone.utc) - timedelta(days=_WINDOW_DAYS)
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    found = 0
+    for project_key, project_id in ASANA_PROJECTS.items():
+        try:
+            page = tasks_api.get_tasks_for_project(
+                project_id,
+                {
+                    "opt_fields": "gid,name,completed,completed_at,assignee.name,created_at",
+                    "modified_since": cutoff_str,
+                    "limit": 100,
+                },
+            )
+            for task in page:
+                gid = task.get("gid")
+                if not gid:
+                    continue
+                if gid in known_gids or gid in already_logged:
+                    continue
+                # New user-created task
+                log_activity_async(
+                    role="user",
+                    action="user_created_task",
+                    status="success",
+                    details={
+                        "gid":         gid,
+                        "title":       task.get("name", ""),
+                        "project_key": project_key,
+                        "completed":   task.get("completed", False),
+                        "completed_at": task.get("completed_at", ""),
+                    },
+                )
+                already_logged.add(gid)
+                found += 1
+        except AsanaApiException as e:
+            print(f"[asana_sync] project {project_key} list failed: {e}")
+            continue
+
+    if found:
+        print(f"[asana_sync] found {found} user-created tasks across projects")
+    return found
+
+
+def run_full_sync() -> int:
+    """Entry point called from reporting_scheduler."""
+    n = sync_asana_tasks()
+    m = sync_user_tasks()
+    return n + m
