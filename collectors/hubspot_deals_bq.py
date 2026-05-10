@@ -152,17 +152,17 @@ def collect_and_write(days: int = None, start_date: date = None,
                        incremental: bool = False):
     """
     Modes:
-      - incremental=True: last 30 days by createdate + last 30 days by closedate.
-        The closedate pass catches deals created >30 days ago that recently closed
+      - incremental=True: last 30 days by createdate + last 365 days by closedate.
+        The closedate pass catches deals created at any point that recently closed
         (long sales cycles) — these are invisible to a createdate-only search.
-      - days=N: last N days (for a targeted re-pull)
-      - start_date=date(Y,M,D): custom window
-      - default: YTD (Jan 1 of current year) — use once for initial backfill
-    """
-    # How far back to look for recently-closed deals in incremental mode.
-    # 90 days covers the longest realistic sales cycle in HubSpot.
-    CLOSEDATE_LOOKBACK_DAYS = 90
+      - days=N: last N days by createdate + same window by closedate
+      - start_date=date(Y,M,D): custom window by createdate + same window by closedate
+      - default: YTD (Jan 1 of current year) by createdate + same window by closedate
 
+    In all modes, the closedate pass runs over the SAME date window as the
+    createdate pass. This ensures any deal closed in the window is captured,
+    regardless of when it was created — even deals created years ago.
+    """
     _load_pipelines()
     print(f"[deals] Loaded {len(_CACHE['pipelines'])} pipelines, "
           f"{len(_CACHE['stages'])} stages")
@@ -170,15 +170,19 @@ def collect_and_write(days: int = None, start_date: date = None,
     end = date.today()
     if incremental:
         # 30-day createdate window: catches new deals and recently-created ones.
-        # A separate closedate pass below handles deals created earlier that
-        # just closed within the window.
+        # The closedate pass below uses a wider 365-day window so long-cycle
+        # deals (created >1 year ago) are still found when they close.
         start = end - timedelta(days=30)
+        closedate_start = end - timedelta(days=365)
     elif start_date:
         start = start_date
+        closedate_start = start_date   # same window — any deal closed in range
     elif days:
         start = end - timedelta(days=days)
+        closedate_start = start
     else:
-        start = date(end.year, 1, 1)  # YTD default
+        start = date(end.year, 1, 1)   # YTD default
+        closedate_start = start
     print(f"[deals] Window: {start} -> {end}")
     since_ms = int(datetime(start.year, start.month, start.day).timestamp() * 1000)
 
@@ -309,14 +313,15 @@ def collect_and_write(days: int = None, start_date: date = None,
         print(f"[deals] {win_start}..{win_end}: {win_count} deals")
         win_start = win_end
 
-    # ── Closedate pass (incremental only) ────────────────────────────────────
-    # Catches deals created >30 days ago that recently closed (long sales cycles).
-    # Searches by closedate so we find ANY deal that closed in the window,
-    # regardless of when it was created. Deduplicates against seen_ids so
-    # deals already fetched by createdate above are not double-counted.
-    if incremental:
-        cd_start = end - timedelta(days=CLOSEDATE_LOOKBACK_DAYS)
-        cd_win_start = cd_start
+    # ── Closedate pass (all modes) ───────────────────────────────────────────
+    # Finds ANY won deal whose closedate falls in the window, regardless of
+    # when the deal was created. This is the authoritative pass for revenue —
+    # a deal created 2 years ago that closed today belongs in today's revenue.
+    # Runs in ALL modes (incremental, days, start_date, YTD).
+    # Deduplicates against seen_ids so deals already in the createdate pass
+    # are not double-counted.
+    if True:  # always run — replaces the old incremental-only guard
+        cd_win_start = closedate_start
         cd_end_dt = end + timedelta(days=1)
         closedate_fetched = 0
         while cd_win_start < cd_end_dt:
