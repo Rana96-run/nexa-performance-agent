@@ -242,35 +242,12 @@ def collect_and_write(days: int = None, start_date: date = None,
                 amount = to_usd(amount_native, native_cur)
                 tis = _to_float(p.get("hs_v2_time_in_current_stage"))
 
-                # Same fallback chain as the leads collector.
-                from analysers.channel_inference import (
-                    resolve_channel, CHANNEL_TO_QOYOD_SOURCE,
-                )
                 explicit_src = (p.get("deal_qoyod_source") or "").strip()
-                inferred_slug = resolve_channel(
-                    qoyod_source=explicit_src,
-                    lead_utm_source=p.get("deal_utm_source") or "",
-                    lead_utm_campaign=p.get("deal_utm_campaign") or "",
-                    lead_original_traffic_source=p.get("deal_original_traffic_source") or "",
-                    lead_latest_traffic_source=p.get("deal_latest_traffic_source") or "",
-                    lead_original_traffic_source_drilldown_1=
-                        p.get("deal_original_traffic_source_drilldown_1") or "",
-                    lead_latest_traffic_source_drilldown_1=
-                        p.get("deal_latest_traffic_source_drilldown_1") or "",
-                    lead_original_traffic_source_drilldown_2=
-                        p.get("deal_original_traffic_source_drilldown_2") or "",
-                    lead_latest_traffic_source_drilldown_2=
-                        p.get("deal_latest_traffic_source_drilldown_2") or "",
-                    lead_utm_audience=p.get("deal_utm_audience") or "",
-                    lead_utm_content=p.get("deal_utm_content") or "",
-                    lead_utm_medium=p.get("deal_utm_medium") or "",
-                )
-                if explicit_src and explicit_src != "Other":
-                    src_label = explicit_src
-                elif inferred_slug:
-                    src_label = CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug, inferred_slug)
-                else:
-                    src_label = explicit_src or "Other"
+                # Explicit deal_qoyod_source only — no UTM inference.
+                # Matches HubSpot's own "Deal Qoyod Source" filter exactly.
+                # Deals without an explicit source fall to "Other" and are
+                # excluded from paid-channel queries.
+                src_label = explicit_src if (explicit_src and explicit_src != "Other") else "Other"
 
                 # Won deals use closedate as the partition date so ROAS can be
                 # filtered by when revenue was actually recognised, not when the
@@ -383,34 +360,8 @@ def collect_and_write(days: int = None, start_date: date = None,
                     )
                     amount = to_usd(amount_native, native_cur)
                     tis = _to_float(p.get("hs_v2_time_in_current_stage"))
-                    from analysers.channel_inference import (
-                        resolve_channel, CHANNEL_TO_QOYOD_SOURCE,
-                    )
                     explicit_src = (p.get("deal_qoyod_source") or "").strip()
-                    inferred_slug = resolve_channel(
-                        qoyod_source=explicit_src,
-                        lead_utm_source=p.get("deal_utm_source") or "",
-                        lead_utm_campaign=p.get("deal_utm_campaign") or "",
-                        lead_original_traffic_source=p.get("deal_original_traffic_source") or "",
-                        lead_latest_traffic_source=p.get("deal_latest_traffic_source") or "",
-                        lead_original_traffic_source_drilldown_1=
-                            p.get("deal_original_traffic_source_drilldown_1") or "",
-                        lead_latest_traffic_source_drilldown_1=
-                            p.get("deal_latest_traffic_source_drilldown_1") or "",
-                        lead_original_traffic_source_drilldown_2=
-                            p.get("deal_original_traffic_source_drilldown_2") or "",
-                        lead_latest_traffic_source_drilldown_2=
-                            p.get("deal_latest_traffic_source_drilldown_2") or "",
-                        lead_utm_audience=p.get("deal_utm_audience") or "",
-                        lead_utm_content=p.get("deal_utm_content") or "",
-                        lead_utm_medium=p.get("deal_utm_medium") or "",
-                    )
-                    if explicit_src and explicit_src != "Other":
-                        src_label = explicit_src
-                    elif inferred_slug:
-                        src_label = CHANNEL_TO_QOYOD_SOURCE.get(inferred_slug, inferred_slug)
-                    else:
-                        src_label = explicit_src or "Other"
+                    src_label = explicit_src if (explicit_src and explicit_src != "Other") else "Other"
                     from datetime import date as _date
                     today_str = _date.today().isoformat()
                     if closed and closed > today_str:

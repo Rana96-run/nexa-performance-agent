@@ -279,7 +279,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('campaign_creation')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('campaigns_created')">⚙ How this works</button>
         </div>
         {% if metrics.campaigns_created.rows %}
         <table class="dtable">
@@ -314,7 +314,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('approval_flow')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('campaigns_paused')">⚙ How this works</button>
         </div>
         {% if metrics.campaigns_paused.rows %}
         <table class="dtable">
@@ -348,7 +348,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('approval_flow')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('campaigns_scaled')">⚙ How this works</button>
         </div>
         {% if metrics.campaigns_scaled.rows %}
         <table class="dtable">
@@ -383,7 +383,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('nightly_audit')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('campaign_audits')">⚙ How this works</button>
         </div>
         {% if metrics.campaign_audits.rows %}
         <table class="dtable">
@@ -417,7 +417,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('keyword_expansion')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('keywords_added')">⚙ How this works</button>
         </div>
         {% if metrics.keywords_added.rows %}
         <table class="dtable">
@@ -451,7 +451,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('keyword_pause')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('keywords_paused')">⚙ How this works</button>
         </div>
         {% if metrics.keywords_paused.kw_rows %}
         <table class="dtable">
@@ -485,7 +485,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('negative_keywords')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('negatives_added')">⚙ How this works</button>
         </div>
         {% if metrics.negatives_added.term_rows %}
         <table class="dtable">
@@ -515,7 +515,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('optimization')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('optimizations')">⚙ How this works</button>
         </div>
         {% if metrics.optimizations.rows %}
         <table class="dtable">
@@ -550,7 +550,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('asana_task')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('asana_tasks')">⚙ How this works</button>
         </div>
         {% if metrics.asana_tasks.rows %}
         <table class="dtable">
@@ -585,7 +585,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('creative_review')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('creative_reviews')">⚙ How this works</button>
         </div>
         {% if metrics.creative_reviews.rows %}
         <table class="dtable">
@@ -668,7 +668,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('slack_digest')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('slack_messages')">⚙ How this works</button>
         </div>
         {% if metrics.slack_messages.rows %}
         <table class="dtable">
@@ -701,7 +701,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('approval_flow')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('slack_approvals')">⚙ How this works</button>
         </div>
         {% if metrics.slack_approvals.rows %}
         <table class="dtable">
@@ -736,7 +736,7 @@ a:hover{text-decoration:underline}
       </div>
       <div class="card-body">
         <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('data_collection')">⚙ How this works</button>
+          <button class="btn-workflow" onclick="openWorkflow('bq_collections')">⚙ How this works</button>
         </div>
         {% if metrics.bq_collections.rows %}
         <table class="dtable">
@@ -817,6 +817,146 @@ a:hover{text-decoration:underline}
           {% endfor %}
         </table>
         {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No channel data found.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- LLM Analysis Runs -->
+    <div class="card" id="llm_runs">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">🧠</div>
+          <div>
+            <div class="card-name">LLM Analysis Runs</div>
+            <div class="card-counts">30d: {{ metrics.llm_runs.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.llm_runs.count_7d }} &nbsp;·&nbsp; cost: ${{ "%.4f"|format(metrics.llm_runs.total_cost) }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.llm_runs.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-actions">
+          <button class="btn-workflow" onclick="openWorkflow('llm_runs')">⚙ How this works</button>
+        </div>
+        {% if metrics.llm_runs.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Model</th><th>Tokens In</th><th>Tokens Out</th><th>Cost</th></tr>
+          {% for r in metrics.llm_runs.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td>{{ r.model }}</td>
+            <td>{{ "{:,}".format(r.tokens_in) }}</td>
+            <td>{{ "{:,}".format(r.tokens_out) }}</td>
+            <td>${{ "%.4f"|format(r.cost_usd) }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No LLM runs logged in this period.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Spike Detections -->
+    <div class="card" id="spike_detections">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">⚡</div>
+          <div>
+            <div class="card-name">Spike Detections</div>
+            <div class="card-counts">30d: {{ metrics.spike_detections.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.spike_detections.count_7d }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.spike_detections.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-actions">
+          <button class="btn-workflow" onclick="openWorkflow('spike_detections')">⚙ How this works</button>
+        </div>
+        {% if metrics.spike_detections.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Channel</th><th>Campaign</th><th>Spikes</th></tr>
+          {% for r in metrics.spike_detections.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+            <td>{{ r.campaign }}</td>
+            <td>{{ r.cnt }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No spikes detected in this period.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Slack Bot Replies -->
+    <div class="card" id="slack_bot_replies">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">💬</div>
+          <div>
+            <div class="card-name">Slack Bot Replies (@Nexa)</div>
+            <div class="card-counts">30d: {{ metrics.slack_bot.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.slack_bot.count_7d }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.slack_bot.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-actions">
+          <button class="btn-workflow" onclick="openWorkflow('slack_bot_replies')">⚙ How this works</button>
+        </div>
+        {% if metrics.slack_bot.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Tokens In</th><th>Tokens Out</th></tr>
+          {% for r in metrics.slack_bot.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td>{{ "{:,}".format(r.tokens_in) }}</td>
+            <td>{{ "{:,}".format(r.tokens_out) }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No bot replies in this period.</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Data Quality Heals -->
+    <div class="card" id="data_quality">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">🔧</div>
+          <div>
+            <div class="card-name">Data Quality Heals</div>
+            <div class="card-counts">30d: {{ metrics.data_quality.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.data_quality.count_7d }}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num">{{ metrics.data_quality.count_30d }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-actions">
+          <button class="btn-workflow" onclick="openWorkflow('data_quality')">⚙ How this works</button>
+        </div>
+        {% if metrics.data_quality.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Issue Type</th><th>Channel</th><th>Fixed</th></tr>
+          {% for r in metrics.data_quality.rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td>{{ r.issue_type }}</td>
+            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+            <td>{{ r.cnt }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No auto-heals in this period.</div>{% endif %}
       </div>
     </div>
 

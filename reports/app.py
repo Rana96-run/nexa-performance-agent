@@ -701,6 +701,76 @@ def activity_dashboard():
         ],
     }
 
+    # ── Intelligence / ops actions (LLM, spikes, bot replies, data quality) ──
+    intel_sql = f"""
+        SELECT
+          DATE(ts, 'Asia/Riyadh')              AS day,
+          action,
+          role,
+          channel,
+          campaign_name,
+          COALESCE(rows_affected, 1)            AS cnt,
+          JSON_VALUE(details, '$.model')        AS model,
+          JSON_VALUE(details, '$.issue_type')   AS issue_type,
+          CAST(JSON_VALUE(details, '$.cost_usd') AS FLOAT64) AS cost_usd,
+          CAST(JSON_VALUE(details, '$.tokens_in') AS INT64)  AS tokens_in,
+          CAST(JSON_VALUE(details, '$.tokens_out') AS INT64) AS tokens_out
+        FROM {T}.agent_activity_log
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+          AND status NOT IN ('failed','skipped')
+          AND action IN (
+            'llm_role_ran','detect_spikes','slack_listener_reply',
+            'data_quality_autoheal','weekly_autofix'
+          )
+        ORDER BY ts DESC
+        LIMIT 300
+    """
+    intel_rows = []
+    try:
+        intel_rows = list(bq.query(intel_sql).result())
+    except Exception as e:
+        print(f"[activity] intel query failed (non-fatal): {e}")
+
+    def _icounts(action):
+        c30 = sum(r.cnt for r in intel_rows if r.action == action and r.day >= cutoff_30)
+        c7  = sum(r.cnt for r in intel_rows if r.action == action and r.day >= cutoff_7)
+        return c30, c7
+
+    llm_c30, llm_c7 = _icounts("llm_role_ran")
+    m_llm_runs = {
+        "count_30d": llm_c30, "count_7d": llm_c7,
+        "total_cost": round(sum((r.cost_usd or 0) for r in intel_rows if r.action == "llm_role_ran"), 4),
+        "total_tokens": sum((r.tokens_in or 0) + (r.tokens_out or 0) for r in intel_rows if r.action == "llm_role_ran"),
+        "rows": [{"day": str(r.day), "model": r.model or "claude-sonnet-4-6",
+                  "tokens_in": r.tokens_in or 0, "tokens_out": r.tokens_out or 0,
+                  "cost_usd": round(r.cost_usd or 0, 4)}
+                 for r in intel_rows if r.action == "llm_role_ran"][:60],
+    }
+
+    sp_c30, sp_c7 = _icounts("detect_spikes")
+    m_spike_detections = {
+        "count_30d": sp_c30, "count_7d": sp_c7,
+        "rows": [{"day": str(r.day), "channel": r.channel or "—",
+                  "campaign": r.campaign_name or "—", "cnt": r.cnt}
+                 for r in intel_rows if r.action == "detect_spikes"][:60],
+    }
+
+    sb_c30, sb_c7 = _icounts("slack_listener_reply")
+    m_slack_bot = {
+        "count_30d": sb_c30, "count_7d": sb_c7,
+        "rows": [{"day": str(r.day), "tokens_in": r.tokens_in or 0,
+                  "tokens_out": r.tokens_out or 0}
+                 for r in intel_rows if r.action == "slack_listener_reply"][:60],
+    }
+
+    dq_c30, dq_c7 = _icounts("data_quality_autoheal")
+    m_data_quality = {
+        "count_30d": dq_c30, "count_7d": dq_c7,
+        "rows": [{"day": str(r.day), "issue_type": r.issue_type or "—",
+                  "channel": r.channel or "—", "cnt": r.cnt}
+                 for r in intel_rows if r.action == "data_quality_autoheal"][:60],
+    }
+
     # ── Sidebar categories (totals over selected window) ──────────────────────
     sidebar_raw: dict[str, int] = {}
     for r in detail_rows:
@@ -747,6 +817,10 @@ def activity_dashboard():
         "reports_refreshed":  m_reports_refreshed,
         "linked_channels":    m_linked_channels,
         "user_actions":       m_user_actions,
+        "llm_runs":           m_llm_runs,
+        "spike_detections":   m_spike_detections,
+        "slack_bot":          m_slack_bot,
+        "data_quality":       m_data_quality,
     }
 
     # ── 5. Asana task completion status ───────────────────────────────────────
