@@ -1092,6 +1092,42 @@ a:hover{text-decoration:underline}
         {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">All tasks completed — great work!</div>{% endif %}
       </div>
     </div>
+
+    <!-- Executed Actions card -->
+    <div class="card" style="margin-bottom:16px" id="asana_executed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">⚡</div>
+          <div>
+            <div class="card-name">Executed Actions</div>
+            <div class="card-counts">Campaigns paused / scaled · keywords paused · budget changes</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#58a6ff">{{ asana_completion.executed_rows|length }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if asana_completion.executed_rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Action</th><th>Channel</th><th>Campaign</th><th>#</th><th>Detail</th></tr>
+          {% for r in asana_completion.executed_rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.action_date }}</td>
+            <td>{{ r.verb }}</td>
+            <td>{{ r.channel }}</td>
+            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.campaign }}</td>
+            <td>{{ r.cnt }}</td>
+            <td style="color:#8b949e;font-size:12px">{{ r.detail }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="color:#484f58;font-size:12px;padding:4px 0">No executed actions logged for this period.</div>
+        {% endif %}
+      </div>
+    </div>
   </div>
   {% endif %}
 

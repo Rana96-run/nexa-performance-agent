@@ -879,79 +879,98 @@ def activity_dashboard():
     }
 
     # ── 5. Asana task completion status ───────────────────────────────────────
-    # Pull every created task from agent_activity_log (source of truth for what
-    # the agent created). LEFT JOIN asana_task_status for completion status —
-    # if that table is empty the task just shows as open.
+    # Always use 365-day window so ALL agent-created tasks appear regardless of
+    # the selected date tab.  The GID partition key falls back to the row's
+    # microsecond timestamp for tasks logged without a GID — this prevents
+    # the null-partition collapse that previously reduced 100+ tasks to 1.
     task_status_rows = []
+    _ASANA_WINDOW = 365
+    _ts_base_sql = f"""
+        WITH created AS (
+          SELECT
+            JSON_VALUE(details, '$.gid')         AS gid,
+            JSON_VALUE(details, '$.title')        AS title,
+            JSON_VALUE(details, '$.project_key')  AS project_key,
+            JSON_VALUE(details, '$.asset_level')  AS asset_level,
+            DATE(ts, 'Asia/Riyadh')               AS created_day,
+            ROW_NUMBER() OVER (
+              PARTITION BY COALESCE(
+                JSON_VALUE(details, '$.gid'),
+                FORMAT_TIMESTAMP('%Y%m%d%H%M%E6S', ts)
+              )
+              ORDER BY ts DESC
+            ) AS rn
+          FROM `{T}.agent_activity_log`
+          WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+            AND action = 'asana_task_created'
+        )
+    """
     try:
-        ts_sql = f"""
-            WITH created AS (
-              SELECT
-                JSON_VALUE(details, '$.gid')         AS gid,
-                JSON_VALUE(details, '$.title')        AS title,
-                JSON_VALUE(details, '$.project_key')  AS project_key,
-                JSON_VALUE(details, '$.asset_level')  AS asset_level,
-                DATE(ts, 'Asia/Riyadh')               AS created_day,
-                ROW_NUMBER() OVER (
-                  PARTITION BY JSON_VALUE(details, '$.gid')
-                  ORDER BY ts DESC
-                ) AS rn
-              FROM `{T}.agent_activity_log`
-              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-                AND action = 'asana_task_created'
-            ),
-            status AS (
-              SELECT gid, completed, completed_at, assignee_name, due_on,
-                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
-              FROM `{T}.asana_task_status`
-            )
-            SELECT
-              c.gid,
-              c.title,
-              c.project_key,
-              c.asset_level,
-              c.created_day,
-              COALESCE(s.completed, FALSE)  AS completed,
-              s.completed_at,
-              s.assignee_name,
-              s.due_on
-            FROM created c
-            LEFT JOIN status s ON s.gid = c.gid AND s.rn = 1
-            WHERE c.rn = 1
-            ORDER BY c.created_day DESC
-            LIMIT 300
+        ts_sql = _ts_base_sql + f"""
+        , status AS (
+          SELECT gid, completed, completed_at, assignee_name, due_on,
+                 ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+          FROM `{T}.asana_task_status`
+        )
+        SELECT
+          c.gid, c.title, c.project_key, c.asset_level, c.created_day,
+          COALESCE(s.completed, FALSE)  AS completed,
+          s.completed_at, s.assignee_name, s.due_on
+        FROM created c
+        LEFT JOIN status s ON s.gid = c.gid AND s.rn = 1
+        WHERE c.rn = 1
+        ORDER BY c.created_day DESC
+        LIMIT 500
         """
         task_status_rows = list(bq.query(ts_sql).result())
     except Exception as e:
-        err_str = str(e)
-        if "asana_task_status" in err_str and "Not found" in err_str:
-            # Table doesn't exist yet — fall back to agent_activity_log only
-            try:
-                ts_sql_fallback = f"""
-                    SELECT
-                      JSON_VALUE(details, '$.gid')         AS gid,
-                      JSON_VALUE(details, '$.title')        AS title,
-                      JSON_VALUE(details, '$.project_key')  AS project_key,
-                      JSON_VALUE(details, '$.asset_level')  AS asset_level,
-                      DATE(ts, 'Asia/Riyadh')               AS created_day,
-                      FALSE                                  AS completed,
-                      NULL                                   AS completed_at,
-                      NULL                                   AS assignee_name,
-                      NULL                                   AS due_on
-                    FROM `{T}.agent_activity_log`
-                    WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-                      AND action = 'asana_task_created'
-                    QUALIFY ROW_NUMBER() OVER (
-                      PARTITION BY JSON_VALUE(details, '$.gid') ORDER BY ts DESC
-                    ) = 1
-                    ORDER BY ts DESC
-                    LIMIT 300
-                """
-                task_status_rows = list(bq.query(ts_sql_fallback).result())
-            except Exception as e2:
-                print(f"[activity] asana fallback query failed (non-fatal): {e2}")
-        else:
-            print(f"[activity] asana_task_status query failed (non-fatal): {e}")
+        # asana_task_status doesn't exist yet — show tasks with no completion data
+        try:
+            ts_sql_fb = _ts_base_sql + """
+            SELECT
+              c.gid, c.title, c.project_key, c.asset_level, c.created_day,
+              FALSE AS completed, NULL AS completed_at,
+              NULL  AS assignee_name, NULL AS due_on
+            FROM created c
+            WHERE c.rn = 1
+            ORDER BY c.created_day DESC
+            LIMIT 500
+            """
+            task_status_rows = list(bq.query(ts_sql_fb).result())
+        except Exception as e2:
+            print(f"[activity] asana task query failed (non-fatal): {e2}")
+
+    # ── 5b. Executed actions: pauses / scales / keyword actions the team ran ──
+    # These are "completed" in the sense that the action was actually executed
+    # (not just recommended). Include them alongside Asana task completion.
+    executed_rows = []
+    try:
+        exec_sql = f"""
+            SELECT
+              DATE(ts, 'Asia/Riyadh')              AS action_date,
+              action,
+              channel,
+              campaign_name,
+              COALESCE(rows_affected, 1)            AS cnt,
+              JSON_VALUE(details, '$.old_status')   AS old_status,
+              JSON_VALUE(details, '$.new_budget')   AS new_budget,
+              JSON_VALUE(details, '$.direction')    AS direction
+            FROM `{T}.agent_activity_log`
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+              AND action IN (
+                'campaign_paused', 'campaign_scaled',
+                'keywords_paused', 'negative_keywords_added', 'ads_paused',
+                'user_paused_campaign', 'user_enabled_campaign',
+                'user_changed_budget', 'user_changed_status',
+                'action_approved_via_slack', 'action_rejected_via_slack'
+              )
+              AND status NOT IN ('failed','skipped')
+            ORDER BY ts DESC
+            LIMIT 300
+        """
+        executed_rows = list(bq.query(exec_sql).result())
+    except Exception as e:
+        print(f"[activity] executed_actions query failed (non-fatal): {e}")
 
     completed_tasks = [r for r in task_status_rows if r.completed]
     open_tasks      = [r for r in task_status_rows if not r.completed]
@@ -966,6 +985,20 @@ def activity_dashboard():
         if r.completed:
             proj_task_counts[pk]["done"] += 1
 
+    _ACTION_VERB = {
+        "campaign_paused":          "Paused campaign",
+        "campaign_scaled":          "Scaled campaign",
+        "keywords_paused":          "Paused keywords",
+        "negative_keywords_added":  "Added negatives",
+        "ads_paused":               "Paused ads",
+        "user_paused_campaign":     "Paused campaign (direct)",
+        "user_enabled_campaign":    "Enabled campaign (direct)",
+        "user_changed_budget":      "Changed budget (direct)",
+        "user_changed_status":      "Changed status (direct)",
+        "action_approved_via_slack":"Approved via Slack ✅",
+        "action_rejected_via_slack":"Rejected via Slack ❌",
+    }
+
     asana_completion = {
         "total":     len(task_status_rows),
         "completed": len(completed_tasks),
@@ -979,7 +1012,7 @@ def activity_dashboard():
              "created_day": str(r.created_day or ""),
              "completed_at": str(r.completed_at or ""),
              "assignee": r.assignee_name or "—"}
-            for r in completed_tasks[:80]
+            for r in completed_tasks[:100]
         ],
         "open_rows": [
             {"gid": r.gid or "", "title": r.title or "—",
@@ -987,38 +1020,50 @@ def activity_dashboard():
              "created_day": str(r.created_day or ""),
              "due_on": str(r.due_on or ""),
              "assignee": r.assignee_name or "—"}
-            for r in open_tasks[:80]
+            for r in open_tasks[:100]
+        ],
+        # Executed actions (pauses, scales, keyword pauses, budget changes)
+        "executed_rows": [
+            {"action_date": str(r.action_date or ""),
+             "verb":        _ACTION_VERB.get(r.action, r.action.replace("_", " ").title()),
+             "channel":     r.channel or "—",
+             "campaign":    r.campaign_name or "—",
+             "cnt":         r.cnt,
+             "detail":      (f"${r.new_budget} ({r.direction})" if r.new_budget
+                             else f"was {r.old_status}" if r.old_status else "")}
+            for r in executed_rows[:100]
         ],
     }
 
     # ── Enrich keyword/negative/asana rows with Asana task completion status ──
     # Build lookup: "YYYY-MM-DD|asset_level" -> "done" | "open"
-    _asana_status: dict[str, str] = {}
+    _asana_st: dict[str, str] = {}
     for r in task_status_rows:
         if not r.created_day:
             continue
         k = f"{r.created_day}|{r.asset_level or 'keyword'}"
         if r.completed:
-            _asana_status[k] = "done"
-        elif k not in _asana_status:
-            _asana_status[k] = "open"
+            _asana_st[k] = "done"
+        elif k not in _asana_st:
+            _asana_st[k] = "open"
 
     def _task_status(day, level="keyword") -> str:
-        return _asana_status.get(f"{day}|{level}", "—")
+        return _asana_st.get(f"{day}|{level}", "—")
 
     for row in metrics["keywords_added"]["rows"]:
         row["asana_status"] = _task_status(row["day"])
     for row in metrics["negatives_added"]["term_rows"]:
         row["asana_status"] = _task_status(row["day"])
-    # Asana tasks card: match by GID via completed_rows lookup
-    _done_gids = {r["gid"] for r in asana_completion["completed_rows"]}
+    # Asana tasks card: match by GID (exact match, no title heuristics)
+    _done_gids = {r["gid"] for r in asana_completion["completed_rows"] if r["gid"]}
+    _open_gids = {r["gid"] for r in asana_completion["open_rows"] if r["gid"]}
     for row in metrics["asana_tasks"]["rows"]:
-        gid = next(
-            (r.gid for r in task_status_rows if r.title == row["title"]), None
-        )
-        if gid and gid in _done_gids:
+        # title match to find the gid from task_status_rows
+        gid = next((r.gid for r in task_status_rows
+                    if r.title and row["title"] and r.title[:60] == row["title"][:60]), None)
+        if gid in _done_gids:
             row["asana_status"] = "done"
-        elif gid:
+        elif gid in _open_gids or gid:
             row["asana_status"] = "open"
         else:
             row["asana_status"] = "—"
