@@ -506,7 +506,12 @@ def _ensure_table_exists():
 
 
 if __name__ == "__main__":
-    import sys
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    n = collect_and_write(days=days)
+    import sys, argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("days", nargs="?", type=int, default=None,
+                        help="Number of days to look back (positional)")
+    parser.add_argument("--start-date", type=lambda s: date.fromisoformat(s),
+                        default=None, help="Explicit start date YYYY-MM-DD")
+    args = parser.parse_args()
+    n = collect_and_write(days=args.days, start_date=args.start_date)
     print(f"HubSpot Deals backfill complete: {n} rows")
