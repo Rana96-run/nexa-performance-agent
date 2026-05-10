@@ -693,11 +693,12 @@ def activity_dashboard():
     _all_30d_actions = [r for r in detail_rows if r.day >= cutoff_30]
     active_days = len({r.day for r in _all_30d_actions})
     totals = {
-        "total_actions": sum(r.cnt for r in _all_30d_actions),
-        "active_days":   active_days,
-        "asana_tasks":   asana_c30,
+        "total_actions":  sum(r.cnt for r in _all_30d_actions),
+        "active_days":    active_days,
+        "asana_tasks":    asana_c30,
+        "slack_messages": m_slack_messages["count_30d"],
         "linked_channels": len(linked_ch),
-        "active_apis":   sum(1 for r in channel_rows if r.active),
+        "active_apis":    sum(1 for r in channel_rows if r.active),
     }
 
     # ── User actions ──────────────────────────────────────────────────────────
