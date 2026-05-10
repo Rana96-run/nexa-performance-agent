@@ -335,6 +335,9 @@ def activity_dashboard():
         "ads_paused":                                  "Ads Paused",
         "ads_enabled":                                 "Ads Paused",
         "keywords_deleted":                            "Keywords Paused",
+        "negative_keywords_removed":                   "Negatives Added",
+        "detect_spikes":                               "Optimizations",
+        "data_quality_autoheal":                       "Optimizations",
     }
 
     # ── 1. Heatmap data (from view, parameterised by days) ─────────────────────

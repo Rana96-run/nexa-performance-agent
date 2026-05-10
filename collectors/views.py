@@ -472,6 +472,8 @@ categorised AS (
         'optimize_task_created', 'drilldown_task_created'
       )
         THEN 'Asana Tasks'
+      WHEN action IN ('detect_spikes', 'data_quality_autoheal')
+        THEN 'Optimizations'
       WHEN action IN ('posted_slack_digest', 'slack_summary_posted',
                       'post_weekly_summary', 'nightly_audit_complete',
                       'cadence_daily_complete', 'cadence_nightly_complete',
