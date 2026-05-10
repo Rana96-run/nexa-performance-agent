@@ -567,7 +567,16 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
             ctr          = _f(row.get("Ctr")) / 100
             cpl_native   = _f(row.get("CostPerConversion"))
             cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
-            ad_name = (row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
+            # Prefer utm_content from FinalUrl (RSA titles are empty), then AdTitle, then AdId
+            _final_url = row.get("FinalUrl") or ""
+            _utm_content = ""
+            if "utm_content=" in _final_url:
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    _utm_content = parse_qs(urlparse(_final_url).query).get("utm_content", [""])[0]
+                except Exception:
+                    pass
+            ad_name = (_utm_content or row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
             bq_rows.append({
                 "date":          day,
                 "channel":       "microsoft_ads",
