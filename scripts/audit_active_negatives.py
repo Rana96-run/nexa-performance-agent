@@ -211,6 +211,18 @@ def remove_negatives(violations: list[dict]) -> int:
         except Exception as e:
             print(f"[neg-audit] removal failed for {cid}/{level}: {e}")
 
+    if removed:
+        try:
+            from logs.activity_logger import log_activity_async
+            terms = [v.get("keyword", "") for v in violations]
+            log_activity_async(
+                role="manual_script", action="negative_keywords_removed",
+                channel="google_ads", rows_affected=removed,
+                details={"terms": terms[:30], "source": "audit_active_negatives.py"},
+            )
+        except Exception:
+            pass
+
     return removed
 
 

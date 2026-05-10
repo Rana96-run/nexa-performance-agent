@@ -297,6 +297,7 @@ def activity_dashboard():
         "keyword_candidates_queued_for_weekly_review": "Keywords Added",
         "keywords_paused":                             "Keywords Paused",
         "negative_keywords_added":                     "Negatives Added",
+        "negative_keywords_removed":                   "Negatives Added",
         "asana_task_created":                          "Asana Tasks",
         "asana_tasks_created":                         "Asana Tasks",
         "posted_slack_digest":                         "Slack Messages",
@@ -332,6 +333,8 @@ def activity_dashboard():
         "pause_task_created":                          "Ads Paused",
         "junk_leads_task_created":                     "Ads Paused",
         "ads_paused":                                  "Ads Paused",
+        "ads_enabled":                                 "Ads Paused",
+        "keywords_deleted":                            "Keywords Paused",
     }
 
     # ── 1. Heatmap data (from view, parameterised by days) ─────────────────────
@@ -415,7 +418,9 @@ def activity_dashboard():
             'user_created_campaign',
             -- Keyword actions
             'launch','keyword_candidates_queued_for_weekly_review',
-            'keywords_paused','negative_keywords_added',
+            'keywords_paused','keywords_deleted',
+            'negative_keywords_added','negative_keywords_removed',
+            'ads_enabled',
             -- Asana
             'asana_task_created','asana_tasks_created',
             -- Slack
@@ -1009,7 +1014,9 @@ def activity_dashboard():
             WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
               AND action IN (
                 'campaign_paused', 'campaign_scaled',
-                'keywords_paused', 'negative_keywords_added', 'ads_paused',
+                'keywords_paused', 'keywords_deleted',
+                'negative_keywords_added', 'negative_keywords_removed',
+                'ads_paused', 'ads_enabled',
                 'user_paused_campaign', 'user_enabled_campaign',
                 'user_changed_budget', 'user_changed_status',
                 'action_approved_via_slack', 'action_rejected_via_slack'
@@ -1036,17 +1043,20 @@ def activity_dashboard():
             proj_task_counts[pk]["done"] += 1
 
     _ACTION_VERB = {
-        "campaign_paused":          "Paused campaign",
-        "campaign_scaled":          "Scaled campaign",
-        "keywords_paused":          "Paused keywords",
-        "negative_keywords_added":  "Added negatives",
-        "ads_paused":               "Paused ads",
-        "user_paused_campaign":     "Paused campaign (direct)",
-        "user_enabled_campaign":    "Enabled campaign (direct)",
-        "user_changed_budget":      "Changed budget (direct)",
-        "user_changed_status":      "Changed status (direct)",
-        "action_approved_via_slack":"Approved via Slack ✅",
-        "action_rejected_via_slack":"Rejected via Slack ❌",
+        "campaign_paused":              "Paused campaign",
+        "campaign_scaled":              "Scaled campaign",
+        "keywords_paused":              "Paused keywords",
+        "keywords_deleted":             "Deleted keywords",
+        "negative_keywords_added":      "Added negatives",
+        "negative_keywords_removed":    "Removed negatives",
+        "ads_paused":                   "Paused ads",
+        "ads_enabled":                  "Enabled ads",
+        "user_paused_campaign":         "Paused campaign (direct)",
+        "user_enabled_campaign":        "Enabled campaign (direct)",
+        "user_changed_budget":          "Changed budget (direct)",
+        "user_changed_status":          "Changed status (direct)",
+        "action_approved_via_slack":    "Approved via Slack ✅",
+        "action_rejected_via_slack":    "Rejected via Slack ❌",
     }
 
     asana_completion = {

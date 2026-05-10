@@ -65,6 +65,7 @@ def execute(violations: list[dict], dry_run: bool = False) -> dict:
             by_cid_action[(cid, "delete")].append(rn)
 
     counts = {"paused": 0, "deleted": 0, "errors": 0}
+    keyword_names = [v.get("keyword", "") for v in violations]
     for (cid, action), resources in by_cid_action.items():
         verb = "WOULD-" + action.upper() if dry_run else action.upper()
         print(f"\n[{verb}] account={cid}  {len(resources)} keyword(s)")
@@ -93,6 +94,26 @@ def execute(violations: list[dict], dry_run: bool = False) -> dict:
         except Exception as e:
             counts["errors"] += 1
             print(f"   X mutate failed for {cid}/{action}: {e}")
+
+    if not dry_run and (counts["paused"] or counts["deleted"]):
+        try:
+            from logs.activity_logger import log_activity_async
+            if counts["paused"]:
+                log_activity_async(
+                    role="manual_script", action="keywords_paused",
+                    channel="google_ads", rows_affected=counts["paused"],
+                    details={"keywords": keyword_names[:30],
+                             "source": "action_audit_violations.py"},
+                )
+            if counts["deleted"]:
+                log_activity_async(
+                    role="manual_script", action="keywords_deleted",
+                    channel="google_ads", rows_affected=counts["deleted"],
+                    details={"keywords": keyword_names[:30],
+                             "source": "action_audit_violations.py"},
+                )
+        except Exception:
+            pass
 
     return counts
 

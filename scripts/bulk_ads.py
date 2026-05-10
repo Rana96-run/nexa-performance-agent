@@ -443,6 +443,7 @@ def cmd_execute(days: int, yes: bool) -> None:
 
     paused  = 0
     skipped = 0
+    paused_names: list[str] = []
     for row in flagged:
         ad_name = row.get("ad_name") or ""
         ad_id   = row.get("ad_id")
@@ -453,10 +454,23 @@ def cmd_execute(days: int, yes: bool) -> None:
         ok = _pause_ad(channel, ad_name, ad_id)
         if ok:
             paused += 1
+            paused_names.append(f"{channel}:{ad_name}")
         else:
             skipped += 1
 
     print(f"\n{PREFIX} Audit complete: {len(flagged)} ads flagged ({paused} paused, {skipped} skipped)")
+
+    if paused:
+        try:
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="manual_script", action="ads_paused",
+                channel="multi", rows_affected=paused,
+                details={"ads": paused_names[:30], "skipped": skipped,
+                         "source": "bulk_ads.py execute"},
+            )
+        except Exception:
+            pass
 
 
 # ── Mode: manual ──────────────────────────────────────────────────────────────
@@ -483,6 +497,20 @@ def cmd_manual(action: str, channel_arg: str, ad_name: str | None, ad_id: str | 
 
     result = "done" if ok else "failed/skipped"
     print(f"\n{PREFIX} Audit complete: 1 ads flagged (manual {action}: {result})")
+
+    if ok:
+        try:
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="manual_script",
+                action="ads_paused" if action == "pause" else "ads_enabled",
+                channel=CHANNEL_MAP.get(channel_arg.lower(), channel_arg),
+                rows_affected=1,
+                details={"ad_name": ad_name, "ad_id": ad_id,
+                         "source": "bulk_ads.py manual"},
+            )
+        except Exception:
+            pass
 
 
 # ── CLI entrypoint ────────────────────────────────────────────────────────────
