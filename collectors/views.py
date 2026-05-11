@@ -409,24 +409,70 @@ LEFT JOIN deals d         ON d.date = s.date
 # Channel-level rollup view — same data aggregated to (date, channel)
 PAID_CHANNEL_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_daily` AS
+-- Lead totals come directly from hubspot_leads_module_daily by qoyod_source
+-- (no campaign-name join) so ALL paid leads are counted, including those
+-- with no UTM campaign. Spend comes from campaigns_daily. Campaign-level
+-- drill-down lives in paid_channel_campaign_daily.
+WITH
+  channel_map AS (
+    SELECT 'google_ads'   AS channel, 'Google Ads'   AS qoyod_source UNION ALL
+    SELECT 'meta',                    'Meta Ads'                      UNION ALL
+    SELECT 'snapchat',                'Snapchat Ads'                  UNION ALL
+    SELECT 'tiktok',                  'Tiktok Ads'                    UNION ALL
+    SELECT 'linkedin',                'LinkedIn Ads'                  UNION ALL
+    SELECT 'microsoft_ads',           'Microsoft Ads'
+  ),
+  spend AS (
+    SELECT date, channel,
+           SUM(spend)       AS spend,
+           SUM(impressions) AS impressions,
+           SUM(clicks)      AS clicks
+    FROM `{P}.{D}.campaigns_daily`
+    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    GROUP BY date, channel
+  ),
+  leads AS (
+    SELECT cm.channel,
+           l.date,
+           SUM(l.leads_total)        AS leads,
+           SUM(l.leads_qualified)    AS qualified,
+           SUM(l.leads_disqualified) AS disqualified,
+           SUM(l.leads_open)         AS open_leads
+    FROM `{P}.{D}.hubspot_leads_module_daily` l
+    JOIN channel_map cm ON cm.qoyod_source = l.qoyod_source
+    WHERE l.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    GROUP BY cm.channel, l.date
+  ),
+  deals AS (
+    SELECT cm.channel,
+           d.date,
+           SUM(d.deals_won)  AS deals,
+           SUM(d.amount_won) AS deal_amount
+    FROM `{P}.{D}.hubspot_deals_daily` d
+    JOIN channel_map cm ON cm.qoyod_source = d.qoyod_source
+    WHERE d.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    GROUP BY cm.channel, d.date
+  )
 SELECT
-  date,
-  channel,
-  ROUND(SUM(spend), 2)        AS spend,
-  SUM(impressions)            AS impressions,
-  SUM(clicks)                 AS clicks,
-  SUM(leads)                  AS leads,
-  SUM(qualified)              AS qualified,
-  SUM(disqualified)           AS disqualified,
-  SUM(open_leads)             AS open_leads,
-  SUM(deals)                  AS deals,
-  ROUND(SUM(deal_amount), 2)  AS deal_amount,
-  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),       2) AS cpl,
-  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)),   2) AS cpql,
-  ROUND(SAFE_DIVIDE(SUM(deal_amount), NULLIF(SUM(spend), 0)), 2) AS roas,
-  ROUND(SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads), 0)) * 100, 2) AS qual_rate_pct
-FROM `{P}.{D}.paid_channel_campaign_daily`
-GROUP BY date, channel
+  COALESCE(s.date,    l.date,    d.date)    AS date,
+  COALESCE(s.channel, l.channel, d.channel) AS channel,
+  ROUND(IFNULL(s.spend, 0), 2)       AS spend,
+  IFNULL(s.impressions, 0)           AS impressions,
+  IFNULL(s.clicks, 0)                AS clicks,
+  IFNULL(l.leads, 0)                 AS leads,
+  IFNULL(l.qualified, 0)             AS qualified,
+  IFNULL(l.disqualified, 0)          AS disqualified,
+  IFNULL(l.open_leads, 0)            AS open_leads,
+  IFNULL(d.deals, 0)                 AS deals,
+  ROUND(IFNULL(d.deal_amount, 0), 2) AS deal_amount,
+  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.leads,0), 0)),        2) AS cpl,
+  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.qualified,0), 0)),    2) AS cpql,
+  ROUND(SAFE_DIVIDE(IFNULL(d.deal_amount,0), NULLIF(IFNULL(s.spend,0), 0)), 2) AS roas,
+  ROUND(SAFE_DIVIDE(IFNULL(l.qualified,0), NULLIF(IFNULL(l.leads,0),0)) * 100, 2) AS qual_rate_pct
+FROM spend s
+FULL OUTER JOIN leads  l ON l.date = s.date AND l.channel = s.channel
+FULL OUTER JOIN deals  d ON d.date = COALESCE(s.date, l.date)
+                        AND d.channel = COALESCE(s.channel, l.channel)
 """
 
 
