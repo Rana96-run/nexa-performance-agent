@@ -51,3 +51,7 @@ build/
 # ── Misc ──────────────────────────────────────────────────────────────────
 *.bak
 *~
+_ms_new_token.tmp
+_ms_rt2_set.bat
+_ms_new_token.tmp
+_ms_rt2_set.bat
