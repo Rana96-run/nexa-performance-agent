@@ -699,7 +699,7 @@ def initial_load_individual(start_date: date = None) -> int:
     return total_fetched
 
 
-def _flush_individual(client, rows: list[dict]) -> None:
+def _flush_individual(client, rows: list[dict], label: str = "leads-initial") -> None:
     """Append a batch of rows to hubspot_leads_individual via load job."""
     project  = os.getenv("BQ_PROJECT_ID")
     dataset  = os.getenv("BQ_DATASET")
@@ -711,7 +711,92 @@ def _flush_individual(client, rows: list[dict]) -> None:
         write_disposition="WRITE_APPEND",
     )
     client.load_table_from_file(BytesIO(ndjson), table_id, job_config=job_cfg).result()
-    print(f"[leads-initial] flushed {len(rows)} rows")
+    print(f"[{label}] flushed {len(rows)} rows")
+
+
+def full_resync_since_2026() -> int:
+    """
+    Full re-pull of all HubSpot leads with hs_createdate >= 2026-01-01.
+
+    Replaces the individual table rows for that window with the freshest values
+    from HubSpot, then rebuilds daily buckets.  Designed to run twice a week
+    (Tuesday + Friday Riyadh time) to catch lead_qoyod_source changes caused
+    by Contact workflow re-runs — changes that don't move the Lead's
+    hs_lastmodifieddate so the cursor CDC never sees them.
+
+    Approach mirrors Funnel.io: no delta logic, just pull the current state of
+    every lead in the window and overwrite BQ.
+
+    CLI: python -m collectors.hubspot_leads_bq resync
+    """
+    _load_pipelines()
+    _ensure_individual_table_exists()
+
+    client       = get_client()
+    resync_start = date(2026, 1, 1)
+    end          = date.today() + timedelta(days=1)
+    project      = os.getenv("BQ_PROJECT_ID")
+    dataset      = os.getenv("BQ_DATASET")
+    table_id     = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
+
+    print(f"[leads-resync] full re-pull {resync_start} -> {date.today()}")
+
+    # ── Step 1: Fetch all leads from HubSpot by createdate window ────────────
+    all_rows  = []
+    window    = timedelta(days=7)
+    win_start = resync_start
+
+    while win_start < end:
+        win_end   = min(win_start + window, end)
+        w_since   = int(datetime(win_start.year, win_start.month, win_start.day,
+                                 tzinfo=timezone.utc).timestamp() * 1000)
+        w_until   = int(datetime(win_end.year,   win_end.month,   win_end.day,
+                                 tzinfo=timezone.utc).timestamp() * 1000)
+        after     = None
+        pages     = 0
+        win_count = 0
+
+        while True:
+            try:
+                data = _search_leads(w_since, until_ms=w_until, after=after)
+            except Exception as e:
+                print(f"[leads-resync] error at {win_start}: {e}")
+                break
+            for lead in data.get("results", []):
+                row = _row_from_lead(lead)
+                if row:
+                    all_rows.append(row)
+                    win_count += 1
+            pages += 1
+            paging = data.get("paging", {}).get("next", {})
+            after  = paging.get("after")
+            if not after or pages >= 100:
+                break
+
+        print(f"[leads-resync]   {win_start}..{win_end}: {win_count} leads")
+        win_start = win_end
+
+    print(f"[leads-resync] fetched {len(all_rows)} leads from HubSpot")
+    if not all_rows:
+        print("[leads-resync] nothing fetched — aborting")
+        return 0
+
+    # ── Step 2: Delete existing 2026 rows from individual table ──────────────
+    print(f"[leads-resync] deleting rows where hs_createdate >= '{resync_start}'...")
+    client.query(
+        f"DELETE FROM `{table_id}` WHERE hs_createdate >= '{resync_start}'"
+    ).result()
+
+    # ── Step 3: Insert fresh rows in batches of 5 000 ────────────────────────
+    for i in range(0, len(all_rows), 5000):
+        _flush_individual(client, all_rows[i:i + 5000], label="leads-resync")
+    print(f"[leads-resync] wrote {len(all_rows)} rows to {_INDIVIDUAL_TABLE}")
+
+    # ── Step 4: Rebuild daily buckets for all affected dates ─────────────────
+    affected_dates = {row["hs_createdate"] for row in all_rows}
+    n = _rebuild_daily_buckets(client, affected_dates)
+    print(f"[leads-resync] rebuilt {len(affected_dates)} dates -> {n} bucket rows")
+    return n
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -728,6 +813,10 @@ if __name__ == "__main__":
     elif cmd == "cursor":
         n = sync_cursor_and_write()
         print(f"Cursor sync complete: {n} daily bucket rows updated")
+
+    elif cmd == "resync":
+        n = full_resync_since_2026()
+        print(f"Full resync complete: {n} daily bucket rows updated")
 
     elif cmd == "rebuild_all":
         # Full rebuild of hubspot_leads_module_daily from hubspot_leads_individual.

@@ -74,6 +74,21 @@ def _check_bq_staleness() -> list[str]:
         return []
 
 
+def _hubspot_leads_collector() -> int:
+    """
+    Tuesday + Friday at 06:00 UTC (09:00 Riyadh): full re-pull from 2026-01-01
+    so lead_qoyod_source is always fresh after the team re-runs the attribution
+    workflow. Every other run: fast cursor CDC.
+    """
+    riyadh_now = datetime.now(timezone.utc) + timedelta(hours=3)
+    is_resync_day = riyadh_now.weekday() in (1, 4)   # 1=Tuesday, 4=Friday
+    is_morning    = riyadh_now.hour in range(6, 12)   # 09:00–11:59 Riyadh window
+    if is_resync_day and is_morning:
+        log.info("[scheduler] Tue/Fri morning — running full leads resync")
+        return hubspot_leads_bq.full_resync_since_2026()
+    return hubspot_leads_bq.sync_cursor_and_write()
+
+
 COLLECTORS = [
     # ── Campaign-level direct collectors ──────────────────────────────────────
     ("google_ads",      google_ads_bq.collect_and_write),
@@ -86,8 +101,11 @@ COLLECTORS = [
     ("youtube",         youtube_bq.collect_and_write),
     ("linkedin",        linkedin_bq.collect_and_write),
     # CRM
-    # cursor-based CDC — reads BQ high-water mark, no window boundary problem
-    ("hubspot_leads",   hubspot_leads_bq.sync_cursor_and_write),
+    # Tue/Fri 06:00 UTC (09:00 Riyadh): full re-pull from 2026-01-01 to refresh
+    # lead_qoyod_source (Contact workflow re-runs don't update Lead's
+    # hs_lastmodifieddate so cursor CDC misses them).
+    # All other runs: cursor-based CDC (fast, incremental).
+    ("hubspot_leads",   _hubspot_leads_collector),
     ("hubspot_deals",   hubspot_deals_bq.collect_and_write),
 
     # ── Sub-campaign collectors (adset / ad / keyword grain) ──────────────────
