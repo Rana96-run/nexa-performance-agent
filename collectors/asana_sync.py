@@ -198,7 +198,7 @@ def sync_asana_tasks() -> int:
     )
     bq.load_table_from_file(BytesIO(ndjson), table_ref, job_config=job_cfg).result()
 
-    # ── 5. Log transitions: incomplete → complete = user acted ───────────────
+    # ── 5. Log transitions + patch "Completed on" in task notes ─────────────
     for r in results:
         gid  = r["gid"]
         was  = prev_state.get(gid, False)
@@ -217,9 +217,38 @@ def sync_asana_tasks() -> int:
                 },
             )
             print(f"[asana_sync] user action detected: {action} — {r['title'][:60]!r}")
+            # Patch "Completed on" field in the task notes
+            _patch_completed_on(api, gid, r.get("completed_at") or "")
 
     print(f"[asana_sync] wrote {len(results)} task statuses")
     return len(results)
+
+
+def _patch_completed_on(api: asana.TasksApi, gid: str, completed_at: str) -> None:
+    """Replace '| ✅ Completed on | — |' in task notes with the actual date."""
+    try:
+        task = api.get_task(gid, {"opt_fields": "notes"})
+        notes = task.get("notes") or ""
+        if "| ✅ Completed on | — |" not in notes:
+            return
+        from datetime import datetime, timezone, timedelta
+        if completed_at:
+            try:
+                dt = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
+                riyadh = timezone(timedelta(hours=3))
+                date_str = dt.astimezone(riyadh).strftime("%Y-%m-%d %H:%M Riyadh")
+            except Exception:
+                date_str = completed_at[:10]
+        else:
+            date_str = datetime.now(timezone(timedelta(hours=3))).strftime("%Y-%m-%d")
+        new_notes = notes.replace(
+            "| ✅ Completed on | — |",
+            f"| ✅ Completed on | {date_str} |",
+        )
+        api.update_task(gid, {"data": {"notes": new_notes}}, {})
+        print(f"[asana_sync] patched completed_on for {gid}: {date_str}")
+    except Exception as e:
+        print(f"[asana_sync] patch completed_on failed for {gid} (non-fatal): {e}")
 
 
 def sync_user_tasks() -> int:
