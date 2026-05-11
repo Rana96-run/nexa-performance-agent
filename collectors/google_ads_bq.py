@@ -403,8 +403,94 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             print(f"[google_ads]   ads account {cid} error: {e}")
         print(f"[google_ads]   ads account {cid}: {count} rows")
 
+    # Also collect PMax asset_groups as ads (PMax campaigns don't appear in
+    # ad_group_ad — they have asset_groups instead). Single upsert below so
+    # the shared (date, google_ads) DELETE doesn't wipe one bucket with the
+    # other.
+    try:
+        pmax_rows = _build_pmax_rows(days, incremental, now)
+        if pmax_rows:
+            print(f"[google_ads]   pmax rows merged: {len(pmax_rows)}")
+            rows.extend(pmax_rows)
+    except Exception as e:
+        print(f"[google_ads]   pmax-as-ads error (continuing with regular only): {e}")
+
     return upsert_rows("ads_daily", rows,
                        key_fields=["date", "channel", "ad_id"])
+
+
+def _build_pmax_rows(days: int | None, incremental: bool, now: str) -> list[dict]:
+    """Build PMax asset_group rows formatted for ads_daily.
+
+    Returned rows are appended to the regular ad_group_ad rows in
+    collect_ads_and_write() and upserted together so the (date, channel)
+    DELETE wipes both at once and re-inserts both together.
+    """
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
+    query = f"""
+        SELECT
+            customer.id,
+            customer.currency_code,
+            campaign.id,
+            campaign.name,
+            campaign.tracking_url_template,
+            campaign.url_custom_parameters,
+            asset_group.id,
+            asset_group.name,
+            asset_group.status,
+            metrics.cost_micros,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.ctr,
+            metrics.conversions,
+            segments.date
+        FROM asset_group
+        WHERE segments.date BETWEEN '{start}' AND '{end}'
+          AND campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+          AND campaign.status != 'REMOVED'
+    """
+    rows = []
+    print(f"[google_ads] pmax-as-ads {start} -> {end} | {len(_customer_ids())} account(s)")
+    for cid in _customer_ids():
+        try:
+            for r in ga.search(customer_id=cid, query=query):
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
+                custom_params = {}
+                for cp in getattr(r.campaign, "url_custom_parameters", []) or []:
+                    custom_params[cp.key] = cp.value
+                utm_content = _extract_utm_content(
+                    custom_params,
+                    r.campaign.tracking_url_template,
+                )
+                rows.append({
+                    "date":          str(r.segments.date),
+                    "channel":       "google_ads",
+                    "account_id":    cid,
+                    "campaign_id":   str(r.campaign.id),
+                    "campaign_name": r.campaign.name,
+                    "adset_id":      str(r.asset_group.id),
+                    "adset_name":    r.asset_group.name,
+                    "ad_id":         f"pmax_{r.asset_group.id}",
+                    "ad_name":       r.asset_group.name,
+                    "utm_content":   utm_content,
+                    "status":        r.asset_group.status.name,
+                    "spend":         round(spend, 2),
+                    "impressions":   int(r.metrics.impressions),
+                    "clicks":        int(r.metrics.clicks),
+                    "ctr":           round(r.metrics.ctr * 100, 4),
+                    "leads":         int(r.metrics.conversions),
+                    "conversions":   float(r.metrics.conversions),
+                    "currency":      "USD",
+                    "final_url":     None,
+                    "updated_at":    now,
+                })
+        except Exception as e:
+            print(f"[google_ads]   pmax-as-ads account {cid} error: {e}")
+    return rows
 
 
 # ── PMax Asset Group level → pmax_asset_groups_daily ─────────────────────────
