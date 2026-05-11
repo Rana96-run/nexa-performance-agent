@@ -534,17 +534,27 @@ a:hover{text-decoration:underline}
           <button class="btn-workflow" onclick="openWorkflow('negatives_added')">⚙ How this works</button>
         </div>
         {% if metrics.negatives_added.term_rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Term Blocked</th><th>Task Status</th></tr>
+        <table class="dtable" style="margin-bottom:12px">
+          <tr><th>Date</th><th>Term Blocked</th></tr>
           {% for r in metrics.negatives_added.term_rows %}
           <tr>
             <td>{{ r.day }}</td>
-            <td>{{ r.term }}</td>
-            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">open</span>{% else %}—{% endif %}</td>
+            <td style="font-family:monospace;font-size:12px">{{ r.term }}</td>
           </tr>
           {% endfor %}
         </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No negatives added in this period.</div>{% endif %}
+        {% endif %}
+        {% if metrics.negatives_added.always_blocked %}
+        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Always-blocked policy</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          {% for term in metrics.negatives_added.always_blocked %}
+          <span style="background:#21262d;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;font-family:monospace;color:#e6edf3">{{ term }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if not metrics.negatives_added.term_rows and not metrics.negatives_added.always_blocked %}
+        <div style="color:#484f58;font-size:12px;padding:4px 0">No negatives added in this period.</div>
+        {% endif %}
       </div>
     </div>
 

@@ -577,18 +577,18 @@ def activity_dashboard():
         "kw_rows": kw_paused_flat[:120],
     }
 
-    # Negatives added — only show policy-matching terms (not wasted-spend terms)
-    from executors.keyword_policy import ALWAYS_NEGATIVE_PATTERNS, matches_any
+    # Negatives added — show all executed terms + static always-negative policy list
+    from executors.keyword_policy import ALWAYS_NEGATIVE_PATTERNS
     neg_flat = []
     for r in _filter(detail_rows, {"negative_keywords_added"}):
         for term in (r.terms_list or []):
-            if matches_any(term, ALWAYS_NEGATIVE_PATTERNS):
-                neg_flat.append({"day": r.day, "term": term})
+            neg_flat.append({"day": r.day, "term": term})
     neg_c30 = sum(r.cnt for r in detail_rows if r.action == "negative_keywords_added" and r.day >= cutoff_30)
     neg_c7  = sum(r.cnt for r in detail_rows if r.action == "negative_keywords_added" and r.day >= cutoff_7)
     m_negatives_added = {
         "count_30d": neg_c30, "count_7d": neg_c7,
         "term_rows": neg_flat[:120],
+        "always_blocked": ALWAYS_NEGATIVE_PATTERNS,
     }
 
     # Optimization recommendations
@@ -629,8 +629,16 @@ def activity_dashboard():
                  for r in asana_rows[:100]],
     }
 
-    # Creative reviews — Asana tasks where asset_level = 'ad'
-    creative_rows = [r for r in asana_rows if r.asana_asset_level in ("ad", "creative")]
+    # Creative reviews — ad-level tasks only; exclude backfill noise (no task_action + "Campaign" in title)
+    creative_rows = [
+        r for r in asana_rows
+        if r.asana_asset_level in ("ad", "creative")
+        and not (
+            not r.asana_task_action
+            and r.asana_title
+            and "campaign" in r.asana_title.lower()
+        )
+    ]
     cr_c30 = sum(1 for r in creative_rows if r.day >= cutoff_30)
     cr_c7  = sum(1 for r in creative_rows if r.day >= cutoff_7)
     m_creative_reviews = {
