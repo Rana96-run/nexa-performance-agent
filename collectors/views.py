@@ -507,46 +507,105 @@ GROUP BY day, category, channel
 """
 
 ALL_VIEWS = [
-    ("v_channel_key_map",          CHANNEL_MAP_SQL),
-    ("campaign_performance_daily", CAMPAIGN_PERFORMANCE_DAILY_SQL),
+    ("v_channel_key_map",            CHANNEL_MAP_SQL),
+    ("campaign_performance_daily",   CAMPAIGN_PERFORMANCE_DAILY_SQL),
     ("campaign_performance_monthly", CAMPAIGN_PERFORMANCE_MONTHLY_SQL),
-    ("channel_roas_daily",         CHANNEL_ROAS_DAILY_SQL),
-    ("channel_roas_monthly",       CHANNEL_ROAS_MONTHLY_SQL),
-    ("disqualification_matrix",    DISQUAL_MATRIX_SQL),
-    ("pipeline_funnel",            PIPELINE_FUNNEL_SQL),
-    # Unified views — single source of truth for the dashboard
-    ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
-    ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
+    # channel_roas_daily is a MATERIALIZED TABLE — handled by materialize_heavy_views()
+    # channel_roas_monthly reads from that table so it must stay here as a VIEW
+    ("channel_roas_monthly",         CHANNEL_ROAS_MONTHLY_SQL),
+    ("disqualification_matrix",      DISQUAL_MATRIX_SQL),
+    ("pipeline_funnel",              PIPELINE_FUNNEL_SQL),
+    # paid_channel_campaign_daily + paid_channel_daily are MATERIALIZED TABLES
     # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
-    ("v_agent_activity_dashboard",  AGENT_ACTIVITY_DASHBOARD_SQL),
+    ("v_agent_activity_dashboard",   AGENT_ACTIVITY_DASHBOARD_SQL),
 ]
 
-# Sub-campaign views (adset / ad / keyword grain).
+# Sub-campaign views (keyword / LP grain).
 # Defined in bq_writer.py alongside their table schemas.
 # Imported here so refresh_all_views() keeps them in sync automatically.
 #
-# Order matters: utm_paid_attribution_daily MUST come before v_adset_performance,
-# v_ad_performance, and v_keyword_performance because those views SELECT from it.
+# Note: utm_paid_attribution_daily, v_adset_performance, v_ad_performance are
+# MATERIALIZED TABLES (see _heavy_views_list). Only lightweight views live here.
 def _sub_campaign_views():
+    # utm_paid_attribution_daily, v_adset_performance, v_ad_performance are
+    # MATERIALIZED TABLES — they live in _heavy_views_list() / materialize_heavy_views().
+    # Only lightweight grain views that don't need instant-read speed live here.
     from collectors.bq_writer import (
-        UTM_PAID_ATTRIBUTION_VIEW_SQL,
-        V_ADSET_PERFORMANCE_SQL,
-        V_AD_PERFORMANCE_SQL,
         V_KEYWORD_PERFORMANCE_SQL,
         V_LP_PERFORMANCE_WEEKLY_SQL,
         V_LP_WEEKLY_SUMMARY_SQL,
     )
-    UTM_ATTRIBUTION_DAILY_SQL = UTM_PAID_ATTRIBUTION_VIEW_SQL
     return [
-        # Attribution base — must be created before the grain views below
-        ("utm_paid_attribution_daily", UTM_ATTRIBUTION_DAILY_SQL),
-        ("v_adset_performance",        V_ADSET_PERFORMANCE_SQL),
-        ("v_ad_performance",           V_AD_PERFORMANCE_SQL),
-        ("v_keyword_performance",      V_KEYWORD_PERFORMANCE_SQL),
+        ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
         # LP A/B test views — v_lp_weekly_summary depends on v_lp_performance_weekly
-        ("v_lp_performance_weekly",    V_LP_PERFORMANCE_WEEKLY_SQL),
-        ("v_lp_weekly_summary",        V_LP_WEEKLY_SUMMARY_SQL),
+        ("v_lp_performance_weekly", V_LP_PERFORMANCE_WEEKLY_SQL),
+        ("v_lp_weekly_summary",     V_LP_WEEKLY_SUMMARY_SQL),
     ]
+
+
+def _heavy_views_list():
+    """
+    Returns (name, sql) pairs for the 6 views that get materialised as physical
+    tables so Hex reads are instant.  Listed in dependency order:
+      utm_paid_attribution_daily must come before v_adset/v_ad_performance.
+      paid_channel_campaign_daily must come before paid_channel_daily.
+    """
+    from collectors.bq_writer import (
+        UTM_PAID_ATTRIBUTION_VIEW_SQL,
+        V_ADSET_PERFORMANCE_SQL,
+        V_AD_PERFORMANCE_SQL,
+    )
+    return [
+        ("utm_paid_attribution_daily",  UTM_PAID_ATTRIBUTION_VIEW_SQL),
+        ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
+        ("channel_roas_daily",          CHANNEL_ROAS_DAILY_SQL),
+        ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
+        ("v_adset_performance",         V_ADSET_PERFORMANCE_SQL),
+        ("v_ad_performance",            V_AD_PERFORMANCE_SQL),
+    ]
+
+
+def materialize_heavy_views():
+    """
+    Re-creates the 6 heaviest views as physical BQ tables (same names).
+    Hex SQL cells need zero changes — they query the same table names.
+    No staleness window: called automatically at the end of refresh_all_views()
+    after each 6-hour scheduler cycle.
+
+    On the first ever run the objects are VIEWs:
+      CREATE OR REPLACE TABLE will fail with "different type" → we delete the
+      view and retry.  On every subsequent run the objects are already TABLEs,
+      so CREATE OR REPLACE TABLE succeeds directly.
+    """
+    client = get_client()
+    heavy = _heavy_views_list()
+    failed = []
+
+    for name, view_sql in heavy:
+        # Swap VIEW keyword → TABLE in the DDL (1st occurrence only)
+        table_sql = view_sql.replace("CREATE OR REPLACE VIEW", "CREATE OR REPLACE TABLE", 1)
+        try:
+            client.query(table_sql).result()
+            print(f"[materialize] OK: {name}")
+        except Exception as first_err:
+            err_str = str(first_err).lower()
+            if "already exists" in err_str or "different type" in err_str or "conflict" in err_str:
+                # Object is still a VIEW from a prior run — drop it then retry
+                try:
+                    client.delete_table(f"{P}.{D}.{name}", not_found_ok=True)
+                    client.query(table_sql).result()
+                    print(f"[materialize] OK (replaced view): {name}")
+                except Exception as second_err:
+                    print(f"[materialize] FAIL: {name}: {second_err}")
+                    failed.append((name, str(second_err)))
+            else:
+                print(f"[materialize] FAIL: {name}: {first_err}")
+                failed.append((name, str(first_err)))
+
+    if failed:
+        names = ", ".join(n for n, _ in failed)
+        raise RuntimeError(f"[materialize] {len(failed)} table(s) failed: {names}")
+    print(f"[materialize] Done — {len(heavy)} tables refreshed.")
 
 
 def refresh_all_views():
@@ -564,6 +623,9 @@ def refresh_all_views():
         names = ", ".join(n for n, _ in failed)
         raise RuntimeError(f"[views] {len(failed)} view(s) failed: {names}")
     print(f"[views] Refreshed {len(all_views)} views.")
+    # Materialise heavy views as physical tables so Hex reads are instant.
+    # Runs immediately after view DDL so the tables always reflect the latest SQL.
+    materialize_heavy_views()
 
 
 if __name__ == "__main__":
