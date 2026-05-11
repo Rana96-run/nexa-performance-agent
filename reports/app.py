@@ -1030,6 +1030,7 @@ def activity_dashboard():
         task_status_rows = list(bq.query(ts_sql).result())
     except Exception as e:
         # asana_task_status doesn't exist yet — show tasks with no completion data
+        print(f"[activity] asana ts_sql FAILED (falling back to no-completion): {e}")
         try:
             ts_sql_fb = _ts_base_sql + """
             SELECT
@@ -1625,6 +1626,53 @@ def asana_status_debug():
             result["full_ts_error"] = str(e)
     except Exception as e:
         result["error"] = str(e)
+    # Run the exact dashboard processing: ts_sql + Python filter → asana_completion
+    try:
+        T2 = f"`{P}.{D}`"
+        _ASANA_WINDOW = 365
+        from collectors.asana_sync import _TABLE as _TS_TABLE2
+        full_ts = f"""
+            WITH all_tasks AS (
+              SELECT JSON_VALUE(details,'$.gid') AS gid,
+                     JSON_VALUE(details,'$.project_key') AS project_key,
+                     DATE(ts,'Asia/Riyadh') AS created_day, ts
+              FROM {T2}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action = 'asana_task_created'
+              UNION ALL
+              SELECT JSON_VALUE(details,'$.asana_gid') AS gid, 'optimization' AS project_key,
+                     DATE(ts,'Asia/Riyadh') AS created_day, ts
+              FROM {T2}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action IN ('scale_task_created','pause_task_created','junk_leads_task_created',
+                               'optimize_task_created','drilldown_task_created')
+            ),
+            created AS (
+              SELECT *, ROW_NUMBER() OVER (PARTITION BY COALESCE(gid,CAST(ts AS STRING)) ORDER BY ts ASC) AS rn
+              FROM all_tasks
+            ),
+            status AS (
+              SELECT gid, completed, completed_at,
+                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+              FROM {T2}.{_TS_TABLE2}
+            )
+            SELECT c.gid, c.project_key, COALESCE(s.completed,FALSE) AS completed, s.completed_at
+            FROM created c LEFT JOIN status s ON s.gid=c.gid AND s.rn=1
+            WHERE c.rn=1 LIMIT 500
+        """
+        rows = list(bq.query(full_ts).result())
+        _EXCL = {"campaigns_hub", "seasonal"}
+        rows = [r for r in rows if r.project_key not in _EXCL]
+        comp = [r for r in rows if r.completed]
+        result["processing"] = {
+            "rows_total": len(rows),
+            "rows_completed": len(comp),
+            "synced": any(r.completed_at for r in rows),
+            "sample_completed": [{"gid": r.gid, "completed": r.completed, "type": type(r.completed).__name__} for r in comp[:3]],
+        }
+    except Exception as e:
+        result["processing_error"] = str(e)
+
     return jsonify(result)
 
 
