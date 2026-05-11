@@ -26,17 +26,23 @@ from logs.activity_logger import log_activity_async
 _TABLE  = "asana_task_status"
 _CREATE_DDL = """
 CREATE TABLE IF NOT EXISTS `{P}.{D}.{T}` (
-  gid            STRING  NOT NULL,
+  gid            STRING,
   title          STRING,
   project_key    STRING,
   completed      BOOL,
   completed_at   TIMESTAMP,
   assignee_name  STRING,
   due_on         DATE,
-  synced_at      TIMESTAMP NOT NULL
+  synced_at      TIMESTAMP
 )
 PARTITION BY DATE(synced_at)
 OPTIONS(require_partition_filter=false)
+"""
+# Fix for existing tables created with NOT NULL constraints — drop REQUIRED mode
+_ALTER_DDL = """
+ALTER TABLE `{P}.{D}.{T}`
+  ALTER COLUMN gid DROP NOT NULL,
+  ALTER COLUMN synced_at DROP NOT NULL
 """
 _WINDOW_DAYS = 365
 
@@ -111,6 +117,10 @@ def sync_asana_tasks() -> int:
     D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
 
     bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
+    try:
+        bq.query(_ALTER_DDL.format(P=P, D=D, T=_TABLE)).result()
+    except Exception:
+        pass  # already nullable or table doesn't support alter — non-fatal
 
     # ── 1. GIDs from agent_activity_log ──────────────────────────────────────
     # Two sources:
@@ -460,6 +470,10 @@ def backfill_from_projects() -> int:
     if status_rows:
         try:
             bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
+            try:
+                bq.query(_ALTER_DDL.format(P=P, D=D, T=_TABLE)).result()
+            except Exception:
+                pass
             ndjson    = b"\n".join(json.dumps(r).encode() for r in status_rows)
             table_ref = bq.dataset(D, project=P).table(_TABLE)
             from google.cloud import bigquery as bqlib
