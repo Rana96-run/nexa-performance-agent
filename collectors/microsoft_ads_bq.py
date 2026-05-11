@@ -568,16 +568,19 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
             ctr          = _f(row.get("Ctr")) / 100
             cpl_native   = _f(row.get("CostPerConversion"))
             cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
-            # Prefer utm_content from FinalUrl (RSA titles are empty), then AdTitle, then AdId
+            # Parse utm_content from FinalUrl tracking template; this is the
+            # join key against hubspot_leads_module_daily.lead_utm_content.
+            # ad_name keeps its real identifier (AdTitle/AdDescription/AdId)
+            # so the table doesn't conflate the two concepts.
             _final_url = row.get("FinalUrl") or ""
-            _utm_content = ""
+            _utm_content = None
             if "utm_content=" in _final_url:
                 try:
                     from urllib.parse import urlparse, parse_qs
-                    _utm_content = parse_qs(urlparse(_final_url).query).get("utm_content", [""])[0]
+                    _utm_content = parse_qs(urlparse(_final_url).query).get("utm_content", [None])[0] or None
                 except Exception:
                     pass
-            ad_name = (_utm_content or row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
+            ad_name = (row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
             bq_rows.append({
                 "date":          day,
                 "channel":       "microsoft_ads",
@@ -588,6 +591,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "adset_name":    row.get("AdGroupName", ""),
                 "ad_id":         str(row.get("AdId", "")),
                 "ad_name":       ad_name,
+                "utm_content":   _utm_content,
                 "status":        row.get("AdStatus", ""),
                 "spend":         round(spend, 2),
                 "impressions":   int(_f(row.get("Impressions"))),

@@ -8,11 +8,36 @@ Pulls per-day metrics at campaign / ad-group / keyword / ad grain.
   collect_ads_and_write()      -> ads_daily  (includes final_url for LP analysis)
 """
 import os
+import re
 from datetime import date, timedelta, datetime, timezone
+from urllib.parse import urlparse, parse_qs, unquote
 from google.ads.googleads.client import GoogleAdsClient
 from config import GOOGLE_ADS_CONFIG
 from collectors.bq_writer import upsert_rows
 from collectors.currency import to_usd, normalize_currency
+
+
+# ── UTM extraction helper ─────────────────────────────────────────────────────
+_UTM_CONTENT_RE = re.compile(r"utm_content=([^&\s\"']+)", re.IGNORECASE)
+
+
+def _extract_utm_content(*templates):
+    """Walk through tracking-template candidates (ad > ad_group > campaign)
+    and return the utm_content value found in the first non-empty template.
+    Returns None if no utm_content is set at any level.
+
+    Google Ads stores tracking templates as raw strings like:
+        '{lpurl}?utm_source=google&utm_content=Google_AR_Feature_Invoice_WP'
+    We URL-decode the matched value to handle {_param} placeholders that
+    have already been resolved on the API side.
+    """
+    for t in templates:
+        if not t:
+            continue
+        m = _UTM_CONTENT_RE.search(t)
+        if m:
+            return unquote(m.group(1))
+    return None
 
 
 def _client():
@@ -272,11 +297,14 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             customer.currency_code,
             campaign.id,
             campaign.name,
+            campaign.tracking_url_template,
             ad_group.id,
             ad_group.name,
+            ad_group.tracking_url_template,
             ad_group_ad.ad.id,
             ad_group_ad.ad.name,
             ad_group_ad.ad.final_urls,
+            ad_group_ad.ad.tracking_url_template,
             ad_group_ad.status,
             metrics.cost_micros,
             metrics.conversions,
@@ -306,6 +334,15 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                 # final_urls is a repeated field; take first URL or None
                 final_urls   = list(r.ad_group_ad.ad.final_urls)
                 final_url    = final_urls[0] if final_urls else None
+                # utm_content: parsed from tracking_url_template at
+                # ad > ad_group > campaign (lowest-non-empty wins).
+                # This is the SAME string HubSpot captures as lead_utm_content,
+                # so it becomes the reliable join key for spend ⇄ leads.
+                utm_content  = _extract_utm_content(
+                    r.ad_group_ad.ad.tracking_url_template,
+                    r.ad_group.tracking_url_template,
+                    r.campaign.tracking_url_template,
+                )
                 rows.append({
                     "date":          str(r.segments.date),
                     "channel":       "google_ads",
@@ -316,6 +353,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                     "adset_name":    r.ad_group.name,
                     "ad_id":         str(r.ad_group_ad.ad.id),
                     "ad_name":       r.ad_group_ad.ad.name or "",
+                    "utm_content":   utm_content,
                     "status":        r.ad_group_ad.status.name,
                     "spend":         round(spend, 2),
                     "impressions":   int(r.metrics.impressions),
