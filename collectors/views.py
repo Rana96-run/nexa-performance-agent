@@ -341,7 +341,7 @@ WITH
   channel_map AS (
     SELECT 'google_ads'    AS channel, 'Google Ads'    AS qoyod_source UNION ALL
     SELECT 'meta',                     'Meta Ads'                       UNION ALL
-    SELECT 'snapchat',                 'Snapchat'                       UNION ALL
+    SELECT 'snapchat',                 'Snapchat Ads'                   UNION ALL
     SELECT 'tiktok',                   'Tiktok Ads'                     UNION ALL
     SELECT 'linkedin',                 'LinkedIn Ads'                   UNION ALL
     SELECT 'microsoft_ads',            'Microsoft Ads'

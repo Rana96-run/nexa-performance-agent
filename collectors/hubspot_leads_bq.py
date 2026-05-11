@@ -763,16 +763,12 @@ def sync_full_mirror() -> int:
     dataset  = os.getenv("BQ_DATASET")
     table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
 
-    # Start from the earliest lead we've ever seen (query BQ); fall back to
-    # 2024-07-01 if the table is empty (before our oldest known lead 2024-07-23).
-    min_rows = list(client.query(
-        f"SELECT MIN(hs_createdate) AS d FROM `{table_id}`"
-    ).result())
-    min_date = (min_rows[0].d if min_rows and min_rows[0].d else None) or date(2024, 7, 1)
+    # Always start from 2026-01-01 — reporting coverage; pre-2026 data not needed.
+    min_date = date(2026, 1, 1)
     # Pull one extra day into the future to catch any leads created today
     end_date = date.today() + timedelta(days=1)
 
-    print(f"[mirror] full re-pull {min_date} -> {date.today()} ...")
+    print(f"[mirror] re-pull 2026-01-01 -> {date.today()} ...")
 
     # ── Fetch all leads in 7-day createdate windows ───────────────────────────
     all_rows  = []
