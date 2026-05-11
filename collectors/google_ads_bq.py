@@ -275,17 +275,16 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
                        key_fields=["date", "channel", "adset_id"])
 
 
-def _build_pmax_asset_group_rows_for_adsets(days, incremental, now: str) -> list[dict]:
-    """Build PMax asset_group rows formatted for adsets_daily.
-
-    Asset groups are the PMax equivalent of ad_groups and map to utm_audience.
-    Resolved by extracting utm_audience from the campaign's tracking template
-    using merged custom params (campaign-level only, asset_group doesn't
-    expose its own url_custom_parameters on the asset_group resource).
-    """
+def _fetch_pmax_asset_groups(days, incremental):
+    """Single API call that yields (record, custom_params, spend) tuples for
+    PMax asset_groups. Used by both adset-level and ad-level builders so we
+    only hit the API once."""
     client = _client()
     ga     = client.get_service("GoogleAdsService")
     start, end = _date_window(days, incremental)
+    # asset_group.url_custom_parameters is where each asset_group's own
+    # _adname (= utm_content), _audience (= utm_audience), etc. live.
+    # Campaign-level params are inherited; asset_group-level overrides.
     query = f"""
         SELECT
             customer.id,
@@ -308,7 +307,6 @@ def _build_pmax_asset_group_rows_for_adsets(days, incremental, now: str) -> list
           AND campaign.advertising_channel_type = 'PERFORMANCE_MAX'
           AND campaign.status != 'REMOVED'
     """
-    rows = []
     print(f"[google_ads] pmax-asset-groups {start} -> {end}")
     for cid in _customer_ids():
         try:
@@ -316,36 +314,86 @@ def _build_pmax_asset_group_rows_for_adsets(days, incremental, now: str) -> list
                 spend_native = r.metrics.cost_micros / 1_000_000
                 native_cur   = normalize_currency(r.customer.currency_code)
                 spend        = to_usd(spend_native, native_cur)
+                # asset_group.url_custom_parameters isn't queryable as a
+                # field in GAQL (confirmed via API error). So we work with
+                # campaign-level params + the implicit Google substitutions
+                # that happen at click time.
                 custom_params = _custom_params_dict(r.campaign)
-                # PMax's equivalent of {_adgroup} → asset_group.name
-                custom_params.setdefault("adgroup", r.asset_group.name or "")
+                # Implicit substitutions Google does at click time when the
+                # tracking template uses {_paramname}. For PMax, asset_group
+                # plays the role of both "adgroup" and "adname" (asset_group
+                # IS the lowest reportable unit and is what gets clicked):
+                custom_params.setdefault("adgroup",    r.asset_group.name or "")
                 custom_params.setdefault("assetgroup", r.asset_group.name or "")
-                utm_audience = _extract_utm_param(
-                    "audience", custom_params,
-                    r.campaign.tracking_url_template,
-                )
-                rows.append({
-                    "date":          str(r.segments.date),
-                    "channel":       "google_ads",
-                    "account_id":    cid,
-                    "campaign_id":   str(r.campaign.id),
-                    "campaign_name": r.campaign.name,
-                    # Prefix prevents collision with regular ad_group_ids
-                    "adset_id":      f"pmax_{r.asset_group.id}",
-                    "adset_name":    r.asset_group.name,
-                    "utm_audience":  utm_audience,
-                    "status":        r.asset_group.status.name,
-                    "spend":         round(spend, 2),
-                    "impressions":   int(r.metrics.impressions),
-                    "clicks":        int(r.metrics.clicks),
-                    "ctr":           round(r.metrics.ctr * 100, 4),
-                    "leads":         int(r.metrics.conversions),
-                    "conversions":   float(r.metrics.conversions),
-                    "currency":      "USD",
-                    "updated_at":    now,
-                })
+                custom_params.setdefault("adname",     r.asset_group.name or "")
+                yield (r, cid, custom_params, spend)
         except Exception as e:
             print(f"[google_ads]   pmax asset_groups account {cid} error: {e}")
+
+
+def _build_pmax_asset_group_rows_for_adsets(days, incremental, now: str) -> list[dict]:
+    """Build PMax asset_group rows formatted for adsets_daily (utm_audience)."""
+    rows = []
+    for r, cid, custom_params, spend in _fetch_pmax_asset_groups(days, incremental):
+        utm_audience = _extract_utm_param(
+            "audience", custom_params, r.campaign.tracking_url_template,
+        )
+        rows.append({
+            "date":          str(r.segments.date),
+            "channel":       "google_ads",
+            "account_id":    cid,
+            "campaign_id":   str(r.campaign.id),
+            "campaign_name": r.campaign.name,
+            "adset_id":      f"pmax_{r.asset_group.id}",
+            "adset_name":    r.asset_group.name,
+            "utm_audience":  utm_audience,
+            "status":        r.asset_group.status.name,
+            "spend":         round(spend, 2),
+            "impressions":   int(r.metrics.impressions),
+            "clicks":        int(r.metrics.clicks),
+            "ctr":           round(r.metrics.ctr * 100, 4),
+            "leads":         int(r.metrics.conversions),
+            "conversions":   float(r.metrics.conversions),
+            "currency":      "USD",
+            "updated_at":    now,
+        })
+    return rows
+
+
+def _build_pmax_asset_group_rows_for_ads(days, incremental, now: str) -> list[dict]:
+    """Build PMax asset_group rows formatted for ads_daily (utm_content).
+
+    Each asset_group becomes one row in ads_daily because PMax has no
+    sub-asset_group reportable unit. utm_content is resolved from the
+    asset_group's own url_custom_parameters — typically the _adname value.
+    """
+    rows = []
+    for r, cid, custom_params, spend in _fetch_pmax_asset_groups(days, incremental):
+        utm_content = _extract_utm_param(
+            "content", custom_params, r.campaign.tracking_url_template,
+        )
+        rows.append({
+            "date":          str(r.segments.date),
+            "channel":       "google_ads",
+            "account_id":    cid,
+            "campaign_id":   str(r.campaign.id),
+            "campaign_name": r.campaign.name,
+            "adset_id":      f"pmax_{r.asset_group.id}",
+            "adset_name":    r.asset_group.name,
+            "ad_id":         f"pmax_{r.asset_group.id}",
+            "ad_name":       r.asset_group.name,
+            "utm_content":   utm_content,
+            "status":        r.asset_group.status.name,
+            "spend":         round(spend, 2),
+            "impressions":   int(r.metrics.impressions),
+            "clicks":        int(r.metrics.clicks),
+            "ctr":           round(r.metrics.ctr * 100, 4),
+            "leads":         int(r.metrics.conversions),
+            "conversions":   float(r.metrics.conversions),
+            "currency":      "USD",
+            "final_url":     None,
+            "updated_at":    now,
+        })
     return rows
 
 
@@ -526,16 +574,17 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             print(f"[google_ads]   ads account {cid} error: {e}")
         print(f"[google_ads]   ads account {cid}: {count} rows")
 
-    # Note on PMax ads:
-    # Google Ads API does NOT expose individual PMax ads — querying
-    # `FROM ad_group_ad WHERE campaign.advertising_channel_type='PERFORMANCE_MAX'`
-    # returns 0 rows regardless of filters. PMax's reportable granularity
-    # bottoms out at asset_group (in adsets_daily) + per-asset metrics
-    # (in pmax_asset_groups_daily). The 7+ distinct utm_content values
-    # in HubSpot for PMax leads come from multiple final URLs within each
-    # asset_group — Google rotates which URL each user lands on, but per-URL
-    # metrics aren't queryable. Future option: aggregate by asset.final_url
-    # via asset_group_asset and proportionally allocate asset_group spend.
+    # PMax: each asset_group becomes one ad row. utm_content resolved
+    # from asset_group.url_custom_parameters (where _adname lives). Merged
+    # into the same batch so the shared (date, channel) DELETE doesn't
+    # wipe both buckets.
+    try:
+        pmax_rows = _build_pmax_asset_group_rows_for_ads(days, incremental, now)
+        if pmax_rows:
+            print(f"[google_ads]   pmax asset_group ads merged: {len(pmax_rows)}")
+            rows.extend(pmax_rows)
+    except Exception as e:
+        print(f"[google_ads]   pmax ads error (continuing): {e}")
 
     return upsert_rows("ads_daily", rows,
                        key_fields=["date", "channel", "ad_id"])
