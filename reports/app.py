@@ -1542,6 +1542,28 @@ def asana_backfill():
     })
 
 
+@app.route("/api/asana-status-debug")
+def asana_status_debug():
+    """Check what's in asana_task_status BQ table."""
+    from collectors.bq_writer import get_client as get_bq
+    import os
+    bq = get_bq()
+    P = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+    D = os.getenv("BQ_DATASET", "qoyod_marketing")
+    try:
+        total = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status`").result())[0].n
+        done  = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status` WHERE completed=TRUE").result())[0].n
+        sample = list(bq.query(f"SELECT gid, completed, completed_at, synced_at FROM `{P}.{D}.asana_task_status` ORDER BY synced_at DESC LIMIT 5").result())
+        log_gids = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.agent_activity_log` WHERE action='asana_task_created' AND JSON_VALUE(details,'$.gid') IS NOT NULL").result())[0].n
+        return jsonify({
+            "status_rows_total": total,
+            "status_rows_completed": done,
+            "activity_log_with_gid": log_gids,
+            "sample": [{"gid": r.gid, "completed": r.completed, "completed_at": str(r.completed_at), "synced_at": str(r.synced_at)} for r in sample],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # DASHBOARD_URL / ACTIVITY_DASHBOARD_URL = short Railway URLs shown in Slack/email/Asana
 # DASHBOARD_DEST_URL / ACTIVITY_DEST_URL = full Hex URLs that /dashboard and /activity redirect to
