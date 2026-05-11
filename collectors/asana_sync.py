@@ -51,13 +51,16 @@ def _asana_client():
 def _all_projects() -> dict[str, str]:
     """Return every Asana project the agent creates tasks in.
 
-    Merges ASANA_PROJECTS (env-var-backed), ASANA_OPTIMIZATION_PROJECTS
-    (per-channel), and ASANA_DAILY_PROJECTS (per-function) into one flat
-    {project_key: project_id} dict, skipping any None/empty IDs.
+    Merges all four project dicts into one flat {project_key: project_id},
+    skipping any None/empty IDs.
     """
-    from config import ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS
+    from config import (
+        ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS,
+        ASANA_DAILY_PROJECTS, ASANA_SEASONAL_PROJECTS,
+    )
     merged: dict[str, str] = {}
-    for d in (ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS):
+    for d in (ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS,
+              ASANA_DAILY_PROJECTS, ASANA_SEASONAL_PROJECTS):
         for k, v in d.items():
             if v:
                 merged[k] = v
