@@ -112,7 +112,7 @@ def _search_leads(since_ms, until_ms=None, after=None):
     body = {
         "filterGroups": [{"filters": filters}],
         "properties": PROPERTIES,
-        "limit": 100,
+        "limit": 200,   # HubSpot max — halves round trips vs 100
         "sorts": [{"propertyName": "hs_createdate", "direction": "ASCENDING"}],
     }
     if after:
@@ -392,7 +392,7 @@ def _search_by_modified(since_ms: int, until_ms: int, after=None) -> dict:
             {"propertyName": "hs_lastmodifieddate", "operator": "LT",  "value": str(until_ms)},
         ]}],
         "properties": PROPERTIES,
-        "limit": 100,
+        "limit": 200,   # HubSpot max
         "sorts": [{"propertyName": "hs_lastmodifieddate", "direction": "ASCENDING"}],
     }
     if after:
