@@ -1,9 +1,9 @@
 """
 scripts/miro_agent_workflow.py
 ===============================
-Qoyod Performance Agent — 4-column architecture with two brain tracks.
+Qoyod Performance Agent — clean 3-column diagram + key rules.
 
-    INPUTS  →  BRAIN (2 tracks)  →  ACTIONS  →  OUTPUTS
+    DATA SOURCES  →  AGENT (2 runtimes)  →  OUTPUTS
 
 Run:
     python scripts/miro_agent_workflow.py
@@ -13,25 +13,26 @@ from __future__ import annotations
 import os
 import time
 import requests
-from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv("MIRO_ACCESS_TOKEN")
 BOARD = os.getenv("MIRO_BOARD_ID")
-H = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
-BASE = f"https://api.miro.com/v2/boards/{BOARD}"
+H     = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+BASE  = f"https://api.miro.com/v2/boards/{BOARD}"
 
+
+# ── API helpers ───────────────────────────────────────────────────────────────
 
 def _post(path, payload):
     r = requests.post(f"{BASE}{path}", headers=H, json=payload, timeout=15)
     if not r.ok:
-        print(f"FAIL {path}: {r.status_code} — {r.text[:200]}")
+        print(f"  FAIL {path}: {r.status_code} — {r.text[:200]}")
         return None
     return r.json()
 
 
-def _delete_all_existing():
+def _delete_all():
     deleted = 0
     for kind in ("connectors", "shapes", "sticky_notes", "cards", "texts", "frames", "images"):
         cursor = None
@@ -53,10 +54,10 @@ def _delete_all_existing():
     time.sleep(2)
 
 
-def shape(text_content, x, y, w=300, h=120, fill="#dbeafe", border="#2563eb",
-          font_color="#0f172a", font_size=14):
+def box(text, x, y, w=280, h=100, fill="#dbeafe", border="#2563eb",
+        font_color="#0f172a", font_size=13, shape="round_rectangle"):
     return _post("/shapes", {
-        "data": {"content": text_content, "shape": "round_rectangle"},
+        "data": {"content": text, "shape": shape},
         "style": {
             "fillColor": fill, "borderColor": border, "borderWidth": "2",
             "fontFamily": "open_sans", "fontSize": str(font_size),
@@ -67,7 +68,7 @@ def shape(text_content, x, y, w=300, h=120, fill="#dbeafe", border="#2563eb",
     })
 
 
-def label(content, x, y, w=340, font=13, color="#64748b", align="center"):
+def txt(content, x, y, w=800, font=14, color="#0f172a", align="center"):
     return _post("/texts", {
         "data": {"content": content},
         "style": {"fontSize": str(font), "color": color, "textAlign": align},
@@ -76,207 +77,190 @@ def label(content, x, y, w=340, font=13, color="#64748b", align="center"):
     })
 
 
-def connect(from_id, to_id, lbl="", color="#94a3b8"):
-    if not from_id or not to_id:
-        return None
+def arrow(a, b, label="", color="#94a3b8", width="2"):
+    if not a or not b:
+        return
     return _post("/connectors", {
-        "startItem": {"id": from_id},
-        "endItem":   {"id": to_id},
-        "captions":  [{"content": lbl}] if lbl else [],
-        "style": {"strokeColor": color, "strokeWidth": "2"},
+        "startItem": {"id": a["id"]},
+        "endItem":   {"id": b["id"]},
+        "captions":  [{"content": label, "position": "50%"}] if label else [],
+        "style": {"strokeColor": color, "strokeWidth": width,
+                  "endStrokeCap": "stealth"},
     })
+
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+
+X_SRC   = -900
+X_AGENT = 0
+X_OUT   = 900
+
+BW = 270   # box width
+BH = 90    # box height
+GAP = 20   # vertical gap between boxes
 
 
 def build():
-    _delete_all_existing()
+    _delete_all()
 
-    # ── Layout ─────────────────────────────────────────────────────────────────
-    CX   = {"inputs": -1100, "brain": -200, "actions": 620, "outputs": 1400}
-    W    = 310
-    H    = 118
-    G    = 30       # gap between rows
-    TOP  = -900
+    # ── Title ─────────────────────────────────────────────────────────────────
+    txt("<b>Qoyod Performance Agent</b>", x=0, y=-600, font=38, color="#0f172a")
+    txt("Two runtimes  ·  Every action approval-gated  ·  All data in BigQuery",
+        x=0, y=-548, font=14, color="#64748b")
 
-    # ── Title ──────────────────────────────────────────────────────────────────
-    _post("/texts", {
-        "data": {"content": "<b>Qoyod Performance Agent</b>"},
-        "style": {"fontSize": "36", "color": "#0f172a", "textAlign": "center"},
-        "position": {"x": 150, "y": -1130, "origin": "center"},
-        "geometry": {"width": 1000},
-    })
-    _post("/texts", {
-        "data": {"content": "Two runtimes: Nightly 03:00 Riyadh (operational) · Every 6h (reporting)  ·  Nothing executes without human ✅"},
-        "style": {"fontSize": "14", "color": "#64748b", "textAlign": "center"},
-        "position": {"x": 150, "y": -1075, "origin": "center"},
-        "geometry": {"width": 1300},
-    })
+    # ── Column headers ────────────────────────────────────────────────────────
+    for x, label, color in [
+        (X_SRC,   "DATA SOURCES",  "#1e40af"),
+        (X_AGENT, "AGENT",         "#7c3aed"),
+        (X_OUT,   "OUTPUTS",       "#15803d"),
+    ]:
+        txt(f"<b>{label}</b>", x=x, y=-490, w=320, font=20, color=color)
 
-    # ── Column headers ─────────────────────────────────────────────────────────
-    headers = [
-        ("inputs",  "INPUTS",   "What the agent reads",              "#1e40af"),
-        ("brain",   "BRAIN",    "Two tracks: operational + reporting","#7c3aed"),
-        ("actions", "ACTIONS",  "What the agent does",               "#15803d"),
-        ("outputs", "OUTPUTS",  "Where things land",                 "#0f172a"),
-    ]
-    for col, title, sub, color in headers:
-        _post("/texts", {
-            "data": {"content": f"<b>{title}</b>"},
-            "style": {"fontSize": "20", "color": color, "textAlign": "center"},
-            "position": {"x": CX[col], "y": TOP - 100, "origin": "center"},
-            "geometry": {"width": W},
-        })
-        label(sub, CX[col], TOP - 68, w=W, font=12)
-
-    # ── INPUTS — 5 nodes ───────────────────────────────────────────────────────
-    in_data = [
-        ("Ad Platforms\nMeta · Google Ads · TikTok\nLinkedIn",
+    # ─────────────────────────────────────────────────────────────────────────
+    # COLUMN 1 — Data Sources
+    # ─────────────────────────────────────────────────────────────────────────
+    src_items = [
+        ("Ad Platforms\nMeta · Google Ads · TikTok\nLinkedIn · Snapchat · Microsoft",
          "#dbeafe", "#1e40af"),
-        ("Adspirer MCP\nExecution API\nBudget · pause · keyword mutations",
-         "#e0f2fe", "#0369a1"),
-        ("HubSpot CRM\nLeads (Lead Module only)\nDeals · Read-only by default",
-         "#fecaca", "#991b1b"),
-        ("BigQuery\nqoyod_marketing dataset\nt_* materialized tables (6h refresh)",
-         "#fde68a", "#a16207"),
-        ("Anthropic Claude API\nReasoning + analysis\nclaude-sonnet-4-6",
-         "#f9a8d4", "#9d174d"),
+        ("HubSpot CRM\nLeads (Lead Module only)\nDeals · Read-only",
+         "#fee2e2", "#991b1b"),
+        ("BigQuery\nqoyod_marketing\nt_* materialized tables",
+         "#fef9c3", "#a16207"),
+        ("Anthropic Claude API\nclaude-sonnet-4-6\nReasoning + analysis",
+         "#fce7f3", "#9d174d"),
     ]
-    in_ids = []
-    for i, (txt, fill, border) in enumerate(in_data):
-        n = shape(txt, CX["inputs"], TOP + i * (H + G), w=W, h=H,
-                  fill=fill, border=border, font_size=13)
-        in_ids.append(n)
 
-    # ── BRAIN — 4 nodes in 2 tracks ───────────────────────────────────────────
-    # Track A: Operational (nightly 03:00) — top half
-    track_a_top = TOP + 0.0 * (H + G)
-    analysis = shape(
-        "🧠 ANALYSIS — Nightly 03:00\nCPQL/CPL health · Anomaly detection\nKeyword audit (Sundays) · Ad audit",
-        CX["brain"], track_a_top,
-        w=W, h=H + 20, fill="#7c3aed", border="#4c1d95",
-        font_color="#ffffff", font_size=13)
+    src_nodes = []
+    for i, (text, fill, border) in enumerate(src_items):
+        y = -380 + i * (BH + GAP)
+        n = box(text, X_SRC, y, w=BW, h=BH, fill=fill, border=border)
+        src_nodes.append(n)
 
-    task_flow = shape(
-        "🤖 TASK-FLOW (code)\nRoutes findings → Asana + #approvals\nNever auto-executes pause/scale",
-        CX["brain"], track_a_top + (H + G) + 20,
-        w=W, h=H, fill="#0f172a", border="#0f172a",
-        font_color="#ffffff", font_size=13)
+    # ─────────────────────────────────────────────────────────────────────────
+    # COLUMN 2 — Agent (2 runtime tracks)
+    # ─────────────────────────────────────────────────────────────────────────
 
-    # Divider label between tracks
-    label("── Reporting track (every 6h) ──", CX["brain"],
-          track_a_top + 2 * (H + G) + 60, w=W + 40, font=11, color="#94a3b8")
+    # Track A header
+    txt("⏱ Nightly 03:00 Riyadh", x=X_AGENT, y=-445, w=340,
+        font=12, color="#7c3aed", align="center")
 
-    # Track B: Reporting (6h) — bottom half
-    track_b_top = track_a_top + 2 * (H + G) + 90
+    nightly_items = [
+        ("Campaign Health\nCPQL / CPL audit · Scale / Pause / Optimize\n14-day minimum window",
+         "#ede9fe", "#7c3aed"),
+        ("Ad Audit\nZero-conv · Junk leads · High CPL\nFindings → PENDING APPROVAL",
+         "#f5f3ff", "#6d28d9"),
+        ("Keyword Audit (Sundays)\nIS / QS · Candidates · Negatives\nNegatives auto-executed",
+         "#f3e8ff", "#7c3aed"),
+        ("Approval Digest\n#approvals — 1 batch/night\nScale + Pause on ✅  |  ❌ skips all",
+         "#fef3c7", "#d97706"),
+    ]
 
-    data_refresh = shape(
-        "⟳ DATA REFRESH — Every 6h\n22 collectors → BQ upsert\nView materialisation → t_* tables\nHubSpot 30-day lead resync",
-        CX["brain"], track_b_top,
-        w=W, h=H + 20, fill="#0e7490", border="#155e75",
-        font_color="#ffffff", font_size=13)
+    nightly_nodes = []
+    for i, (text, fill, border) in enumerate(nightly_items):
+        y = -380 + i * (BH + GAP)
+        n = box(text, X_AGENT, y, w=BW, h=BH, fill=fill, border=border)
+        nightly_nodes.append(n)
 
-    health_checks = shape(
-        "🩺 HEALTH CHECKS — Hourly 09–17\nAll connectors + APIs + BQ\nResults logged → Activity Dashboard\nOn-demand via dashboard button",
-        CX["brain"], track_b_top + (H + G) + 20,
-        w=W, h=H + 10, fill="#374151", border="#111827",
-        font_color="#ffffff", font_size=13)
+    # Divider
+    txt("── ── ── ── ── ── ── ──", x=X_AGENT, y=-380 + 4 * (BH + GAP) - 10,
+        w=320, font=11, color="#cbd5e1")
 
-    # ── ACTIONS — 3 nodes ──────────────────────────────────────────────────────
-    act_top = TOP + 0.3 * (H + G)
+    # Track B header
+    txt("⟳ Every 6 Hours", x=X_AGENT,
+        y=-380 + 4 * (BH + GAP) + 15, w=340, font=12, color="#0e7490")
 
-    approval_req = shape(
-        "APPROVAL DIGEST\n#approvals — max 2 msgs/night\nScale + pause in one batch\nOptimize/junk → Asana only",
-        CX["actions"], act_top,
-        w=W, h=H + 20, fill="#fef3c7", border="#92400e", font_size=13)
+    reporting_items = [
+        ("Data Refresh\n22 collectors → BQ upsert\nView materialisation → t_* tables",
+         "#cffafe", "#0e7490"),
+        ("Health Checks  09–17 Riyadh\nAll connectors + APIs + BQ\nResults → Activity Dashboard",
+         "#ecfeff", "#0891b2"),
+    ]
 
-    execute = shape(
-        "EXECUTE ON ✅\nUser reaction → executor\nScale +25% · Pause campaign\nAsana task updated",
-        CX["actions"], act_top + (H + G) + 20,
-        w=W, h=H + 10, fill="#dcfce7", border="#15803d", font_size=13)
+    reporting_nodes = []
+    for i, (text, fill, border) in enumerate(reporting_items):
+        y = -380 + (5 + i) * (BH + GAP) + 30
+        n = box(text, X_AGENT, y, w=BW, h=BH, fill=fill, border=border)
+        reporting_nodes.append(n)
 
-    notify_box = shape(
-        "NOTIFY\n1 message → #notify\nPerformance summary · Alerts\nAsana counts",
-        CX["actions"], act_top + 2 * (H + G) + 30,
-        w=W, h=H, fill="#e0e7ff", border="#4338ca", font_size=13)
+    # ─────────────────────────────────────────────────────────────────────────
+    # COLUMN 3 — Outputs
+    # ─────────────────────────────────────────────────────────────────────────
+    out_items = [
+        ("Slack #approvals\n1 digest/night · ✅ executes\nScale + Pause actions",
+         "#dbeafe", "#1e40af"),
+        ("Slack #notify\n1 summary/night\nPerformance · Alerts",
+         "#bfdbfe", "#1d4ed8"),
+        ("Asana\n6 projects · 7 channels\nPENDING APPROVAL tasks",
+         "#fce7f3", "#9f1239"),
+        ("Hex Dashboard\nCampaign · Ad · Keyword\nRefreshed every 6h",
+         "#d1fae5", "#15803d"),
+        ("Activity Dashboard\n/activity — full audit log\nApproval rate · Data hygiene",
+         "#e0e7ff", "#4338ca"),
+    ]
 
-    # ── OUTPUTS — 5 nodes ──────────────────────────────────────────────────────
-    out_top = TOP + 0.1 * (H + G)
+    out_nodes = []
+    for i, (text, fill, border) in enumerate(out_items):
+        y = -380 + i * (BH + GAP)
+        n = box(text, X_OUT, y, w=BW, h=BH, fill=fill, border=border)
+        out_nodes.append(n)
 
-    out_slack = shape(
-        "SLACK\n#notify  max 1 msg/night\n#approvals  max 2 msgs/night\n✅/❌ reactions trigger execution",
-        CX["outputs"], out_top,
-        w=W, h=H + 10, fill="#bfdbfe", border="#1e40af", font_size=13)
+    # ─────────────────────────────────────────────────────────────────────────
+    # Connectors
+    # ─────────────────────────────────────────────────────────────────────────
 
-    out_asana = shape(
-        "ASANA\n6 projects · 7 channels\nPENDING APPROVAL tasks\nOverdue count tracked daily",
-        CX["outputs"], out_top + (H + G) + 10,
-        w=W, h=H + 10, fill="#fbcfe8", border="#9f1239", font_size=13)
+    # Sources → nightly analysis
+    for src in src_nodes:
+        arrow(src, nightly_nodes[0], color="#94a3b8")
 
-    out_hex = shape(
-        "HEX DASHBOARD\nCampaign · Ad set · Ad · Keyword\nCPL / CPQL / ROAS trends\nRefreshed every 6h via t_* tables",
-        CX["outputs"], out_top + 2 * (H + G) + 20,
-        w=W, h=H + 10, fill="#bbf7d0", border="#15803d", font_size=13)
+    # Nightly chain
+    arrow(nightly_nodes[0], nightly_nodes[1], color="#7c3aed")
+    arrow(nightly_nodes[0], nightly_nodes[2], color="#7c3aed")
+    arrow(nightly_nodes[1], nightly_nodes[3], color="#d97706")
+    arrow(nightly_nodes[2], nightly_nodes[3], color="#d97706")
 
-    out_activity = shape(
-        "ACTIVITY DASHBOARD\n/activity — Agent transparency\nTasks done · Ads paused · Approval rate\nData Hygiene health checks",
-        CX["outputs"], out_top + 3 * (H + G) + 30,
-        w=W, h=H + 10, fill="#c7d2fe", border="#4338ca", font_size=13)
+    # Nightly → outputs
+    arrow(nightly_nodes[3], out_nodes[0], "posts digest",   color="#d97706", width="3")
+    arrow(nightly_nodes[0], out_nodes[2], "creates tasks",  color="#9f1239")
+    arrow(nightly_nodes[3], out_nodes[1], "summary",        color="#1d4ed8")
 
-    out_bq = shape(
-        "BIGQUERY\nt_* tables refreshed every 6h\nUTC stored · Riyadh for UI\nAll spend in USD",
-        CX["outputs"], out_top + 4 * (H + G) + 40,
-        w=W, h=H, fill="#fde68a", border="#a16207", font_size=13)
+    # Reporting → outputs
+    arrow(reporting_nodes[0], out_nodes[3], "triggers re-run", color="#15803d")
+    arrow(reporting_nodes[1], out_nodes[4], "logs results",    color="#4338ca")
 
-    # ── Connections ────────────────────────────────────────────────────────────
-    # All inputs → analysis (operational track)
-    for src in in_ids:
-        connect(src["id"], analysis["id"], color="#94a3b8")
+    # ─────────────────────────────────────────────────────────────────────────
+    # KEY RULES — below the diagram
+    # ─────────────────────────────────────────────────────────────────────────
+    rules_y = -380 + 8 * (BH + GAP) + 120
 
-    # analysis → task-flow
-    connect(analysis["id"], task_flow["id"], "findings", "#7c3aed")
+    txt("<b>KEY RULES</b>", x=0, y=rules_y, w=1200, font=22, color="#0f172a")
+    txt("Non-negotiable constraints the agent always follows",
+        x=0, y=rules_y + 35, w=1200, font=13, color="#64748b")
 
-    # task-flow → actions
-    connect(task_flow["id"], approval_req["id"], "scale/pause", "#d97706")
-    connect(task_flow["id"], notify_box["id"],   "summary",     "#4338ca")
+    rules = [
+        ("🚫 No Auto-Execute\nScale + Pause always wait\nfor ✅ in #approvals",
+         "#fef3c7", "#d97706"),
+        ("📊 Leads from HubSpot Only\nLead Module · Not contacts\nCPQL evaluated first",
+         "#fee2e2", "#991b1b"),
+        ("💵 Spend Always USD\nPlatforms in micros → ÷1M\nSAR peg: 1 USD = 3.75 SAR",
+         "#d1fae5", "#15803d"),
+        ("📅 14-Day Minimum Window\nNo pause/scale on < 14 days\nAwareness = impressions only",
+         "#dbeafe", "#1e40af"),
+        ("🔑 Keywords Weekly (Sun)\nNegatives: daily auto-exec\nAdditions: Sunday only",
+         "#f3e8ff", "#7c3aed"),
+        ("🔒 Secrets in Railway Only\nNever hardcode tokens\n.env = local cert path only",
+         "#ecfeff", "#0e7490"),
+    ]
 
-    # approval_req → slack (#approvals)
-    connect(approval_req["id"], out_slack["id"], "posts to #approvals", "#d97706")
+    rule_bw = 240
+    total_w = len(rules) * rule_bw + (len(rules) - 1) * 20
+    start_x = -total_w // 2 + rule_bw // 2
 
-    # slack ✅ → execute
-    connect(out_slack["id"], execute["id"], "✅ reaction", "#16a34a")
+    for i, (text, fill, border) in enumerate(rules):
+        x = start_x + i * (rule_bw + 20)
+        box(text, x, rules_y + 140, w=rule_bw, h=110, fill=fill, border=border,
+            font_size=12)
 
-    # execute → adspirer (calls back)
-    connect(execute["id"], in_ids[1]["id"], "calls executor", "#0369a1")
-
-    # execute → asana
-    connect(execute["id"], out_asana["id"], "updates task", "#9f1239")
-
-    # task-flow → asana
-    connect(task_flow["id"], out_asana["id"], "creates tasks", "#9f1239")
-
-    # notify → slack + dashboard
-    connect(notify_box["id"], out_slack["id"], "1 msg to #notify", "#4338ca")
-    connect(notify_box["id"], out_hex["id"],   "dashboard URL",    "#15803d")
-
-    # reporting track
-    connect(in_ids[3]["id"], data_refresh["id"], "reads/writes", "#a16207")
-    connect(data_refresh["id"], out_bq["id"],    "upsert + t_*", "#a16207")
-    connect(data_refresh["id"], out_hex["id"],   "triggers Hex re-run", "#15803d")
-
-    # health checks → activity dashboard
-    connect(health_checks["id"], out_activity["id"], "logs results", "#4338ca")
-
-    # BigQuery feeds analysis
-    connect(in_ids[3]["id"], analysis["id"], "reads", "#a16207")
-
-    print("[miro] Main flow done. Rebuilding use cases...")
-
-    import subprocess, sys
-    subprocess.run(
-        [sys.executable, str(Path(__file__).parent / "miro_use_cases_v2.py")],
-        check=True,
-    )
-
-    print(f"[miro] Board fully rebuilt: https://miro.com/app/board/{BOARD}")
+    print(f"[miro] Board built: https://miro.com/app/board/{BOARD}")
 
 
 if __name__ == "__main__":
