@@ -278,9 +278,17 @@ Applied to `ads_daily` joined to `hubspot_leads_module_daily` on `lead_utm_conte
 - **Zero-conversion pause:** spend > $70 over 7+ days with 0 platform conversions → PAUSE
 - **Junk lead pause:** ad running 10+ days, converting leads, but
   `leads_disqualified / leads_total >= 0.60` (60%+ disqualification rate) → PAUSE
-- **High CPL pause:** CPL (`spend / hs_leads`) > $50 for 10+ days → PAUSE
+- **High CPL pause:** CPL (`spend / hs_leads`) > `AD_CPL_PAUSE` ($50) for 10+ days → PAUSE
 - **Never remove an ad** — only pause. All ad actions logged and approval-gated.
 - These same rules apply in the manual ad-management tool (`scripts/bulk_ads.py`).
+
+**Ad-level KPI zones** (from `config.py` — `AD_CPL_*` / `AD_CPQL_*`):
+- CPL: under $30 scale | $30–35 acceptable | $36–50 warning | over $50 pause
+- CPQL: under $60 scale | $60–75 acceptable | $76–85 warning | over $90 pause
+
+**Campaign-level KPI zones** (from `config.py` — `CPL_*` / `CPQL_*`):
+- CPL: under $25 scale | $25–35 acceptable | $36–40 warning | over $45 pause
+- CPQL: under $60 scale | $65–80 acceptable | $85–95 warning | over $100 pause
 
 ## Two runtimes (don't confuse them)
 

@@ -40,13 +40,13 @@ from collectors.bq_writer import get_client as _get_bq_client, PROJECT_ID, DATAS
 
 PREFIX = "[bulk-ads]"
 
-# Pause rule thresholds — non-negotiable per CLAUDE.md
+# Pause rule thresholds — sourced from config.py AD_CPL_PAUSE
+from config import AD_CPL_PAUSE as HIGH_CPL_THRESHOLD  # noqa: E402
 ZERO_CONV_SPEND    = 70.0   # USD: zero-conv rule minimum spend
 ZERO_CONV_DAYS     = 7      # days running before zero-conv rule applies
 JUNK_LEAD_DAYS     = 10     # days running before junk-lead rule applies
 JUNK_LEAD_RATE     = 0.60   # 60% disqualified
 JUNK_LEAD_MIN      = 5      # minimum HubSpot leads to qualify for junk-lead rule
-HIGH_CPL_THRESHOLD = 50.0   # USD: CPL above this triggers pause
 HIGH_CPL_DAYS      = 10     # days running before high-CPL rule applies
 
 # Google Ads accounts (Acc1 = primary, Acc2 = secondary)

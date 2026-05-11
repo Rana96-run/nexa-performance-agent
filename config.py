@@ -174,19 +174,31 @@ USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 # ---------------------------------------------------------------------------
 # KPI thresholds — all in USD (per playbook in qoyod-manager-os.md)
 # ---------------------------------------------------------------------------
-# CPL (cost per lead) zones, USD
-# ≤ $30 is "good" (acceptable). Only warn/pause above that.
-CPL_SCALE      = 15.00  # < this  -> scale up
-CPL_ACCEPTABLE = 30.00  # ≤ this  -> acceptable (good)
+# CPL (cost per lead) zones, USD — campaign level
+CPL_SCALE      = 25.00  # < this  -> scale up
+CPL_ACCEPTABLE = 35.00  # ≤ this  -> acceptable
 CPL_WARNING    = 40.00  # ≤ this  -> warning
-CPL_PAUSE      = CPL_WARNING   # backwards-compat alias
+CPL_PAUSE      = 45.00  # > this  -> pause candidate
+# backwards-compat alias (some callers check CPL_PAUSE as the single trigger)
 
-# CPQL (cost per qualified lead) zones, USD
-# ≤ $95 is "good" (acceptable). Only warn/pause above that.
+# CPQL (cost per qualified lead) zones, USD — campaign level
 CPQL_SCALE      = 60.00   # < this  -> scale up
-CPQL_ACCEPTABLE = 95.00   # ≤ this  -> acceptable (good)
-CPQL_WARNING    = 120.00  # ≤ this  -> warning
-CPQL_PAUSE      = CPQL_WARNING  # backwards-compat alias
+CPQL_ACCEPTABLE = 80.00   # ≤ this  -> acceptable
+CPQL_WARNING    = 95.00   # ≤ this  -> warning
+CPQL_PAUSE      = 100.00  # > this  -> pause candidate
+
+# Ad-level CPL/CPQL zones, USD
+# Slightly more lenient than campaign level — individual ads can spike before
+# the campaign average does. Used by bulk_ads.py and ad-level health checks.
+AD_CPL_SCALE      = 30.00   # < this  -> scale up
+AD_CPL_ACCEPTABLE = 35.00   # ≤ this  -> acceptable
+AD_CPL_WARNING    = 50.00   # ≤ this  -> warning
+AD_CPL_PAUSE      = 50.00   # > this  -> pause candidate
+
+AD_CPQL_SCALE      = 60.00  # < this  -> scale up
+AD_CPQL_ACCEPTABLE = 75.00  # ≤ this  -> acceptable
+AD_CPQL_WARNING    = 85.00  # ≤ this  -> warning
+AD_CPQL_PAUSE      = 90.00  # > this  -> pause candidate
 
 # Qualification / ROAS targets
 QUAL_RATE_TARGET = 0.30   # ≥ 30 %
