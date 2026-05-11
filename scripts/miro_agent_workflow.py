@@ -1,9 +1,9 @@
 """
 scripts/miro_agent_workflow.py
 ===============================
-Qoyod Performance Agent — simplified 4-column architecture.
+Qoyod Performance Agent — 4-column architecture with two brain tracks.
 
-    INPUTS  →  BRAIN  →  ACTIONS  →  OUTPUTS
+    INPUTS  →  BRAIN (2 tracks)  →  ACTIONS  →  OUTPUTS
 
 Run:
     python scripts/miro_agent_workflow.py
@@ -91,32 +91,32 @@ def build():
     _delete_all_existing()
 
     # ── Layout ─────────────────────────────────────────────────────────────────
-    CX = {"inputs": -1050, "brain": -250, "actions": 500, "outputs": 1250}
-    W  = 310
-    H  = 115
-    G  = 35       # gap between rows
-    TOP = -900
+    CX   = {"inputs": -1100, "brain": -200, "actions": 620, "outputs": 1400}
+    W    = 310
+    H    = 118
+    G    = 30       # gap between rows
+    TOP  = -900
 
     # ── Title ──────────────────────────────────────────────────────────────────
     _post("/texts", {
         "data": {"content": "<b>Qoyod Performance Agent</b>"},
         "style": {"fontSize": "36", "color": "#0f172a", "textAlign": "center"},
-        "position": {"x": 100, "y": -1120, "origin": "center"},
-        "geometry": {"width": 900},
+        "position": {"x": 150, "y": -1130, "origin": "center"},
+        "geometry": {"width": 1000},
     })
     _post("/texts", {
-        "data": {"content": "Runs nightly 03:00 Riyadh  ·  Nothing executes without human ✅"},
-        "style": {"fontSize": "15", "color": "#64748b", "textAlign": "center"},
-        "position": {"x": 100, "y": -1065, "origin": "center"},
-        "geometry": {"width": 1000},
+        "data": {"content": "Two runtimes: Nightly 03:00 Riyadh (operational) · Every 6h (reporting)  ·  Nothing executes without human ✅"},
+        "style": {"fontSize": "14", "color": "#64748b", "textAlign": "center"},
+        "position": {"x": 150, "y": -1075, "origin": "center"},
+        "geometry": {"width": 1300},
     })
 
     # ── Column headers ─────────────────────────────────────────────────────────
     headers = [
-        ("inputs",  "INPUTS",   "What the agent reads",           "#1e40af"),
-        ("brain",   "BRAIN",    "Claude + code router",           "#7c3aed"),
-        ("actions", "ACTIONS",  "What the agent does",            "#15803d"),
-        ("outputs", "OUTPUTS",  "Where things land",              "#0f172a"),
+        ("inputs",  "INPUTS",   "What the agent reads",              "#1e40af"),
+        ("brain",   "BRAIN",    "Two tracks: operational + reporting","#7c3aed"),
+        ("actions", "ACTIONS",  "What the agent does",               "#15803d"),
+        ("outputs", "OUTPUTS",  "Where things land",                 "#0f172a"),
     ]
     for col, title, sub, color in headers:
         _post("/texts", {
@@ -129,15 +129,15 @@ def build():
 
     # ── INPUTS — 5 nodes ───────────────────────────────────────────────────────
     in_data = [
-        ("Ad Platforms\nGoogle · Meta · Snapchat\nTikTok · LinkedIn · Microsoft",
+        ("Ad Platforms\nMeta · Google Ads · TikTok\nLinkedIn",
          "#dbeafe", "#1e40af"),
         ("Adspirer MCP\nExecution API\nBudget · pause · keyword mutations",
          "#e0f2fe", "#0369a1"),
-        ("HubSpot CRM\nLeads · Deals · Webhooks\nRead-only by default",
+        ("HubSpot CRM\nLeads (Lead Module only)\nDeals · Read-only by default",
          "#fecaca", "#991b1b"),
-        ("BigQuery\nCross-channel data layer\ncampaigns_daily · leads · deals",
+        ("BigQuery\nqoyod_marketing dataset\nt_* materialized tables (6h refresh)",
          "#fde68a", "#a16207"),
-        ("Anthropic Claude API\nReasoning engine\nclaude-sonnet-4-6",
+        ("Anthropic Claude API\nReasoning + analysis\nclaude-sonnet-4-6",
          "#f9a8d4", "#9d174d"),
     ]
     in_ids = []
@@ -146,27 +146,45 @@ def build():
                   fill=fill, border=border, font_size=13)
         in_ids.append(n)
 
-    # ── BRAIN — 2 nodes ────────────────────────────────────────────────────────
-    # Collapse Media Buyer + Analyst + Strategist into one Analysis node
-    brain_mid = TOP + 1.5 * (H + G)   # vertically centred in the input span
-
+    # ── BRAIN — 4 nodes in 2 tracks ───────────────────────────────────────────
+    # Track A: Operational (nightly 03:00) — top half
+    track_a_top = TOP + 0.0 * (H + G)
     analysis = shape(
-        "🧠 ANALYSIS (Claude)\nCPQL/CPL health · anomaly detection\nAudit · weekly plans · creative",
-        CX["brain"], brain_mid - (H + G) // 2,
+        "🧠 ANALYSIS — Nightly 03:00\nCPQL/CPL health · Anomaly detection\nKeyword audit (Sundays) · Ad audit",
+        CX["brain"], track_a_top,
         w=W, h=H + 20, fill="#7c3aed", border="#4c1d95",
         font_color="#ffffff", font_size=13)
 
     task_flow = shape(
-        "🤖 TASK-FLOW (code)\nRoutes findings → Asana + #approvals\nNever auto-executes",
-        CX["brain"], brain_mid + (H + G) // 2 + 20,
+        "🤖 TASK-FLOW (code)\nRoutes findings → Asana + #approvals\nNever auto-executes pause/scale",
+        CX["brain"], track_a_top + (H + G) + 20,
         w=W, h=H, fill="#0f172a", border="#0f172a",
+        font_color="#ffffff", font_size=13)
+
+    # Divider label between tracks
+    label("── Reporting track (every 6h) ──", CX["brain"],
+          track_a_top + 2 * (H + G) + 60, w=W + 40, font=11, color="#94a3b8")
+
+    # Track B: Reporting (6h) — bottom half
+    track_b_top = track_a_top + 2 * (H + G) + 90
+
+    data_refresh = shape(
+        "⟳ DATA REFRESH — Every 6h\n22 collectors → BQ upsert\nView materialisation → t_* tables\nHubSpot 30-day lead resync",
+        CX["brain"], track_b_top,
+        w=W, h=H + 20, fill="#0e7490", border="#155e75",
+        font_color="#ffffff", font_size=13)
+
+    health_checks = shape(
+        "🩺 HEALTH CHECKS — Hourly 09–17\nAll connectors + APIs + BQ\nResults logged → Activity Dashboard\nOn-demand via dashboard button",
+        CX["brain"], track_b_top + (H + G) + 20,
+        w=W, h=H + 10, fill="#374151", border="#111827",
         font_color="#ffffff", font_size=13)
 
     # ── ACTIONS — 3 nodes ──────────────────────────────────────────────────────
     act_top = TOP + 0.3 * (H + G)
 
     approval_req = shape(
-        "APPROVAL REQUEST\nScale/pause → 1 batch msg\nOptimize/junk/drill → 1 digest\nMax 2 msgs to #approvals",
+        "APPROVAL DIGEST\n#approvals — max 2 msgs/night\nScale + pause in one batch\nOptimize/junk → Asana only",
         CX["actions"], act_top,
         w=W, h=H + 20, fill="#fef3c7", border="#92400e", font_size=13)
 
@@ -176,12 +194,12 @@ def build():
         w=W, h=H + 10, fill="#dcfce7", border="#15803d", font_size=13)
 
     notify_box = shape(
-        "NOTIFY\n1 message → #notify\nPerformance · Alerts\n#approvals summary · Asana counts",
+        "NOTIFY\n1 message → #notify\nPerformance summary · Alerts\nAsana counts",
         CX["actions"], act_top + 2 * (H + G) + 30,
-        w=W, h=H + 10, fill="#e0e7ff", border="#4338ca", font_size=13)
+        w=W, h=H, fill="#e0e7ff", border="#4338ca", font_size=13)
 
-    # ── OUTPUTS — 4 nodes ──────────────────────────────────────────────────────
-    out_top = TOP + 0.3 * (H + G)
+    # ── OUTPUTS — 5 nodes ──────────────────────────────────────────────────────
+    out_top = TOP + 0.1 * (H + G)
 
     out_slack = shape(
         "SLACK\n#notify  max 1 msg/night\n#approvals  max 2 msgs/night\n✅/❌ reactions trigger execution",
@@ -189,22 +207,27 @@ def build():
         w=W, h=H + 10, fill="#bfdbfe", border="#1e40af", font_size=13)
 
     out_asana = shape(
-        "ASANA\nPENDING APPROVAL task titles\n6 projects · 7 channels\nOverdue count tracked daily",
+        "ASANA\n6 projects · 7 channels\nPENDING APPROVAL tasks\nOverdue count tracked daily",
         CX["outputs"], out_top + (H + G) + 10,
         w=W, h=H + 10, fill="#fbcfe8", border="#9f1239", font_size=13)
 
-    out_dash = shape(
-        "HTML DASHBOARD\n/paid-performance/latest\nGoogle Drive (persistent)\nCustom date-range API",
+    out_hex = shape(
+        "HEX DASHBOARD\nCampaign · Ad set · Ad · Keyword\nCPL / CPQL / ROAS trends\nRefreshed every 6h via t_* tables",
         CX["outputs"], out_top + 2 * (H + G) + 20,
         w=W, h=H + 10, fill="#bbf7d0", border="#15803d", font_size=13)
 
-    out_bq = shape(
-        "BIGQUERY\ncampaigns_daily · leads · deals\nCase-insensitive UTM join\nRefreshed nightly",
+    out_activity = shape(
+        "ACTIVITY DASHBOARD\n/activity — Agent transparency\nTasks done · Ads paused · Approval rate\nData Hygiene health checks",
         CX["outputs"], out_top + 3 * (H + G) + 30,
+        w=W, h=H + 10, fill="#c7d2fe", border="#4338ca", font_size=13)
+
+    out_bq = shape(
+        "BIGQUERY\nt_* tables refreshed every 6h\nUTC stored · Riyadh for UI\nAll spend in USD",
+        CX["outputs"], out_top + 4 * (H + G) + 40,
         w=W, h=H, fill="#fde68a", border="#a16207", font_size=13)
 
     # ── Connections ────────────────────────────────────────────────────────────
-    # All inputs → analysis
+    # All inputs → analysis (operational track)
     for src in in_ids:
         connect(src["id"], analysis["id"], color="#94a3b8")
 
@@ -212,8 +235,8 @@ def build():
     connect(analysis["id"], task_flow["id"], "findings", "#7c3aed")
 
     # task-flow → actions
-    connect(task_flow["id"], approval_req["id"], "scale/pause/optimize", "#d97706")
-    connect(task_flow["id"], notify_box["id"],   "summary",              "#4338ca")
+    connect(task_flow["id"], approval_req["id"], "scale/pause", "#d97706")
+    connect(task_flow["id"], notify_box["id"],   "summary",     "#4338ca")
 
     # approval_req → slack (#approvals)
     connect(approval_req["id"], out_slack["id"], "posts to #approvals", "#d97706")
@@ -227,17 +250,26 @@ def build():
     # execute → asana
     connect(execute["id"], out_asana["id"], "updates task", "#9f1239")
 
-    # notify → slack + dashboard
-    connect(notify_box["id"], out_slack["id"],  "1 msg to #notify", "#4338ca")
-    connect(notify_box["id"], out_dash["id"],   "dashboard URL",    "#15803d")
-    connect(notify_box["id"], out_asana["id"],  "task counts",      "#9f1239")
+    # task-flow → asana
+    connect(task_flow["id"], out_asana["id"], "creates tasks", "#9f1239")
 
-    # bigquery feeds analysis
+    # notify → slack + dashboard
+    connect(notify_box["id"], out_slack["id"], "1 msg to #notify", "#4338ca")
+    connect(notify_box["id"], out_hex["id"],   "dashboard URL",    "#15803d")
+
+    # reporting track
+    connect(in_ids[3]["id"], data_refresh["id"], "reads/writes", "#a16207")
+    connect(data_refresh["id"], out_bq["id"],    "upsert + t_*", "#a16207")
+    connect(data_refresh["id"], out_hex["id"],   "triggers Hex re-run", "#15803d")
+
+    # health checks → activity dashboard
+    connect(health_checks["id"], out_activity["id"], "logs results", "#4338ca")
+
+    # BigQuery feeds analysis
     connect(in_ids[3]["id"], analysis["id"], "reads", "#a16207")
 
     print("[miro] Main flow done. Rebuilding use cases...")
 
-    # Always rebuild use cases immediately after — flow script clears the whole board
     import subprocess, sys
     subprocess.run(
         [sys.executable, str(Path(__file__).parent / "miro_use_cases_v2.py")],

@@ -470,10 +470,10 @@ def _post_weekly_summary(spikes: list | None = None,
 
 
 def _run_health_check():
-    """Run the self-contained health check and post results to Slack."""
+    """Run health check — results logged to BQ only, visible in Activity Dashboard."""
     try:
         from scripts.health_check import main as hc_main
-        hc_main(post_slack=True)
+        hc_main(post_slack=False)
     except Exception as e:
         print(f"[ops-scheduler] Health check failed: {e}")
         traceback.print_exc()
