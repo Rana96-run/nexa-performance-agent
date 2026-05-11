@@ -25,7 +25,7 @@ load_dotenv(override=True)
 CLIENT_ID     = os.getenv("LI_CLIENT_ID")
 CLIENT_SECRET = os.getenv("LI_CLIENT_SECRET")
 REDIRECT_URI  = os.getenv("LI_REDIRECT_URI", "http://localhost:8080/callback")
-SCOPES        = "r_ads r_ads_reporting rw_ads r_basicprofile openid"
+SCOPES        = "r_ads r_ads_reporting rw_ads r_basicprofile openid profile email"
 
 _code: str | None = None
 _done = threading.Event()
