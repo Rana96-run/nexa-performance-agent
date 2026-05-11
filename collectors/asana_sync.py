@@ -48,6 +48,22 @@ def _asana_client():
     return asana.ApiClient(cfg)
 
 
+def _all_projects() -> dict[str, str]:
+    """Return every Asana project the agent creates tasks in.
+
+    Merges ASANA_PROJECTS (env-var-backed), ASANA_OPTIMIZATION_PROJECTS
+    (per-channel), and ASANA_DAILY_PROJECTS (per-function) into one flat
+    {project_key: project_id} dict, skipping any None/empty IDs.
+    """
+    from config import ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS
+    merged: dict[str, str] = {}
+    for d in (ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS, ASANA_DAILY_PROJECTS):
+        for k, v in d.items():
+            if v:
+                merged[k] = v
+    return merged
+
+
 def _fetch_task(api: asana.TasksApi, gid: str) -> dict | None:
     try:
         t = api.get_task(gid, {"opt_fields": "gid,name,completed,completed_at,assignee.name,due_on"})
@@ -258,8 +274,6 @@ def sync_user_tasks() -> int:
     (deduplicates against previous sync runs via a BQ lookup).
     Returns number of new user tasks found.
     """
-    from config import ASANA_PROJECTS
-
     bq = get_bq()
     P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
@@ -302,7 +316,7 @@ def sync_user_tasks() -> int:
     cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     found = 0
-    for project_key, project_id in ASANA_PROJECTS.items():
+    for project_key, project_id in _all_projects().items():
         try:
             page = tasks_api.get_tasks_for_project(
                 project_id,
@@ -352,8 +366,6 @@ def backfill_from_projects() -> int:
 
     Returns count of newly seeded tasks.
     """
-    from config import ASANA_PROJECTS
-
     bq = get_bq()
     P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D  = os.getenv("BQ_DATASET",    "qoyod_marketing")
@@ -389,7 +401,7 @@ def backfill_from_projects() -> int:
     status_rows: list[dict] = []  # collect for bulk write to asana_task_status
     now_utc   = datetime.now(timezone.utc)
 
-    for project_key, project_id in ASANA_PROJECTS.items():
+    for project_key, project_id in _all_projects().items():
         if not project_id:
             continue
         try:
