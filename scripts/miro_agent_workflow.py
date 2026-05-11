@@ -260,7 +260,15 @@ def build():
         box(text, x, rules_y + 140, w=rule_bw, h=110, fill=fill, border=border,
             font_size=12)
 
-    print(f"[miro] Board built: https://miro.com/app/board/{BOARD}")
+    print(f"[miro] Main flow done — building use cases...")
+
+    import subprocess, sys
+    from pathlib import Path
+    subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "miro_use_cases_v2.py")],
+        check=True,
+    )
+    print(f"[miro] Board fully rebuilt: https://miro.com/app/board/{BOARD}")
 
 
 if __name__ == "__main__":
