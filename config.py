@@ -254,14 +254,17 @@ DAYS_FOR_PAUSE_DECISION    = 14
 SCALE_PAUSE_DIGEST_INTERVAL_DAYS = 4   # Slack #approvals digest cadence — only post every N days
 ZERO_CONV_SPEND_THRESHOLD  = 8     # pause ad if spend > $8 with zero conv
 ZERO_CONV_DAYS_THRESHOLD   = 7
-# Keyword pause rules (Google Ads / Microsoft Ads) — two independent triggers:
-#   Rule A: spend > $80, zero conversions, running ≥ 7 days   → pause
-#   Rule B: CPL > $80, 1+ conversions (low quality), ≥ 14 days → pause
-# Note: wasted-spend KEYWORDS are paused, NOT added as negatives. The whole
-# keyword (and the spend at risk) is the issue, not just one matched query.
-KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv threshold
-KEYWORD_PAUSE_CPL          = 80.00   # Rule B: poor-CPL threshold (1+ conv)
-KEYWORD_PAUSE_DAYS         = 10      # Rule A window — matches MIN_KEYWORD_AGE_DAYS (10-day rule)
+# Keyword pause rules (Google Ads + Microsoft Ads) — three independent triggers:
+#   Rule A: spend > $80, 0 conversions, active ≥ 10 days        → pause
+#   Rule B: converting keyword but CPA > $90, active ≥ 10 days  → pause
+#   Rule C: QS < 5 AND lost IS (rank) > 70%, 0 conv for 7 days  → pause
+# Note: wasted-spend KEYWORDS are paused, NOT added as negatives.
+KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv spend threshold
+KEYWORD_PAUSE_CPA          = 90.00   # Rule B: high-CPA threshold (converting keywords)
+KEYWORD_PAUSE_DAYS         = 10      # Rules A+B window (days)
+KEYWORD_QS_PAUSE_THRESHOLD = 5       # Rule C: QS < 5
+KEYWORD_IS_LOST_THRESHOLD  = 0.70    # Rule C: lost search IS (rank) > 70%
+KEYWORD_QS_PAUSE_DAYS      = 7       # Rule C window (days)
 
 # Minimum age before a NON-CONVERTING keyword can be paused. A 3-day-old
 # keyword with $0 spend and 0 conv shouldn't be paused — it hasn't had time

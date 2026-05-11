@@ -360,80 +360,143 @@ def audit_search_terms(days: int = 30) -> dict:
 
 # ─── 4. Non-converting keyword auto-pause ────────────────────────────────────
 
-def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
+def audit_and_pause_nonconverting_keywords(days: int = 10) -> list[dict]:
     """
-    Find keywords that have been ENABLED for {days}+ days with spend >
-    KEYWORD_PAUSE_SPEND and 0 HubSpot-qualified leads, then PAUSE them immediately.
-
-    Uses HubSpot Lead Module (hubspot_leads_module_daily) as the lead source —
-    NOT Google Ads conversion tracking alone.
+    Pause keywords matching any of three rules:
+      Rule A: spend > $80, 0 conversions, active ≥ 10 days
+      Rule B: converting keyword but CPA > $90, active ≥ 10 days
+      Rule C: QS < 5 AND lost IS (rank) > 70%, 0 conversions over 7 days
     """
-    from config import KEYWORD_PAUSE_SPEND
+    from config import (KEYWORD_PAUSE_SPEND, KEYWORD_PAUSE_CPA, KEYWORD_PAUSE_DAYS,
+                        KEYWORD_QS_PAUSE_THRESHOLD, KEYWORD_IS_LOST_THRESHOLD,
+                        KEYWORD_QS_PAUSE_DAYS, MIN_KEYWORD_AGE_DAYS)
     from collectors.google_ads import get_client as _get_client
     from collectors.google_ads_bq import _customer_ids
 
-    client = _get_client()
-    ga     = client.get_service("GoogleAdsService")
+    client   = _get_client()
+    ga       = client.get_service("GoogleAdsService")
     crit_svc = client.get_service("AdGroupCriterionService")
 
-    end_date   = date.today() - timedelta(days=1)
-    start_date = end_date - timedelta(days=days - 1)
+    # Rule A+B use 10-day window; Rule C uses 7-day window — run both
+    windows = {
+        "ab": KEYWORD_PAUSE_DAYS,
+        "c":  KEYWORD_QS_PAUSE_DAYS,
+    }
 
-    query = f"""
-      SELECT
-        ad_group_criterion.resource_name,
-        ad_group_criterion.keyword.text,
-        ad_group_criterion.keyword.match_type,
-        ad_group.name,
-        campaign.name,
-        campaign.id,
-        customer.currency_code,
-        metrics.cost_micros,
-        metrics.conversions
-      FROM keyword_view
-      WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
-        AND ad_group_criterion.status = 'ENABLED'
-    """
+    from collections import defaultdict
+    # key = resource_name → aggregated metrics across the relevant window
+    kw_data: dict[str, dict] = {}
 
-    from config import MIN_KEYWORD_AGE_DAYS
+    from collectors.currency import normalize_currency, to_usd
     from executors.keyword_policy import keyword_first_impression_dates, days_since
 
-    paused: list[dict] = []
-    for cid in _customer_ids():
-        try:
-            rows = list(ga.search(customer_id=cid, query=query))
-        except Exception as e:
-            print(f"[kw-pause] account {cid} skipped: {e}")
-            continue
-
-        # First pass: build the list of pause candidates (over spend, 0 conv)
-        candidates = []
-        for r in rows:
-            from collectors.currency import normalize_currency, to_usd
-            cur   = normalize_currency(getattr(r.customer, "currency_code", None))
-            spend = to_usd(r.metrics.cost_micros / 1_000_000, cur)
-            conv  = float(r.metrics.conversions)
-            if spend < KEYWORD_PAUSE_SPEND or conv > 0:
-                continue   # under spend threshold or already converting
-            candidates.append((r, spend, conv))
-
-        if not candidates:
-            continue
-
-        # Apply age guard — only pause keywords ≥ MIN_KEYWORD_AGE_DAYS old.
-        firsts = keyword_first_impression_dates(
-            client, cid,
-            [r.ad_group_criterion.resource_name for r, _, _ in candidates],
-        )
-
-        for r, spend, conv in candidates:
-            rn = r.ad_group_criterion.resource_name
-            first = firsts.get(rn)
-            age = days_since(first)
-            if age < MIN_KEYWORD_AGE_DAYS:
-                print(f"[kw-pause] AGE-GUARD skip: '{r.ad_group_criterion.keyword.text}' "
-                      f"({age}d old, threshold {MIN_KEYWORD_AGE_DAYS}d)")
+    for win_name, win_days in windows.items():
+        end_date   = date.today() - timedelta(days=1)
+        start_date = end_date - timedelta(days=win_days - 1)
+        query = f"""
+          SELECT
+            ad_group_criterion.resource_name,
+            ad_group_criterion.keyword.text,
+            ad_group_criterion.keyword.match_type,
+            ad_group_criterion.quality_info.quality_score,
+            ad_group.name,
+            campaign.name,
+            campaign.id,
+            customer.currency_code,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.search_rank_lost_impression_share
+          FROM keyword_view
+          WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
+            AND ad_group_criterion.status = 'ENABLED'
+        """
+        for cid in _customer_ids():
+            try:
+                rows = list(ga.search(customer_id=cid, query=query))
+            except Exception as e:
+                print(f"[kw-pause] account {cid} skipped ({win_name}): {e}")
                 continue
+            for r in rows:
+                rn    = r.ad_group_criterion.resource_name
+                cur   = normalize_currency(getattr(r.customer, "currency_code", None))
+                spend = to_usd(r.metrics.cost_micros / 1_000_000, cur)
+                conv  = float(r.metrics.conversions)
+                qs    = r.ad_group_criterion.quality_info.quality_score or 0
+                lost  = float(r.metrics.search_rank_lost_impression_share or 0)
+                if rn not in kw_data:
+                    kw_data[rn] = {
+                        "r": r, "cid": cid,
+                        "spend_ab": 0, "conv_ab": 0,
+                        "spend_c": 0,  "conv_c": 0,
+                        "qs": qs, "lost_rank": lost,
+                    }
+                if win_name == "ab":
+                    kw_data[rn]["spend_ab"] += spend
+                    kw_data[rn]["conv_ab"]  += conv
+                else:
+                    kw_data[rn]["spend_c"] += spend
+                    kw_data[rn]["conv_c"]  += conv
+                # Always keep latest QS + lost IS
+                if qs:
+                    kw_data[rn]["qs"]        = qs
+                    kw_data[rn]["lost_rank"]  = lost
+
+    paused: list[dict] = []
+
+    # Group by customer for age guard
+    by_cid: dict[str, list] = defaultdict(list)
+    for rn, d in kw_data.items():
+        rule = None
+        spend_ab = d["spend_ab"]
+        conv_ab  = d["conv_ab"]
+        spend_c  = d["spend_c"]
+        conv_c   = d["conv_c"]
+        qs       = d["qs"]
+        lost     = d["lost_rank"]
+        cpa      = spend_ab / conv_ab if conv_ab > 0 else None
+
+        if spend_ab >= KEYWORD_PAUSE_SPEND and conv_ab == 0:
+            rule = "A"   # wasted spend, no conversion
+        elif conv_ab > 0 and cpa is not None and cpa > KEYWORD_PAUSE_CPA:
+            rule = "B"   # converting but CPA too high
+        elif (0 < qs < KEYWORD_QS_PAUSE_THRESHOLD
+              and lost > KEYWORD_IS_LOST_THRESHOLD
+              and conv_c == 0):
+            rule = "C"   # low QS + high lost IS + not converting
+
+        if rule:
+            by_cid[d["cid"]].append((rn, d, rule))
+
+    for cid, entries in by_cid.items():
+        age_guard_days = MIN_KEYWORD_AGE_DAYS
+        firsts = keyword_first_impression_dates(
+            client, cid, [rn for rn, _, _ in entries]
+        )
+        for rn, d, rule in entries:
+            r   = d["r"]
+            age = days_since(firsts.get(rn))
+            min_age = KEYWORD_QS_PAUSE_DAYS if rule == "C" else age_guard_days
+            if age < min_age:
+                print(f"[kw-pause] AGE-GUARD skip ({rule}): "
+                      f"'{r.ad_group_criterion.keyword.text}' ({age}d < {min_age}d)")
+                continue
+
+            # Zero-active-keyword guard
+            try:
+                enabled_q = f"""
+                  SELECT ad_group_criterion.resource_name
+                  FROM ad_group_criterion
+                  WHERE ad_group.resource_name = '{r.ad_group.resource_name}'
+                    AND ad_group_criterion.status = 'ENABLED'
+                    AND ad_group_criterion.type = 'KEYWORD'
+                """
+                enabled = list(ga.search(customer_id=cid, query=enabled_q))
+                if len(enabled) <= 1:
+                    print(f"[kw-pause] SOLE-KW skip ({rule}): "
+                          f"'{r.ad_group_criterion.keyword.text}' is last keyword")
+                    continue
+            except Exception:
+                pass
 
             try:
                 op   = client.get_type("AdGroupCriterionOperation")
@@ -446,6 +509,9 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
             except Exception as e:
                 status = f"error: {e}"
 
+            spend_ab = d["spend_ab"]
+            conv_ab  = d["conv_ab"]
+            cpa_val  = round(spend_ab / conv_ab, 2) if conv_ab > 0 else None
             paused.append({
                 "channel":    "google_ads",
                 "customer_id": cid,
@@ -454,13 +520,20 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
                 "ad_group":   r.ad_group.name,
                 "keyword":    r.ad_group_criterion.keyword.text,
                 "match_type": r.ad_group_criterion.keyword.match_type.name,
-                "spend":      round(spend, 2),
-                "conv":       conv,
+                "spend":      round(spend_ab, 2),
+                "conv":       conv_ab,
+                "cpa":        cpa_val,
+                "qs":         d["qs"],
+                "lost_rank":  round(d["lost_rank"], 3),
+                "rule":       rule,
                 "days":       days,
                 "status":     status,
             })
-            print(f"[kw-pause] {status}: '{r.ad_group_criterion.keyword.text}' "
-                  f"({r.campaign.name}) spend=${spend:.2f} conv=0")
+            print(f"[kw-pause] {status} (Rule {rule}): "
+                  f"'{r.ad_group_criterion.keyword.text}' "
+                  f"({r.campaign.name}) spend=${spend_ab:.2f} "
+                  f"conv={conv_ab} cpa={cpa_val} qs={d['qs']} "
+                  f"lost_IS={d['lost_rank']:.0%}")
 
     actually_paused = [p for p in paused if p["status"] == "paused"]
     if actually_paused:
@@ -470,7 +543,8 @@ def audit_and_pause_nonconverting_keywords(days: int = 7) -> list[dict]:
                 role="keyword_management", action="keywords_paused",
                 channel="google_ads", rows_affected=len(actually_paused),
                 details={"keywords": [p["keyword"] for p in actually_paused[:20]],
-                         "days_window": days},
+                         "rules": {r: sum(1 for p in actually_paused if p["rule"] == r)
+                                   for r in ("A", "B", "C")}},
             )
         except Exception:
             pass
@@ -576,7 +650,7 @@ def run_full_audit(days: int = 14) -> dict:
     qs_findings   = audit_quality_score(days=days)
     search_terms  = audit_search_terms(days=30)
     if _is_weekly_keyword_day():
-        kw_paused = audit_and_pause_nonconverting_keywords(days=7)
+        kw_paused = audit_and_pause_nonconverting_keywords(days=10)
     else:
         kw_paused = []
         print("[kw-pause] skipped — runs weekly on Sunday Riyadh (set FORCE_WEEKLY_KEYWORDS=1 to override)")
