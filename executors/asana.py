@@ -50,23 +50,48 @@ _ACTION_PRIORITY = {
     "refresh":  "Low",
 }
 
-# ── Custom field GIDs (workspace-level, present on all projects) ──────────────
-# Estimated time — number field (minutes). GID confirmed from all opt + daily projects.
-_CF_ESTIMATED_TIME     = "1207977944194162"
-# Status — enum field. Option GID for "To do" (so tasks aren't blank on creation).
-_CF_STATUS             = "1208009827500816"
-_CF_STATUS_TODO        = "1208009827500819"   # "To do"
+# ── Custom field GIDs ─────────────────────────────────────────────────────────
+# Estimated time — workspace-level number field (minutes).
+# Confirmed present in: Google Ads, Meta, Snapchat optimization projects.
+_CF_ESTIMATED_TIME = "1207977944194162"
 
 # How long (minutes) each action type is estimated to take.
-# Drives the "Estimated time" column visible in all project boards.
 _ACTION_ESTIMATED_MINUTES: dict[str, int] = {
-    "pause":    15,   # Review findings, execute platform pause
-    "scale":    20,   # Review data, lift budget in platform
-    "optimize": 30,   # Analyse + apply bid/targeting/copy changes
-    "fix":      45,   # Diagnose + fix tracking or setup issue
-    "launch":   30,   # Campaign / adset / ad creation
-    "refresh":  20,   # Creative swap or ad copy refresh
-    "exclude":  10,   # Add placement / audience exclusion
+    "pause":    15,
+    "scale":    20,
+    "optimize": 30,
+    "fix":      45,
+    "launch":   30,
+    "refresh":  20,
+    "exclude":  10,
+}
+
+# Priority custom field — varies per project (different GIDs, different enum options).
+# Confirmed via Asana API 2026-05-11.
+# Format: project_id -> {field_gid, priority_label -> enum_option_gid}
+_PROJECT_PRIORITY_CF: dict[str, dict] = {
+    "1213239419217795": {   # Google Ads Optimization (Recovery)
+        "field_gid": "1213239419217798",
+        "Critical": "1213239419217800",
+        "High":     "1213239419217799",
+        "Medium":   "1213239419217801",
+        "Low":      "1213239419217801",   # map Low → Medium
+    },
+    "1213294555250809": {   # Bing Ads Scaling
+        "field_gid": "1213294555250812",
+        "Critical": "1213294555250813",   # map Critical → High
+        "High":     "1213294555250813",
+        "Medium":   "1213294555250814",
+        "Low":      "1213294555250814",   # map Low → Medium
+    },
+}
+
+# Projects confirmed to have the Estimated time field (verified 2026-05-11).
+_PROJECTS_WITH_ESTIMATED_TIME = {
+    "1213239419217795",   # Google Ads Optimization
+    "1213280413868927",   # Meta Ads (Recovery)
+    "1214135546324721",   # Snapchat Ads Optimization
+    "1214135614950965",   # TikTok Ads Optimization
 }
 
 
@@ -278,16 +303,25 @@ def create_task(
     if assignee_gid:
         task_data["assignee"] = assignee_gid
 
-    # Populate custom fields visible in all project boards.
-    # "Estimated time" (workspace-level number field) works in every project.
-    # "Status" → "To do" only for daily_activity projects — optimization
-    #   projects don't have this field and the API returns 400 if we try to set it.
+    # Populate custom fields for the target project.
+    # Only set fields confirmed present — avoids 400 errors from missing fields.
     cf: dict = {}
-    est = _ACTION_ESTIMATED_MINUTES.get((action or "").lower())
-    if est is not None:
-        cf[_CF_ESTIMATED_TIME] = est
-    if project_key == "daily_activity":
-        cf[_CF_STATUS] = _CF_STATUS_TODO
+    act_lower = (action or "").lower()
+
+    # Estimated time — only for projects confirmed to have this field
+    if project_id in _PROJECTS_WITH_ESTIMATED_TIME:
+        est = _ACTION_ESTIMATED_MINUTES.get(act_lower)
+        if est is not None:
+            cf[_CF_ESTIMATED_TIME] = est
+
+    # Priority — per-project enum field
+    if project_id in _PROJECT_PRIORITY_CF:
+        priority = _ACTION_PRIORITY.get(act_lower, "Medium")
+        pmap = _PROJECT_PRIORITY_CF[project_id]
+        enum_gid = pmap.get(priority) or pmap.get("Medium")
+        if enum_gid:
+            cf[pmap["field_gid"]] = enum_gid
+
     if cf:
         task_data["custom_fields"] = cf
 
