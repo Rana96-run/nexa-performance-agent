@@ -113,6 +113,17 @@ the fix, not just the symptom.
   `/crm/v3/objects/0-136/search`, not `/contacts/search`.
 - **READ-ONLY.** Never PATCH/DELETE/CREATE HubSpot objects without explicit
   user approval in Slack. User reminded this multiple times.
+- **`HUBSPOT_ACCESS_TOKEN` is NOT in the local `.env` — it lives on Railway.**
+  Any local CLI run (`python -m collectors.hubspot_leads_bq mirror`) MUST use
+  `railway run python -m collectors.hubspot_leads_bq mirror`. Without `railway run`
+  the token is `None`, every HubSpot API call returns 401, and the failure
+  happens inside `_load_pipelines()` at startup before any data is fetched.
+  Confirmed 2026-05-11.
+- **Unicode arrows crash `print()` on Windows** — `→` (`→`) maps to
+  `undefined` under `cp1252` (Windows default console encoding). Replace with
+  `->` in any `print()` or `f-string` that is not inside a `sys.stdout.reconfigure`
+  block. Symptom: `UnicodeEncodeError: 'charmap' codec can't encode character '→'`
+  before any work is done.
 
 ## Meta — November 2025 deprecations
 

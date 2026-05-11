@@ -772,7 +772,7 @@ def sync_full_mirror() -> int:
     # Pull one extra day into the future to catch any leads created today
     end_date = date.today() + timedelta(days=1)
 
-    print(f"[mirror] full re-pull {min_date} → {date.today()} ...")
+    print(f"[mirror] full re-pull {min_date} -> {date.today()} ...")
 
     # ── Fetch all leads in 7-day createdate windows ───────────────────────────
     all_rows  = []
