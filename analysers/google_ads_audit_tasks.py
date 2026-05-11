@@ -291,26 +291,11 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
                      "next_review_day": "Sunday Riyadh"},
         )
 
-    # ── 4. Wasted-spend search terms → pause the matched keyword (not negate) ──
+    # ── 4. Wasted-spend search terms — handled by keyword pause audit ──────────
+    # Non-converting keywords are paused by audit_and_pause_nonconverting_keywords()
+    # after 10 days (MIN_KEYWORD_AGE_DAYS). No separate task needed here.
     if add_neg:
-        body = (f"{len(add_neg)} search terms spent $25+ each with 0 conversions.\n\n"
-                f"**Action:** Review and pause the keywords that are matching these wasted queries.\n"
-                f"**How:** Run `python scripts/bulk_keywords.py audit` to see which keywords "
-                f"are pulling these queries, then pause them.\n\n"
-                f"These terms are NOT added as negatives — they may be relevant queries "
-                f"triggered by an overly broad keyword.\n\n"
-                + _term_card(add_neg[:50], mode="negative"))
-
-        gid = create_task(
-            title=f"Google Ads — Review {len(add_neg)} wasted-spend queries → pause matched keywords",
-            description=body,
-            project_key="daily_activity",
-            task_type="Keyword",
-            channel="google_ads",
-            asset_level="keyword",
-            action="pause",
-        )
-        out.append((f"wasted queries ({len(add_neg)})", gid))
+        print(f"[audit-tasks] {len(add_neg)} wasted-spend search terms — keyword audit will handle")
 
     # ── 4b. Always-negative auto-executed (silent log) ────────────────────────
     if auto_neg:

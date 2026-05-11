@@ -107,24 +107,10 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             details={"keywords": [k["keyword"] for k in add_kw[:50]]},
         )
 
-    # 4. Wasted-spend search terms → pause matched keywords (not negate)
+    # 4. Wasted-spend search terms — handled by keyword pause audit
+    # Non-converting keywords paused by keyword audit after 10 days. No task here.
     if add_neg:
-        body = (f"{len(add_neg)} Microsoft Ads search terms spent $25+ each with 0 conversions.\n\n"
-                f"**Action:** Review and pause the keywords matching these queries.\n"
-                f"**How:** Run `python scripts/bulk_keywords.py audit --channel microsoft_ads`.\n\n"
-                f"These terms are NOT added as negatives — they may be triggered by a "
-                f"broad keyword that needs pausing, not the query itself.\n\n"
-                + _term_card(add_neg[:50], mode="negative"))
-        gid = create_task(
-            title=f"Microsoft Ads — Review {len(add_neg)} wasted-spend queries → pause matched keywords",
-            description=body,
-            project_key="daily_activity",
-            task_type="Keyword",
-            channel="microsoft_ads",
-            asset_level="keyword",
-            action="pause",
-        )
-        out.append((f"MS wasted queries ({len(add_neg)})", gid))
+        print(f"[ms-audit-tasks] {len(add_neg)} wasted-spend search terms — keyword audit will handle")
 
     # 4b. Auto-negative direct-executed (always-negative policy matches)
     if auto_neg:

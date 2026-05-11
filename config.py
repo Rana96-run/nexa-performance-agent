@@ -259,9 +259,9 @@ ZERO_CONV_DAYS_THRESHOLD   = 7
 #   Rule B: CPL > $80, 1+ conversions (low quality), ≥ 14 days → pause
 # Note: wasted-spend KEYWORDS are paused, NOT added as negatives. The whole
 # keyword (and the spend at risk) is the issue, not just one matched query.
-KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv threshold (was $35 / 14d)
+KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv threshold
 KEYWORD_PAUSE_CPL          = 80.00   # Rule B: poor-CPL threshold (1+ conv)
-KEYWORD_PAUSE_DAYS         = 7       # Rule A window (Rule B uses DAYS_FOR_PAUSE_DECISION)
+KEYWORD_PAUSE_DAYS         = 10      # Rule A window — matches MIN_KEYWORD_AGE_DAYS (10-day rule)
 
 # Minimum age before a NON-CONVERTING keyword can be paused. A 3-day-old
 # keyword with $0 spend and 0 conv shouldn't be paused — it hasn't had time
