@@ -21,6 +21,29 @@ from collectors.bq_writer import upsert_rows, get_client
 load_dotenv()
 TOKEN = os.getenv("HUBSPOT_ACCESS_TOKEN")
 BASE = "https://api.hubapi.com"
+
+# HubSpot returns hs_createdate as a UTC ISO timestamp (e.g. "2026-05-08T22:18:00.000Z").
+# We store the RIYADH date (GMT+3) so BQ dates match what HubSpot displays in the UI.
+# Without this, leads created 00:00-02:59 Riyadh appear on the previous day in BQ.
+_RIYADH = timezone(timedelta(hours=3))
+
+
+def _hs_date_to_riyadh(s: str) -> str:
+    """
+    Convert HubSpot's UTC ISO datetime string to a Riyadh (GMT+3) date string.
+    Input:  "2026-05-08T22:18:00.000Z"  (UTC)
+    Output: "2026-05-09"                (Riyadh date — matches HubSpot UI filter)
+    Falls back to [:10] slice if the string is already a plain date.
+    """
+    if not s:
+        return ""
+    if "T" in s or s.endswith("Z"):
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            return dt.astimezone(_RIYADH).date().isoformat()
+        except ValueError:
+            pass
+    return s[:10]  # already a plain date string
 LEAD_OBJ = "0-136"
 
 PROPERTIES = [
@@ -388,7 +411,7 @@ def _row_from_lead(lead: dict) -> dict | None:
     """
     _load_pipelines()
     p = lead.get("properties", {})
-    created = (p.get("hs_createdate") or "")[:10]
+    created = _hs_date_to_riyadh(p.get("hs_createdate") or "")
     if not created:
         return None
 
@@ -735,9 +758,10 @@ def sync_rolling_window(days: int = 30) -> int:
 
     CLI: python -m collectors.hubspot_leads_bq rolling [days]
     """
-    _RIYADH = timezone(timedelta(hours=3))
+    # since_date is Riyadh date (matches how _hs_date_to_riyadh stores dates)
     since_date = (datetime.now(_RIYADH) - timedelta(days=days)).date()
-    # Convert Riyadh midnight to UTC milliseconds for the HubSpot filter
+    # since_ms: Riyadh midnight in UTC millis — tells HubSpot "give me leads
+    # whose hs_createdate UTC timestamp >= Riyadh midnight that day"
     since_ms = int(datetime(since_date.year, since_date.month, since_date.day,
                             tzinfo=_RIYADH).timestamp() * 1000)
 
