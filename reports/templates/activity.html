@@ -1235,73 +1235,108 @@ a:hover{text-decoration:underline}
   </div>
 
   <!-- ── Data Hygiene ── -->
-  <div class="section-head" style="margin-top:32px">
-    Data Hygiene
-    <span style="font-size:11px;color:#484f58;font-weight:400;text-transform:none;letter-spacing:0;margin-left:10px">
-      {% if hygiene.run_ts %}Last checked {{ hygiene.run_ts }}{% else %}No check run yet{% endif %}
-    </span>
-    <button id="hc-btn" onclick="runHealthCheck()"
-            style="float:right;background:none;border:1px solid #30363d;border-radius:6px;
-                   color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;margin-top:-2px">
-      {% if hc_running %}⏳ Running…{% else %}▶ Run now{% endif %}
-    </button>
-  </div>
-
-  <!-- Connector status grid -->
-  {% if hygiene.checks %}
-  {% set cats = hygiene.checks | map(attribute='category') | unique | list %}
-  {% for cat in ['Infrastructure', 'Connectors', 'Data', 'Other'] %}
-  {% set cat_checks = hygiene.checks | selectattr('category', 'equalto', cat) | list %}
-  {% if cat_checks %}
-  <div style="margin-bottom:14px">
-    <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
-                letter-spacing:.06em;margin-bottom:8px">{{ cat }}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px">
-      {% for c in cat_checks %}
-      <div style="background:#161b22;border:1px solid {% if c.ok %}#238636{% else %}#f85149{% endif %};
-                  border-radius:6px;padding:8px 12px;min-width:160px;max-width:280px;flex:1"
-           title="{{ c.msg }}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-          <span style="font-size:13px">{% if c.ok %}✅{% else %}❌{% endif %}</span>
-          <span style="font-size:12px;font-weight:600;color:#e6edf3">{{ c.name }}</span>
-        </div>
-        <div style="font-size:11px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          {{ c.msg | truncate(60, True, '…') }}
+  <div class="card" id="data_hygiene_card" style="margin-bottom:20px;margin-top:32px">
+    <div class="card-header" onclick="toggleCard(this)" style="cursor:pointer">
+      <div class="card-left">
+        <div class="card-icon">🩺</div>
+        <div>
+          <div class="card-name">Data Hygiene</div>
+          <div class="card-counts">
+            {% if hygiene.checks %}
+            {% set fails = hygiene.checks | rejectattr('ok') | list | length %}
+            {% set total = hygiene.checks | length %}
+            {{ total - fails }}/{{ total }} passing
+            {% if fails %} &nbsp;·&nbsp; <span style="color:#f85149">{{ fails }} failing</span>{% endif %}
+            &nbsp;·&nbsp; {{ hygiene.run_ts or 'no run yet' }}
+            {% else %}No check run yet — click Run now{% endif %}
+          </div>
         </div>
       </div>
-      {% endfor %}
+      <div class="card-right">
+        <button id="hc-btn" onclick="event.stopPropagation();runHealthCheck()"
+                style="background:none;border:1px solid #30363d;border-radius:6px;
+                       color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;margin-right:8px">
+          {% if hc_running %}⏳ Running…{% else %}▶ Run now{% endif %}
+        </button>
+        <div class="card-arrow">▾</div>
+      </div>
     </div>
-  </div>
-  {% endif %}
-  {% endfor %}
-
-  <!-- Table freshness -->
-  {% if hygiene.freshness %}
-  <div style="margin-bottom:20px">
-    <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
-                letter-spacing:.06em;margin-bottom:8px">Data Freshness</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px">
-      {% for f in hygiene.freshness %}
-      <div style="background:#161b22;border:1px solid {% if f.ok %}#21262d{% else %}#f85149{% endif %};
-                  border-radius:6px;padding:8px 14px;text-align:center;min-width:120px">
-        <div style="font-size:11px;color:#8b949e;margin-bottom:2px">{{ f.channel }}</div>
-        <div style="font-size:13px;font-weight:600;color:{% if f.ok %}#e6edf3{% else %}#f85149{% endif %}">
-          {{ f.last_date }}
-        </div>
-        <div style="font-size:10px;color:{% if f.ok %}#8b949e{% else %}#f85149{% endif %}">
-          {% if f.days_ago == 0 %}today{% elif f.days_ago == 1 %}yesterday{% else %}{{ f.days_ago }}d ago ⚠{% endif %}
+    <div class="card-body">
+      {% if hygiene.checks %}
+      {% for cat in ['Infrastructure', 'Connectors', 'Data', 'Other'] %}
+      {% set cat_checks = hygiene.checks | selectattr('category', 'equalto', cat) | list %}
+      {% if cat_checks %}
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:8px">{{ cat }}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          {% for c in cat_checks %}
+          <div onclick="showCheckDetail('{{ c.name | e }}', {{ c.ok | tojson }}, '{{ c.msg | replace("'", "\\'") | e }}')"
+               style="background:#0d1117;border:1px solid {% if c.ok %}#238636{% else %}#f85149{% endif %};
+                      border-radius:6px;padding:8px 12px;min-width:150px;max-width:260px;flex:1;
+                      cursor:pointer;transition:background .15s"
+               onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='#0d1117'">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:13px">{% if c.ok %}✅{% else %}❌{% endif %}</span>
+              <span style="font-size:12px;font-weight:600;color:#e6edf3">{{ c.name }}</span>
+            </div>
+            <div style="font-size:11px;color:{% if c.ok %}#8b949e{% else %}#f85149{% endif %};
+                        overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">
+              {{ c.msg | truncate(72, True, '…') }}
+            </div>
+          </div>
+          {% endfor %}
         </div>
       </div>
+      {% endif %}
       {% endfor %}
+
+      {% if hygiene.freshness %}
+      <div style="margin-top:4px">
+        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:8px">Data Freshness</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          {% for f in hygiene.freshness %}
+          <div style="background:#0d1117;border:1px solid {% if f.ok %}#21262d{% else %}#f85149{% endif %};
+                      border-radius:6px;padding:8px 14px;text-align:center;min-width:110px">
+            <div style="font-size:11px;color:#8b949e;margin-bottom:2px">{{ f.channel }}</div>
+            <div style="font-size:13px;font-weight:600;color:{% if f.ok %}#e6edf3{% else %}#f85149{% endif %}">
+              {{ f.last_date }}
+            </div>
+            <div style="font-size:10px;color:{% if f.ok %}#8b949e{% else %}#f85149{% endif %}">
+              {% if f.days_ago == 0 %}today{% elif f.days_ago == 1 %}yesterday{% else %}{{ f.days_ago }}d ago ⚠{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% else %}
+      <div style="color:#484f58;font-size:12px;padding:4px 0">
+        No results yet. Click <strong style="color:#58a6ff;cursor:pointer" onclick="runHealthCheck()">Run now</strong>.
+      </div>
+      {% endif %}
     </div>
   </div>
-  {% endif %}
 
-  {% else %}
-  <div style="color:#484f58;font-size:12px;margin-bottom:20px">
-    No health check results yet. Click <strong>Run now</strong> to run the first check.
+  <!-- Check detail mini-modal -->
+  <div id="hc-detail-overlay" onclick="closeHcDetail()"
+       style="display:none;position:fixed;inset:0;background:#00000088;z-index:300;
+              align-items:center;justify-content:center">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                width:500px;max-width:92vw;padding:22px;position:relative"
+         onclick="event.stopPropagation()">
+      <button onclick="closeHcDetail()"
+              style="position:absolute;top:12px;right:14px;background:none;border:none;
+                     color:#8b949e;font-size:18px;cursor:pointer;line-height:1">✕</button>
+      <div id="hc-detail-icon" style="font-size:20px;margin-bottom:6px"></div>
+      <div id="hc-detail-name" style="font-size:15px;font-weight:600;color:#e6edf3;margin-bottom:10px"></div>
+      <div id="hc-detail-msg"
+           style="font-size:12px;color:#c9d1d9;background:#0d1117;border:1px solid #21262d;
+                  border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all;
+                  max-height:260px;overflow-y:auto;font-family:monospace"></div>
+    </div>
   </div>
-  {% endif %}
 
   <!-- ── Recent Activity ── -->
   <div class="card" id="recent_feed" style="margin-bottom:24px">
@@ -1398,6 +1433,18 @@ function closeWorkflow(e) {
 
 function closeWorkflowDirect() {
   document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function showCheckDetail(name, ok, msg) {
+  document.getElementById('hc-detail-icon').textContent = ok ? '✅' : '❌';
+  document.getElementById('hc-detail-name').textContent = name;
+  document.getElementById('hc-detail-msg').textContent  = msg;
+  const overlay = document.getElementById('hc-detail-overlay');
+  overlay.style.display = 'flex';
+}
+
+function closeHcDetail() {
+  document.getElementById('hc-detail-overlay').style.display = 'none';
 }
 
 function runHealthCheck() {

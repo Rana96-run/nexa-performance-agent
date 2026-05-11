@@ -1381,7 +1381,7 @@ def activity_dashboard():
         hygiene["freshness"] = [
             {"channel": r.channel, "last_date": str(r.last_date or "—"),
              "days_ago": int(r.days_ago or 0),
-             "ok": (r.days_ago or 99) <= 1}
+             "ok": r.days_ago is not None and r.days_ago <= 1}
             for r in bq.query(fresh_sql).result()
         ]
     except Exception as e:

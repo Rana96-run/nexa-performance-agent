@@ -165,20 +165,29 @@ def check_microsoft_ads() -> tuple[bool, str]:
         accs = _accounts()
         if not accs:
             return False, "Microsoft Ads: no accounts configured"
-        acc = accs[0]
-        _get_access_token_for(acc["refresh_token"], acc["public_client"])
-        return True, f"Microsoft Ads -> OK ({len(accs)} account(s))"
+        ok_accs, fail_accs = [], []
+        for acc in accs:
+            try:
+                _get_access_token_for(acc["refresh_token"], acc["public_client"])
+                ok_accs.append(acc["account_id"])
+            except Exception as e:
+                fail_accs.append(f"{acc['account_id']}: {str(e)[:80]}")
+        if fail_accs:
+            msg = f"{len(ok_accs)}/{len(accs)} OK. Failed: {'; '.join(fail_accs)}"
+            return len(ok_accs) > 0, f"Microsoft Ads -> partial: {msg}"
+        return True, f"Microsoft Ads -> OK ({len(ok_accs)} account(s))"
     except Exception as e:
         return False, f"Microsoft Ads: {e}"
 
 
 def check_snapchat() -> tuple[bool, str]:
     try:
-        from collectors.snap_bq import _get_token, SNAP_AD_ACCOUNT_IDS
-        token = _get_token()
+        from collectors.snap_bq import _refresh_access_token, _ad_accounts
+        token = _refresh_access_token()
         if not token:
             return False, "Snapchat: token fetch returned empty"
-        return True, f"Snapchat -> OK ({len(SNAP_AD_ACCOUNT_IDS)} account(s))"
+        accts = _ad_accounts()
+        return True, f"Snapchat -> OK ({len(accts)} account(s))"
     except Exception as e:
         return False, f"Snapchat: {e}"
 
@@ -199,7 +208,7 @@ def check_linkedin() -> tuple[bool, str]:
 def check_data_freshness() -> tuple[bool, str]:
     """Check how stale the key BQ tables are. Fails if any source is >2 days behind."""
     try:
-        from collectors.bq_writer import get_client, PROJECT_ID, DATASET_ID
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET as DATASET_ID
         bq     = get_client()
         T      = f"`{PROJECT_ID}.{DATASET_ID}`"
         riyadh = timezone(timedelta(hours=3))
