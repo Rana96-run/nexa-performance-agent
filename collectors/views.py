@@ -635,7 +635,7 @@ def materialize_heavy_views():
             print(f"[materialize] OK: {name}")
         except Exception as first_err:
             err_str = str(first_err).lower()
-            if "already exists" in err_str or "different type" in err_str or "conflict" in err_str:
+            if any(s in err_str for s in ("already exists", "different type", "conflict", "not allowed", "type view", "currently has type")):
                 # Object is still a VIEW from a prior run — drop it then retry
                 try:
                     client.delete_table(f"{P}.{D}.{name}", not_found_ok=True)
