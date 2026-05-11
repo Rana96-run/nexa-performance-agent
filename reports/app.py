@@ -1578,37 +1578,51 @@ def asana_status_debug():
         result["overlap_with_log"] = ov.overlap
         result["overlap_completed"] = ov.overlap_completed
 
-        # Run the exact dashboard ts_sql to see if it works or falls back
-        T = f"`{P}.{D}`"
+        # Run the full dashboard ts_sql and expose result/error
+        T2 = f"`{P}.{D}`"
         _ASANA_WINDOW = 365
-        ts_test_sql = f"""
+        from collectors.asana_sync import _TABLE as _TS_TABLE
+        full_ts_sql = f"""
             WITH all_tasks AS (
-              SELECT JSON_VALUE(details, '$.gid') AS gid, DATE(ts,'Asia/Riyadh') AS created_day
-              FROM {T}.agent_activity_log
+              SELECT
+                JSON_VALUE(details, '$.gid')        AS gid,
+                JSON_VALUE(details, '$.project_key') AS project_key,
+                DATE(ts, 'Asia/Riyadh')              AS created_day,
+                ts
+              FROM {T2}.agent_activity_log
               WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
                 AND action = 'asana_task_created'
-                AND JSON_VALUE(details, '$.gid') IS NOT NULL
+              UNION ALL
+              SELECT
+                JSON_VALUE(details, '$.asana_gid')   AS gid,
+                'optimization'                        AS project_key,
+                DATE(ts, 'Asia/Riyadh')               AS created_day,
+                ts
+              FROM {T2}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action IN ('scale_task_created','pause_task_created',
+                               'junk_leads_task_created','optimize_task_created','drilldown_task_created')
             ),
             created AS (
-              SELECT *, ROW_NUMBER() OVER (PARTITION BY gid ORDER BY created_day ASC) AS rn
+              SELECT *, ROW_NUMBER() OVER (PARTITION BY COALESCE(gid,CAST(ts AS STRING)) ORDER BY ts ASC) AS rn
               FROM all_tasks
             ),
             status AS (
               SELECT gid, completed, completed_at,
                      ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
-              FROM {T}.asana_task_status
+              FROM {T2}.{_TS_TABLE}
             )
-            SELECT COUNT(*) AS total, COUNTIF(COALESCE(s.completed,FALSE)) AS completed
+            SELECT COUNT(*) AS total, COUNTIF(COALESCE(s.completed,FALSE)) AS completed_count
             FROM created c
             LEFT JOIN status s ON s.gid = c.gid AND s.rn = 1
             WHERE c.rn = 1
         """
         try:
-            ts_r = list(bq.query(ts_test_sql).result())[0]
-            result["ts_sql_total"] = ts_r.total
-            result["ts_sql_completed"] = ts_r.completed
+            ts_r = list(bq.query(full_ts_sql).result())[0]
+            result["full_ts_total"] = ts_r.total
+            result["full_ts_completed"] = ts_r.completed_count
         except Exception as e:
-            result["ts_sql_error"] = str(e)
+            result["full_ts_error"] = str(e)
     except Exception as e:
         result["error"] = str(e)
     return jsonify(result)
