@@ -732,20 +732,30 @@ if __name__ == "__main__":
     elif cmd == "rebuild_all":
         # Full rebuild of hubspot_leads_module_daily from hubspot_leads_individual.
         # Run this once after initial_load_individual completes.
+        # Processes dates in batches of 30 to avoid MERGE timeout on 600+ date sets.
         from collectors.bq_writer import get_client
         import os as _os
         _client = get_client()
         _project = _os.getenv("BQ_PROJECT_ID")
         _dataset = _os.getenv("BQ_DATASET")
+        _BATCH_SIZE = 30
         print("[rebuild_all] querying all distinct hs_createdate from individual table...")
         _dates_rows = _client.query(
             f"SELECT DISTINCT hs_createdate FROM `{_project}.{_dataset}.{_INDIVIDUAL_TABLE}`"
             f" WHERE hs_createdate IS NOT NULL ORDER BY 1"
         ).result()
-        all_dates = {row.hs_createdate for row in _dates_rows}
-        print(f"[rebuild_all] rebuilding {len(all_dates)} dates...")
-        n = _rebuild_daily_buckets(_client, all_dates)
-        print(f"[rebuild_all] done — {n} rows written to hubspot_leads_module_daily")
+        all_dates_sorted = sorted({row.hs_createdate for row in _dates_rows})
+        total_dates = len(all_dates_sorted)
+        print(f"[rebuild_all] rebuilding {total_dates} dates in batches of {_BATCH_SIZE}...")
+        total_rows = 0
+        for _i in range(0, total_dates, _BATCH_SIZE):
+            _batch = set(all_dates_sorted[_i:_i + _BATCH_SIZE])
+            _batch_start = all_dates_sorted[_i]
+            _batch_end   = all_dates_sorted[min(_i + _BATCH_SIZE - 1, total_dates - 1)]
+            print(f"[rebuild_all] batch {_i // _BATCH_SIZE + 1}/{(total_dates + _BATCH_SIZE - 1) // _BATCH_SIZE}"
+                  f"  {_batch_start} .. {_batch_end}")
+            total_rows += _rebuild_daily_buckets(_client, _batch)
+        print(f"[rebuild_all] done — {total_rows} rows written to hubspot_leads_module_daily")
 
     else:  # backfill / legacy
         days = int(sys.argv[1]) if sys.argv[1].isdigit() else None
