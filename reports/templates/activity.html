@@ -102,7 +102,7 @@ a:hover{text-decoration:underline}
               padding:14px 16px;cursor:pointer;user-select:none}
 .card-header:hover{background:#1c2128}
 .card-left{display:flex;align-items:center;gap:10px}
-.card-icon{font-size:18px;width:28px;text-align:center}
+.card-icon{display:none}
 .card-name{font-size:13px;font-weight:600;color:#e6edf3}
 .card-counts{font-size:11px;color:#8b949e;margin-top:2px}
 .card-right{display:flex;align-items:center;gap:8px}
@@ -342,9 +342,9 @@ a:hover{text-decoration:underline}
             <td>{{ (rows | map(attribute='day') | sort | last) }}</td>
             <td>
               {% if rows | selectattr('status', 'equalto', 'executed') | list %}
-              <span style="color:#39d353;font-size:11px">✅ Executed</span>
+              <span style="color:#39d353;font-size:11px">Executed</span>
               {% else %}
-              <span style="color:#e3b341;font-size:11px">⏳ Pending approval</span>
+              <span style="color:#e3b341;font-size:11px">Pending</span>
               {% endif %}
             </td>
           </tr>
@@ -389,9 +389,9 @@ a:hover{text-decoration:underline}
             <td>{% if r.budget %}${{ r.budget }}{% else %}—{% endif %}</td>
             <td>
               {% if r.status == 'executed' %}
-              <span style="color:#39d353;font-size:11px">✅ Executed</span>
+              <span style="color:#39d353;font-size:11px">Executed</span>
               {% else %}
-              <span style="color:#e3b341;font-size:11px">⏳ Pending approval</span>
+              <span style="color:#e3b341;font-size:11px">Pending</span>
               {% endif %}
             </td>
           </tr>
@@ -540,7 +540,7 @@ a:hover{text-decoration:underline}
           <tr>
             <td>{{ r.day }}</td>
             <td>{{ r.term }}</td>
-            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">✅ done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">⏳ open</span>{% else %}—{% endif %}</td>
+            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">open</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </table>
@@ -585,7 +585,7 @@ a:hover{text-decoration:underline}
             <td>{{ r.title }}</td>
             <td><span class="tag">{{ r.project_key }}</span></td>
             <td>{{ r.task_action or '—' }}</td>
-            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">✅ done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">⏳ open</span>{% else %}—{% endif %}</td>
+            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">open</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </table>
@@ -887,7 +887,7 @@ a:hover{text-decoration:underline}
           <tr>
             <td>{{ r.day }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-            <td>{{ "⏸ Paused" if r.action == "ads_paused" else "▶ Enabled" }}</td>
+            <td>{{ "Paused" if r.action == "ads_paused" else "Enabled" }}</td>
             <td>{{ r.cnt }}</td>
           </tr>
           {% endfor %}
@@ -918,8 +918,8 @@ a:hover{text-decoration:underline}
         {% if metrics.approval_rate.total_30d > 0 %}
         <div style="margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-            <span style="color:#39d353;font-size:13px;font-weight:600">✅ {{ metrics.approval_rate.approved_30d }}</span>
-            <span style="color:#f85149;font-size:13px;font-weight:600">❌ {{ metrics.approval_rate.rejected_30d }}</span>
+            <span style="color:#39d353;font-size:13px;font-weight:600">{{ metrics.approval_rate.approved_30d }} approved</span>
+            <span style="color:#f85149;font-size:13px;font-weight:600">{{ metrics.approval_rate.rejected_30d }} rejected</span>
             <span style="color:#8b949e;font-size:12px">of {{ metrics.approval_rate.total_30d }} decisions</span>
           </div>
           <div style="height:6px;background:#21262d;border-radius:4px;overflow:hidden">
@@ -1170,18 +1170,18 @@ a:hover{text-decoration:underline}
         <tr>
           <td style="white-space:nowrap">{{ r.action_date }}</td>
           <td>
-            {% if r.action == 'campaign_paused' %}<span style="color:#f85149">⏸ Pause</span>
-            {% elif r.action == 'campaign_scaled' %}<span style="color:#39d353">📈 Scale</span>
-            {% elif r.action == 'campaign_created' %}<span style="color:#58a6ff">🚀 Create</span>
-            {% elif r.action == 'ads_paused' %}<span style="color:#f85149">⏸ Ads Paused</span>
+            {% if r.action == 'campaign_paused' %}<span style="color:#f85149">Pause</span>
+            {% elif r.action == 'campaign_scaled' %}<span style="color:#39d353">Scale</span>
+            {% elif r.action == 'campaign_created' %}<span style="color:#58a6ff">Create</span>
+            {% elif r.action == 'ads_paused' %}<span style="color:#f85149">Ads Paused</span>
             {% else %}<span>{{ r.action }}</span>
             {% endif %}
           </td>
           <td>
             {% if r.action_type == 'executed' %}
-            <span style="color:#39d353;font-size:11px">✅ Executed</span>
+            <span style="color:#39d353;font-size:11px">Executed</span>
             {% else %}
-            <span style="color:#e3b341;font-size:11px">⏳ Recommended</span>
+            <span style="color:#e3b341;font-size:11px">Recommended</span>
             {% endif %}
           </td>
           <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
@@ -1189,7 +1189,7 @@ a:hover{text-decoration:underline}
           <td>{% if r.avg_spend_before %}${{ r.avg_spend_before }}/d{% else %}—{% endif %}</td>
           <td>{% if r.avg_spend_after %}${{ r.avg_spend_after }}/d{% else %}—{% endif %}</td>
           <td>
-            {% if r.outcome == 'Pending approval' %}<span style="color:#e3b341">⏳ {{ r.outcome }}</span>
+            {% if r.outcome == 'Pending approval' %}<span style="color:#e3b341">{{ r.outcome }}</span>
             {% elif r.outcome == 'Confirmed paused' %}<span style="color:#484f58">✓ {{ r.outcome }}</span>
             {% elif r.outcome == 'Re-enabled' %}<span style="color:#e3b341">⚠ {{ r.outcome }}</span>
             {% elif r.outcome == 'Spend increased' %}<span style="color:#39d353">✓ {{ r.outcome }}</span>
@@ -1269,7 +1269,7 @@ a:hover{text-decoration:underline}
         <button id="hc-btn" onclick="event.stopPropagation();runHealthCheck()"
                 style="background:none;border:1px solid #30363d;border-radius:6px;
                        color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;margin-right:8px">
-          {% if hc_running %}⏳ Running…{% else %}▶ Run now{% endif %}
+          {% if hc_running %}Running…{% else %}Run now{% endif %}
         </button>
         <div class="card-arrow">▾</div>
       </div>
@@ -1290,7 +1290,7 @@ a:hover{text-decoration:underline}
                       cursor:pointer;transition:background .15s"
                onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='#0d1117'">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-              <span style="font-size:13px">{% if c.ok %}✅{% else %}❌{% endif %}</span>
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{% if c.ok %}#238636{% else %}#f85149{% endif %}"></span>
               <span style="font-size:12px;font-weight:600;color:#e6edf3">{{ c.name }}</span>
             </div>
             <div style="font-size:11px;color:{% if c.ok %}#8b949e{% else %}#f85149{% endif %};
@@ -1449,7 +1449,7 @@ function closeWorkflowDirect() {
 }
 
 function showCheckDetail(name, ok, msg) {
-  document.getElementById('hc-detail-icon').textContent = ok ? '✅' : '❌';
+  document.getElementById('hc-detail-icon').textContent = ok ? 'OK' : 'FAIL';
   document.getElementById('hc-detail-name').textContent = name;
   document.getElementById('hc-detail-msg').textContent  = msg;
   const overlay = document.getElementById('hc-detail-overlay');
@@ -1463,7 +1463,7 @@ function closeHcDetail() {
 function runHealthCheck() {
   const btn = document.getElementById('hc-btn');
   if (!btn || btn.textContent.includes('Running')) return;
-  btn.textContent = '⏳ Running…';
+  btn.textContent = 'Running…';
   btn.disabled = true;
   fetch('/api/run-health-check', {method: 'POST'})
     .then(function() {
