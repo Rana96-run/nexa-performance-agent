@@ -357,6 +357,8 @@ def backfill_from_projects() -> int:
     client    = _asana_client()
     tasks_api = asana.TasksApi(client)
     seeded    = 0
+    status_rows: list[dict] = []  # collect for bulk write to asana_task_status
+    now_utc   = datetime.now(timezone.utc)
 
     for project_key, project_id in ASANA_PROJECTS.items():
         if not project_id:
@@ -371,30 +373,70 @@ def backfill_from_projects() -> int:
             }
             for task in tasks_api.get_tasks_for_project(project_id, opts):
                 gid = task.get("gid")
-                if not gid or gid in already_known:
+                if not gid:
                     continue
                 name = task.get("name", "")
-                asset_level = "campaign"
-                if any(w in name.lower() for w in ("keyword", "negative", "kw")):
-                    asset_level = "keyword"
-                elif any(w in name.lower() for w in ("ad ", " ad", "creative")):
-                    asset_level = "ad"
-                log_activity_async(
-                    role="task_creator",
-                    action="asana_task_created",
-                    status="success",
-                    details={
-                        "gid":         gid,
-                        "title":       name[:120],
-                        "project_key": project_key,
-                        "asset_level": asset_level,
-                        "backfilled":  True,
-                    },
-                )
-                already_known.add(gid)
-                seeded += 1
+                if gid not in already_known:
+                    asset_level = "campaign"
+                    if any(w in name.lower() for w in ("keyword", "negative", "kw")):
+                        asset_level = "keyword"
+                    elif any(w in name.lower() for w in ("ad ", " ad", "creative")):
+                        asset_level = "ad"
+                    log_activity_async(
+                        role="task_creator",
+                        action="asana_task_created",
+                        status="success",
+                        details={
+                            "gid":         gid,
+                            "title":       name[:120],
+                            "project_key": project_key,
+                            "asset_level": asset_level,
+                            "backfilled":  True,
+                        },
+                    )
+                    already_known.add(gid)
+                    seeded += 1
+                # Always collect status — backfill already has completed_at, write it
+                status_rows.append({
+                    "gid":           gid,
+                    "title":         name[:120],
+                    "project_key":   project_key,
+                    "completed":     bool(task.get("completed", False)),
+                    "completed_at":  task.get("completed_at"),
+                    "assignee_name": (task.get("assignee") or {}).get("name", ""),
+                    "due_on":        task.get("due_on"),
+                    "synced_at":     now_utc.isoformat(),
+                })
         except Exception as e:
             print(f"[asana_backfill] project {project_key} failed: {e}")
+
+    # Write completion status to asana_task_status in one bulk pass
+    if status_rows:
+        try:
+            bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
+            ndjson    = b"\n".join(json.dumps(r).encode() for r in status_rows)
+            table_ref = bq.dataset(D, project=P).table(_TABLE)
+            from google.cloud import bigquery as bqlib
+            job_cfg = bqlib.LoadJobConfig(
+                source_format=bqlib.SourceFormat.NEWLINE_DELIMITED_JSON,
+                write_disposition=bqlib.WriteDisposition.WRITE_APPEND,
+                autodetect=False,
+                schema=[
+                    bqlib.SchemaField("gid",           "STRING"),
+                    bqlib.SchemaField("title",         "STRING"),
+                    bqlib.SchemaField("project_key",   "STRING"),
+                    bqlib.SchemaField("completed",     "BOOL"),
+                    bqlib.SchemaField("completed_at",  "TIMESTAMP"),
+                    bqlib.SchemaField("assignee_name", "STRING"),
+                    bqlib.SchemaField("due_on",        "DATE"),
+                    bqlib.SchemaField("synced_at",     "TIMESTAMP"),
+                ],
+            )
+            bq.load_table_from_file(BytesIO(ndjson), table_ref, job_config=job_cfg).result()
+            n_done = sum(1 for r in status_rows if r["completed"])
+            print(f"[asana_backfill] wrote {len(status_rows)} status rows ({n_done} completed) to {_TABLE}")
+        except Exception as e:
+            print(f"[asana_backfill] asana_task_status write failed (non-fatal): {e}")
 
     if seeded:
         print(f"[asana_backfill] seeded {seeded} historical tasks into agent_activity_log")
