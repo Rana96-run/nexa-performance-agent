@@ -113,6 +113,15 @@ the fix, not just the symptom.
   `/crm/v3/objects/0-136/search`, not `/contacts/search`.
 - **READ-ONLY.** Never PATCH/DELETE/CREATE HubSpot objects without explicit
   user approval in Slack. User reminded this multiple times.
+- **Canonical `lead_qoyod_source` internal names (verified 2026-05-11 from HubSpot property editor):**
+  ```
+  Google Ads       Microsoft Ads    Meta Ads
+  Snapchat Ads     Tiktok Ads       LinkedIn Ads
+  ```
+  `Tiktok Ads` has a lowercase 'i' — NOT `TikTok Ads`. All BQ channel_maps,
+  `QOYOD_SOURCE_TO_CHANNEL` in `channel_inference.py`, and the views in
+  `collectors/views.py` must use these exact strings. Any mismatch causes
+  leads to silently drop from dashboard joins.
 - **`HUBSPOT_ACCESS_TOKEN` is NOT in the local `.env` — it lives on Railway.**
   Any local CLI run (`python -m collectors.hubspot_leads_bq mirror`) MUST use
   `railway run python -m collectors.hubspot_leads_bq mirror`. Without `railway run`

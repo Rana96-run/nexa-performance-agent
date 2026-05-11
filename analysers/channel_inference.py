@@ -116,13 +116,15 @@ def channel_from_campaign_name(campaign_name: str) -> Optional[str]:
 # ─── HubSpot qoyod_source label ↔ channel slug ────────────────────────────────
 QOYOD_SOURCE_TO_CHANNEL: dict[str, str] = {
     # paid
+    # Exact HubSpot lead_qoyod_source internal names — verified 2026-05-11
+    # Source: HubSpot property editor → Lead → lead_qoyod_source dropdown
+    # NEVER change these strings without updating them in HubSpot first.
     "Google Ads":    "google_ads",
+    "Microsoft Ads": "microsoft_ads",
     "Meta Ads":      "meta",
     "Snapchat Ads":  "snapchat",
-    "TikTok Ads":    "tiktok",
-    "Tiktok Ads":    "tiktok",   # actual HubSpot value (lowercase 'i') — must be last so reverse dict resolves here
+    "Tiktok Ads":    "tiktok",   # HubSpot internal name: lowercase 'i' (not TikTok)
     "LinkedIn Ads":  "linkedin",
-    "Microsoft Ads": "microsoft_ads",
     # organic / direct / other
     "Direct Traffic":  "direct",
     "Organic Search":  "organic_search",
