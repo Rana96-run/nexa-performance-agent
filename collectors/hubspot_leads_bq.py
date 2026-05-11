@@ -10,6 +10,7 @@ Two write modes:
      Handles leads from ANY year — no window boundary.
 """
 import os
+import time
 import json as _json
 from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
@@ -787,10 +788,19 @@ def sync_full_mirror() -> int:
         win_count = 0
 
         while True:
-            try:
-                data = _search_leads(since_ms, until_ms=until_ms, after=after)
-            except Exception as e:
-                print(f"[mirror] error at {win_start}: {e}")
+            # Retry up to 3 times with 30s backoff — HubSpot 500s are transient
+            data = None
+            for attempt in range(1, 4):
+                try:
+                    data = _search_leads(since_ms, until_ms=until_ms, after=after)
+                    break
+                except Exception as e:
+                    if attempt < 3:
+                        print(f"[mirror] {win_start} attempt {attempt}/3 failed ({e}) — retrying in 30s")
+                        time.sleep(30)
+                    else:
+                        print(f"[mirror] {win_start} failed after 3 attempts ({e}) — skipping window")
+            if data is None:
                 break
             for lead in data.get("results", []):
                 row = _row_from_lead(lead)
