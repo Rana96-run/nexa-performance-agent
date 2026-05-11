@@ -1562,13 +1562,14 @@ def asana_status_debug():
     except Exception as e:
         result["query_error"] = str(e)
 
-    # Fix REQUIRED mode on gid/synced_at if table was created with NOT NULL
+    # Table was created with REQUIRED columns — drop and recreate so load jobs work
     try:
-        alter = f"ALTER TABLE `{P}.{D}.asana_task_status` ALTER COLUMN gid DROP NOT NULL, ALTER COLUMN synced_at DROP NOT NULL"
-        bq.query(alter).result()
-        result["alter"] = "ok"
+        bq.query(f"DROP TABLE IF EXISTS `{P}.{D}.asana_task_status`").result()
+        from collectors.asana_sync import _CREATE_DDL, _TABLE
+        bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
+        result["recreate"] = "ok"
     except Exception as e:
-        result["alter_error"] = str(e)
+        result["recreate_error"] = str(e)
 
     # Try writing a single test row to see if the write itself works
     try:
