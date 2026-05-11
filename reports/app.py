@@ -1578,20 +1578,37 @@ def asana_status_debug():
         result["overlap_with_log"] = ov.overlap
         result["overlap_completed"] = ov.overlap_completed
 
-        # Sample 3 GIDs from agent_activity_log and check if they're in asana_task_status
-        sample_sql = f"""
-            SELECT log.gid, s.completed, s.synced_at
-            FROM (
-              SELECT DISTINCT JSON_VALUE(details,'$.gid') AS gid
-              FROM `{P}.{D}.agent_activity_log`
-              WHERE action='asana_task_created' AND JSON_VALUE(details,'$.gid') IS NOT NULL
-              LIMIT 3
-            ) log
-            LEFT JOIN `{P}.{D}.asana_task_status` s ON s.gid = log.gid
+        # Run the exact dashboard ts_sql to see if it works or falls back
+        T = f"`{P}.{D}`"
+        _ASANA_WINDOW = 365
+        ts_test_sql = f"""
+            WITH all_tasks AS (
+              SELECT JSON_VALUE(details, '$.gid') AS gid, DATE(ts,'Asia/Riyadh') AS created_day
+              FROM {T}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action = 'asana_task_created'
+                AND JSON_VALUE(details, '$.gid') IS NOT NULL
+            ),
+            created AS (
+              SELECT *, ROW_NUMBER() OVER (PARTITION BY gid ORDER BY created_day ASC) AS rn
+              FROM all_tasks
+            ),
+            status AS (
+              SELECT gid, completed, completed_at,
+                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+              FROM {T}.asana_task_status
+            )
+            SELECT COUNT(*) AS total, COUNTIF(COALESCE(s.completed,FALSE)) AS completed
+            FROM created c
+            LEFT JOIN status s ON s.gid = c.gid AND s.rn = 1
+            WHERE c.rn = 1
         """
-        for r in bq.query(sample_sql).result():
-            result.setdefault("sample_join", []).append(
-                {"gid": r.gid, "in_status": r.completed is not None, "completed": r.completed})
+        try:
+            ts_r = list(bq.query(ts_test_sql).result())[0]
+            result["ts_sql_total"] = ts_r.total
+            result["ts_sql_completed"] = ts_r.completed
+        except Exception as e:
+            result["ts_sql_error"] = str(e)
     except Exception as e:
         result["error"] = str(e)
     return jsonify(result)
