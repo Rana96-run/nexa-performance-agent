@@ -846,15 +846,21 @@ def activity_dashboard():
                  for r in intel_rows if r.action == "data_quality_autoheal"][:60],
     }
 
-    # Ads paused / enabled
-    ads_rows = _filter(detail_rows, {"ads_paused", "ads_enabled"})
-    ap_c30 = sum(int(r.cnt) for r in ads_rows if r.day >= cutoff_30)
-    ap_c7  = sum(int(r.cnt) for r in ads_rows if r.day >= cutoff_7)
+    # Ads paused / enabled — executed + junk-lead recommendations
+    ads_exec  = _filter(detail_rows, {"ads_paused", "ads_enabled"})
+    ads_rec   = _filter(detail_rows, {"junk_leads_task_created"})
+    ap_c30 = (sum(int(r.cnt) for r in ads_exec if r.day >= cutoff_30)
+              + sum(1 for r in ads_rec if r.day >= cutoff_30))
+    ap_c7  = (sum(int(r.cnt) for r in ads_exec if r.day >= cutoff_7)
+              + sum(1 for r in ads_rec if r.day >= cutoff_7))
     m_ads_paused = {
         "count_30d": ap_c30, "count_7d": ap_c7,
-        "rows": [{"day": str(r.day), "action": r.action,
-                  "channel": r.channel or "—", "cnt": int(r.cnt)}
-                 for r in ads_rows[:80]],
+        "rows": ([{"day": str(r.day), "action": r.action,
+                   "channel": r.channel or "—", "cnt": int(r.cnt), "status": "executed"}
+                  for r in ads_exec[:60]]
+                 + [{"day": str(r.day), "action": "junk_leads_flag",
+                     "channel": r.channel or "—", "cnt": 1, "status": "recommended"}
+                    for r in ads_rec[:40]]),
     }
 
     # Approval rate — how often the team acts on recommendations

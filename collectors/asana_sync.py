@@ -434,9 +434,10 @@ def backfill_from_projects() -> int:
                 name = task.get("name", "")
                 if gid not in already_known:
                     asset_level = "campaign"
-                    if any(w in name.lower() for w in ("keyword", "negative", "kw")):
+                    name_words = name.lower().split()
+                    if any(w in name_words for w in ("keyword", "negative", "kw")):
                         asset_level = "keyword"
-                    elif any(w in name.lower() for w in ("ad ", " ad", "creative")):
+                    elif "ad" in name_words or "creative" in name_words:
                         asset_level = "ad"
                     log_activity_async(
                         role="task_creator",

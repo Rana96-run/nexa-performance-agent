@@ -882,13 +882,14 @@ a:hover{text-decoration:underline}
       <div class="card-body">
         {% if metrics.ads_paused.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Action</th><th>Count</th></tr>
+          <tr><th>Date</th><th>Channel</th><th>Action</th><th>Count</th><th>Status</th></tr>
           {% for r in metrics.ads_paused.rows %}
           <tr>
             <td>{{ r.day }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-            <td>{{ "Paused" if r.action == "ads_paused" else "Enabled" }}</td>
+            <td>{% if r.action == "ads_paused" %}Paused{% elif r.action == "ads_enabled" %}Enabled{% else %}Junk leads flag{% endif %}</td>
             <td>{{ r.cnt }}</td>
+            <td>{% if r.status == "executed" %}<span style="color:#39d353;font-size:11px">Executed</span>{% else %}<span style="color:#e3b341;font-size:11px">Pending</span>{% endif %}</td>
           </tr>
           {% endfor %}
         </table>
