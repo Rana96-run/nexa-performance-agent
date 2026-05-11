@@ -1626,6 +1626,64 @@ def asana_status_debug():
             result["full_ts_error"] = str(e)
     except Exception as e:
         result["error"] = str(e)
+    # Run the EXACT full dashboard ts_sql (with all columns) to catch any SQL errors
+    try:
+        _ASANA_WINDOW = 365
+        T3 = f"`{P}.{D}`"
+        from collectors.asana_sync import _TABLE as _TS_TABLE3
+        full_dash_sql = f"""
+            WITH all_tasks AS (
+              SELECT JSON_VALUE(details,'$.gid') AS gid,
+                     JSON_VALUE(details,'$.title') AS title,
+                     JSON_VALUE(details,'$.project_key') AS project_key,
+                     JSON_VALUE(details,'$.asset_level') AS asset_level,
+                     DATE(ts,'Asia/Riyadh') AS created_day, ts
+              FROM {T3}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action = 'asana_task_created'
+              UNION ALL
+              SELECT JSON_VALUE(details,'$.asana_gid') AS gid,
+                     CONCAT(CASE action
+                       WHEN 'scale_task_created' THEN 'Scale: '
+                       WHEN 'pause_task_created' THEN 'Pause: '
+                       WHEN 'optimize_task_created' THEN 'Optimize: '
+                       WHEN 'drilldown_task_created' THEN 'Review: '
+                       ELSE '' END, COALESCE(campaign_name, action)) AS title,
+                     'optimization' AS project_key, 'campaign' AS asset_level,
+                     DATE(ts,'Asia/Riyadh') AS created_day, ts
+              FROM {T3}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action IN ('scale_task_created','pause_task_created','junk_leads_task_created',
+                               'optimize_task_created','drilldown_task_created')
+            ),
+            created AS (
+              SELECT *, ROW_NUMBER() OVER (PARTITION BY COALESCE(gid,CAST(ts AS STRING)) ORDER BY ts ASC) AS rn
+              FROM all_tasks
+            ),
+            status AS (
+              SELECT gid, completed, completed_at, assignee_name, due_on,
+                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+              FROM {T3}.{_TS_TABLE3}
+            )
+            SELECT c.gid, c.title, c.project_key, c.asset_level, c.created_day,
+                   COALESCE(s.completed,FALSE) AS completed,
+                   s.completed_at, s.assignee_name, s.due_on
+            FROM created c LEFT JOIN status s ON s.gid=c.gid AND s.rn=1
+            WHERE c.rn=1 ORDER BY c.created_day DESC LIMIT 500
+        """
+        rows3 = list(bq.query(full_dash_sql).result())
+        _EXCL3 = {"campaigns_hub", "seasonal"}
+        rows3 = [r for r in rows3 if r.project_key not in _EXCL3]
+        comp3 = [r for r in rows3 if r.completed]
+        result["full_dash_sql"] = {
+            "rows_total": len(rows3), "rows_completed": len(comp3),
+            "sample_completed": [{"gid": r.gid, "completed": r.completed,
+                                   "type": type(r.completed).__name__,
+                                   "assignee": r.assignee_name, "due_on": str(r.due_on)}
+                                  for r in comp3[:3]],
+        }
+    except Exception as e:
+        result["full_dash_sql_error"] = str(e)
     # Run the exact dashboard processing: ts_sql + Python filter → asana_completion
     try:
         T2 = f"`{P}.{D}`"

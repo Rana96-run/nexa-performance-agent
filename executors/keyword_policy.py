@@ -27,26 +27,23 @@ import re
 
 # ── 1. ALWAYS NEGATIVE ────────────────────────────────────────────────────────
 ALWAYS_NEGATIVE_PATTERNS: list[str] = [
-    # Existing accounts / login flows — the user is already a customer
-    "sign in", "signin", "log in", "login",
-    "تسجيل الدخول", "تسجيل دخول", "تسجيل  دخول",
     # Free / promo seekers — won't pay for SaaS
-    "مجاني", "مجانا", "مجانية", "مجانى", "مجانًا",
-    "free",
-    # Course / training intent — they want to learn accounting, not buy software
-    "دورة", "دورات", "كورس", "كورسات",
-    "course", "courses", "training",
-    # Download intent — looking for cracked software / pirated PDFs
-    "تحميل", "تنزيل",
-    "download",
-    # Loan / financing — wrong intent entirely
-    "قرض", "قروض", "قرضي",
-    "تمويل", "تمويلي", "تمويلات",
-    "loan", "loans", "financing",
-    # Job seekers — not SMB owners
-    "وظيفة", "وظائف", "توظيف",
-    "فرص عمل", "فرصة عمل",
-    "job", "jobs", "career", "careers", "hiring",
+    "مجاني", "مجانا", "مجانية", "مجانى",
+    # Login / existing account — already a customer
+    "تسجيل الدخول", "تسجيل دخول", "تسجل دخول",
+    "sign in", "signin", "login", "log in",
+    # Account / store creation — wrong intent (not SaaS buyer)
+    "انشاء حساب", "فتح حساب", "انشاء متجر",
+    # Job / work seekers — not SMB owners
+    "عمل", "وظيفة", "وظائف", "توظيف",
+    # Finance / banking — wrong intent
+    "تمويل", "قرض", "قروض", "بنك",
+    # Dropshipping / ecom setup — different product category
+    "دروب شيبنج", "دروب شيبينج",
+    # Education intent — want to learn, not buy software
+    "دورة", "كورس", "تعلم", "تعليم",
+    # Marketing / AI tools — not SaaS accounting
+    "التسويق", "chatgpt",
 ]
 
 

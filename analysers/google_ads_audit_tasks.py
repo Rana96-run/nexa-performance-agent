@@ -275,13 +275,20 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             action="launch",
         )
         out.append((f"keyword expansion ({len(capped)})", gid))
+        # Log keywords so the dashboard can show individual terms
+        log_activity_async(
+            role="keyword_management", action="positive_keywords_added",
+            channel="google_ads", rows_affected=len(capped),
+            details={"keywords": [k["keyword"] for k in capped[:50]]},
+        )
     elif add_kw:
         # Off-day — log only, don't create the task.
         log_activity_async(
             role="keyword_management",
             action="keyword_candidates_queued_for_weekly_review",
             channel="google_ads", status="ok", rows_affected=len(add_kw),
-            details={"candidate_count": len(add_kw), "next_review_day": "Sunday Riyadh"},
+            details={"candidate_count": len(add_kw), "keywords": [k["keyword"] for k in add_kw[:50]],
+                     "next_review_day": "Sunday Riyadh"},
         )
 
     # ── 4. Negative-keyword candidates (normal wasted terms) ──────────────────
@@ -360,17 +367,9 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         )
         out.append((f"pause-watch ({len(pause_watch)})", gid))
 
-    # Direct-execute negatives (no approval gate — no spend at risk).
-    # Both `add_neg` (normal wasted spend) and `auto_neg` (always-negative
-    # policy matches) execute immediately. Keywords/expansion go to Asana
-    # only — never to Slack.
-    if add_neg:
-        try:
-            from executors.keyword_approval import _execute_negatives
-            _execute_negatives(add_neg)
-            print(f"[audit-tasks] neg: {len(add_neg)} wasted-spend negatives executed")
-        except Exception as e:
-            print(f"[audit-tasks] neg execution failed (non-fatal): {e}")
+    # Wasted-spend negatives (add_neg) require human review — Asana task
+    # already created above. Never auto-execute; only always-negative policy
+    # matches (auto_neg) are safe to execute without approval.
 
     if auto_neg:
         try:

@@ -101,6 +101,11 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
             action="launch",
         )
         out.append((f"MS keyword expansion ({len(add_kw)})", gid))
+        log_activity_async(
+            role="keyword_management", action="positive_keywords_added",
+            channel="microsoft_ads", rows_affected=len(add_kw),
+            details={"keywords": [k["keyword"] for k in add_kw[:50]]},
+        )
 
     # 4. Wasted-spend negatives — direct execute (no spend at risk)
     if add_neg:
@@ -165,16 +170,14 @@ def create_audit_tasks() -> list[tuple[str, str | None]]:
         )
         out.append((f"MS pause-watch ({len(pause_watch)})", gid))
 
-    # Direct-execute negatives (both add_neg + auto_neg) — no spend at risk
-    if add_neg or auto_neg:
+    # Wasted-spend negatives (add_neg) require human review — Asana task
+    # already created above. Only always-negative policy matches auto-execute.
+    if auto_neg:
         try:
             from executors.keyword_approval import _execute_negatives
-            if add_neg:
-                _execute_negatives(add_neg)
-            if auto_neg:
-                _execute_negatives(auto_neg)
+            _execute_negatives(auto_neg)
         except Exception as e:
-            print(f"[ms-audit-tasks] negative execution failed (non-fatal): {e}")
+            print(f"[ms-audit-tasks] auto-neg execution failed (non-fatal): {e}")
 
     log_activity_async(role="performance_audit", action="create_audit_tasks",
                        status="success", channel="microsoft_ads",
