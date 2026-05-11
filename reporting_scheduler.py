@@ -76,19 +76,11 @@ def _check_bq_staleness() -> list[str]:
 
 def _hubspot_leads_collector() -> int:
     """
-    Every 6-hour cycle: rolling 30-day re-pull from HubSpot (fresh attribution),
-    then cursor CDC to catch stage changes on leads older than 30 days.
-
-    Rolling window is the primary sync — it always matches what HubSpot shows for
-    the last 30 days.  No special-case days, no drift between runs.
-    Cursor CDC is a secondary pass — handles disqualifications/reassignments on
-    older leads without re-pulling all history.
+    Full mirror of ALL HubSpot leads every 6-hour cycle.
+    Identical approach to Funnel.io: pull current state of every lead,
+    overwrite BQ. No cursor, no delta, no drift — ever.
     """
-    n = hubspot_leads_bq.sync_rolling_window(days=30)
-    # Cursor CDC: picks up stage changes on leads older than 30 days.
-    # Low volume (old leads rarely change), but keeps historical data consistent.
-    hubspot_leads_bq.sync_cursor_and_write()
-    return n
+    return hubspot_leads_bq.sync_full_mirror()
 
 
 COLLECTORS = [

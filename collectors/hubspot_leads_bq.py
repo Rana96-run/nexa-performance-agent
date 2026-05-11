@@ -737,33 +737,108 @@ def _flush_individual(client, rows: list[dict], label: str = "leads-initial") ->
     print(f"[{label}] flushed {len(rows)} rows")
 
 
+def sync_full_mirror() -> int:
+    """
+    Full mirror of ALL HubSpot leads on every 6-hour cycle.
+
+    This is exactly what Funnel.io does: no cursor, no delta, no windows.
+    Pull every lead's CURRENT property values from HubSpot, overwrite BQ.
+    Whatever HubSpot shows for any date range + any filter → BQ matches.
+
+    How:
+      - 7-day createdate windows (keeps each search under HubSpot's 10k cap)
+      - Dates stored as Riyadh (GMT+3) to match HubSpot UI date filters
+      - DELETE all → INSERT fresh (no stale rows can survive)
+
+    Capacity: ~132k leads, ~1 300 API pages, ~5-10 min per cycle.
+    Completely replaces cursor CDC — no cursor needed when you always mirror.
+
+    CLI: python -m collectors.hubspot_leads_bq mirror
+    """
+    _load_pipelines()
+    _ensure_individual_table_exists()
+
+    client   = get_client()
+    project  = os.getenv("BQ_PROJECT_ID")
+    dataset  = os.getenv("BQ_DATASET")
+    table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
+
+    # Start from the earliest lead we've ever seen (query BQ); fall back to
+    # 2024-07-01 if the table is empty (before our oldest known lead 2024-07-23).
+    min_rows = list(client.query(
+        f"SELECT MIN(hs_createdate) AS d FROM `{table_id}`"
+    ).result())
+    min_date = (min_rows[0].d if min_rows and min_rows[0].d else None) or date(2024, 7, 1)
+    # Pull one extra day into the future to catch any leads created today
+    end_date = date.today() + timedelta(days=1)
+
+    print(f"[mirror] full re-pull {min_date} → {date.today()} ...")
+
+    # ── Fetch all leads in 7-day createdate windows ───────────────────────────
+    all_rows  = []
+    window    = timedelta(days=7)
+    win_start = min_date
+
+    while win_start < end_date:
+        win_end  = min(win_start + window, end_date)
+        # Convert Riyadh midnight → UTC millis for the HubSpot filter
+        since_ms = int(datetime(win_start.year, win_start.month, win_start.day,
+                                tzinfo=_RIYADH).timestamp() * 1000)
+        until_ms = int(datetime(win_end.year,   win_end.month,   win_end.day,
+                                tzinfo=_RIYADH).timestamp() * 1000)
+        after    = None
+        pages    = 0
+        win_count = 0
+
+        while True:
+            try:
+                data = _search_leads(since_ms, until_ms=until_ms, after=after)
+            except Exception as e:
+                print(f"[mirror] error at {win_start}: {e}")
+                break
+            for lead in data.get("results", []):
+                row = _row_from_lead(lead)
+                if row:
+                    all_rows.append(row)
+                    win_count += 1
+            pages += 1
+            after = (data.get("paging") or {}).get("next", {}).get("after")
+            if not after or pages >= 100:
+                break
+
+        print(f"[mirror]   {win_start} .. {win_end}: {win_count} leads")
+        win_start = win_end
+
+    if not all_rows:
+        print("[mirror] nothing fetched — aborting")
+        return 0
+
+    print(f"[mirror] fetched {len(all_rows)} leads total")
+
+    # ── Replace all BQ rows with fresh data ──────────────────────────────────
+    client.query(f"DELETE FROM `{table_id}` WHERE TRUE").result()
+
+    for i in range(0, len(all_rows), 5000):
+        _flush_individual(client, all_rows[i:i + 5000], label="mirror")
+    print(f"[mirror] wrote {len(all_rows)} rows to {_INDIVIDUAL_TABLE}")
+
+    # ── Rebuild all daily aggregates ─────────────────────────────────────────
+    all_dates = sorted({r["hs_createdate"] for r in all_rows})
+    n = _rebuild_daily_buckets(client, all_dates)
+    print(f"[mirror] rebuilt {len(all_dates)} dates -> {n} rows in hubspot_leads_module_daily")
+    return n
+
+
 def sync_rolling_window(days: int = 30) -> int:
     """
-    Re-pull the most recent `days` of HubSpot leads from scratch on every run.
-
-    Why this exists
-    ---------------
-    Cursor CDC (sync_cursor_and_write) tracks hs_lastmodifieddate on the Lead
-    object.  When the team re-runs the Contact-source workflow, it changes
-    qoyod_source on the Contact which syncs to lead_qoyod_source on the Lead —
-    but the Lead's hs_lastmodifieddate NEVER moves.  Cursor CDC is therefore
-    blind to attribution changes.
-
-    Rolling window has no such blindspot: it just deletes the last `days` rows
-    from BQ and re-inserts them straight from HubSpot every 6-hour cycle.
-    Numbers always match whatever HubSpot shows for the same date range.
-
-    Capacity: ~200 leads/day × 30 days = 6 000 leads → 60 API pages → < 2 min.
-    HubSpot search cap is 10 000 results per query — safely under that.
+    Re-pull only the last `days` of leads. Kept for CLI testing / quick fixes.
+    Normal operation uses sync_full_mirror() which pulls everything.
 
     CLI: python -m collectors.hubspot_leads_bq rolling [days]
     """
-    # since_date is Riyadh date (matches how _hs_date_to_riyadh stores dates)
     since_date = (datetime.now(_RIYADH) - timedelta(days=days)).date()
-    # since_ms: Riyadh midnight in UTC millis — tells HubSpot "give me leads
-    # whose hs_createdate UTC timestamp >= Riyadh midnight that day"
-    since_ms = int(datetime(since_date.year, since_date.month, since_date.day,
-                            tzinfo=_RIYADH).timestamp() * 1000)
+    since_ms   = int(datetime(since_date.year, since_date.month, since_date.day,
+                              tzinfo=_RIYADH).timestamp() * 1000)
 
     _load_pipelines()
     _ensure_individual_table_exists()
@@ -772,7 +847,6 @@ def sync_rolling_window(days: int = 30) -> int:
 
     print(f"[rolling] re-pulling last {days} days from HubSpot (since {since_date}) ...")
 
-    # ── Fetch all leads in window ─────────────────────────────────────────────
     rows, after, pages = [], None, 0
     while True:
         try:
@@ -788,28 +862,21 @@ def sync_rolling_window(days: int = 30) -> int:
         after = (data.get("paging") or {}).get("next", {}).get("after")
         if not after:
             break
-        if pages >= 100:  # 100 × 100 = 10k hard cap — warn and stop
-            print(f"[rolling] WARNING: hit 10k result cap — consider reducing --days")
+        if pages >= 100:
+            print(f"[rolling] WARNING: hit 10k result cap")
             break
 
-    print(f"[rolling] fetched {len(rows)} leads from HubSpot ({pages} pages)")
+    print(f"[rolling] fetched {len(rows)} leads ({pages} pages)")
     if not rows:
-        print("[rolling] nothing returned — aborting")
         return 0
 
-    # ── Replace BQ rows for this window ──────────────────────────────────────
-    client.query(
-        f"DELETE FROM `{table_id}` WHERE hs_createdate >= '{since_date}'"
-    ).result()
-
+    client.query(f"DELETE FROM `{table_id}` WHERE hs_createdate >= '{since_date}'").result()
     for i in range(0, len(rows), 5000):
         _flush_individual(client, rows[i:i + 5000], label="rolling-sync")
-    print(f"[rolling] wrote {len(rows)} rows to {_INDIVIDUAL_TABLE}")
 
-    # ── Rebuild daily aggregates for affected dates ───────────────────────────
     affected = sorted({r["hs_createdate"] for r in rows})
     n = _rebuild_daily_buckets(client, affected)
-    print(f"[rolling] rebuilt {len(affected)} dates -> {n} rows in hubspot_leads_module_daily")
+    print(f"[rolling] rebuilt {len(affected)} dates -> {n} rows")
     return n
 
 
@@ -906,6 +973,10 @@ if __name__ == "__main__":
     elif cmd == "cursor":
         n = sync_cursor_and_write()
         print(f"Cursor sync complete: {n} daily bucket rows updated")
+
+    elif cmd == "mirror":
+        n = sync_full_mirror()
+        print(f"Full mirror complete: {n} daily bucket rows updated")
 
     elif cmd == "rolling":
         d = int(sys.argv[2]) if len(sys.argv) > 2 else 30
