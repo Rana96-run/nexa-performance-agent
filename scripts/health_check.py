@@ -180,6 +180,29 @@ def check_microsoft_ads() -> tuple[bool, str]:
         return False, f"Microsoft Ads: {e}"
 
 
+def check_tiktok() -> tuple[bool, str]:
+    try:
+        import os, requests as _req
+        token = os.getenv("TIKTOK_ACCESS_TOKEN", "")
+        if not token:
+            return False, "TikTok: TIKTOK_ACCESS_TOKEN not set"
+        from collectors.tiktok_bq import _ad_accounts, BASE
+        accts = _ad_accounts()
+        if not accts:
+            return False, "TikTok: no ad accounts configured"
+        r = _req.get(
+            f"{BASE}/advertiser/info/",
+            headers={"Access-Token": token, "Content-Type": "application/json"},
+            params={"advertiser_ids": f'["{accts[0]}"]', "fields": '["name"]'},
+            timeout=10,
+        )
+        if r.status_code == 200 and r.json().get("code") == 0:
+            return True, f"TikTok -> OK ({len(accts)} account(s))"
+        return False, f"TikTok: API error {r.status_code} {r.text[:80]}"
+    except Exception as e:
+        return False, f"TikTok: {e}"
+
+
 def check_snapchat() -> tuple[bool, str]:
     try:
         from collectors.snap_bq import _refresh_access_token, _ad_accounts
@@ -363,6 +386,7 @@ CHECKS = [
     ("Conversion tracking",   check_conversion_tracking),
     ("Meta Ads",              check_meta),
     ("Microsoft Ads",         check_microsoft_ads),
+    ("TikTok",                check_tiktok),
     ("Snapchat",              check_snapchat),
     ("LinkedIn",              check_linkedin),
     ("HubSpot API",           check_hubspot),
@@ -383,6 +407,7 @@ CHECK_CATEGORY = {
     "Conversion tracking":  "Connectors",
     "Meta Ads":             "Connectors",
     "Microsoft Ads":        "Connectors",
+    "TikTok":               "Connectors",
     "Snapchat":             "Connectors",
     "LinkedIn":             "Connectors",
     "HubSpot API":          "Connectors",
