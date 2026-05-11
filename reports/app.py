@@ -552,8 +552,13 @@ def activity_dashboard():
     # Keywords added — positive: from weekly expansion queue + direct API adds during campaign creation
     kw_add_actions = {"launch", "keyword_candidates_queued_for_weekly_review", "positive_keywords_added"}
     c30, c7 = _counts(detail_rows, kw_add_actions)
+    kw_add_flat = []
+    for r in _filter(detail_rows, kw_add_actions):
+        for term in (r.kw_list or []):
+            kw_add_flat.append({"day": r.day, "channel": r.channel or "google_ads", "term": term})
     m_keywords_added = {
         "count_30d": c30, "count_7d": c7,
+        "term_rows": kw_add_flat[:300],
         "rows": [{"day": r.day, "channel": r.channel or "google_ads", "cnt": r.cnt,
                   "type": "positive"}
                  for r in _filter(detail_rows, kw_add_actions)[:60]],

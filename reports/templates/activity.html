@@ -130,6 +130,9 @@ a:hover{text-decoration:underline}
 .tag.meta{background:#1f2d50;color:#79b8ff}
 .tag.snapchat{background:#3d3010;color:#e3b341}
 .tag.linkedin{background:#0d3050;color:#56b2e6}
+.tag.tiktok{background:#1a1a2e;color:#ee1d52}
+.tag.microsoft_ads{background:#1a2a3a;color:#00a4ef}
+.tag.microsoft{background:#1a2a3a;color:#00a4ef}
 
 /* ── Recent activity table ── */
 .activity-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:40px}
@@ -451,15 +454,25 @@ a:hover{text-decoration:underline}
         <div class="card-actions">
           <button class="btn-workflow" onclick="openWorkflow('keywords_added')">⚙ How this works</button>
         </div>
-        {% if metrics.keywords_added.rows %}
+        {% if metrics.keywords_added.term_rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Count</th><th>Task Status</th></tr>
+          <tr><th>Date</th><th>Keyword</th><th>Channel</th></tr>
+          {% for r in metrics.keywords_added.term_rows %}
+          <tr>
+            <td>{{ r.day }}</td>
+            <td style="font-family:monospace;font-size:12px">{{ r.term }}</td>
+            <td><span class="tag {{ (r.channel or '')|lower|replace(' ','_') }}">{{ r.channel or '—' }}</span></td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% elif metrics.keywords_added.rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Channel</th><th>Count</th></tr>
           {% for r in metrics.keywords_added.rows %}
           <tr>
             <td>{{ r.day }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
+            <td><span class="tag {{ (r.channel or '')|lower|replace(' ','_') }}">{{ r.channel or '—' }}</span></td>
             <td>{{ r.cnt }}</td>
-            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">✅ done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">⏳ open</span>{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </table>
