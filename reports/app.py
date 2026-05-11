@@ -1544,25 +1544,54 @@ def asana_backfill():
 
 @app.route("/api/asana-status-debug")
 def asana_status_debug():
-    """Check what's in asana_task_status BQ table."""
+    """Check what's in asana_task_status BQ table, and try a test write."""
     from collectors.bq_writer import get_client as get_bq
+    from io import BytesIO
+    import json as _json
     import os
+    from datetime import datetime, timezone
     bq = get_bq()
     P = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D = os.getenv("BQ_DATASET", "qoyod_marketing")
+    result = {}
     try:
         total = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status`").result())[0].n
         done  = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status` WHERE completed=TRUE").result())[0].n
-        sample = list(bq.query(f"SELECT gid, completed, completed_at, synced_at FROM `{P}.{D}.asana_task_status` ORDER BY synced_at DESC LIMIT 5").result())
         log_gids = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.agent_activity_log` WHERE action='asana_task_created' AND JSON_VALUE(details,'$.gid') IS NOT NULL").result())[0].n
-        return jsonify({
-            "status_rows_total": total,
-            "status_rows_completed": done,
-            "activity_log_with_gid": log_gids,
-            "sample": [{"gid": r.gid, "completed": r.completed, "completed_at": str(r.completed_at), "synced_at": str(r.synced_at)} for r in sample],
-        })
+        result = {"status_rows_total": total, "status_rows_completed": done, "activity_log_with_gid": log_gids}
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        result["query_error"] = str(e)
+
+    # Try writing a single test row to see if the write itself works
+    try:
+        from google.cloud import bigquery as bqlib
+        test_row = {"gid": "debug_test_gid", "title": "debug", "project_key": "debug",
+                    "completed": False, "completed_at": None, "assignee_name": "",
+                    "due_on": None, "synced_at": datetime.now(timezone.utc).isoformat()}
+        ndjson = _json.dumps(test_row).encode()
+        table_ref = bq.dataset(D, project=P).table("asana_task_status")
+        job_cfg = bqlib.LoadJobConfig(
+            source_format=bqlib.SourceFormat.NEWLINE_DELIMITED_JSON,
+            write_disposition=bqlib.WriteDisposition.WRITE_APPEND,
+            autodetect=False,
+            schema=[
+                bqlib.SchemaField("gid",           "STRING"),
+                bqlib.SchemaField("title",         "STRING"),
+                bqlib.SchemaField("project_key",   "STRING"),
+                bqlib.SchemaField("completed",     "BOOL"),
+                bqlib.SchemaField("completed_at",  "TIMESTAMP"),
+                bqlib.SchemaField("assignee_name", "STRING"),
+                bqlib.SchemaField("due_on",        "DATE"),
+                bqlib.SchemaField("synced_at",     "TIMESTAMP"),
+            ],
+        )
+        job = bq.load_table_from_file(BytesIO(ndjson), table_ref, job_config=job_cfg)
+        job.result()
+        result["test_write"] = "ok"
+    except Exception as e:
+        result["test_write_error"] = str(e)
+
+    return jsonify(result)
 
 
 # DASHBOARD_URL / ACTIVITY_DASHBOARD_URL = short Railway URLs shown in Slack/email/Asana
