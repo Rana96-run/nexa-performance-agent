@@ -131,6 +131,21 @@ mirror (and extend) the Looker boards the team already trusts.
   over all accounts via `_accounts()` / `_get_access_token_for(public_client=True/False)`.
   Both accounts authenticate. Backfill needed: run collector YTD to populate BQ.
 
+## Done this session (2026-05-11 continued)
+
+- [x] **Full mirror sync redesign — HubSpot ↔ BQ permanently matched** — replaced
+  Tue/Fri cursor-based resync with `sync_full_mirror()` that re-pulls all 2026 leads
+  on every 6h cycle (Funnel.io approach). No cursor, no delta, no drift ever.
+  Start date: 2026-01-01. 26,076 leads → 12,327 rows across 131 dates. May 5-9
+  paid count: BQ=883 vs HubSpot=882 (1-lead midnight boundary — matches).
+- [x] **Snapchat qoyod_source mismatch fixed** — `paid_channel_campaign_daily` had
+  `'Snapchat'` in its channel_map but data stores `'Snapchat Ads'`. Snapchat leads
+  were silently dropped from all campaign-level dashboard joins. Fixed + views
+  rematerialized.
+- [x] **Riyadh date bucketing fixed** — `hs_createdate` now stored as Riyadh (GMT+3)
+  date via `_hs_date_to_riyadh()`. Leads created 00:00-02:59 Riyadh were bucketing
+  to the previous UTC day. May 9 went from 5 leads to 258.
+
 ## Done this session (2026-05-11)
 
 - [x] **`rebuild_all` BQ MERGE timeout fix** — batched 658 dates into chunks of 30 per MERGE to avoid the 2400s timeout. 47,019 rows written across 22 batches to `hubspot_leads_module_daily`. Committed `e448918`.
