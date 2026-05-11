@@ -131,14 +131,14 @@ _WORKFLOWS = {
     },
     "negatives_added": {
         "title": "Negative Keyword Execution",
-        "subtitle": "How wasted search terms get blocked automatically",
+        "subtitle": "Policy-violating terms blocked automatically — wasted-spend queries route to keyword pause",
         "steps": [
-            ("Search term report scanned", "google_ads_audit.py: search_term_view last 14 days"),
-            ("ALWAYS_NEGATIVE policy", "login/free/course/download/loan/job patterns → auto-exclude"),
-            ("Wasted spend check", "$25+ per term with 0 conversions → negative candidate"),
+            ("Search term report scanned", "google_ads_audit.py + microsoft_ads_audit.py: search_term_view last 14 days"),
+            ("ALWAYS_NEGATIVE policy check", "مجاني/مجانا · login/sign in · وظيفة/توظيف · تمويل/قرض/بنك · دورة/كورس/تعلم · التسويق · chatgpt"),
+            ("Policy match → auto-negate", "Add as EXACT negative at campaign level — no approval needed"),
+            ("Wasted-spend terms → pause review", "$25+ with 0 conv → Asana task to pause the matched keyword (not negate)"),
             ("Competitor guard", "Competitor terms NEVER negated — routed to pause-watch instead"),
-            ("Add as EXACT negative", "Campaign-level via add_negative_keywords() in executors/google_ads.py"),
-            ("Logged to BQ", "action=negative_keywords_added, details.terms = list of blocked terms"),
+            ("Logged to BQ", "action=negative_keywords_added, details.terms = policy-matching terms only"),
         ],
     },
     "optimizations": {
@@ -577,11 +577,13 @@ def activity_dashboard():
         "kw_rows": kw_paused_flat[:120],
     }
 
-    # Negatives added — expand terms_list
+    # Negatives added — only show policy-matching terms (not wasted-spend terms)
+    from executors.keyword_policy import ALWAYS_NEGATIVE_PATTERNS, matches_any
     neg_flat = []
     for r in _filter(detail_rows, {"negative_keywords_added"}):
         for term in (r.terms_list or []):
-            neg_flat.append({"day": r.day, "term": term})
+            if matches_any(term, ALWAYS_NEGATIVE_PATTERNS):
+                neg_flat.append({"day": r.day, "term": term})
     neg_c30 = sum(r.cnt for r in detail_rows if r.action == "negative_keywords_added" and r.day >= cutoff_30)
     neg_c7  = sum(r.cnt for r in detail_rows if r.action == "negative_keywords_added" and r.day >= cutoff_7)
     m_negatives_added = {
@@ -1741,13 +1743,6 @@ def asana_status_debug():
 def dashboard_short():
     """Short link → Hex performance dashboard."""
     dest = os.getenv("DASHBOARD_DEST_URL") or "https://app.hex.tech"
-    return redirect(dest, code=302)
-
-
-@app.route("/activity")
-def activity_short():
-    """Short link → Hex agent activity dashboard."""
-    dest = os.getenv("ACTIVITY_DEST_URL") or "https://app.hex.tech"
     return redirect(dest, code=302)
 
 
