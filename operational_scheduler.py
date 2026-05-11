@@ -349,14 +349,7 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] Asana maintenance failed (non-fatal): {e}")
 
-    # 3e. Zapier monitor — auto-replay errored zap runs, alert on persistent failures
-    try:
-        from collectors.zapier import run as zapier_run
-        zapier_run()
-    except Exception as e:
-        print(f"[ops-scheduler] Zapier monitor failed (non-fatal): {e}")
-
-    # 3f. LinkedIn token refresh — tokens expire every 60 days; refresh nightly
+    # 3e. LinkedIn token refresh — tokens expire every 60 days; refresh nightly
     try:
         from scripts.linkedin_refresh import refresh_token
         refresh_token()
