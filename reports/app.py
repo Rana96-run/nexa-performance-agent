@@ -1562,6 +1562,14 @@ def asana_status_debug():
     except Exception as e:
         result["query_error"] = str(e)
 
+    # Fix REQUIRED mode on gid/synced_at if table was created with NOT NULL
+    try:
+        alter = f"ALTER TABLE `{P}.{D}.asana_task_status` ALTER COLUMN gid DROP NOT NULL, ALTER COLUMN synced_at DROP NOT NULL"
+        bq.query(alter).result()
+        result["alter"] = "ok"
+    except Exception as e:
+        result["alter_error"] = str(e)
+
     # Try writing a single test row to see if the write itself works
     try:
         from google.cloud import bigquery as bqlib
