@@ -17,55 +17,68 @@ from collectors.bq_writer import upsert_rows
 from collectors.currency import to_usd, normalize_currency
 
 
-# ── UTM extraction helper ─────────────────────────────────────────────────────
-_UTM_CONTENT_RE = re.compile(r"utm_content=([^&\s\"']+)", re.IGNORECASE)
+# ── UTM extraction helpers ────────────────────────────────────────────────────
 _CUSTOM_PARAM_RE = re.compile(r"\{_([A-Za-z0-9_]+)\}")
 
 
-def _extract_utm_content(custom_params, *templates):
-    """Walk through tracking-template candidates (ad > ad_group > campaign)
-    and return the utm_content value found in the first non-empty template,
-    resolving Google Ads {_paramname} placeholders against the ad's
+def _extract_utm_param(param_name, custom_params, *templates):
+    """Pull a named utm_* parameter out of a tracking-URL template, resolving
+    any Google Ads {_paramname} placeholders against the entity's
     url_custom_parameters dict.
 
-    Google Ads URL tracking templates can use literal values:
-        '{lpurl}?utm_content=Google_AR_Feature_Invoice_WP'
-    or placeholder references to custom parameters set per-ad:
-        '{lpurl}?utm_content={_adname}'
-    The latter is what's resolved at click-time to the value HubSpot captures.
+    Walks the templates in order (typically: ad > ad_group > campaign) and
+    returns the first fully-resolved value. Returns None if no template
+    contains the param or all references stay unresolved.
 
-    custom_params is a dict {param_name: value} extracted from
-    ad_group_ad.ad.url_custom_parameters (sans the leading underscore).
-    Returns the resolved utm_content string, or None if none could be derived.
+    Example:
+        _extract_utm_param("content", {"adname": "x_invoice_wp"},
+                           "{lpurl}?utm_content={_adname}")
+        → "x_invoice_wp"
     """
+    pattern = re.compile(rf"utm_{param_name}=([^&\s\"']+)", re.IGNORECASE)
     for t in templates:
         if not t:
             continue
-        m = _UTM_CONTENT_RE.search(t)
+        m = pattern.search(t)
         if not m:
             continue
         raw = m.group(1)
-        # Resolve any {_paramname} placeholders against the ad's custom params
         def _sub(match):
             name = match.group(1)
             return custom_params.get(name, match.group(0))
         resolved = _CUSTOM_PARAM_RE.sub(_sub, raw)
-        # If anything was successfully resolved (no remaining placeholders), return it
         if "{" not in resolved:
             return unquote(resolved)
-        # Otherwise fall through to next template candidate
     return None
 
 
-def _custom_params_dict(ad):
-    """Convert Google Ads ad.url_custom_parameters (repeated CustomParameter)
-    into a {key: value} dict. Keys are without the leading underscore so the
-    {_paramname} regex match group (which captures inside the braces sans `_`)
-    looks them up directly."""
+# Backwards-compat shim — older callers used this name. Equivalent to
+# _extract_utm_param("content", ...). Kept as a thin wrapper so we don't
+# break anything pointed at the previous symbol.
+def _extract_utm_content(custom_params, *templates):
+    return _extract_utm_param("content", custom_params, *templates)
+
+
+def _custom_params_dict(entity):
+    """Convert any Google Ads entity's url_custom_parameters (repeated
+    CustomParameter message) into a {key: value} dict. Works for ad,
+    ad_group, campaign — any entity that exposes url_custom_parameters."""
     out = {}
-    for cp in getattr(ad, "url_custom_parameters", []) or []:
+    for cp in getattr(entity, "url_custom_parameters", []) or []:
         out[cp.key] = cp.value
     return out
+
+
+def _merged_custom_params(*entities):
+    """Merge url_custom_parameters from multiple entities (ad, ad_group,
+    campaign...). Later entities override earlier ones, so the natural call
+    order is (campaign, ad_group, ad) so the most-specific param wins."""
+    merged = {}
+    for e in entities:
+        if e is None:
+            continue
+        merged.update(_custom_params_dict(e))
+    return merged
 
 
 def _client():
@@ -176,8 +189,12 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
             customer.currency_code,
             campaign.id,
             campaign.name,
+            campaign.tracking_url_template,
+            campaign.url_custom_parameters,
             ad_group.id,
             ad_group.name,
+            ad_group.tracking_url_template,
+            ad_group.url_custom_parameters,
             ad_group.status,
             metrics.cost_micros,
             metrics.conversions,
@@ -203,6 +220,21 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
                 native_cur   = normalize_currency(r.customer.currency_code)
                 spend        = to_usd(spend_native, native_cur)
                 conv         = r.metrics.conversions
+                # utm_audience: the ad-group-level UTM tag. {_adgroup} in
+                # the campaign/ad_group template resolves to ad_group.name
+                # at click time, but Google Ads doesn't expose that resolved
+                # value on the API. So we resolve it ourselves: merge
+                # url_custom_parameters from campaign + ad_group, then fall
+                # back to ad_group.name when the template uses {_adgroup}.
+                custom_params = _merged_custom_params(r.campaign, r.ad_group)
+                # The {_adgroup} placeholder isn't in url_custom_parameters
+                # — Google substitutes it from ad_group.name. Emulate that.
+                custom_params.setdefault("adgroup", r.ad_group.name or "")
+                utm_audience = _extract_utm_param(
+                    "audience", custom_params,
+                    r.ad_group.tracking_url_template,
+                    r.campaign.tracking_url_template,
+                )
                 rows.append({
                     "date":          str(r.segments.date),
                     "channel":       "google_ads",
@@ -211,6 +243,7 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
                     "campaign_name": r.campaign.name,
                     "adset_id":      str(r.ad_group.id),
                     "adset_name":    r.ad_group.name,
+                    "utm_audience":  utm_audience,
                     "status":        r.ad_group.status.name,
                     "spend":         round(spend, 2),
                     "impressions":   int(r.metrics.impressions),
@@ -226,8 +259,94 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
             print(f"[google_ads]   adgroups account {cid} error: {e}")
         print(f"[google_ads]   adgroups account {cid}: {count} rows")
 
+    # PMax asset_groups belong here too — they are the PMax equivalent of an
+    # ad_group (both → utm_audience). Merged into the same batch so the
+    # shared (date, channel='google_ads') DELETE clause in upsert_rows wipes
+    # and re-inserts both consistently.
+    try:
+        pmax_rows = _build_pmax_asset_group_rows_for_adsets(days, incremental, now)
+        if pmax_rows:
+            print(f"[google_ads]   pmax asset_groups merged: {len(pmax_rows)}")
+            rows.extend(pmax_rows)
+    except Exception as e:
+        print(f"[google_ads]   pmax asset_groups error (continuing): {e}")
+
     return upsert_rows("adsets_daily", rows,
                        key_fields=["date", "channel", "adset_id"])
+
+
+def _build_pmax_asset_group_rows_for_adsets(days, incremental, now: str) -> list[dict]:
+    """Build PMax asset_group rows formatted for adsets_daily.
+
+    Asset groups are the PMax equivalent of ad_groups and map to utm_audience.
+    Resolved by extracting utm_audience from the campaign's tracking template
+    using merged custom params (campaign-level only, asset_group doesn't
+    expose its own url_custom_parameters on the asset_group resource).
+    """
+    client = _client()
+    ga     = client.get_service("GoogleAdsService")
+    start, end = _date_window(days, incremental)
+    query = f"""
+        SELECT
+            customer.id,
+            customer.currency_code,
+            campaign.id,
+            campaign.name,
+            campaign.tracking_url_template,
+            campaign.url_custom_parameters,
+            asset_group.id,
+            asset_group.name,
+            asset_group.status,
+            metrics.cost_micros,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.ctr,
+            metrics.conversions,
+            segments.date
+        FROM asset_group
+        WHERE segments.date BETWEEN '{start}' AND '{end}'
+          AND campaign.advertising_channel_type = 'PERFORMANCE_MAX'
+          AND campaign.status != 'REMOVED'
+    """
+    rows = []
+    print(f"[google_ads] pmax-asset-groups {start} -> {end}")
+    for cid in _customer_ids():
+        try:
+            for r in ga.search(customer_id=cid, query=query):
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
+                custom_params = _custom_params_dict(r.campaign)
+                # PMax's equivalent of {_adgroup} → asset_group.name
+                custom_params.setdefault("adgroup", r.asset_group.name or "")
+                custom_params.setdefault("assetgroup", r.asset_group.name or "")
+                utm_audience = _extract_utm_param(
+                    "audience", custom_params,
+                    r.campaign.tracking_url_template,
+                )
+                rows.append({
+                    "date":          str(r.segments.date),
+                    "channel":       "google_ads",
+                    "account_id":    cid,
+                    "campaign_id":   str(r.campaign.id),
+                    "campaign_name": r.campaign.name,
+                    # Prefix prevents collision with regular ad_group_ids
+                    "adset_id":      f"pmax_{r.asset_group.id}",
+                    "adset_name":    r.asset_group.name,
+                    "utm_audience":  utm_audience,
+                    "status":        r.asset_group.status.name,
+                    "spend":         round(spend, 2),
+                    "impressions":   int(r.metrics.impressions),
+                    "clicks":        int(r.metrics.clicks),
+                    "ctr":           round(r.metrics.ctr * 100, 4),
+                    "leads":         int(r.metrics.conversions),
+                    "conversions":   float(r.metrics.conversions),
+                    "currency":      "USD",
+                    "updated_at":    now,
+                })
+        except Exception as e:
+            print(f"[google_ads]   pmax asset_groups account {cid} error: {e}")
+    return rows
 
 
 # ── Keyword level → keywords_daily ────────────────────────────────────────────
@@ -364,14 +483,18 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                 final_urls   = list(r.ad_group_ad.ad.final_urls)
                 final_url    = final_urls[0] if final_urls else None
                 # utm_content: parsed from tracking_url_template at
-                # ad > ad_group > campaign (lowest-non-empty wins).
-                # Resolves {_paramname} placeholders against the ad's
-                # url_custom_parameters — this is what Google does at click
-                # time and is exactly the string HubSpot captures as
-                # lead_utm_content, so it becomes the reliable join key.
-                custom_params = _custom_params_dict(r.ad_group_ad.ad)
-                utm_content  = _extract_utm_content(
-                    custom_params,
+                # ad > ad_group > campaign (lowest-non-empty wins). Resolves
+                # {_paramname} placeholders against merged custom params
+                # from campaign + ad_group + ad. Plus the implicit
+                # {_adname} → ad.name and {_adgroup} → ad_group.name
+                # substitutions Google does at click time.
+                custom_params = _merged_custom_params(
+                    r.campaign, r.ad_group, r.ad_group_ad.ad,
+                )
+                custom_params.setdefault("adgroup", r.ad_group.name or "")
+                custom_params.setdefault("adname", r.ad_group_ad.ad.name or "")
+                utm_content = _extract_utm_param(
+                    "content", custom_params,
                     r.ad_group_ad.ad.tracking_url_template,
                     r.ad_group.tracking_url_template,
                     r.campaign.tracking_url_template,
@@ -403,94 +526,15 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             print(f"[google_ads]   ads account {cid} error: {e}")
         print(f"[google_ads]   ads account {cid}: {count} rows")
 
-    # Also collect PMax asset_groups as ads (PMax campaigns don't appear in
-    # ad_group_ad — they have asset_groups instead). Single upsert below so
-    # the shared (date, google_ads) DELETE doesn't wipe one bucket with the
-    # other.
-    try:
-        pmax_rows = _build_pmax_rows(days, incremental, now)
-        if pmax_rows:
-            print(f"[google_ads]   pmax rows merged: {len(pmax_rows)}")
-            rows.extend(pmax_rows)
-    except Exception as e:
-        print(f"[google_ads]   pmax-as-ads error (continuing with regular only): {e}")
+    # Also collect PMax ads (ad_group_ad with type=PERFORMANCE_MAX_AD).
+    # PMax ads ARE exposed via ad_group_ad — the regular query above already
+    # picks them up if the type filter is broad. They map to utm_content
+    # (same as Search ads do), so they belong in ads_daily alongside the
+    # regular ad rows. The above query already returns them; this is a
+    # documentation note rather than a separate call.
 
     return upsert_rows("ads_daily", rows,
                        key_fields=["date", "channel", "ad_id"])
-
-
-def _build_pmax_rows(days: int | None, incremental: bool, now: str) -> list[dict]:
-    """Build PMax asset_group rows formatted for ads_daily.
-
-    Returned rows are appended to the regular ad_group_ad rows in
-    collect_ads_and_write() and upserted together so the (date, channel)
-    DELETE wipes both at once and re-inserts both together.
-    """
-    client = _client()
-    ga     = client.get_service("GoogleAdsService")
-    start, end = _date_window(days, incremental)
-    query = f"""
-        SELECT
-            customer.id,
-            customer.currency_code,
-            campaign.id,
-            campaign.name,
-            campaign.tracking_url_template,
-            campaign.url_custom_parameters,
-            asset_group.id,
-            asset_group.name,
-            asset_group.status,
-            metrics.cost_micros,
-            metrics.impressions,
-            metrics.clicks,
-            metrics.ctr,
-            metrics.conversions,
-            segments.date
-        FROM asset_group
-        WHERE segments.date BETWEEN '{start}' AND '{end}'
-          AND campaign.advertising_channel_type = 'PERFORMANCE_MAX'
-          AND campaign.status != 'REMOVED'
-    """
-    rows = []
-    print(f"[google_ads] pmax-as-ads {start} -> {end} | {len(_customer_ids())} account(s)")
-    for cid in _customer_ids():
-        try:
-            for r in ga.search(customer_id=cid, query=query):
-                spend_native = r.metrics.cost_micros / 1_000_000
-                native_cur   = normalize_currency(r.customer.currency_code)
-                spend        = to_usd(spend_native, native_cur)
-                custom_params = {}
-                for cp in getattr(r.campaign, "url_custom_parameters", []) or []:
-                    custom_params[cp.key] = cp.value
-                utm_content = _extract_utm_content(
-                    custom_params,
-                    r.campaign.tracking_url_template,
-                )
-                rows.append({
-                    "date":          str(r.segments.date),
-                    "channel":       "google_ads",
-                    "account_id":    cid,
-                    "campaign_id":   str(r.campaign.id),
-                    "campaign_name": r.campaign.name,
-                    "adset_id":      str(r.asset_group.id),
-                    "adset_name":    r.asset_group.name,
-                    "ad_id":         f"pmax_{r.asset_group.id}",
-                    "ad_name":       r.asset_group.name,
-                    "utm_content":   utm_content,
-                    "status":        r.asset_group.status.name,
-                    "spend":         round(spend, 2),
-                    "impressions":   int(r.metrics.impressions),
-                    "clicks":        int(r.metrics.clicks),
-                    "ctr":           round(r.metrics.ctr * 100, 4),
-                    "leads":         int(r.metrics.conversions),
-                    "conversions":   float(r.metrics.conversions),
-                    "currency":      "USD",
-                    "final_url":     None,
-                    "updated_at":    now,
-                })
-        except Exception as e:
-            print(f"[google_ads]   pmax-as-ads account {cid} error: {e}")
-    return rows
 
 
 # ── PMax Asset Group level → pmax_asset_groups_daily ─────────────────────────

@@ -96,6 +96,7 @@ ADSETS_DAILY_SCHEMA = [
     bigquery.SchemaField("campaign_name", "STRING"),
     bigquery.SchemaField("adset_id",      "STRING",    mode="REQUIRED"),
     bigquery.SchemaField("adset_name",    "STRING"),
+    bigquery.SchemaField("utm_audience",  "STRING"),    # resolved from tracking template; join key vs hubspot_leads_module_daily.lead_utm_audience
     bigquery.SchemaField("status",        "STRING"),
     bigquery.SchemaField("spend",         "FLOAT64"),
     bigquery.SchemaField("impressions",   "INT64"),
