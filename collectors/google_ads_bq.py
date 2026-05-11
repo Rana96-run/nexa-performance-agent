@@ -19,25 +19,53 @@ from collectors.currency import to_usd, normalize_currency
 
 # ── UTM extraction helper ─────────────────────────────────────────────────────
 _UTM_CONTENT_RE = re.compile(r"utm_content=([^&\s\"']+)", re.IGNORECASE)
+_CUSTOM_PARAM_RE = re.compile(r"\{_([A-Za-z0-9_]+)\}")
 
 
-def _extract_utm_content(*templates):
+def _extract_utm_content(custom_params, *templates):
     """Walk through tracking-template candidates (ad > ad_group > campaign)
-    and return the utm_content value found in the first non-empty template.
-    Returns None if no utm_content is set at any level.
+    and return the utm_content value found in the first non-empty template,
+    resolving Google Ads {_paramname} placeholders against the ad's
+    url_custom_parameters dict.
 
-    Google Ads stores tracking templates as raw strings like:
-        '{lpurl}?utm_source=google&utm_content=Google_AR_Feature_Invoice_WP'
-    We URL-decode the matched value to handle {_param} placeholders that
-    have already been resolved on the API side.
+    Google Ads URL tracking templates can use literal values:
+        '{lpurl}?utm_content=Google_AR_Feature_Invoice_WP'
+    or placeholder references to custom parameters set per-ad:
+        '{lpurl}?utm_content={_adname}'
+    The latter is what's resolved at click-time to the value HubSpot captures.
+
+    custom_params is a dict {param_name: value} extracted from
+    ad_group_ad.ad.url_custom_parameters (sans the leading underscore).
+    Returns the resolved utm_content string, or None if none could be derived.
     """
     for t in templates:
         if not t:
             continue
         m = _UTM_CONTENT_RE.search(t)
-        if m:
-            return unquote(m.group(1))
+        if not m:
+            continue
+        raw = m.group(1)
+        # Resolve any {_paramname} placeholders against the ad's custom params
+        def _sub(match):
+            name = match.group(1)
+            return custom_params.get(name, match.group(0))
+        resolved = _CUSTOM_PARAM_RE.sub(_sub, raw)
+        # If anything was successfully resolved (no remaining placeholders), return it
+        if "{" not in resolved:
+            return unquote(resolved)
+        # Otherwise fall through to next template candidate
     return None
+
+
+def _custom_params_dict(ad):
+    """Convert Google Ads ad.url_custom_parameters (repeated CustomParameter)
+    into a {key: value} dict. Keys are without the leading underscore so the
+    {_paramname} regex match group (which captures inside the braces sans `_`)
+    looks them up directly."""
+    out = {}
+    for cp in getattr(ad, "url_custom_parameters", []) or []:
+        out[cp.key] = cp.value
+    return out
 
 
 def _client():
@@ -305,6 +333,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             ad_group_ad.ad.name,
             ad_group_ad.ad.final_urls,
             ad_group_ad.ad.tracking_url_template,
+            ad_group_ad.ad.url_custom_parameters,
             ad_group_ad.status,
             metrics.cost_micros,
             metrics.conversions,
@@ -336,9 +365,13 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                 final_url    = final_urls[0] if final_urls else None
                 # utm_content: parsed from tracking_url_template at
                 # ad > ad_group > campaign (lowest-non-empty wins).
-                # This is the SAME string HubSpot captures as lead_utm_content,
-                # so it becomes the reliable join key for spend ⇄ leads.
+                # Resolves {_paramname} placeholders against the ad's
+                # url_custom_parameters — this is what Google does at click
+                # time and is exactly the string HubSpot captures as
+                # lead_utm_content, so it becomes the reliable join key.
+                custom_params = _custom_params_dict(r.ad_group_ad.ad)
                 utm_content  = _extract_utm_content(
+                    custom_params,
                     r.ad_group_ad.ad.tracking_url_template,
                     r.ad_group.tracking_url_template,
                     r.campaign.tracking_url_template,
