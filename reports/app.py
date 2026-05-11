@@ -1318,6 +1318,75 @@ def activity_dashboard():
         "new_ads": new_ads_rows,
     }
 
+    # ── 7. Health check — last run from BQ ────────────────────────────────────
+    hygiene = {"run_id": None, "run_ts": None, "checks": [], "freshness": []}
+    try:
+        hc_sql = f"""
+            WITH ranked AS (
+              SELECT
+                channel                                  AS name,
+                status,
+                ts,
+                JSON_VALUE(details, '$.msg')             AS msg,
+                JSON_VALUE(details, '$.run_id')          AS run_id,
+                JSON_VALUE(details, '$.category')        AS category,
+                ROW_NUMBER() OVER (
+                  PARTITION BY JSON_VALUE(details, '$.run_id'), channel
+                  ORDER BY ts DESC
+                ) AS rn
+              FROM {T}.agent_activity_log
+              WHERE action = 'health_check'
+                AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+            ),
+            latest_run AS (
+              SELECT run_id, MAX(ts) AS run_ts
+              FROM ranked
+              WHERE rn = 1
+              GROUP BY run_id
+              ORDER BY run_ts DESC
+              LIMIT 1
+            )
+            SELECT r.name, r.status, r.msg, r.run_id, r.category,
+                   lr.run_ts
+            FROM ranked r
+            JOIN latest_run lr ON r.run_id = lr.run_id
+            WHERE r.rn = 1
+            ORDER BY r.category, r.name
+        """
+        hc_rows = list(bq.query(hc_sql).result())
+        if hc_rows:
+            hygiene["run_id"] = hc_rows[0].run_id
+            hygiene["run_ts"] = hc_rows[0].run_ts.strftime("%Y-%m-%d %H:%M AST") \
+                if hc_rows[0].run_ts else None
+            hygiene["checks"] = [
+                {"name": r.name, "ok": r.status == "success",
+                 "msg": r.msg or "", "category": r.category or "Other"}
+                for r in hc_rows
+            ]
+
+        # Table freshness
+        fresh_sql = f"""
+            SELECT channel, MAX(date) AS last_date,
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_ago
+            FROM {T}.campaigns_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            GROUP BY channel
+            UNION ALL
+            SELECT 'hubspot_leads' AS channel, MAX(date),
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+            FROM {T}.hubspot_leads_module_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            ORDER BY channel
+        """
+        hygiene["freshness"] = [
+            {"channel": r.channel, "last_date": str(r.last_date or "—"),
+             "days_ago": int(r.days_ago or 0),
+             "ok": (r.days_ago or 99) <= 1}
+            for r in bq.query(fresh_sql).result()
+        ]
+    except Exception as e:
+        print(f"[activity] hygiene query failed (non-fatal): {e}")
+
     return render_template(
         "activity.html",
         last_updated=now_str,
@@ -1331,11 +1400,42 @@ def activity_dashboard():
         workflows=_WORKFLOWS,
         asana_completion=asana_completion,
         followup=followup,
+        hygiene=hygiene,
+        hc_running=_HC_STATUS.get("running", False),
     )
 
 
 _REFRESH_STATUS: dict = {"running": False, "started_at": None,
                           "finished_at": None, "result": None, "error": None}
+
+_HC_STATUS: dict = {"running": False, "last_run_id": None, "results": None, "error": None}
+
+
+def _do_health_check():
+    from datetime import datetime as _dt
+    run_id = _dt.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    _HC_STATUS.update({"running": True, "last_run_id": run_id, "error": None})
+    try:
+        import sys, pathlib
+        sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+        from scripts.health_check import run_all
+        results = run_all(run_id=run_id)
+        _HC_STATUS["results"] = {
+            name: {"ok": ok, "msg": msg} for name, (ok, msg) in results.items()
+        }
+    except Exception as e:
+        _HC_STATUS["error"] = str(e)
+    finally:
+        _HC_STATUS["running"] = False
+
+
+@app.route("/api/run-health-check", methods=["POST"])
+def trigger_health_check():
+    if _HC_STATUS.get("running"):
+        return jsonify({"status": "already_running"}), 202
+    import threading
+    threading.Thread(target=_do_health_check, daemon=True).start()
+    return jsonify({"status": "started"}), 202
 
 
 def _do_refresh(days: int | None, backfill: bool):

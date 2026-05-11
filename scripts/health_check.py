@@ -159,6 +159,73 @@ def check_asana() -> tuple[bool, str]:
 
 
 
+def check_microsoft_ads() -> tuple[bool, str]:
+    try:
+        from collectors.microsoft_ads_bq import _accounts, _get_access_token_for
+        accs = _accounts()
+        if not accs:
+            return False, "Microsoft Ads: no accounts configured"
+        acc = accs[0]
+        _get_access_token_for(acc["refresh_token"], acc["public_client"])
+        return True, f"Microsoft Ads -> OK ({len(accs)} account(s))"
+    except Exception as e:
+        return False, f"Microsoft Ads: {e}"
+
+
+def check_snapchat() -> tuple[bool, str]:
+    try:
+        from collectors.snap_bq import _get_token, SNAP_AD_ACCOUNT_IDS
+        token = _get_token()
+        if not token:
+            return False, "Snapchat: token fetch returned empty"
+        return True, f"Snapchat -> OK ({len(SNAP_AD_ACCOUNT_IDS)} account(s))"
+    except Exception as e:
+        return False, f"Snapchat: {e}"
+
+
+def check_linkedin() -> tuple[bool, str]:
+    try:
+        import requests
+        from collectors.linkedin_bq import _headers, BASE
+        r = requests.get(f"{BASE}/adAccounts?q=search", headers=_headers(), timeout=10)
+        if r.status_code < 400:
+            n = len(r.json().get("elements", []))
+            return True, f"LinkedIn -> OK ({n} account(s))"
+        return False, f"LinkedIn -> HTTP {r.status_code}"
+    except Exception as e:
+        return False, f"LinkedIn: {e}"
+
+
+def check_data_freshness() -> tuple[bool, str]:
+    """Check how stale the key BQ tables are. Fails if any source is >2 days behind."""
+    try:
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET_ID
+        bq     = get_client()
+        T      = f"`{PROJECT_ID}.{DATASET_ID}`"
+        riyadh = timezone(timedelta(hours=3))
+        today  = datetime.now(riyadh).date()
+        sql = f"""
+            SELECT 'campaigns_daily' AS tbl, channel, MAX(date) AS last_date
+            FROM {T}.campaigns_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
+            GROUP BY channel
+            UNION ALL
+            SELECT 'hubspot_leads', 'hubspot', MAX(date)
+            FROM {T}.hubspot_leads_module_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
+        """
+        rows   = list(bq.query(sql).result())
+        stale  = [(r.tbl, r.channel, str(r.last_date))
+                  for r in rows if r.last_date and (today - r.last_date).days > 1]
+        if stale:
+            parts = [f"{ch}({tbl})={d}" for tbl, ch, d in stale[:5]]
+            return False, f"Stale data: {', '.join(parts)}"
+        sources = {r.channel for r in rows}
+        return True, f"All fresh ({len(sources)} sources, latest={max(str(r.last_date) for r in rows if r.last_date)})"
+    except Exception as e:
+        return False, f"Freshness check: {e}"
+
+
 def check_hubspot_webhook() -> tuple[bool, str]:
     try:
         import requests
@@ -281,19 +348,61 @@ CHECKS = [
     ("Railway deployment",    check_railway_deployment),
     ("Slack listener",        check_slack_listener),
     ("Flask",                 check_flask),
-    ("HubSpot API",           check_hubspot),
     ("BigQuery",              check_bigquery),
+    ("Data freshness",        check_data_freshness),
     ("Google Ads",            check_google_ads),
     ("Conversion tracking",   check_conversion_tracking),
     ("Meta Ads",              check_meta),
+    ("Microsoft Ads",         check_microsoft_ads),
+    ("Snapchat",              check_snapchat),
+    ("LinkedIn",              check_linkedin),
+    ("HubSpot API",           check_hubspot),
+    ("HubSpot webhook",       check_hubspot_webhook),
     ("Slack",                 check_slack),
     ("Asana",                 check_asana),
-    ("HubSpot webhook",       check_hubspot_webhook),
 ]
 
+# Category grouping for dashboard display
+CHECK_CATEGORY = {
+    "Railway deployment":   "Infrastructure",
+    "Flask":                "Infrastructure",
+    "BigQuery":             "Infrastructure",
+    "Data freshness":       "Data",
+    "Slack":                "Infrastructure",
+    "Slack listener":       "Infrastructure",
+    "Google Ads":           "Connectors",
+    "Conversion tracking":  "Connectors",
+    "Meta Ads":             "Connectors",
+    "Microsoft Ads":        "Connectors",
+    "Snapchat":             "Connectors",
+    "LinkedIn":             "Connectors",
+    "HubSpot API":          "Connectors",
+    "HubSpot webhook":      "Connectors",
+    "Asana":                "Connectors",
+}
 
-def run_all() -> dict:
+
+def _log_to_bq(results: dict, run_id: str) -> None:
+    """Write one row per check to agent_activity_log so the dashboard can read them."""
+    try:
+        from logs.activity_logger import log_activity_async
+        for name, (ok, msg) in results.items():
+            log_activity_async(
+                role="health_monitor",
+                action="health_check",
+                status="success" if ok else "failed",
+                channel=name,
+                details={"msg": msg, "run_id": run_id,
+                         "category": CHECK_CATEGORY.get(name, "Other")},
+            )
+    except Exception as e:
+        print(f"[health_check] BQ log failed (non-fatal): {e}")
+
+
+def run_all(run_id: str | None = None) -> dict:
     """Run every check; return {name: (ok, msg)} dict."""
+    if run_id is None:
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     results = {}
     for name, fn in CHECKS:
         t0 = time.time()
@@ -306,6 +415,7 @@ def run_all() -> dict:
         results[name] = (ok, f"{msg}  ({elapsed}s)")
         icon = "✅" if ok else "❌"
         print(f"  {icon}  {name:<20} {msg}  ({elapsed}s)")
+    _log_to_bq(results, run_id)
     return results
 
 
@@ -357,7 +467,7 @@ def post_to_slack(results: dict, failures_only: bool = True) -> None:
         print(f"[health_check] Slack post failed: {e}")
 
 
-def main(post_slack: bool = True, failures_only: bool = True) -> bool:
+def main(post_slack: bool = True, failures_only: bool = True, run_id: str | None = None) -> bool:
     """Return True if all checks pass.
 
     Args:
@@ -369,7 +479,7 @@ def main(post_slack: bool = True, failures_only: bool = True) -> bool:
     print(f"  Nexa Health Check — {_now()}")
     print(f"  Base URL: {BASE_URL}")
     print("=" * 60)
-    results = run_all()
+    results = run_all(run_id=run_id)
     print("=" * 60)
 
     if post_slack:

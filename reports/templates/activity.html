@@ -320,15 +320,25 @@ a:hover{text-decoration:underline}
           <button class="btn-workflow" onclick="openWorkflow('campaigns_paused')">⚙ How this works</button>
         </div>
         {% if metrics.campaigns_paused.rows %}
+        {% set ns = namespace(seen={}) %}
+        {% for r in metrics.campaigns_paused.rows %}
+          {% set key = (r.campaign_name or '—') ~ '|' ~ (r.channel or '') %}
+          {% if key not in ns.seen %}
+            {% set _ = ns.seen.update({key: []}) %}
+          {% endif %}
+          {% set _ = ns.seen[key].append(r) %}
+        {% endfor %}
         <table class="dtable">
-          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Status</th></tr>
-          {% for r in metrics.campaigns_paused.rows %}
+          <tr><th>Campaign</th><th>Channel</th><th>Times</th><th>Last date</th><th>Status</th></tr>
+          {% for key, rows in ns.seen.items() %}
+          {% set r = rows | last %}
           <tr>
-            <td>{{ r.day }}</td>
             <td>{{ r.campaign_name or '—' }}</td>
             <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
+            <td style="color:#8b949e">{{ rows | length }}×</td>
+            <td>{{ (rows | map(attribute='day') | sort | last) }}</td>
             <td>
-              {% if r.status == 'executed' %}
+              {% if rows | selectattr('status', 'equalto', 'executed') | list %}
               <span style="color:#39d353;font-size:11px">✅ Executed</span>
               {% else %}
               <span style="color:#e3b341;font-size:11px">⏳ Pending approval</span>
@@ -1224,6 +1234,75 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
+  <!-- ── Data Hygiene ── -->
+  <div class="section-head" style="margin-top:32px">
+    Data Hygiene
+    <span style="font-size:11px;color:#484f58;font-weight:400;text-transform:none;letter-spacing:0;margin-left:10px">
+      {% if hygiene.run_ts %}Last checked {{ hygiene.run_ts }}{% else %}No check run yet{% endif %}
+    </span>
+    <button id="hc-btn" onclick="runHealthCheck()"
+            style="float:right;background:none;border:1px solid #30363d;border-radius:6px;
+                   color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;margin-top:-2px">
+      {% if hc_running %}⏳ Running…{% else %}▶ Run now{% endif %}
+    </button>
+  </div>
+
+  <!-- Connector status grid -->
+  {% if hygiene.checks %}
+  {% set cats = hygiene.checks | map(attribute='category') | unique | list %}
+  {% for cat in ['Infrastructure', 'Connectors', 'Data', 'Other'] %}
+  {% set cat_checks = hygiene.checks | selectattr('category', 'equalto', cat) | list %}
+  {% if cat_checks %}
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                letter-spacing:.06em;margin-bottom:8px">{{ cat }}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for c in cat_checks %}
+      <div style="background:#161b22;border:1px solid {% if c.ok %}#238636{% else %}#f85149{% endif %};
+                  border-radius:6px;padding:8px 12px;min-width:160px;max-width:280px;flex:1"
+           title="{{ c.msg }}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="font-size:13px">{% if c.ok %}✅{% else %}❌{% endif %}</span>
+          <span style="font-size:12px;font-weight:600;color:#e6edf3">{{ c.name }}</span>
+        </div>
+        <div style="font-size:11px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          {{ c.msg | truncate(60, True, '…') }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <!-- Table freshness -->
+  {% if hygiene.freshness %}
+  <div style="margin-bottom:20px">
+    <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                letter-spacing:.06em;margin-bottom:8px">Data Freshness</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for f in hygiene.freshness %}
+      <div style="background:#161b22;border:1px solid {% if f.ok %}#21262d{% else %}#f85149{% endif %};
+                  border-radius:6px;padding:8px 14px;text-align:center;min-width:120px">
+        <div style="font-size:11px;color:#8b949e;margin-bottom:2px">{{ f.channel }}</div>
+        <div style="font-size:13px;font-weight:600;color:{% if f.ok %}#e6edf3{% else %}#f85149{% endif %}">
+          {{ f.last_date }}
+        </div>
+        <div style="font-size:10px;color:{% if f.ok %}#8b949e{% else %}#f85149{% endif %}">
+          {% if f.days_ago == 0 %}today{% elif f.days_ago == 1 %}yesterday{% else %}{{ f.days_ago }}d ago ⚠{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="color:#484f58;font-size:12px;margin-bottom:20px">
+    No health check results yet. Click <strong>Run now</strong> to run the first check.
+  </div>
+  {% endif %}
+
   <!-- ── Recent Activity ── -->
   <div class="card" id="recent_feed" style="margin-bottom:24px">
     <div class="card-header" onclick="toggleCard(this)">
@@ -1319,6 +1398,26 @@ function closeWorkflow(e) {
 
 function closeWorkflowDirect() {
   document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function runHealthCheck() {
+  const btn = document.getElementById('hc-btn');
+  if (!btn || btn.textContent.includes('Running')) return;
+  btn.textContent = '⏳ Running…';
+  btn.disabled = true;
+  fetch('/api/run-health-check', {method: 'POST'})
+    .then(function() {
+      // Poll every 5s for up to 2 minutes, then reload
+      let tries = 0;
+      const t = setInterval(function() {
+        tries++;
+        if (tries > 24) { clearInterval(t); location.reload(); return; }
+        fetch('/activity?_hc=1').then(function(r) {
+          if (r.ok) { clearInterval(t); location.reload(); }
+        });
+      }, 5000);
+    })
+    .catch(function() { btn.textContent = '▶ Run now'; btn.disabled = false; });
 }
 
 document.addEventListener('keydown', function(e) {

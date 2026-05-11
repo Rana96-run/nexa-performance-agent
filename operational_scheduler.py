@@ -481,9 +481,10 @@ def _run_health_check():
 
 def run():
     schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
-    # Full audit every 6 hours: 03:00 / 09:00 / 15:00 / 21:00 Riyadh
-    # (00:00 / 06:00 / 12:00 / 18:00 UTC)
-    schedule.every(6).hours.do(_run_health_check)
+    # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
+    # On-demand outside those hours via POST /api/run-health-check
+    for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
+        schedule.every().day.at(f"{_utc_h:02d}:00").do(_run_health_check)
 
     print("=" * 52)
     print("  Qoyod Operational Scheduler — LIVE")
@@ -491,7 +492,7 @@ def run():
     print("  Daily    08:00 Riyadh (05:00 UTC)")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month")
-    print("  Health   every 6h — Railway, listener, all APIs")
+    print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
     print("  Manual:  python main.py on_demand")
     print("=" * 52)
 
