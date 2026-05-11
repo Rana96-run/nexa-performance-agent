@@ -131,6 +131,11 @@ mirror (and extend) the Looker boards the team already trusts.
   over all accounts via `_accounts()` / `_get_access_token_for(public_client=True/False)`.
   Both accounts authenticate. Backfill needed: run collector YTD to populate BQ.
 
+## Done this session (2026-05-11)
+
+- [x] **`rebuild_all` BQ MERGE timeout fix** — batched 658 dates into chunks of 30 per MERGE to avoid the 2400s timeout. 47,019 rows written across 22 batches to `hubspot_leads_module_daily`. Committed `e448918`.
+- [x] **Qual/disq rate formula fixed everywhere** — denominator was `leads_total` (included open/pending leads). Corrected to `qualified + disqualified` in all 6 BQ view definitions in `bq_writer.py` (9 instances) and in the Hex "KPI scorecard data" SQL cell. Qual Rate 47.2 + Disq Rate 52.80 = 100.0 ✅. Committed `499b7c6`, Hex published.
+
 ## Done this session (2026-05-10)
 
 - [x] **HubSpot deals dual-pass fix** — incremental window extended 2→30 days; closedate pass now runs in ALL modes (not just incremental); explicit `deal_qoyod_source` only (no UTM inference). Eliminated 15–20% count inflation from inference. Fixed undercounting from 721→818 for 90-day Sales Pipeline paid deals (target 789).

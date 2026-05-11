@@ -28,7 +28,7 @@ def _ad_card(rows: list[dict], mode: str) -> str:
                 f"**Ad Set:**       {r['adset']}\n"
                 f"**Campaign:**     {r['campaign']}\n"
                 f"**14d Spend:**    ${r['spend_14d']:.0f}\n"
-                f"**14d Conv:**     {r['conv_14d']:.0f}\n"
+                f"**14d HS Leads:** {r['hs_leads_14d']}\n"
                 f"**CTR drop:**     {r['ctr_first7d']:.2%} → {r['ctr_last7d']:.2%} ({r['ctr_drop_pct']:.0f}% decline)\n"
                 f"**Verdict:**      Refresh creative — fatigue"
             )
@@ -39,7 +39,7 @@ def _ad_card(rows: list[dict], mode: str) -> str:
                 f"**Ad Set:**       {r['adset']}\n"
                 f"**Campaign:**     {r['campaign']}\n"
                 f"**14d Spend:**    ${r['spend_14d']:.0f}\n"
-                f"**14d Conv:**     {r['conv_14d']:.0f}\n"
+                f"**14d HS Leads:** {r['hs_leads_14d']}\n"
                 f"**Avg Frequency:**{r['avg_freq']:.1f}x  (threshold > 2.5)\n"
                 f"**Verdict:**      Expand audience or pause — same users seeing this ad too often"
             )
@@ -50,8 +50,8 @@ def _ad_card(rows: list[dict], mode: str) -> str:
                 f"**Ad Set:**       {r['adset']}\n"
                 f"**Campaign:**     {r['campaign']}\n"
                 f"**14d Spend:**    ${r['spend_14d']:.0f}\n"
-                f"**14d Conv:**     0\n"
-                f"**Verdict:**      Pause — burnt $50+ over 14 days with zero conversions"
+                f"**14d HS Leads:** 0  _(verified via HubSpot Lead Module)_\n"
+                f"**Verdict:**      Pause — burnt $50+ over 14 days with 0 HubSpot leads"
             )
     return "\n\n---\n\n".join(cards) + (
         f"\n\n_…and {len(rows) - 30} more_" if len(rows) > 30 else "\n"
@@ -80,7 +80,9 @@ def _create_one_bucket(channel: str, bucket: str, findings: list[dict]) -> str |
                              f"**Why this matters:** Audience is over-saturated — same users see this ad "
                              f"3+ times. Expand audience targeting or pause to avoid ad fatigue.\n\n"),
         "zero_conv_pause": (f"Daily zero-conversion pause audit (last 14d). {len(findings)} {label} ad(s) "
-                             f"spent $50+ with 0 conversions over 14 days.\n\n"
+                             f"spent $50+ with 0 HubSpot leads over 14 days.\n\n"
+                             f"**Source:** HubSpot Lead Module (lead_utm_content join) — "
+                             f"not platform-reported conversions.\n\n"
                              f"**Why this matters:** This is wasted budget. Pause the ad and reallocate "
                              f"budget to performing creatives.\n\n"),
     }[bucket]

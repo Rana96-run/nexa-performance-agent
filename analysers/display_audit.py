@@ -39,46 +39,68 @@ FREQ_CHANNELS = {"meta", "snapchat", "linkedin"}
 
 
 def _query_ad_window(channel: str, days: int = 14) -> list[dict]:
-    """Pull per-ad aggregates over the last N days from ads_daily."""
+    """Pull per-ad aggregates over the last N days.
+
+    Joins ads_daily with hubspot_leads_module_daily (pre-aggregated by
+    lead_utm_content) so that zero-conv detection uses HubSpot leads —
+    the canonical conversion source per CLAUDE.md — not platform-reported
+    conversions which are unreliable across channels.
+    """
     client = get_client()
     end   = date.today() - timedelta(days=1)
     start = end - timedelta(days=days - 1)
     half  = end - timedelta(days=6)   # last 7d boundary
 
     q = """
-      WITH win AS (
+      -- Pre-aggregate HubSpot leads at ad level (lead_utm_content = ad name).
+      -- Must be a CTE to avoid spend fan-out on the outer join.
+      WITH hs AS (
+        SELECT
+          lead_utm_content,
+          SUM(leads_total)      AS hs_leads,
+          SUM(leads_qualified)  AS hs_sqls
+        FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`
+        WHERE date BETWEEN @start AND @end
+          AND lead_utm_content IS NOT NULL
+          AND lead_utm_content != ''
+        GROUP BY lead_utm_content
+      ),
+      win AS (
         SELECT
           ad_id, ad_name, adset_name, campaign_name,
-          date, spend, impressions, clicks, conversions,
+          date, spend, impressions, clicks,
           SAFE_DIVIDE(clicks, impressions) AS daily_ctr,
-          frequency,
+          frequency
         FROM `angular-axle-492812-q4.qoyod_marketing.ads_daily`
         WHERE channel = @channel
           AND date BETWEEN @start AND @end
       )
       SELECT
-        ad_id,
-        ANY_VALUE(ad_name)       AS ad_name,
-        ANY_VALUE(adset_name)    AS adset_name,
-        ANY_VALUE(campaign_name) AS campaign_name,
-        SUM(spend)              AS spend_total,
-        SUM(impressions)        AS impressions_total,
-        SUM(clicks)             AS clicks_total,
-        SUM(conversions)        AS conversions_total,
-        AVG(frequency)          AS avg_frequency,
-        SAFE_DIVIDE(SUM(clicks), SUM(impressions)) AS ctr_overall,
+        w.ad_id,
+        ANY_VALUE(w.ad_name)       AS ad_name,
+        ANY_VALUE(w.adset_name)    AS adset_name,
+        ANY_VALUE(w.campaign_name) AS campaign_name,
+        SUM(w.spend)               AS spend_total,
+        SUM(w.impressions)         AS impressions_total,
+        SUM(w.clicks)              AS clicks_total,
+        AVG(w.frequency)           AS avg_frequency,
+        -- HubSpot leads are the canonical conversion metric (not platform convs)
+        MAX(IFNULL(hs.hs_leads, 0))  AS hs_leads_total,
+        MAX(IFNULL(hs.hs_sqls,  0))  AS hs_sqls_total,
+        SAFE_DIVIDE(SUM(w.clicks), SUM(w.impressions)) AS ctr_overall,
         SAFE_DIVIDE(
-          SUM(IF(date >= @half, clicks, 0)),
-          SUM(IF(date >= @half, impressions, 0))
+          SUM(IF(w.date >= @half, w.clicks, 0)),
+          SUM(IF(w.date >= @half, w.impressions, 0))
         ) AS ctr_last7d,
         SAFE_DIVIDE(
-          SUM(IF(date < @half, clicks, 0)),
-          SUM(IF(date < @half, impressions, 0))
+          SUM(IF(w.date < @half, w.clicks, 0)),
+          SUM(IF(w.date < @half, w.impressions, 0))
         ) AS ctr_first7d,
-        SUM(IF(date >= @half, spend, 0)) AS spend_last7d
-      FROM win
-      WHERE ad_id IS NOT NULL AND ad_id != ''
-      GROUP BY ad_id
+        SUM(IF(w.date >= @half, w.spend, 0)) AS spend_last7d
+      FROM win w
+      LEFT JOIN hs ON LOWER(hs.lead_utm_content) = LOWER(w.ad_name)
+      WHERE w.ad_id IS NOT NULL AND w.ad_id != ''
+      GROUP BY w.ad_id
       HAVING spend_total > 0
     """
     from google.cloud import bigquery
@@ -115,19 +137,22 @@ def audit_channel(channel: str, days: int = 14) -> dict:
         campaign     = r.get("campaign_name") or "—"
         spend_total  = float(r.get("spend_total") or 0)
         spend_last7d = float(r.get("spend_last7d") or 0)
-        conv_total   = float(r.get("conversions_total") or 0)
+        # HubSpot leads are the canonical conversion metric (CLAUDE.md golden rule)
+        hs_leads     = float(r.get("hs_leads_total") or 0)
+        hs_sqls      = float(r.get("hs_sqls_total")  or 0)
         ctr_first    = float(r.get("ctr_first7d") or 0)
         ctr_last     = float(r.get("ctr_last7d")  or 0)
         avg_freq     = float(r.get("avg_frequency") or 0)
 
         base = {
-            "channel":  channel,
-            "ad_id":    ad_id,
-            "ad_name":  ad_name,
-            "adset":    adset,
-            "campaign": campaign,
-            "spend_14d":   round(spend_total, 2),
-            "conv_14d":    conv_total,
+            "channel":    channel,
+            "ad_id":      ad_id,
+            "ad_name":    ad_name,
+            "adset":      adset,
+            "campaign":   campaign,
+            "spend_14d":  round(spend_total, 2),
+            "hs_leads_14d": int(hs_leads),   # HubSpot leads, not platform convs
+            "hs_sqls_14d":  int(hs_sqls),
             "ctr_first7d": round(ctr_first, 4),
             "ctr_last7d":  round(ctr_last,  4),
             "avg_freq":    round(avg_freq,  2),
@@ -149,7 +174,9 @@ def audit_channel(channel: str, days: int = 14) -> dict:
             freq_sat.append(row)
 
         # 3. High-spend zero-conv → pause candidate
-        if spend_total >= ZERO_CONV_SPEND_USD and conv_total == 0:
+        # Uses HubSpot leads (not platform conversions) per CLAUDE.md golden rule:
+        # "Leads and SQLs come from HubSpot Lead Module only"
+        if spend_total >= ZERO_CONV_SPEND_USD and hs_leads == 0:
             row = dict(base)
             row["verdict"] = "zero_conv_high_spend_pause"
             zero_conv_pause.append(row)
