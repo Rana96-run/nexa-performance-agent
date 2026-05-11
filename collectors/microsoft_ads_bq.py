@@ -28,7 +28,8 @@ CLIENT_SECRET   = os.getenv("MS_CLIENT_SECRET", "")
 TENANT_ID       = os.getenv("MS_TENANT_ID", "")
 DEVELOPER_TOKEN = os.getenv("MS_DEVELOPER_TOKEN", "")
 
-TOKEN_URL     = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+_MS_TENANT    = os.getenv("MS_TENANT_ID", "common")
+TOKEN_URL     = f"https://login.microsoftonline.com/{_MS_TENANT}/oauth2/v2.0/token"
 SCOPE         = "https://ads.microsoft.com/msads.manage offline_access"
 REPORTING_URL = "https://reporting.api.bingads.microsoft.com/Reporting/v13"
 
