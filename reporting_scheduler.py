@@ -76,17 +76,19 @@ def _check_bq_staleness() -> list[str]:
 
 def _hubspot_leads_collector() -> int:
     """
-    Tuesday + Friday at 06:00 UTC (09:00 Riyadh): full re-pull from 2026-01-01
-    so lead_qoyod_source is always fresh after the team re-runs the attribution
-    workflow. Every other run: fast cursor CDC.
+    Every 6-hour cycle: rolling 30-day re-pull from HubSpot (fresh attribution),
+    then cursor CDC to catch stage changes on leads older than 30 days.
+
+    Rolling window is the primary sync — it always matches what HubSpot shows for
+    the last 30 days.  No special-case days, no drift between runs.
+    Cursor CDC is a secondary pass — handles disqualifications/reassignments on
+    older leads without re-pulling all history.
     """
-    riyadh_now = datetime.now(timezone.utc) + timedelta(hours=3)
-    is_resync_day = riyadh_now.weekday() in (1, 4)   # 1=Tuesday, 4=Friday
-    is_morning    = riyadh_now.hour in range(6, 12)   # 09:00–11:59 Riyadh window
-    if is_resync_day and is_morning:
-        log.info("[scheduler] Tue/Fri morning — running full leads resync")
-        return hubspot_leads_bq.full_resync_since_2026()
-    return hubspot_leads_bq.sync_cursor_and_write()
+    n = hubspot_leads_bq.sync_rolling_window(days=30)
+    # Cursor CDC: picks up stage changes on leads older than 30 days.
+    # Low volume (old leads rarely change), but keeps historical data consistent.
+    hubspot_leads_bq.sync_cursor_and_write()
+    return n
 
 
 COLLECTORS = [

@@ -714,18 +714,87 @@ def _flush_individual(client, rows: list[dict], label: str = "leads-initial") ->
     print(f"[{label}] flushed {len(rows)} rows")
 
 
+def sync_rolling_window(days: int = 30) -> int:
+    """
+    Re-pull the most recent `days` of HubSpot leads from scratch on every run.
+
+    Why this exists
+    ---------------
+    Cursor CDC (sync_cursor_and_write) tracks hs_lastmodifieddate on the Lead
+    object.  When the team re-runs the Contact-source workflow, it changes
+    qoyod_source on the Contact which syncs to lead_qoyod_source on the Lead —
+    but the Lead's hs_lastmodifieddate NEVER moves.  Cursor CDC is therefore
+    blind to attribution changes.
+
+    Rolling window has no such blindspot: it just deletes the last `days` rows
+    from BQ and re-inserts them straight from HubSpot every 6-hour cycle.
+    Numbers always match whatever HubSpot shows for the same date range.
+
+    Capacity: ~200 leads/day × 30 days = 6 000 leads → 60 API pages → < 2 min.
+    HubSpot search cap is 10 000 results per query — safely under that.
+
+    CLI: python -m collectors.hubspot_leads_bq rolling [days]
+    """
+    _RIYADH = timezone(timedelta(hours=3))
+    since_date = (datetime.now(_RIYADH) - timedelta(days=days)).date()
+    # Convert Riyadh midnight to UTC milliseconds for the HubSpot filter
+    since_ms = int(datetime(since_date.year, since_date.month, since_date.day,
+                            tzinfo=_RIYADH).timestamp() * 1000)
+
+    _load_pipelines()
+    _ensure_individual_table_exists()
+    client   = get_client()
+    table_id = f"{os.getenv('BQ_PROJECT_ID')}.{os.getenv('BQ_DATASET')}.{_INDIVIDUAL_TABLE}"
+
+    print(f"[rolling] re-pulling last {days} days from HubSpot (since {since_date}) ...")
+
+    # ── Fetch all leads in window ─────────────────────────────────────────────
+    rows, after, pages = [], None, 0
+    while True:
+        try:
+            data = _search_leads(since_ms, after=after)
+        except Exception as e:
+            print(f"[rolling] HubSpot fetch error: {e}")
+            break
+        for lead in data.get("results", []):
+            row = _row_from_lead(lead)
+            if row:
+                rows.append(row)
+        pages += 1
+        after = (data.get("paging") or {}).get("next", {}).get("after")
+        if not after:
+            break
+        if pages >= 100:  # 100 × 100 = 10k hard cap — warn and stop
+            print(f"[rolling] WARNING: hit 10k result cap — consider reducing --days")
+            break
+
+    print(f"[rolling] fetched {len(rows)} leads from HubSpot ({pages} pages)")
+    if not rows:
+        print("[rolling] nothing returned — aborting")
+        return 0
+
+    # ── Replace BQ rows for this window ──────────────────────────────────────
+    client.query(
+        f"DELETE FROM `{table_id}` WHERE hs_createdate >= '{since_date}'"
+    ).result()
+
+    for i in range(0, len(rows), 5000):
+        _flush_individual(client, rows[i:i + 5000], label="rolling-sync")
+    print(f"[rolling] wrote {len(rows)} rows to {_INDIVIDUAL_TABLE}")
+
+    # ── Rebuild daily aggregates for affected dates ───────────────────────────
+    affected = sorted({r["hs_createdate"] for r in rows})
+    n = _rebuild_daily_buckets(client, affected)
+    print(f"[rolling] rebuilt {len(affected)} dates -> {n} rows in hubspot_leads_module_daily")
+    return n
+
+
 def full_resync_since_2026() -> int:
     """
     Full re-pull of all HubSpot leads with hs_createdate >= 2026-01-01.
 
-    Replaces the individual table rows for that window with the freshest values
-    from HubSpot, then rebuilds daily buckets.  Designed to run twice a week
-    (Tuesday + Friday Riyadh time) to catch lead_qoyod_source changes caused
-    by Contact workflow re-runs — changes that don't move the Lead's
-    hs_lastmodifieddate so the cursor CDC never sees them.
-
-    Approach mirrors Funnel.io: no delta logic, just pull the current state of
-    every lead in the window and overwrite BQ.
+    Use this for a one-time recovery (e.g. after a long outage or schema change).
+    Normal operation uses sync_rolling_window() instead which runs every 6 hours.
 
     CLI: python -m collectors.hubspot_leads_bq resync
     """
@@ -813,6 +882,11 @@ if __name__ == "__main__":
     elif cmd == "cursor":
         n = sync_cursor_and_write()
         print(f"Cursor sync complete: {n} daily bucket rows updated")
+
+    elif cmd == "rolling":
+        d = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+        n = sync_rolling_window(days=d)
+        print(f"Rolling sync complete: {n} daily bucket rows updated")
 
     elif cmd == "resync":
         n = full_resync_since_2026()
