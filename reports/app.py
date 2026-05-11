@@ -1544,62 +1544,56 @@ def asana_backfill():
 
 @app.route("/api/asana-status-debug")
 def asana_status_debug():
-    """Check what's in asana_task_status BQ table, and try a test write."""
+    """Diagnose asana_task_status — read-only queries, no writes."""
     from collectors.bq_writer import get_client as get_bq
-    from io import BytesIO
-    import json as _json
     import os
-    from datetime import datetime, timezone
     bq = get_bq()
     P = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
     D = os.getenv("BQ_DATASET", "qoyod_marketing")
+    T = "qoyod_marketing"
     result = {}
     try:
-        total = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status`").result())[0].n
-        done  = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status` WHERE completed=TRUE").result())[0].n
+        total    = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status`").result())[0].n
+        done     = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.asana_task_status` WHERE completed=TRUE").result())[0].n
         log_gids = list(bq.query(f"SELECT COUNT(*) AS n FROM `{P}.{D}.agent_activity_log` WHERE action='asana_task_created' AND JSON_VALUE(details,'$.gid') IS NOT NULL").result())[0].n
         result = {"status_rows_total": total, "status_rows_completed": done, "activity_log_with_gid": log_gids}
-    except Exception as e:
-        result["query_error"] = str(e)
 
-    # Table was created with REQUIRED columns — drop and recreate so load jobs work
-    try:
-        bq.query(f"DROP TABLE IF EXISTS `{P}.{D}.asana_task_status`").result()
-        from collectors.asana_sync import _CREATE_DDL, _TABLE
-        bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
-        result["recreate"] = "ok"
-    except Exception as e:
-        result["recreate_error"] = str(e)
+        # How many GIDs from agent_activity_log actually match asana_task_status?
+        overlap_sql = f"""
+            SELECT COUNT(*) AS overlap,
+                   COUNTIF(s.completed) AS overlap_completed
+            FROM (
+              SELECT DISTINCT JSON_VALUE(details,'$.gid') AS gid
+              FROM `{P}.{D}.agent_activity_log`
+              WHERE action = 'asana_task_created'
+                AND JSON_VALUE(details,'$.gid') IS NOT NULL
+            ) log
+            JOIN (
+              SELECT gid, completed,
+                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+              FROM `{P}.{D}.asana_task_status`
+            ) s ON s.gid = log.gid AND s.rn = 1
+        """
+        ov = list(bq.query(overlap_sql).result())[0]
+        result["overlap_with_log"] = ov.overlap
+        result["overlap_completed"] = ov.overlap_completed
 
-    # Try writing a single test row to see if the write itself works
-    try:
-        from google.cloud import bigquery as bqlib
-        test_row = {"gid": "debug_test_gid", "title": "debug", "project_key": "debug",
-                    "completed": False, "completed_at": None, "assignee_name": "",
-                    "due_on": None, "synced_at": datetime.now(timezone.utc).isoformat()}
-        ndjson = _json.dumps(test_row).encode()
-        table_ref = bq.dataset(D, project=P).table("asana_task_status")
-        job_cfg = bqlib.LoadJobConfig(
-            source_format=bqlib.SourceFormat.NEWLINE_DELIMITED_JSON,
-            write_disposition=bqlib.WriteDisposition.WRITE_APPEND,
-            autodetect=False,
-            schema=[
-                bqlib.SchemaField("gid",           "STRING"),
-                bqlib.SchemaField("title",         "STRING"),
-                bqlib.SchemaField("project_key",   "STRING"),
-                bqlib.SchemaField("completed",     "BOOL"),
-                bqlib.SchemaField("completed_at",  "TIMESTAMP"),
-                bqlib.SchemaField("assignee_name", "STRING"),
-                bqlib.SchemaField("due_on",        "DATE"),
-                bqlib.SchemaField("synced_at",     "TIMESTAMP"),
-            ],
-        )
-        job = bq.load_table_from_file(BytesIO(ndjson), table_ref, job_config=job_cfg)
-        job.result()
-        result["test_write"] = "ok"
+        # Sample 3 GIDs from agent_activity_log and check if they're in asana_task_status
+        sample_sql = f"""
+            SELECT log.gid, s.completed, s.synced_at
+            FROM (
+              SELECT DISTINCT JSON_VALUE(details,'$.gid') AS gid
+              FROM `{P}.{D}.agent_activity_log`
+              WHERE action='asana_task_created' AND JSON_VALUE(details,'$.gid') IS NOT NULL
+              LIMIT 3
+            ) log
+            LEFT JOIN `{P}.{D}.asana_task_status` s ON s.gid = log.gid
+        """
+        for r in bq.query(sample_sql).result():
+            result.setdefault("sample_join", []).append(
+                {"gid": r.gid, "in_status": r.completed is not None, "completed": r.completed})
     except Exception as e:
-        result["test_write_error"] = str(e)
-
+        result["error"] = str(e)
     return jsonify(result)
 
 
