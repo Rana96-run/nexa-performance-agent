@@ -526,12 +526,16 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             print(f"[google_ads]   ads account {cid} error: {e}")
         print(f"[google_ads]   ads account {cid}: {count} rows")
 
-    # Also collect PMax ads (ad_group_ad with type=PERFORMANCE_MAX_AD).
-    # PMax ads ARE exposed via ad_group_ad — the regular query above already
-    # picks them up if the type filter is broad. They map to utm_content
-    # (same as Search ads do), so they belong in ads_daily alongside the
-    # regular ad rows. The above query already returns them; this is a
-    # documentation note rather than a separate call.
+    # Note on PMax ads:
+    # Google Ads API does NOT expose individual PMax ads — querying
+    # `FROM ad_group_ad WHERE campaign.advertising_channel_type='PERFORMANCE_MAX'`
+    # returns 0 rows regardless of filters. PMax's reportable granularity
+    # bottoms out at asset_group (in adsets_daily) + per-asset metrics
+    # (in pmax_asset_groups_daily). The 7+ distinct utm_content values
+    # in HubSpot for PMax leads come from multiple final URLs within each
+    # asset_group — Google rotates which URL each user lands on, but per-URL
+    # metrics aren't queryable. Future option: aggregate by asset.final_url
+    # via asset_group_asset and proportionally allocate asset_group spend.
 
     return upsert_rows("ads_daily", rows,
                        key_fields=["date", "channel", "ad_id"])
