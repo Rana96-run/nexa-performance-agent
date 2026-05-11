@@ -135,6 +135,8 @@ mirror (and extend) the Looker boards the team already trusts.
 
 - [x] **`rebuild_all` BQ MERGE timeout fix** — batched 658 dates into chunks of 30 per MERGE to avoid the 2400s timeout. 47,019 rows written across 22 batches to `hubspot_leads_module_daily`. Committed `e448918`.
 - [x] **Qual/disq rate formula fixed everywhere** — denominator was `leads_total` (included open/pending leads). Corrected to `qualified + disqualified` in all 6 BQ view definitions in `bq_writer.py` (9 instances) and in the Hex "KPI scorecard data" SQL cell. Qual Rate 47.2 + Disq Rate 52.80 = 100.0 ✅. Committed `499b7c6`, Hex published.
+- [x] **lead_qoyod_source Funnel.io-style full resync** — added `full_resync_since_2026()` to `collectors/hubspot_leads_bq.py` (CLI: `resync`). Runs Tue + Fri morning in `reporting_scheduler._hubspot_leads_collector()`. Catches attribution drift from Contact workflow re-runs that don't touch Lead's `hs_lastmodifieddate` (invisible to CDC). Committed `ab1c9e9`.
+- [x] **BQ view materialization for Hex speed** — 6 heavy views converted to physical tables rebuilt every 6h: `channel_roas_daily`, `paid_channel_campaign_daily`, `paid_channel_daily`, `utm_paid_attribution_daily`, `v_adset_performance`, `v_ad_performance`. Same names = zero Hex SQL changes. `materialize_heavy_views()` added to `collectors/views.py`, called automatically at end of `refresh_all_views()`. First-run auto-drops view objects via `delete_table` + retry. Committed `24c3bdd`.
 
 ## Done this session (2026-05-10)
 
