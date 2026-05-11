@@ -50,6 +50,25 @@ _ACTION_PRIORITY = {
     "refresh":  "Low",
 }
 
+# ── Custom field GIDs (workspace-level, present on all projects) ──────────────
+# Estimated time — number field (minutes). GID confirmed from all opt + daily projects.
+_CF_ESTIMATED_TIME     = "1207977944194162"
+# Status — enum field. Option GID for "To do" (so tasks aren't blank on creation).
+_CF_STATUS             = "1208009827500816"
+_CF_STATUS_TODO        = "1208009827500819"   # "To do"
+
+# How long (minutes) each action type is estimated to take.
+# Drives the "Estimated time" column visible in all project boards.
+_ACTION_ESTIMATED_MINUTES: dict[str, int] = {
+    "pause":    15,   # Review findings, execute platform pause
+    "scale":    20,   # Review data, lift budget in platform
+    "optimize": 30,   # Analyse + apply bid/targeting/copy changes
+    "fix":      45,   # Diagnose + fix tracking or setup issue
+    "launch":   30,   # Campaign / adset / ad creation
+    "refresh":  20,   # Creative swap or ad copy refresh
+    "exclude":  10,   # Add placement / audience exclusion
+}
+
 
 _PRIORITY_EMOJI = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}
 _ACTION_EMOJI   = {
@@ -256,6 +275,19 @@ def create_task(
     assignee_gid = _assignee_for_channel(channel)
     if assignee_gid:
         task_data["assignee"] = assignee_gid
+
+    # Populate custom fields visible in all project boards.
+    # "Estimated time" (workspace-level number field) works in every project.
+    # "Status" → "To do" only for daily_activity projects — optimization
+    #   projects don't have this field and the API returns 400 if we try to set it.
+    cf: dict = {}
+    est = _ACTION_ESTIMATED_MINUTES.get((action or "").lower())
+    if est is not None:
+        cf[_CF_ESTIMATED_TIME] = est
+    if project_key == "daily_activity":
+        cf[_CF_STATUS] = _CF_STATUS_TODO
+    if cf:
+        task_data["custom_fields"] = cf
 
     # Section routing — for Optimization projects, route into the
     # asset-level section (e.g. "Campaign", "Ad Set / Group", "Audience").
