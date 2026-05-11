@@ -48,11 +48,13 @@ def _asana_client():
     return asana.ApiClient(cfg)
 
 
+_EXCLUDED_PROJECTS = {"campaigns_hub", "seasonal"}  # not active work-item projects
+
 def _all_projects() -> dict[str, str]:
     """Return every Asana project the agent creates tasks in.
 
     Merges all four project dicts into one flat {project_key: project_id},
-    skipping any None/empty IDs.
+    skipping any None/empty IDs and excluded keys.
     """
     from config import (
         ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS,
@@ -62,7 +64,7 @@ def _all_projects() -> dict[str, str]:
     for d in (ASANA_PROJECTS, ASANA_OPTIMIZATION_PROJECTS,
               ASANA_DAILY_PROJECTS, ASANA_SEASONAL_PROJECTS):
         for k, v in d.items():
-            if v:
+            if v and k not in _EXCLUDED_PROJECTS:
                 merged[k] = v
     return merged
 

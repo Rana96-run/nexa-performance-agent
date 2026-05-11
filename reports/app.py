@@ -1045,6 +1045,10 @@ def activity_dashboard():
         except Exception as e2:
             print(f"[activity] asana task query failed (non-fatal): {e2}")
 
+    # Exclude non-work-item projects from dashboard display.
+    _EXCLUDE_PK = {"campaigns_hub", "seasonal"}
+    task_status_rows = [r for r in task_status_rows if r.project_key not in _EXCLUDE_PK]
+
     # Rebuild m_asana_tasks from task_status_rows: it uses a 365-day window and
     # captures all historical asana_task_created logs, unlike detail_rows (days window).
     if task_status_rows:
