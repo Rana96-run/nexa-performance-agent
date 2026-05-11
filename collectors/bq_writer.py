@@ -450,7 +450,7 @@ SELECT
   h.leads_disqualified AS hs_disqualified,
   SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0))                      AS cpl,
   SAFE_DIVIDE(c.spend, NULLIF(h.leads_qualified, 0))            AS cpql,
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))            AS qual_rate,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS qual_rate,
   CASE
     WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0)) < {CPL_SCALE} THEN 'scale'
     WHEN SAFE_DIVIDE(c.spend, NULLIF(h.leads, 0)) <= {CPL_ACCEPTABLE} THEN 'acceptable'
@@ -487,7 +487,7 @@ SELECT
   SUM(leads_open)                           AS leads_open,
   SUM(leads_qualified)                      AS leads_qualified,
   SUM(leads_disqualified)                   AS leads_disqualified,
-  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_total), 0)) AS qual_rate
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_qualified) + SUM(leads_disqualified), 0)) AS qual_rate
 FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
 GROUP BY 1, 2, 3, 4, 5, 6
 """
@@ -508,7 +508,7 @@ SELECT
   SUM(leads_open)                           AS leads_open,
   SUM(leads_qualified)                      AS leads_qualified,
   SUM(leads_disqualified)                   AS leads_disqualified,
-  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_total), 0)) AS qual_rate,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_qualified) + SUM(leads_disqualified), 0)) AS qual_rate,
   ANY_VALUE(top_disq_reason)                AS top_disq_reason
 FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
 GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
@@ -777,7 +777,7 @@ SELECT
   COALESCE(leads_disqualified, 0)                          AS leads_disqualified,
   SAFE_DIVIDE(COALESCE(spend, 0.0), NULLIF(leads, 0))      AS CPL,
   SAFE_DIVIDE(COALESCE(spend, 0.0), NULLIF(leads_qualified, 0)) AS CPQL,
-  SAFE_DIVIDE(leads_qualified, NULLIF(leads, 0))           AS qual_rate,
+  SAFE_DIVIDE(leads_qualified, NULLIF(leads_qualified + leads_disqualified, 0)) AS qual_rate,
   match_method
 FROM combined
 """
@@ -848,8 +848,8 @@ SELECT
   COALESCE(d.deals_won, 0)                  AS deals_won,
   COALESCE(d.revenue_won, 0)                AS revenue_won,
   -- Ratios
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))                     AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))                  AS disq_rate,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   -- Cost metrics
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))            AS CPL,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0))  AS CPQL,
@@ -926,8 +926,8 @@ SELECT
   COALESCE(d.deals, 0)                       AS deals,
   COALESCE(d.deals_won, 0)                   AS deals_won,
   COALESCE(d.revenue_won, 0)                 AS revenue_won,
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))         AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))      AS disq_rate,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   SAFE_DIVIDE(p.spend, NULLIF(h.leads, 0))                   AS CPL,
   SAFE_DIVIDE(p.spend, NULLIF(h.leads_qualified, 0))         AS CPQL,
   SAFE_DIVIDE(d.revenue_won, NULLIF(p.spend, 0))             AS ROAS,
@@ -1007,8 +1007,8 @@ SELECT
   COALESCE(d.deals, 0)                       AS deals,
   COALESCE(d.deals_won, 0)                   AS deals_won,
   COALESCE(d.revenue_won, 0)                 AS revenue_won,
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads, 0))                    AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads, 0))                 AS disq_rate,
+  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
+  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))           AS CPL,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0)) AS CPQL,
   SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS ROAS,
@@ -1100,7 +1100,7 @@ SELECT
   COALESCE(h.hs_leads, 0)                                            AS hs_leads,
   COALESCE(h.hs_qualified, 0)                                        AS hs_qualified,
   COALESCE(h.hs_disqualified, 0)                                     AS hs_disqualified,
-  SAFE_DIVIDE(h.hs_disqualified, NULLIF(h.hs_leads, 0)) * 100        AS disq_rate_pct,
+  SAFE_DIVIDE(h.hs_disqualified, NULLIF(h.hs_qualified + h.hs_disqualified, 0)) * 100 AS disq_rate_pct,
   SAFE_DIVIDE(p.spend, NULLIF(h.hs_leads, 0))                        AS cpl,
   SAFE_DIVIDE(p.spend, NULLIF(h.hs_qualified, 0))                    AS cpql
 FROM platform p
@@ -1124,7 +1124,7 @@ SELECT
   SUM(hs_leads)                            AS hs_leads,
   SUM(hs_qualified)                        AS hs_qualified,
   SUM(hs_disqualified)                     AS hs_disqualified,
-  SAFE_DIVIDE(SUM(hs_disqualified), NULLIF(SUM(hs_leads), 0)) * 100 AS disq_rate_pct,
+  SAFE_DIVIDE(SUM(hs_disqualified), NULLIF(SUM(hs_qualified) + SUM(hs_disqualified), 0)) * 100 AS disq_rate_pct,
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_leads), 0))           AS cpl,
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_qualified), 0))       AS cpql
 FROM `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly`
