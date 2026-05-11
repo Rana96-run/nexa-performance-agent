@@ -14,6 +14,16 @@ the fix, not just the symptom.
 - **Partition pruning requires a literal or param.** Don't do
   `WHERE date >= CURRENT_DATE() - INTERVAL 7 DAY` in a view definition; use
   it in queries, or pass params.
+- **`upsert_rows` scope-field DELETE causes silent ghost-row accumulation.** When
+  `key_fields=[date, scope_field, ...]`, the DELETE only removes rows where
+  `scope_field IN (values present in the new build)`. If a lead's source changes
+  between builds, the old row (old_source, same date) is NEVER deleted and
+  accumulates. Fix: for tables rebuilt entirely per date (like
+  `hubspot_leads_module_daily`), use `key_fields=["date"]` only — DELETE wipes
+  the whole date partition before re-inserting. Found 2026-05-11: 60,156 rows /
+  186,384 leads (5x inflated) vs correct 12,326 rows / ~26k leads. Repair:
+  `DELETE WHERE TRUE` + `_rebuild_daily_buckets` for all 131 dates. Fixed by
+  changing `_rebuild_daily_buckets` key_fields to `["date"]`.
 
 ## HubSpot deal amounts in BQ are correctly USD — verified 2026-05-09
 

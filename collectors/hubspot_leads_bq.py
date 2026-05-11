@@ -569,10 +569,15 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
         })
 
     _ensure_table_exists()
+    # key_fields=["date"] only — _rebuild_daily_buckets owns the entire date
+    # partition (it rebuilds from scratch). Using a broader key (e.g. +qoyod_source)
+    # causes silent stale-row accumulation: when a lead's source changes between
+    # builds, the old (date, old_source) rows are NOT deleted because the new build
+    # no longer includes that source value. Full-date DELETE is the safe default
+    # for any table that is completely rebuilt per date. (Fixed 2026-05-11 after
+    # 60 156-row corruption was found — 5x duplication from accumulated ghost rows.)
     return upsert_rows("hubspot_leads_module_daily", daily_rows,
-                       key_fields=["date", "qoyod_source", "pipeline", "stage",
-                                   "lead_utm_campaign", "lead_utm_audience",
-                                   "lead_utm_content", "lead_utm_term"])
+                       key_fields=["date"])
 
 
 def sync_cursor_and_write(incremental: bool = False, days: int = None) -> int:
