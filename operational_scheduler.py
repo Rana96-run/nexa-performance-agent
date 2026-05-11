@@ -349,7 +349,16 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] Asana maintenance failed (non-fatal): {e}")
 
-    # 3e. LinkedIn token refresh — tokens expire every 60 days; refresh nightly
+    # 3e. Asana completion sync — update asana_task_status in BQ so the
+    #     Activity Dashboard shows accurate completed/open counts nightly.
+    try:
+        from collectors.asana_sync import run_full_sync
+        n_synced = run_full_sync()
+        print(f"[ops-scheduler] Asana sync: {n_synced} task status rows written")
+    except Exception as e:
+        print(f"[ops-scheduler] Asana sync failed (non-fatal): {e}")
+
+    # 3f. LinkedIn token refresh — tokens expire every 60 days; refresh nightly
     try:
         from scripts.linkedin_refresh import refresh_token
         refresh_token()
