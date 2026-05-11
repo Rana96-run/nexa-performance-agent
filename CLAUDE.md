@@ -52,6 +52,17 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
 
 ## Golden rules (non-negotiable)
 
+- **"Done" means verified, not attempted.** Never say "done", "fixed", or
+  "numbers are correct" without having **observed the actual result**. The
+  verification must match the claim exactly:
+  - "BQ count is 883" → must have queried BQ and seen 883
+  - "Hex shows the right numbers" → must have seen Hex show them (or triggered
+    a verified refresh and confirmed BQ is the source)
+  - "Fixed" → must have run the fix AND confirmed the symptom is gone
+  If verification is still running or hasn't happened yet, say
+  "running — will confirm" instead. This rule exists because premature "done"
+  statements on 2026-05-11 caused the same fix to be re-done 3 times.
+
 - **No streaming BQ inserts.** Use `load_table_from_file(BytesIO(ndjson))`
   always. See `memory/08_pitfalls.md`.
 - **HubSpot is read-only** unless Amar explicitly approves in Slack.
