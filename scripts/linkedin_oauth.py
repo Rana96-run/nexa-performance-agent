@@ -34,12 +34,27 @@ _done = threading.Event()
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         global _code
-        params = parse_qs(urlparse(self.path).query)
-        _code = params.get("code", [None])[0]
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"<h2>Authorized. You can close this tab.</h2>")
-        _done.set()
+        parsed = urlparse(self.path)
+        # Only process the OAuth callback path — ignore favicon, prefetch, etc.
+        if not parsed.path.startswith("/callback"):
+            self.send_response(204)
+            self.end_headers()
+            return
+        params = parse_qs(parsed.query)
+        code = params.get("code", [None])[0]
+        if code:
+            _code = code
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<h2>Authorized. You can close this tab.</h2>")
+            _done.set()
+        else:
+            # LinkedIn returned an error (user denied, or state mismatch)
+            error = params.get("error", ["unknown"])[0]
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(f"<h2>Auth failed: {error}. Close this tab and try again.</h2>".encode())
+            _done.set()
 
     def log_message(self, *_):
         pass
