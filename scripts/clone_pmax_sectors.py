@@ -1,9 +1,9 @@
 """
 scripts/clone_pmax_sectors.py
 ==============================
-Clone Services + Technology asset_groups from PMax_AR_Invoice_FiveSectors
-into 2 new PMax campaigns, each with a proper hardcoded utm_content in
-its tracking template (so spend joins to HubSpot leads in BQ).
+Clone sector asset_groups from PMax_AR_Invoice_FiveSectors into individual
+PMax campaigns, each with a hardcoded utm_content in its tracking template
+(so spend joins to HubSpot leads in BQ).
 
 Why this exists:
   PMax_AR_Invoice_FiveSectors uses `utm_content={_adname}` in its tracking
@@ -13,12 +13,14 @@ Why this exists:
   utm_content baked into the campaign-level template as a literal string.
 
 What the script does:
-  1. Finds the source FiveSectors campaign + its Services/Technology asset_groups
+  1. Finds the source FiveSectors campaign + its named asset_groups
   2. Reads the asset references + audience signals from each source asset_group
-  3. Creates 2 new PMax campaigns (PAUSED) with proper tracking templates
+  3. Creates new PMax campaigns (PAUSED) with proper tracking templates
+     — skips any campaign that already exists
   4. Creates one asset_group per new campaign, linking the SAME assets
      (by resource_name — no re-upload, instant)
-  5. Copies audience signals over
+     — skips any asset_group that already has assets linked
+  5. Copies search themes over (audience signals require manual re-add via UI)
   6. Prints campaign IDs for review in Google Ads UI
 
 Usage:
@@ -26,9 +28,10 @@ Usage:
   python scripts/clone_pmax_sectors.py --execute       # actually creates
 
 After running with --execute:
-  - Review the 2 new campaigns in Google Ads UI (they will be PAUSED)
-  - Pause the corresponding Services + Technology asset_groups in
-    PMax_AR_Invoice_FiveSectors (so spend doesn't double up)
+  - Review the new campaigns in Google Ads UI (they will be PAUSED)
+  - Pause the corresponding asset_groups in PMax_AR_Invoice_FiveSectors
+    (so spend doesn't double up)
+  - Re-attach audience signals in UI (API can't read source audience signals)
   - Enable the new campaigns
 """
 from __future__ import annotations
@@ -223,40 +226,49 @@ def create_pmax_campaign(client, customer_id: str, name: str,
     return r.results[0].resource_name
 
 
-def create_asset_group(client, customer_id: str, campaign_resource: str,
-                       name: str, final_url: str) -> str:
-    svc = client.get_service("AssetGroupService")
-    op  = client.get_type("AssetGroupOperation")
-    ag  = op.create
-    ag.name           = name
-    ag.campaign       = campaign_resource
+def create_asset_group_with_assets(client, customer_id: str,
+                                   campaign_resource: str,
+                                   name: str, final_url: str,
+                                   asset_links: list) -> str:
+    """Create an asset_group AND link assets in ONE atomic batch mutate.
+
+    Google Ads API rejects empty asset_groups — minimum headline, long_headline,
+    description, image, square_image, business_name, and logo must all be present
+    at creation time.  The only way to satisfy this is to include the
+    AssetGroupAsset operations in the SAME GoogleAdsService.mutate() call,
+    using a temp resource_name (-1) so the ops can reference each other.
+
+    Returns the real asset_group resource_name after the batch succeeds.
+    """
+    ga_svc      = client.get_service("GoogleAdsService")
+    temp_ag_rn  = f"customers/{customer_id}/assetGroups/-1"
+
+    mutate_ops = []
+
+    # ── 1. Asset group create op ───────────────────────────────────────────
+    ag_mop = client.get_type("MutateOperation")
+    ag     = ag_mop.asset_group_operation.create
+    ag.resource_name = temp_ag_rn
+    ag.name          = name
+    ag.campaign      = campaign_resource
     ag.final_urls.append(final_url)
-    ag.status         = client.enums.AssetGroupStatusEnum.PAUSED
-    r = svc.mutate_asset_groups(customer_id=customer_id, operations=[op])
-    return r.results[0].resource_name
+    ag.status        = client.enums.AssetGroupStatusEnum.PAUSED
+    mutate_ops.append(ag_mop)
 
-
-def link_assets_to_group(client, customer_id: str, asset_group_resource: str,
-                         asset_links: list) -> int:
-    """Link existing assets (by resource_name) to the new asset_group with
-    the same field_type they had in the source asset_group."""
-    if not asset_links:
-        return 0
-    svc = client.get_service("AssetGroupAssetService")
-    ops = []
+    # ── 2. Asset link ops (same temp_ag_rn) ───────────────────────────────
     for asset_rn, field_type in asset_links:
-        op = client.get_type("AssetGroupAssetOperation")
-        a  = op.create
-        a.asset_group = asset_group_resource
-        a.asset       = asset_rn
-        a.field_type  = field_type
-        ops.append(op)
-    try:
-        r = svc.mutate_asset_group_assets(customer_id=customer_id, operations=ops)
-        return len(r.results)
-    except Exception as e:
-        print(f"    [warn] asset linking partial failure: {e}")
-        return 0
+        aga_mop = client.get_type("MutateOperation")
+        aga     = aga_mop.asset_group_asset_operation.create
+        aga.asset_group = temp_ag_rn
+        aga.asset       = asset_rn
+        aga.field_type  = field_type
+        mutate_ops.append(aga_mop)
+
+    response = ga_svc.mutate(customer_id=customer_id, mutate_operations=mutate_ops)
+
+    # First result is the asset_group; the rest are asset_group_asset links
+    real_ag_rn = response.mutate_operation_responses[0].asset_group_result.resource_name
+    return real_ag_rn, len(mutate_ops) - 1  # (ag_resource, n_assets_linked)
 
 
 def link_search_themes(client, customer_id: str, asset_group_resource: str,
@@ -342,58 +354,91 @@ def main(execute: bool):
         print("DRY-RUN complete. Pass --execute to actually create.")
         return
 
-    print("=== EXECUTING (campaign + budget only — asset_groups in UI) ===")
-    print("Note: PMax asset_groups can't be created atomically with assets via")
-    print("normal API calls (requires atomic mutate). Easier to copy in UI:")
-    print("  Google Ads → new campaign → Asset groups → '+ Add' → copy from")
-    print("  PMax_AR_Invoice_FiveSectors → pick Services / Technology.\n")
-    # Idempotency: check which campaigns already exist
-    existing_names = set()
-    q = "SELECT campaign.id, campaign.name FROM campaign"
+    print("=== EXECUTING (campaigns + asset_groups + assets + search themes) ===\n")
+
+    # ── Step 1: collect existing campaigns + asset_groups ────────────────────
+    existing_campaigns: dict[str, str] = {}   # name → resource_name
+    q = "SELECT campaign.id, campaign.name, campaign.resource_name FROM campaign"
     for r in ga.search(customer_id=SOURCE_CUSTOMER_ID, query=q):
-        existing_names.add(r.campaign.name)
-    created = []
+        existing_campaigns[r.campaign.name] = r.campaign.resource_name
+
+    # Map campaign_resource → list of asset_group names already under it
+    existing_ag_by_campaign: dict[str, list[str]] = {}
+    q2 = "SELECT campaign.resource_name, asset_group.name FROM asset_group"
+    for r in ga.search(customer_id=SOURCE_CUSTOMER_ID, query=q2):
+        c_rn = r.campaign.resource_name
+        existing_ag_by_campaign.setdefault(c_rn, []).append(r.asset_group.name)
+
+    # ── Step 2: create missing campaigns ─────────────────────────────────────
+    campaign_resources: dict[str, str] = {}  # sector_name → campaign resource_name
     for p in plans:
-        sec = p["sec"]
-        if sec["new_campaign_name"] in existing_names:
-            print(f"\nSKIP {sec['new_campaign_name']} — already exists.")
+        sec     = p["sec"]
+        name    = sec["new_campaign_name"]
+        if name in existing_campaigns:
+            camp_rn = existing_campaigns[name]
+            print(f"SKIP campaign {name} — already exists ({camp_rn})")
+            campaign_resources[name] = camp_rn
             continue
-        print(f"\nCreating {sec['new_campaign_name']}...")
+        print(f"Creating campaign {name}...")
         try:
             budget_rn = create_budget(
-                client, SOURCE_CUSTOMER_ID, sec["new_campaign_name"],
-                sec["daily_budget_usd"],
+                client, SOURCE_CUSTOMER_ID, name, sec["daily_budget_usd"],
             )
-            print(f"  budget: {budget_rn}")
             tracking = _tracking_template(sec["utm_content"], SOURCE_CUSTOMER_ID)
-            camp_rn = create_pmax_campaign(
-                client, SOURCE_CUSTOMER_ID, sec["new_campaign_name"],
-                budget_rn, tracking,
+            camp_rn  = create_pmax_campaign(
+                client, SOURCE_CUSTOMER_ID, name, budget_rn, tracking,
             )
-            print(f"  campaign: {camp_rn}")
-            camp_id = camp_rn.split('/')[-1]
-            created.append({"sec": sec["new_campaign_name"],
-                            "campaign_id": camp_id,
-                            "source_ag": sec["source_asset_group_name"]})
-            print(f"  Review: https://ads.google.com/aw/overview?ocid=&campaignId={camp_id}")
+            camp_id  = camp_rn.split("/")[-1]
+            print(f"  OK — campaign_id={camp_id}")
+            print(f"       https://ads.google.com/aw/overview?campaignId={camp_id}")
+            campaign_resources[name] = camp_rn
         except Exception as e:
-            print(f"  FAIL for {sec['new_campaign_name']}: {e}")
+            print(f"  FAIL: {e}")
+
+    # ── Step 3: create asset_groups + link assets ─────────────────────────────
+    print()
+    for p in plans:
+        sec      = p["sec"]
+        name     = sec["new_campaign_name"]
+        camp_rn  = campaign_resources.get(name)
+        if not camp_rn:
+            print(f"SKIP asset_group for {name} — no campaign resource (earlier failure)")
             continue
 
-    print("\n=== CAMPAIGNS CREATED (PAUSED) ===")
-    for c in created:
-        print(f"  • {c['sec']} (id={c['campaign_id']})")
-    print("\nNext steps (manual, ~3 min each in Google Ads UI):")
-    for c in created:
-        print(f"  {c['sec']}:")
-        print(f"    1. Open campaign in Ads UI")
-        print(f"    2. Asset groups → '+ Add' → 'Copy from existing'")
-        print(f"    3. Pick '{c['source_ag']}' from PMax_AR_Invoice_FiveSectors")
-        print(f"    4. Update the asset_group's final_url to its new sector URL")
-        print(f"    5. Re-attach audience signals (search 'HubSpot - Sales Qualified Lead' etc.)")
-    print("\n  Then:")
-    print("  • In PMax_AR_Invoice_FiveSectors, PAUSE the Services + Technology asset_groups")
-    print("  • Enable the new campaigns")
+        ag_name  = sec["source_asset_group_name"]   # reuse same name for clarity
+        existing = existing_ag_by_campaign.get(camp_rn, [])
+        if existing:
+            print(f"SKIP asset_group for {name} — already has: {existing}")
+            continue
+
+        print(f"Creating asset_group '{ag_name}' in {name} "
+              f"(atomic with {len(p['asset_links'])} assets)...")
+        try:
+            ag_rn, n_assets = create_asset_group_with_assets(
+                client, SOURCE_CUSTOMER_ID, camp_rn,
+                ag_name, sec["final_url"], p["asset_links"],
+            )
+            print(f"  asset_group: {ag_rn}  ({n_assets} assets linked)")
+        except Exception as e:
+            print(f"  FAIL creating asset_group: {e}")
+            continue
+
+        # Search themes (separate call is fine after the group exists)
+        n_themes = link_search_themes(
+            client, SOURCE_CUSTOMER_ID, ag_rn, p["search_themes"],
+        )
+        print(f"  linked {n_themes}/{len(p['search_themes'])} search themes")
+        print()
+
+    # ── Step 4: summary ───────────────────────────────────────────────────────
+    print("\n=== DONE ===")
+    print("All campaigns are PAUSED. Next steps:")
+    print("  1. Open each new campaign in Google Ads UI and verify asset_group quality.")
+    print("  2. Re-attach audience signals manually in UI (search 'HubSpot - SQL' etc.)")
+    print("     — the API cannot read source audience signals, only search themes.")
+    print("  3. Pause the corresponding asset_groups in PMax_AR_Invoice_FiveSectors")
+    print("     to avoid double-spend.")
+    print("  4. Enable the new campaigns.")
 
 
 if __name__ == "__main__":
