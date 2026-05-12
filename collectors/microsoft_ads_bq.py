@@ -366,6 +366,11 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
             impr         = int(_f(row.get("Impressions")))
             clicks       = int(_f(row.get("Clicks")))
             ctr          = _f(row.get("Ctr")) / 100
+            # utm_audience = AdGroupName. Microsoft's {_adgroup} ValueTrack
+            # placeholder substitutes to ad_group name at click time, which is
+            # what HubSpot captures as lead_utm_audience. Storing directly here
+            # so the dashboard join works.
+            adgroup_name = row.get("AdGroupName", "")
             bq_rows.append({
                 "date":          day,
                 "channel":       "microsoft_ads",
@@ -373,7 +378,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 "campaign_id":   str(row.get("CampaignId", "")),
                 "campaign_name": row.get("CampaignName", ""),
                 "adset_id":      str(row.get("AdGroupId", "")),
-                "adset_name":    row.get("AdGroupName", ""),
+                "adset_name":    adgroup_name,
+                "utm_audience":  adgroup_name or None,
                 "status":        row.get("Status", ""),
                 "spend":         round(spend, 2),
                 "impressions":   impr,
