@@ -380,9 +380,11 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
             _cust_params = {}
             for m in _re.finditer(r"\{_([A-Za-z0-9_]+)\}\s*=\s*([^;]+)", _cust_params_str):
                 _cust_params[m.group(1)] = m.group(2).strip()
-            _utm_audience = _cust_params.get("audience")
+            # Tracking template: utm_audience={_adgroup} → custom param key = "adgroup"
+            # (same pattern as utm_content={_adname} → key = "adname" for ads)
+            _utm_audience = _cust_params.get("adgroup")
             if not _utm_audience:
-                # Try resolving utm_audience= from the tracking template
+                # Try resolving utm_audience= from the tracking template using custom params
                 mm = _re.search(r"utm_audience=([^&\s\"']+)", _track_tmpl, _re.IGNORECASE)
                 if mm:
                     _raw = mm.group(1)

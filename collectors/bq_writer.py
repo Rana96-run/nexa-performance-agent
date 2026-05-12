@@ -796,7 +796,10 @@ CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_adset_performance` AS
 -- Falls back to UTM-proxy spend when adsets_daily has no row for that adset.
 WITH platform AS (
   SELECT date, channel, campaign_name,
-    adset_name AS utm_audience,
+    -- utm_audience column holds the resolved custom-param value (e.g. _adgroup for
+    -- Microsoft, adset_name for Meta/TikTok/Snap). Fall back to adset_name so
+    -- channels that don't populate utm_audience still show up.
+    COALESCE(utm_audience, adset_name) AS utm_audience,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
   FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
   GROUP BY 1, 2, 3, 4
@@ -861,20 +864,13 @@ SELECT
 FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
-  -- Normalized join: collapse spaces/underscores/dashes to '-' before comparing.
-  -- Fixes Microsoft (and other channels) where the tracking URL uses dashes as
-  -- URL-safe separators but the platform API returns display names with spaces.
-  AND REGEXP_REPLACE(LOWER(TRIM(p.utm_audience)), r'[\s_]+', '-')
-    = REGEXP_REPLACE(LOWER(TRIM(h.utm_audience)), r'[\s_]+', '-')
+  AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
 LEFT JOIN utmproxy u
-  ON h.date = u.date AND h.channel = u.channel
-  AND REGEXP_REPLACE(LOWER(TRIM(h.utm_audience)), r'[\s_]+', '-')
-   = REGEXP_REPLACE(LOWER(TRIM(u.utm_audience)), r'[\s_]+', '-')
+  ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
 LEFT JOIN deals d
   ON COALESCE(p.date, h.date) = d.date
   AND COALESCE(p.channel, h.channel) = d.channel
-  AND REGEXP_REPLACE(LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))), r'[\s_]+', '-')
-    = REGEXP_REPLACE(LOWER(TRIM(d.utm_audience)), r'[\s_]+', '-')
+  AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(d.utm_audience))
 """
 
 
@@ -883,7 +879,10 @@ CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_ad_performance` AS
 -- Ad/Creative level: spend+impressions+clicks from ads_daily,
 -- leads/SQLs/disqual from HubSpot, deals/closed-won/ROAS from deals.
 WITH platform AS (
-  SELECT date, channel, campaign_name, adset_name, ad_name AS utm_content,
+  SELECT date, channel, campaign_name, adset_name,
+    -- utm_content column holds the resolved _adname custom-param value.
+    -- Fall back to ad_name for channels without custom params.
+    COALESCE(utm_content, ad_name) AS utm_content,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
   FROM `{PROJECT_ID}.{DATASET}.ads_daily`
   GROUP BY 1, 2, 3, 4, 5
