@@ -97,8 +97,8 @@ Nexa Performance Agent/
 │   ├── meta_bq.py          # campaign + adset + ad grain
 │   ├── snap_bq.py          # campaign + adset + ad grain
 │   ├── tiktok_bq.py        # campaign + adgroup + ad grain
-│   ├── linkedin_bq.py      # campaign grain (token refresh needed)
-│   ├── microsoft_ads_bq.py # blocked on OAuth (see open_tasks.md)
+│   ├── linkedin_bq.py      # campaign grain — CONNECTED (token valid 2026-05-12)
+│   ├── microsoft_ads_bq.py # CONNECTED both accounts (188176729 + 187231519) 2026-05-12
 │   ├── hubspot_leads_bq.py # lead module daily buckets
 │   ├── hubspot_deals_bq.py # deals daily buckets
 │   ├── windsor_bq.py       # Windsor.ai unified channel fallback
