@@ -541,7 +541,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "CampaignId", "CampaignName",
                 "AdGroupId", "AdGroupName",
                 "AdId", "AdTitle", "AdDescription", "AdType", "AdStatus",
-                "FinalUrl",
+                "FinalUrl", "TrackingTemplate", "CustomParameters",
                 "Impressions", "Clicks", "Spend",
                 "Conversions", "CostPerConversion", "Ctr",
             ],
@@ -568,18 +568,41 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
             ctr          = _f(row.get("Ctr")) / 100
             cpl_native   = _f(row.get("CostPerConversion"))
             cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
-            # Parse utm_content from FinalUrl tracking template; this is the
-            # join key against hubspot_leads_module_daily.lead_utm_content.
-            # ad_name keeps its real identifier (AdTitle/AdDescription/AdId)
-            # so the table doesn't conflate the two concepts.
-            _final_url = row.get("FinalUrl") or ""
-            _utm_content = None
-            if "utm_content=" in _final_url:
-                try:
-                    from urllib.parse import urlparse, parse_qs
-                    _utm_content = parse_qs(urlparse(_final_url).query).get("utm_content", [None])[0] or None
-                except Exception:
-                    pass
+            # Microsoft Ads stores per-ad URL config in CustomParameters:
+            #   "{_adname}=Bing_AR_Feature_Competitros_HubSpot"
+            # The campaign/ad_group-level TrackingTemplate uses
+            # `utm_content={_adname}`, so the resolved value at click time
+            # equals the `_adname` value here. We take it directly as
+            # utm_content (no need to read the template).
+            #
+            # Fallback chain:
+            #   1. _adname value from CustomParameters     (primary, matches HubSpot)
+            #   2. utm_content= in TrackingTemplate         (literal template, rare at ad level)
+            #   3. utm_content= in FinalUrl                 (last resort)
+            _final_url   = row.get("FinalUrl") or ""
+            _track_tmpl  = row.get("TrackingTemplate") or ""
+            _cust_params_str = row.get("CustomParameters") or ""
+            import re as _re
+            _cust_params = {}
+            for m in _re.finditer(r"\{_([A-Za-z0-9_]+)\}\s*=\s*([^;]+)", _cust_params_str):
+                _cust_params[m.group(1)] = m.group(2).strip()
+            _utm_content = _cust_params.get("adname")
+            if not _utm_content:
+                # Fall back to parsing utm_content from templates/URLs
+                for _candidate in (_track_tmpl, _final_url):
+                    if not _candidate:
+                        continue
+                    mm = _re.search(r"utm_content=([^&\s\"']+)", _candidate, _re.IGNORECASE)
+                    if mm:
+                        _raw = mm.group(1)
+                        _resolved = _re.sub(
+                            r"\{_([A-Za-z0-9_]+)\}",
+                            lambda x: _cust_params.get(x.group(1), x.group(0)),
+                            _raw,
+                        )
+                        if "{" not in _resolved:
+                            _utm_content = _resolved
+                            break
             ad_name = (row.get("AdTitle") or row.get("AdDescription") or row.get("AdId") or "").strip()
             bq_rows.append({
                 "date":          day,
