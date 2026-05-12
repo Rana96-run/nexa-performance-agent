@@ -96,10 +96,23 @@ deals AS (
          SUM(d.amount_open)    AS pipeline_open,
          SUM(d.amount_total)   AS total_deal_amount,
          -- New business pipelines: Sales Pipeline, Bookkeeping, Qflavours
+         -- Full parallel set: counts + amounts for won/lost/open + total
          SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                  THEN d.deals_won  ELSE 0 END) AS new_biz_deals_won,
+                  THEN d.deals_won   ELSE 0 END) AS new_biz_deals_won,
          SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                  THEN d.amount_won ELSE 0 END) AS new_biz_revenue_won
+                  THEN d.deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.deals_open  ELSE 0 END) AS new_biz_deals_open,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.deals_total ELSE 0 END) AS new_biz_deals_total,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.amount_won  ELSE 0 END) AS new_biz_revenue_won,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.amount_lost ELSE 0 END) AS new_biz_amount_lost,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.amount_open ELSE 0 END) AS new_biz_amount_open,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.amount_total ELSE 0 END) AS new_biz_amount_total
   FROM `{P}.{D}.hubspot_deals_daily` d
   JOIN `{P}.{D}.v_channel_key_map` m ON d.qoyod_source = m.qoyod_source
   GROUP BY 1,2
@@ -137,9 +150,15 @@ SELECT
   COALESCE(d.amount_lost, 0)           AS amount_lost,
   COALESCE(d.pipeline_open, 0)         AS pipeline_open,
   COALESCE(d.total_deal_amount, 0)     AS amount_total,
-  -- New business pipelines (Sales Pipeline + Bookkeeping + Qflavours)
-  COALESCE(d.new_biz_deals_won, 0)     AS new_biz_deals_won,
+  -- New business pipelines (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
+  COALESCE(d.new_biz_deals_won,   0)   AS new_biz_deals_won,
+  COALESCE(d.new_biz_deals_lost,  0)   AS new_biz_deals_lost,
+  COALESCE(d.new_biz_deals_open,  0)   AS new_biz_deals_open,
+  COALESCE(d.new_biz_deals_total, 0)   AS new_biz_deals_total,
   COALESCE(d.new_biz_revenue_won, 0)   AS new_biz_revenue_won,
+  COALESCE(d.new_biz_amount_lost, 0)   AS new_biz_amount_lost,
+  COALESCE(d.new_biz_amount_open, 0)   AS new_biz_amount_open,
+  COALESCE(d.new_biz_amount_total,0)   AS new_biz_amount_total,
   SAFE_DIVIDE(s.spend, l.hs_leads)     AS cpl,
   SAFE_DIVIDE(s.spend, l.hs_qualified) AS cpql,
   SAFE_DIVIDE(l.hs_qualified,   l.hs_qualified + l.hs_disqualified) * 100 AS qual_rate_pct,
@@ -379,16 +398,31 @@ WITH
   ),
   deals AS (
     SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
-           SUM(deals_won)   AS deals_won,
-           SUM(deals_lost)  AS deals_lost,
-           SUM(deals_open)  AS deals_open,
-           SUM(amount_won)  AS revenue_won,
-           SUM(amount_lost) AS amount_lost,
-           SUM(amount_open) AS amount_open,
+           SUM(deals_won)    AS deals_won,
+           SUM(deals_lost)   AS deals_lost,
+           SUM(deals_open)   AS deals_open,
+           SUM(deals_total)  AS deals_total,
+           SUM(amount_won)   AS revenue_won,
+           SUM(amount_lost)  AS amount_lost,
+           SUM(amount_open)  AS amount_open,
+           SUM(amount_total) AS amount_total,
+           -- New business (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_won  ELSE 0 END) AS new_biz_deals_won,
+                    THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_won ELSE 0 END) AS new_biz_revenue_won
+                    THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_total ELSE 0 END) AS new_biz_deals_total,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_total ELSE 0 END) AS new_biz_amount_total
     FROM `{P}.{D}.hubspot_deals_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
     GROUP BY date, qoyod_source, deal_utm_campaign
@@ -411,9 +445,15 @@ SELECT
   ROUND(IFNULL(d.revenue_won, 0), 2)        AS revenue_won,
   ROUND(IFNULL(d.amount_lost, 0), 2)        AS amount_lost,
   ROUND(IFNULL(d.amount_open, 0), 2)        AS amount_open,
-  -- New business pipelines only
-  IFNULL(d.new_biz_deals_won, 0)            AS new_biz_deals_won,
-  ROUND(IFNULL(d.new_biz_revenue_won, 0), 2) AS new_biz_revenue_won,
+  -- New business pipelines only — full parallel set
+  IFNULL(d.new_biz_deals_won,   0)             AS new_biz_deals_won,
+  IFNULL(d.new_biz_deals_lost,  0)             AS new_biz_deals_lost,
+  IFNULL(d.new_biz_deals_open,  0)             AS new_biz_deals_open,
+  IFNULL(d.new_biz_deals_total, 0)             AS new_biz_deals_total,
+  ROUND(IFNULL(d.new_biz_revenue_won, 0), 2)   AS new_biz_revenue_won,
+  ROUND(IFNULL(d.new_biz_amount_lost, 0), 2)   AS new_biz_amount_lost,
+  ROUND(IFNULL(d.new_biz_amount_open, 0), 2)   AS new_biz_amount_open,
+  ROUND(IFNULL(d.new_biz_amount_total,0), 2)   AS new_biz_amount_total,
   -- KPIs
   ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads, 0)),      2) AS cpl,
   ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)),  2) AS cpql,
@@ -473,17 +513,31 @@ WITH
   deals AS (
     SELECT cm.channel,
            d.date,
-           SUM(d.deals_won)   AS deals_won,
-           SUM(d.deals_lost)  AS deals_lost,
-           SUM(d.deals_open)  AS deals_open,
-           SUM(d.amount_won)  AS revenue_won,
-           SUM(d.amount_lost) AS amount_lost,
-           SUM(d.amount_open) AS amount_open,
-           -- New business pipelines: Sales Pipeline, Bookkeeping, Qflavours
+           SUM(d.deals_won)    AS deals_won,
+           SUM(d.deals_lost)   AS deals_lost,
+           SUM(d.deals_open)   AS deals_open,
+           SUM(d.deals_total)  AS deals_total,
+           SUM(d.amount_won)   AS revenue_won,
+           SUM(d.amount_lost)  AS amount_lost,
+           SUM(d.amount_open)  AS amount_open,
+           SUM(d.amount_total) AS amount_total,
+           -- New business pipelines (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
            SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.deals_won  ELSE 0 END) AS new_biz_deals_won,
+                    THEN d.deals_won   ELSE 0 END) AS new_biz_deals_won,
            SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.amount_won ELSE 0 END) AS new_biz_revenue_won
+                    THEN d.deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.deals_open  ELSE 0 END) AS new_biz_deals_open,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.deals_total ELSE 0 END) AS new_biz_deals_total,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.amount_won  ELSE 0 END) AS new_biz_revenue_won,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.amount_lost ELSE 0 END) AS new_biz_amount_lost,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.amount_open ELSE 0 END) AS new_biz_amount_open,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.amount_total ELSE 0 END) AS new_biz_amount_total
     FROM `{P}.{D}.hubspot_deals_daily` d
     JOIN channel_map cm ON cm.qoyod_source = d.qoyod_source
     WHERE d.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
@@ -506,9 +560,15 @@ SELECT
   ROUND(IFNULL(d.revenue_won, 0), 2)        AS revenue_won,
   ROUND(IFNULL(d.amount_lost, 0), 2)        AS amount_lost,
   ROUND(IFNULL(d.amount_open, 0), 2)        AS amount_open,
-  -- New business pipelines only (Sales Pipeline + Bookkeeping + Qflavours)
-  IFNULL(d.new_biz_deals_won, 0)                    AS new_biz_deals_won,
+  -- New business pipelines only (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
+  IFNULL(d.new_biz_deals_won,   0)                  AS new_biz_deals_won,
+  IFNULL(d.new_biz_deals_lost,  0)                  AS new_biz_deals_lost,
+  IFNULL(d.new_biz_deals_open,  0)                  AS new_biz_deals_open,
+  IFNULL(d.new_biz_deals_total, 0)                  AS new_biz_deals_total,
   ROUND(IFNULL(d.new_biz_revenue_won, 0), 2)        AS new_biz_revenue_won,
+  ROUND(IFNULL(d.new_biz_amount_lost, 0), 2)        AS new_biz_amount_lost,
+  ROUND(IFNULL(d.new_biz_amount_open, 0), 2)        AS new_biz_amount_open,
+  ROUND(IFNULL(d.new_biz_amount_total,0), 2)        AS new_biz_amount_total,
   -- KPIs
   ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.leads,0), 0)),          2) AS cpl,
   ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.qualified,0), 0)),      2) AS cpql,

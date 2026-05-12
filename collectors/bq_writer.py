@@ -820,13 +820,27 @@ deals AS (
     SUM(deals_won)    AS deals_won,
     SUM(deals_lost)   AS deals_lost,
     SUM(deals_open)   AS deals_open,
+    SUM(amount_total) AS amount_total,
     SUM(amount_won)   AS revenue_won,
     SUM(amount_lost)  AS amount_lost,
     SUM(amount_open)  AS amount_open,
+    -- New business — full parallel set
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won  ELSE 0 END) AS new_biz_deals_won,
+             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won ELSE 0 END) AS new_biz_revenue_won
+             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
@@ -858,14 +872,22 @@ SELECT
   COALESCE(h.leads_qualified, 0)            AS leads_qualified,
   COALESCE(h.leads_disqualified, 0)         AS leads_disqualified,
   COALESCE(d.deals, 0)                      AS deals,
-  COALESCE(d.deals_won, 0)                  AS deals_won,
+  COALESCE(d.deals_won,  0)                 AS deals_won,
   COALESCE(d.deals_lost, 0)                 AS deals_lost,
   COALESCE(d.deals_open, 0)                 AS deals_open,
+  COALESCE(d.amount_total, 0)               AS amount_total,
   COALESCE(d.revenue_won, 0)                AS revenue_won,
-  COALESCE(d.amount_lost, 0)               AS amount_lost,
-  COALESCE(d.amount_open, 0)               AS amount_open,
-  COALESCE(d.new_biz_deals_won, 0)         AS new_biz_deals_won,
-  COALESCE(d.new_biz_revenue_won, 0)       AS new_biz_revenue_won,
+  COALESCE(d.amount_lost, 0)                AS amount_lost,
+  COALESCE(d.amount_open, 0)                AS amount_open,
+  -- New business — full parallel set
+  COALESCE(d.new_biz_deals_won,   0)        AS new_biz_deals_won,
+  COALESCE(d.new_biz_deals_lost,  0)        AS new_biz_deals_lost,
+  COALESCE(d.new_biz_deals_open,  0)        AS new_biz_deals_open,
+  COALESCE(d.new_biz_deals_total, 0)        AS new_biz_deals_total,
+  COALESCE(d.new_biz_revenue_won, 0)        AS new_biz_revenue_won,
+  COALESCE(d.new_biz_amount_lost, 0)        AS new_biz_amount_lost,
+  COALESCE(d.new_biz_amount_open, 0)        AS new_biz_amount_open,
+  COALESCE(d.new_biz_amount_total,0)        AS new_biz_amount_total,
   -- Ratios
   SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
   SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
@@ -918,13 +940,27 @@ deals AS (
     SUM(deals_won)    AS deals_won,
     SUM(deals_lost)   AS deals_lost,
     SUM(deals_open)   AS deals_open,
+    SUM(amount_total) AS amount_total,
     SUM(amount_won)   AS revenue_won,
     SUM(amount_lost)  AS amount_lost,
     SUM(amount_open)  AS amount_open,
+    -- New business — full parallel set
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won  ELSE 0 END) AS new_biz_deals_won,
+             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won ELSE 0 END) AS new_biz_revenue_won
+             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4
@@ -957,11 +993,19 @@ SELECT
   COALESCE(d.deals_won, 0)                    AS deals_won,
   COALESCE(d.deals_lost, 0)                   AS deals_lost,
   COALESCE(d.deals_open, 0)                   AS deals_open,
+  COALESCE(d.amount_total, 0)                 AS amount_total,
   COALESCE(d.revenue_won, 0)                  AS revenue_won,
   COALESCE(d.amount_lost, 0)                  AS amount_lost,
   COALESCE(d.amount_open, 0)                  AS amount_open,
-  COALESCE(d.new_biz_deals_won, 0)            AS new_biz_deals_won,
+  -- New business — full parallel set
+  COALESCE(d.new_biz_deals_won,   0)          AS new_biz_deals_won,
+  COALESCE(d.new_biz_deals_lost,  0)          AS new_biz_deals_lost,
+  COALESCE(d.new_biz_deals_open,  0)          AS new_biz_deals_open,
+  COALESCE(d.new_biz_deals_total, 0)          AS new_biz_deals_total,
   COALESCE(d.new_biz_revenue_won, 0)          AS new_biz_revenue_won,
+  COALESCE(d.new_biz_amount_lost, 0)          AS new_biz_amount_lost,
+  COALESCE(d.new_biz_amount_open, 0)          AS new_biz_amount_open,
+  COALESCE(d.new_biz_amount_total,0)          AS new_biz_amount_total,
   SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
   SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   SAFE_DIVIDE(p.spend, NULLIF(h.leads, 0))                   AS CPL,
