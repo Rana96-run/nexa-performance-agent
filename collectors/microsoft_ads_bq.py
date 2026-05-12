@@ -340,6 +340,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 "TimePeriod", "AccountId", "CurrencyCode",
                 "CampaignId", "CampaignName",
                 "AdGroupId", "AdGroupName", "Status",
+                "TrackingTemplate", "CustomParameters",
                 "Impressions", "Clicks", "Spend",
                 "Conversions", "CostPerConversion", "Ctr",
             ],
@@ -366,11 +367,34 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
             impr         = int(_f(row.get("Impressions")))
             clicks       = int(_f(row.get("Clicks")))
             ctr          = _f(row.get("Ctr")) / 100
-            # utm_audience = AdGroupName. Microsoft's {_adgroup} ValueTrack
-            # placeholder substitutes to ad_group name at click time, which is
-            # what HubSpot captures as lead_utm_audience. Storing directly here
-            # so the dashboard join works.
+            # utm_audience: Microsoft tracking templates use {_audience}=SomeValue
+            # as a custom parameter at ad group level — same pattern as {_adname}
+            # at ad level. HubSpot captures the _audience VALUE (e.g.
+            # 'Bing_AR_Brand_Keywords'), NOT the raw AdGroupName from the API.
+            # Parse custom params first; fall back to utm_audience= in template;
+            # last resort is AdGroupName (won't join to HubSpot but at least shows spend).
+            import re as _re
             adgroup_name = row.get("AdGroupName", "")
+            _cust_params_str = row.get("CustomParameters") or ""
+            _track_tmpl      = row.get("TrackingTemplate") or ""
+            _cust_params = {}
+            for m in _re.finditer(r"\{_([A-Za-z0-9_]+)\}\s*=\s*([^;]+)", _cust_params_str):
+                _cust_params[m.group(1)] = m.group(2).strip()
+            _utm_audience = _cust_params.get("audience")
+            if not _utm_audience:
+                # Try resolving utm_audience= from the tracking template
+                mm = _re.search(r"utm_audience=([^&\s\"']+)", _track_tmpl, _re.IGNORECASE)
+                if mm:
+                    _raw = mm.group(1)
+                    _resolved = _re.sub(
+                        r"\{_([A-Za-z0-9_]+)\}",
+                        lambda x: _cust_params.get(x.group(1), x.group(0)),
+                        _raw,
+                    )
+                    if "{" not in _resolved:
+                        _utm_audience = _resolved
+            if not _utm_audience:
+                _utm_audience = adgroup_name or None   # fallback — won't join HubSpot
             bq_rows.append({
                 "date":          day,
                 "channel":       "microsoft_ads",
@@ -379,7 +403,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 "campaign_name": row.get("CampaignName", ""),
                 "adset_id":      str(row.get("AdGroupId", "")),
                 "adset_name":    adgroup_name,
-                "utm_audience":  adgroup_name or None,
+                "utm_audience":  _utm_audience,
                 "status":        row.get("Status", ""),
                 "spend":         round(spend, 2),
                 "impressions":   impr,

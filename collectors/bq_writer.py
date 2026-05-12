@@ -861,13 +861,20 @@ SELECT
 FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
-  AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
+  -- Normalized join: collapse spaces/underscores/dashes to '-' before comparing.
+  -- Fixes Microsoft (and other channels) where the tracking URL uses dashes as
+  -- URL-safe separators but the platform API returns display names with spaces.
+  AND REGEXP_REPLACE(LOWER(TRIM(p.utm_audience)), r'[\s_]+', '-')
+    = REGEXP_REPLACE(LOWER(TRIM(h.utm_audience)), r'[\s_]+', '-')
 LEFT JOIN utmproxy u
-  ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
+  ON h.date = u.date AND h.channel = u.channel
+  AND REGEXP_REPLACE(LOWER(TRIM(h.utm_audience)), r'[\s_]+', '-')
+   = REGEXP_REPLACE(LOWER(TRIM(u.utm_audience)), r'[\s_]+', '-')
 LEFT JOIN deals d
   ON COALESCE(p.date, h.date) = d.date
   AND COALESCE(p.channel, h.channel) = d.channel
-  AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(d.utm_audience))
+  AND REGEXP_REPLACE(LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))), r'[\s_]+', '-')
+    = REGEXP_REPLACE(LOWER(TRIM(d.utm_audience)), r'[\s_]+', '-')
 """
 
 
