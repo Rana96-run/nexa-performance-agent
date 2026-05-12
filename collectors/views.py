@@ -92,8 +92,14 @@ deals AS (
          SUM(d.deals_lost)     AS deals_lost,
          SUM(d.deals_open)     AS deals_open,
          SUM(d.amount_won)     AS revenue_won,
+         SUM(d.amount_lost)    AS amount_lost,
          SUM(d.amount_open)    AS pipeline_open,
-         SUM(d.amount_total)   AS total_deal_amount
+         SUM(d.amount_total)   AS total_deal_amount,
+         -- New business pipelines: Sales Pipeline, Bookkeeping, Qflavours
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.deals_won  ELSE 0 END) AS new_biz_deals_won,
+         SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                  THEN d.amount_won ELSE 0 END) AS new_biz_revenue_won
   FROM `{P}.{D}.hubspot_deals_daily` d
   JOIN `{P}.{D}.v_channel_key_map` m ON d.qoyod_source = m.qoyod_source
   GROUP BY 1,2
@@ -123,20 +129,24 @@ SELECT
   SAFE_DIVIDE(s.spend, l.qualified_accounting) AS cpql_accounting,
   SAFE_DIVIDE(s.spend, l.leads_bookkeeping)    AS cpl_bookkeeping,
   SAFE_DIVIDE(s.spend, l.qualified_bookkeeping) AS cpql_bookkeeping,
-  COALESCE(d.deals_total, 0)     AS deals_total,
-  COALESCE(d.deals_won, 0)       AS deals_won,
-  COALESCE(d.deals_lost, 0)      AS deals_lost,
-  COALESCE(d.deals_open, 0)      AS deals_open,
-  COALESCE(d.revenue_won, 0)       AS revenue_won,
-  COALESCE(d.pipeline_open, 0)     AS pipeline_open,
-  COALESCE(d.total_deal_amount, 0) AS amount_total,
+  COALESCE(d.deals_total, 0)           AS deals_total,
+  COALESCE(d.deals_won, 0)             AS deals_won,
+  COALESCE(d.deals_lost, 0)            AS deals_lost,
+  COALESCE(d.deals_open, 0)            AS deals_open,
+  COALESCE(d.revenue_won, 0)           AS revenue_won,
+  COALESCE(d.amount_lost, 0)           AS amount_lost,
+  COALESCE(d.pipeline_open, 0)         AS pipeline_open,
+  COALESCE(d.total_deal_amount, 0)     AS amount_total,
+  -- New business pipelines (Sales Pipeline + Bookkeeping + Qflavours)
+  COALESCE(d.new_biz_deals_won, 0)     AS new_biz_deals_won,
+  COALESCE(d.new_biz_revenue_won, 0)   AS new_biz_revenue_won,
   SAFE_DIVIDE(s.spend, l.hs_leads)     AS cpl,
   SAFE_DIVIDE(s.spend, l.hs_qualified) AS cpql,
-  -- qual/disq rates: denominator = qualified+disqualified (excludes open leads)
   SAFE_DIVIDE(l.hs_qualified,   l.hs_qualified + l.hs_disqualified) * 100 AS qual_rate_pct,
   SAFE_DIVIDE(l.hs_disqualified, l.hs_qualified + l.hs_disqualified) * 100 AS disq_rate_pct,
-  SAFE_DIVIDE(d.revenue_won, s.spend)   AS roas,
-  SAFE_DIVIDE(d.deals_won, l.hs_leads) * 100 AS lead_to_deal_pct,
+  SAFE_DIVIDE(d.revenue_won,         s.spend) AS roas,
+  SAFE_DIVIDE(d.new_biz_revenue_won, s.spend) AS new_biz_roas,
+  SAFE_DIVIDE(d.deals_won, l.hs_leads) * 100  AS lead_to_deal_pct,
   CASE
     WHEN SAFE_DIVIDE(s.spend, l.hs_leads) IS NULL THEN 'no_data'
     WHEN SAFE_DIVIDE(s.spend, l.hs_leads) < 20 THEN 'scale'
@@ -174,20 +184,23 @@ SELECT
   SUM(hs_qualified)   AS hs_qualified,
   SUM(hs_disqualified) AS hs_disqualified,
   SUM(hs_open)        AS hs_open,
-  SUM(deals_total)    AS deals_total,
-  SUM(deals_won)      AS deals_won,
-  SUM(deals_lost)     AS deals_lost,
-  SUM(deals_open)     AS deals_open,
-  SUM(revenue_won)      AS revenue_won,
-  SUM(pipeline_open)    AS pipeline_open,
-  SUM(amount_total)     AS amount_total,
+  SUM(deals_total)         AS deals_total,
+  SUM(deals_won)           AS deals_won,
+  SUM(deals_lost)          AS deals_lost,
+  SUM(deals_open)          AS deals_open,
+  SUM(revenue_won)         AS revenue_won,
+  SUM(amount_lost)         AS amount_lost,
+  SUM(pipeline_open)       AS pipeline_open,
+  SUM(amount_total)        AS amount_total,
+  SUM(new_biz_deals_won)   AS new_biz_deals_won,
+  SUM(new_biz_revenue_won) AS new_biz_revenue_won,
   SAFE_DIVIDE(SUM(spend), SUM(hs_leads))       AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(hs_qualified))   AS cpql,
-  -- qual/disq rates: denominator = qualified+disqualified (excludes open leads)
   SAFE_DIVIDE(SUM(hs_qualified),   SUM(hs_qualified) + SUM(hs_disqualified)) * 100 AS qual_rate_pct,
   SAFE_DIVIDE(SUM(hs_disqualified), SUM(hs_qualified) + SUM(hs_disqualified)) * 100 AS disq_rate_pct,
-  SAFE_DIVIDE(SUM(revenue_won), SUM(spend))    AS roas,
-  SAFE_DIVIDE(SUM(deals_won), SUM(hs_leads)) * 100 AS lead_to_deal_pct
+  SAFE_DIVIDE(SUM(revenue_won),         SUM(spend)) AS roas,
+  SAFE_DIVIDE(SUM(new_biz_revenue_won), SUM(spend)) AS new_biz_roas,
+  SAFE_DIVIDE(SUM(deals_won), SUM(hs_leads)) * 100  AS lead_to_deal_pct
 FROM `{P}.{D}.channel_roas_daily`
 GROUP BY 1,2
 """
@@ -366,8 +379,16 @@ WITH
   ),
   deals AS (
     SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
-           SUM(deals_won)  AS deals_won,
-           SUM(amount_won) AS amount_won
+           SUM(deals_won)   AS deals_won,
+           SUM(deals_lost)  AS deals_lost,
+           SUM(deals_open)  AS deals_open,
+           SUM(amount_won)  AS revenue_won,
+           SUM(amount_lost) AS amount_lost,
+           SUM(amount_open) AS amount_open,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_won  ELSE 0 END) AS new_biz_deals_won,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_won ELSE 0 END) AS new_biz_revenue_won
     FROM `{P}.{D}.hubspot_deals_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
     GROUP BY date, qoyod_source, deal_utm_campaign
@@ -376,25 +397,31 @@ SELECT
   s.date,
   s.channel,
   s.campaign_name,
-  -- Spend metrics (from ad platform)
-  ROUND(s.spend, 2)        AS spend,
+  ROUND(s.spend, 2)         AS spend,
   s.impressions,
   s.clicks,
-  -- Lead metrics (from HubSpot)
   IFNULL(l.leads, 0)        AS leads,
   IFNULL(l.qualified, 0)    AS qualified,
   IFNULL(l.disqualified, 0) AS disqualified,
   IFNULL(l.leads, 0) - IFNULL(l.qualified, 0) - IFNULL(l.disqualified, 0) AS open_leads,
-  -- Deal metrics (from HubSpot)
-  IFNULL(d.deals_won, 0)              AS deals,
-  ROUND(IFNULL(d.amount_won, 0), 2)   AS deal_amount,
-  -- Computed KPIs (single source of truth — never recompute in Python)
-  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads, 0)),     2) AS cpl,
-  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)), 2) AS cpql,
-  ROUND(SAFE_DIVIDE(d.amount_won, NULLIF(s.spend, 0)), 2) AS roas,
-  ROUND(SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
-  ROUND(SAFE_DIVIDE(l.leads, NULLIF(s.clicks, 0)) * 100, 4)        AS cvr_pct,
-  ROUND(SAFE_DIVIDE(l.qualified, NULLIF(l.leads, 0)) * 100, 2)     AS qual_rate_pct
+  -- Deal metrics — all pipelines
+  IFNULL(d.deals_won, 0)                    AS deals_won,
+  IFNULL(d.deals_lost, 0)                   AS deals_lost,
+  IFNULL(d.deals_open, 0)                   AS deals_open,
+  ROUND(IFNULL(d.revenue_won, 0), 2)        AS revenue_won,
+  ROUND(IFNULL(d.amount_lost, 0), 2)        AS amount_lost,
+  ROUND(IFNULL(d.amount_open, 0), 2)        AS amount_open,
+  -- New business pipelines only
+  IFNULL(d.new_biz_deals_won, 0)            AS new_biz_deals_won,
+  ROUND(IFNULL(d.new_biz_revenue_won, 0), 2) AS new_biz_revenue_won,
+  -- KPIs
+  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads, 0)),      2) AS cpl,
+  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)),  2) AS cpql,
+  ROUND(SAFE_DIVIDE(d.revenue_won,         NULLIF(s.spend, 0)), 2) AS roas,
+  ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(s.spend, 0)), 2) AS new_biz_roas,
+  ROUND(SAFE_DIVIDE(s.clicks,    NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
+  ROUND(SAFE_DIVIDE(l.leads,     NULLIF(s.clicks, 0))      * 100, 4) AS cvr_pct,
+  ROUND(SAFE_DIVIDE(l.qualified, NULLIF(l.leads, 0))       * 100, 2) AS qual_rate_pct
 FROM spend s
 LEFT JOIN channel_map cm  ON cm.channel = s.channel
 LEFT JOIN leads l         ON l.date = s.date
@@ -446,8 +473,17 @@ WITH
   deals AS (
     SELECT cm.channel,
            d.date,
-           SUM(d.deals_won)  AS deals,
-           SUM(d.amount_won) AS deal_amount
+           SUM(d.deals_won)   AS deals_won,
+           SUM(d.deals_lost)  AS deals_lost,
+           SUM(d.deals_open)  AS deals_open,
+           SUM(d.amount_won)  AS revenue_won,
+           SUM(d.amount_lost) AS amount_lost,
+           SUM(d.amount_open) AS amount_open,
+           -- New business pipelines: Sales Pipeline, Bookkeeping, Qflavours
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.deals_won  ELSE 0 END) AS new_biz_deals_won,
+           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN d.amount_won ELSE 0 END) AS new_biz_revenue_won
     FROM `{P}.{D}.hubspot_deals_daily` d
     JOIN channel_map cm ON cm.qoyod_source = d.qoyod_source
     WHERE d.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
@@ -456,19 +492,31 @@ WITH
 SELECT
   COALESCE(s.date,    l.date,    d.date)    AS date,
   COALESCE(s.channel, l.channel, d.channel) AS channel,
-  ROUND(IFNULL(s.spend, 0), 2)       AS spend,
-  IFNULL(s.impressions, 0)           AS impressions,
-  IFNULL(s.clicks, 0)                AS clicks,
-  IFNULL(l.leads, 0)                 AS leads,
-  IFNULL(l.qualified, 0)             AS qualified,
-  IFNULL(l.disqualified, 0)          AS disqualified,
-  IFNULL(l.open_leads, 0)            AS open_leads,
-  IFNULL(d.deals, 0)                 AS deals,
-  ROUND(IFNULL(d.deal_amount, 0), 2) AS deal_amount,
-  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.leads,0), 0)),        2) AS cpl,
-  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.qualified,0), 0)),    2) AS cpql,
-  ROUND(SAFE_DIVIDE(IFNULL(d.deal_amount,0), NULLIF(IFNULL(s.spend,0), 0)), 2) AS roas,
-  ROUND(SAFE_DIVIDE(IFNULL(l.qualified,0), NULLIF(IFNULL(l.leads,0),0)) * 100, 2) AS qual_rate_pct
+  ROUND(IFNULL(s.spend, 0), 2)              AS spend,
+  IFNULL(s.impressions, 0)                  AS impressions,
+  IFNULL(s.clicks, 0)                       AS clicks,
+  IFNULL(l.leads, 0)                        AS leads_total,
+  IFNULL(l.qualified, 0)                    AS qualified,
+  IFNULL(l.disqualified, 0)                 AS disqualified,
+  IFNULL(l.open_leads, 0)                   AS open_leads,
+  -- Deal metrics (all pipelines)
+  IFNULL(d.deals_won, 0)                    AS deals_won,
+  IFNULL(d.deals_lost, 0)                   AS deals_lost,
+  IFNULL(d.deals_open, 0)                   AS deals_open,
+  ROUND(IFNULL(d.revenue_won, 0), 2)        AS revenue_won,
+  ROUND(IFNULL(d.amount_lost, 0), 2)        AS amount_lost,
+  ROUND(IFNULL(d.amount_open, 0), 2)        AS amount_open,
+  -- New business pipelines only (Sales Pipeline + Bookkeeping + Qflavours)
+  IFNULL(d.new_biz_deals_won, 0)                    AS new_biz_deals_won,
+  ROUND(IFNULL(d.new_biz_revenue_won, 0), 2)        AS new_biz_revenue_won,
+  -- KPIs
+  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.leads,0), 0)),          2) AS cpl,
+  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.qualified,0), 0)),      2) AS cpql,
+  ROUND(SAFE_DIVIDE(IFNULL(l.qualified,0), NULLIF(IFNULL(l.leads,0),0)) * 100, 2) AS qual_rate_pct,
+  -- ROAS: all pipelines
+  ROUND(SAFE_DIVIDE(IFNULL(d.revenue_won,0), NULLIF(IFNULL(s.spend,0), 0)),    2) AS roas,
+  -- ROAS: new business only
+  ROUND(SAFE_DIVIDE(IFNULL(d.new_biz_revenue_won,0), NULLIF(IFNULL(s.spend,0), 0)), 2) AS new_biz_roas
 FROM spend s
 FULL OUTER JOIN leads  l ON l.date = s.date AND l.channel = s.channel
 FULL OUTER JOIN deals  d ON d.date = COALESCE(s.date, l.date)

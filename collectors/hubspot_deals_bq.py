@@ -187,8 +187,11 @@ def collect_and_write(days: int = None, start_date: date = None,
     since_ms = int(datetime(start.year, start.month, start.day).timestamp() * 1000)
 
     # bucket by (date, channel, pipeline, stage_status, utm_*)
-    # date = closedate for won deals (revenue recognised at close, not creation)
-    # date = createdate for open/lost deals (tracks pipeline entry)
+    # date = createdate for ALL deals (won/open/lost).
+    # Revenue is attributed to when the deal was created — aligns with the spend
+    # date so ROAS reflects "deals sourced by this spend", not "deals that closed
+    # this period". Closedate pass still searches by closedate to FIND newly-won
+    # deals, but writes them to their createdate partition.
     # Amounts are accumulated twice: once in USD (primary), once in native currency.
     buckets = defaultdict(lambda: {
         "n": 0, "won": 0, "lost": 0, "open": 0,
@@ -269,7 +272,7 @@ def collect_and_write(days: int = None, start_date: date = None,
                         closed = created                # future date → use createdate
                     elif created and (closed < created):
                         closed = created                # closedate before createdate → use createdate
-                partition_date = (closed if (status == "won" and closed) else created)
+                partition_date = created  # always createdate — revenue attributed to deal origin
                 key = (
                     partition_date,
                     src_label,
@@ -373,7 +376,7 @@ def collect_and_write(days: int = None, start_date: date = None,
                         closed = created
                     elif created and closed and (closed < created):
                         closed = created
-                    partition_date = closed if closed else created
+                    partition_date = created  # always createdate — revenue attributed to deal origin
                     key = (
                         partition_date, src_label, plabel or "Unknown", status,
                         (p.get("deal_utm_campaign") or "").strip() or "__none__",

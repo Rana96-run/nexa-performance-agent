@@ -816,9 +816,17 @@ hubspot AS (
 deals AS (
   SELECT date, qoyod_source AS channel, deal_utm_campaign AS utm_campaign,
     deal_utm_audience AS utm_audience,
-    SUM(deals_total) AS deals,
-    SUM(deals_won) AS deals_won,
-    SUM(amount_won) AS revenue_won
+    SUM(deals_total)  AS deals,
+    SUM(deals_won)    AS deals_won,
+    SUM(deals_lost)   AS deals_lost,
+    SUM(deals_open)   AS deals_open,
+    SUM(amount_won)   AS revenue_won,
+    SUM(amount_lost)  AS amount_lost,
+    SUM(amount_open)  AS amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_won  ELSE 0 END) AS new_biz_deals_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won ELSE 0 END) AS new_biz_revenue_won
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
@@ -851,15 +859,21 @@ SELECT
   COALESCE(h.leads_disqualified, 0)         AS leads_disqualified,
   COALESCE(d.deals, 0)                      AS deals,
   COALESCE(d.deals_won, 0)                  AS deals_won,
+  COALESCE(d.deals_lost, 0)                 AS deals_lost,
+  COALESCE(d.deals_open, 0)                 AS deals_open,
   COALESCE(d.revenue_won, 0)                AS revenue_won,
+  COALESCE(d.amount_lost, 0)               AS amount_lost,
+  COALESCE(d.amount_open, 0)               AS amount_open,
+  COALESCE(d.new_biz_deals_won, 0)         AS new_biz_deals_won,
+  COALESCE(d.new_biz_revenue_won, 0)       AS new_biz_revenue_won,
   -- Ratios
   SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
   SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   -- Cost metrics
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))            AS CPL,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0))  AS CPQL,
-  -- ROAS = revenue_won / spend
-  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))      AS ROAS,
+  SAFE_DIVIDE(d.revenue_won,         NULLIF(COALESCE(p.spend, u.spend), 0)) AS ROAS,
+  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
 FROM platform p
 FULL OUTER JOIN hubspot h
@@ -900,9 +914,17 @@ deals AS (
   SELECT date, qoyod_source AS channel,
     deal_utm_campaign AS utm_campaign,
     deal_utm_content AS utm_content,
-    SUM(deals_total) AS deals,
-    SUM(deals_won) AS deals_won,
-    SUM(amount_won) AS revenue_won
+    SUM(deals_total)  AS deals,
+    SUM(deals_won)    AS deals_won,
+    SUM(deals_lost)   AS deals_lost,
+    SUM(deals_open)   AS deals_open,
+    SUM(amount_won)   AS revenue_won,
+    SUM(amount_lost)  AS amount_lost,
+    SUM(amount_open)  AS amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_won  ELSE 0 END) AS new_biz_deals_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won ELSE 0 END) AS new_biz_revenue_won
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4
@@ -931,14 +953,21 @@ SELECT
   COALESCE(h.leads, 0)                       AS leads,
   COALESCE(h.leads_qualified, 0)             AS leads_qualified,
   COALESCE(h.leads_disqualified, 0)          AS leads_disqualified,
-  COALESCE(d.deals, 0)                       AS deals,
-  COALESCE(d.deals_won, 0)                   AS deals_won,
-  COALESCE(d.revenue_won, 0)                 AS revenue_won,
+  COALESCE(d.deals, 0)                        AS deals,
+  COALESCE(d.deals_won, 0)                    AS deals_won,
+  COALESCE(d.deals_lost, 0)                   AS deals_lost,
+  COALESCE(d.deals_open, 0)                   AS deals_open,
+  COALESCE(d.revenue_won, 0)                  AS revenue_won,
+  COALESCE(d.amount_lost, 0)                  AS amount_lost,
+  COALESCE(d.amount_open, 0)                  AS amount_open,
+  COALESCE(d.new_biz_deals_won, 0)            AS new_biz_deals_won,
+  COALESCE(d.new_biz_revenue_won, 0)          AS new_biz_revenue_won,
   SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
   SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   SAFE_DIVIDE(p.spend, NULLIF(h.leads, 0))                   AS CPL,
   SAFE_DIVIDE(p.spend, NULLIF(h.leads_qualified, 0))         AS CPQL,
-  SAFE_DIVIDE(d.revenue_won, NULLIF(p.spend, 0))             AS ROAS,
+  SAFE_DIVIDE(d.revenue_won,         NULLIF(p.spend, 0))     AS ROAS,
+  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(p.spend, 0))     AS new_biz_roas,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')            AS data_source
 FROM platform p
 FULL OUTER JOIN hubspot h
