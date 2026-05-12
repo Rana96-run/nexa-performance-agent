@@ -2063,6 +2063,205 @@ def slack_events():
     return Response("", status=200)
 
 
+# ─── On-Demand Actions ────────────────────────────────────────────────────────
+
+@app.route("/api/duplicate-candidates", methods=["GET"])
+def duplicate_candidates():
+    """
+    Find campaigns worth duplicating based on performance thresholds:
+      - qual_rate >= 45%
+      - CPQL < $95
+      - ROAS > 0.5
+    For each qualifying campaign, also return adsets where:
+      - adset qual_rate >= 50%
+      - leads > 0 (converting, not just spending)
+    Looks back 30 days. Min $50 spend.
+    """
+    from collectors.bq_writer import get_client as get_bq
+    import os
+    bq = get_bq()
+    P = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+    D = os.getenv("BQ_DATASET", "qoyod_marketing")
+    days = int(request.args.get("days", 30))
+
+    try:
+        # ── Campaign-level candidates ──────────────────────────────────────────
+        camp_sql = f"""
+            WITH hs AS (
+              SELECT date, lead_utm_campaign,
+                     SUM(leads_total)     AS leads,
+                     SUM(leads_qualified) AS sqls
+              FROM `{P}.{D}.hubspot_leads_module_daily`
+              GROUP BY date, lead_utm_campaign
+            ),
+            deals AS (
+              SELECT deal_utm_campaign, SUM(amount_won) AS revenue_won
+              FROM `{P}.{D}.hubspot_deals_daily`
+              WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              GROUP BY deal_utm_campaign
+            )
+            SELECT
+              c.channel,
+              c.campaign_name,
+              MAX(c.account_id)                                              AS account_id,
+              MAX(c.campaign_id)                                             AS campaign_id,
+              MAX(c.status)                                                  AS status,
+              ROUND(SUM(c.spend), 2)                                        AS spend,
+              SUM(hs.leads)                                                  AS leads,
+              SUM(hs.sqls)                                                   AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)), 3)  AS qual_rate,
+              ROUND(SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls),0)), 2)   AS cpql,
+              ROUND(SAFE_DIVIDE(MAX(d.revenue_won), NULLIF(SUM(c.spend),0)),3) AS roas
+            FROM `{P}.{D}.campaigns_daily` c
+            LEFT JOIN hs
+              ON c.date = hs.date
+             AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+            LEFT JOIN deals d
+              ON LOWER(c.campaign_name) = LOWER(d.deal_utm_campaign)
+            WHERE c.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              AND c.status = 'ENABLED'
+            GROUP BY c.channel, c.campaign_name
+            HAVING SUM(c.spend) >= 50
+               AND SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)) >= 0.45
+               AND SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls),0)) < 95
+               AND SAFE_DIVIDE(MAX(d.revenue_won), NULLIF(SUM(c.spend),0)) > 0.5
+            ORDER BY qual_rate DESC, cpql ASC
+        """
+        camps = list(bq.query(camp_sql).result())
+        if not camps:
+            return jsonify({"candidates": [], "period_days": days,
+                            "msg": "No campaigns meet the criteria in this period."})
+
+        # ── Adset-level filter for qualifying campaigns ─────────────────────────
+        camp_names = [r.campaign_name for r in camps]
+        names_sql  = ", ".join(f"'{n.replace(chr(39), chr(39)+chr(39))}'" for n in camp_names)
+
+        adset_sql = f"""
+            WITH hs AS (
+              SELECT date, lead_utm_campaign, lead_utm_audience,
+                     SUM(leads_total)     AS leads,
+                     SUM(leads_qualified) AS sqls
+              FROM `{P}.{D}.hubspot_leads_module_daily`
+              GROUP BY date, lead_utm_campaign, lead_utm_audience
+            )
+            SELECT
+              a.campaign_name,
+              a.adset_name,
+              MAX(a.adset_id)                                                AS adset_id,
+              ROUND(SUM(a.spend), 2)                                         AS spend,
+              SUM(hs.leads)                                                   AS leads,
+              SUM(hs.sqls)                                                    AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)), 3)   AS qual_rate,
+              ROUND(SAFE_DIVIDE(SUM(a.spend), NULLIF(SUM(hs.sqls),0)), 2)    AS cpql
+            FROM `{P}.{D}.adsets_daily` a
+            LEFT JOIN hs
+              ON  a.date = hs.date
+             AND  LOWER(a.campaign_name) = LOWER(hs.lead_utm_campaign)
+             AND  LOWER(a.utm_audience)  = LOWER(hs.lead_utm_audience)
+            WHERE a.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              AND LOWER(a.campaign_name) IN ({names_sql.lower()})
+              AND a.status = 'ACTIVE'
+            GROUP BY a.campaign_name, a.adset_name
+            HAVING SUM(hs.leads) > 0
+               AND SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)) >= 0.50
+            ORDER BY qual_rate DESC
+        """
+        adsets = list(bq.query(adset_sql).result())
+
+        # ── Build response ──────────────────────────────────────────────────────
+        adset_map: dict[str, list] = {}
+        for a in adsets:
+            adset_map.setdefault(a.campaign_name.lower(), []).append({
+                "adset_name": a.adset_name,
+                "adset_id":   a.adset_id,
+                "spend":      float(a.spend or 0),
+                "leads":      int(a.leads or 0),
+                "sqls":       int(a.sqls or 0),
+                "qual_rate":  round(float(a.qual_rate or 0) * 100, 1),
+                "cpql":       float(a.cpql) if a.cpql else None,
+            })
+
+        candidates = []
+        for r in camps:
+            candidates.append({
+                "channel":      r.channel,
+                "campaign_name": r.campaign_name,
+                "campaign_id":  r.campaign_id,
+                "account_id":   r.account_id,
+                "status":       r.status,
+                "spend":        float(r.spend or 0),
+                "leads":        int(r.leads or 0),
+                "sqls":         int(r.sqls or 0),
+                "qual_rate":    round(float(r.qual_rate or 0) * 100, 1),
+                "cpql":         float(r.cpql) if r.cpql else None,
+                "roas":         float(r.roas) if r.roas else None,
+                "qualifying_adsets": adset_map.get(r.campaign_name.lower(), []),
+            })
+
+        return jsonify({"candidates": candidates, "period_days": days})
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+_ONDEMAND_STATUS: dict = {}
+
+def _run_ondemand_task(key: str, fn):
+    import threading
+    if _ONDEMAND_STATUS.get(key, {}).get("running"):
+        return False
+    def _worker():
+        _ONDEMAND_STATUS[key] = {"running": True, "result": None, "error": None}
+        try:
+            result = fn()
+            _ONDEMAND_STATUS[key].update({"running": False, "result": result})
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            _ONDEMAND_STATUS[key].update({"running": False, "error": str(e)})
+    threading.Thread(target=_worker, daemon=True).start()
+    return True
+
+
+@app.route("/api/ondemand/keyword-audit", methods=["POST"])
+def ondemand_keyword_audit():
+    """Run keyword policy audit — read-only, creates an Asana task with violations."""
+    def _run():
+        import subprocess, sys
+        r = subprocess.run(
+            [sys.executable, "scripts/audit.py", "keywords"],
+            capture_output=True, text=True, timeout=120,
+        )
+        return {"stdout": r.stdout[-3000:], "stderr": r.stderr[-1000:],
+                "returncode": r.returncode}
+    started = _run_ondemand_task("keyword_audit", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/keyword_audit"})
+
+
+@app.route("/api/ondemand/ad-audit", methods=["POST"])
+def ondemand_ad_audit():
+    """Run ad pause audit — identifies zero-conv / junk-lead / high-CPL ads, posts to #approvals."""
+    def _run():
+        import subprocess, sys
+        r = subprocess.run(
+            [sys.executable, "scripts/bulk_ads.py", "audit"],
+            capture_output=True, text=True, timeout=180,
+        )
+        return {"stdout": r.stdout[-3000:], "stderr": r.stderr[-1000:],
+                "returncode": r.returncode}
+    started = _run_ondemand_task("ad_audit", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/ad_audit"})
+
+
+@app.route("/api/ondemand/status/<key>")
+def ondemand_status(key: str):
+    return jsonify(_ONDEMAND_STATUS.get(key, {"running": False, "result": None, "error": None}))
+
+
 # ─── Startup: warn if pending approvals were lost on redeploy ─────────────────
 
 def _check_pending_on_startup():

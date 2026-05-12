@@ -1362,6 +1362,144 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
+  <!-- ── On-Demand Actions ── -->
+  <div class="card open" id="ondemand_card" style="margin-bottom:20px;margin-top:32px">
+    <div class="card-header" onclick="toggleCard(this)" style="cursor:pointer">
+      <div class="card-left">
+        <div class="card-icon" style="display:none"></div>
+        <div>
+          <div class="card-name">On-Demand Actions</div>
+          <div class="card-counts">Run audits, find campaign candidates, or trigger data operations manually</div>
+        </div>
+      </div>
+      <div class="card-right"><div class="card-arrow">▾</div></div>
+    </div>
+    <div class="card-body">
+
+      <!-- Row 1: Campaign actions -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px">Campaign Operations</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">
+
+        <!-- Find Duplicate Candidates -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Find Best Campaign to Duplicate</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Qual rate &ge;45% &nbsp;&bull;&nbsp; CPQL &lt;$95 &nbsp;&bull;&nbsp; ROAS &gt;0.5<br>
+            Includes adsets with &ge;50% qual rate &amp; converting leads
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="dup-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+            </select>
+            <button id="dup-btn" onclick="runDuplicateFinder()"
+                    style="background:none;border:1px solid #238636;border-radius:6px;
+                           color:#3fb950;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Find Candidates
+            </button>
+          </div>
+          <div id="dup-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
+        </div>
+
+        <!-- BQ Refresh -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">BQ Data Refresh</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Re-sync all channels to BigQuery.<br>
+            Incremental (last 2 days) or full backfill
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="refresh-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="">Incremental (2d)</option>
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <button id="refresh-btn" onclick="runBqRefresh()"
+                    style="background:none;border:1px solid #30363d;border-radius:6px;
+                           color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Refresh
+            </button>
+          </div>
+          <div id="refresh-ondemand-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
+        </div>
+      </div>
+
+      <!-- Row 2: Audit actions -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px">Audits (Read-only — creates Asana tasks + Slack approvals)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+
+        <!-- Keyword Audit -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Keyword Policy Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Scans all enabled keywords for policy violations:<br>
+            always-negative-as-keyword, brand-in-non-brand,<br>
+            competitor-in-generic, language mismatch
+          </div>
+          <button id="kw-audit-btn" onclick="runAudit('keyword_audit','kw-audit-btn','kw-audit-status')"
+                  style="background:none;border:1px solid #30363d;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Keyword Audit
+          </button>
+          <div id="kw-audit-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+        <!-- Ad Audit -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Ad Pause Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Finds ads meeting pause criteria:<br>
+            spend &gt;$70 with 0 conv, 60%+ junk leads,<br>
+            or CPL &gt;$50 for 10+ days — posts to #approvals
+          </div>
+          <button id="ad-audit-btn" onclick="runAudit('ad_audit','ad-audit-btn','ad-audit-status')"
+                  style="background:none;border:1px solid #30363d;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Ad Audit
+          </button>
+          <div id="ad-audit-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+        <!-- Asana Backfill -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Asana Backfill</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Re-scans all Asana projects and seeds missing tasks<br>
+            into BQ. Run if activity dashboard looks stale.
+          </div>
+          <button onclick="runAsanaBackfill()"
+                  style="background:none;border:1px solid #30363d;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Backfill
+          </button>
+          <div id="asana-backfill-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duplicate candidates modal -->
+  <div id="dup-modal-overlay" onclick="closeDupModal()"
+       style="display:none;position:fixed;inset:0;background:#00000099;z-index:400;
+              align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                width:100%;max-width:860px;padding:24px;position:relative"
+         onclick="event.stopPropagation()">
+      <button onclick="closeDupModal()"
+              style="position:absolute;top:12px;right:14px;background:none;border:none;
+                     color:#8b949e;font-size:18px;cursor:pointer">✕</button>
+      <div style="font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:4px">Campaign Duplicate Candidates</div>
+      <div id="dup-modal-sub" style="font-size:12px;color:#8b949e;margin-bottom:18px"></div>
+      <div id="dup-modal-body"></div>
+    </div>
+  </div>
+
   <!-- ── Recent Activity ── -->
   <div class="card" id="recent_feed" style="margin-bottom:24px">
     <div class="card-header" onclick="toggleCard(this)">
@@ -1492,8 +1630,156 @@ function runHealthCheck() {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeWorkflowDirect();
+  if (e.key === 'Escape') { closeWorkflowDirect(); closeDupModal(); }
 });
+
+// ── On-demand: Duplicate Campaign Finder ──────────────────────────────────────
+function runDuplicateFinder() {
+  const btn  = document.getElementById('dup-btn');
+  const stat = document.getElementById('dup-status');
+  const days = document.getElementById('dup-days').value;
+  btn.textContent = 'Searching…';
+  btn.disabled = true;
+  stat.textContent = 'Querying BQ…';
+  fetch('/api/duplicate-candidates?days=' + days)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = 'Find Candidates';
+      btn.disabled = false;
+      if (data.error) { stat.style.color='#f85149'; stat.textContent = 'Error: ' + data.error; return; }
+      stat.style.color = '#8b949e';
+      stat.textContent = (data.candidates||[]).length + ' candidate(s) found — last ' + data.period_days + ' days';
+      showDupModal(data);
+    })
+    .catch(function(e) {
+      btn.textContent = 'Find Candidates'; btn.disabled = false;
+      stat.style.color='#f85149'; stat.textContent = 'Request failed';
+    });
+}
+
+function showDupModal(data) {
+  const overlay = document.getElementById('dup-modal-overlay');
+  const body    = document.getElementById('dup-modal-body');
+  const sub     = document.getElementById('dup-modal-sub');
+  sub.textContent = (data.candidates.length) + ' campaign(s) meet criteria — last ' + data.period_days + ' days  ·  Qual ≥45%  ·  CPQL <$95  ·  ROAS >0.5';
+
+  if (!data.candidates.length) {
+    body.innerHTML = '<div style="color:#8b949e;font-size:13px;padding:8px 0">No campaigns meet all three criteria in this period. Try a longer window.</div>';
+  } else {
+    body.innerHTML = data.candidates.map(function(c) {
+      const adsetRows = (c.qualifying_adsets||[]).map(function(a) {
+        return '<tr>' +
+          '<td style="padding:5px 10px;color:#c9d1d9;font-family:monospace;font-size:11px">' + a.adset_name + '</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#3fb950">' + a.qual_rate + '%</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#e6edf3">' + (a.cpql ? '$'+a.cpql.toFixed(0) : '—') + '</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#8b949e">' + a.sqls + '/' + a.leads + '</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#8b949e">$' + a.spend.toFixed(0) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      const adsetSection = c.qualifying_adsets.length
+        ? '<div style="margin-top:10px;font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Qualifying Ad Sets (' + c.qualifying_adsets.length + ')</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="color:#484f58;font-size:10px;text-transform:uppercase">' +
+          '<th style="padding:4px 10px;text-align:left">Ad Set</th>' +
+          '<th style="padding:4px 10px;text-align:right">Qual%</th>' +
+          '<th style="padding:4px 10px;text-align:right">CPQL</th>' +
+          '<th style="padding:4px 10px;text-align:right">SQL/Lead</th>' +
+          '<th style="padding:4px 10px;text-align:right">Spend</th>' +
+          '</tr>' + adsetRows + '</table>'
+        : '<div style="font-size:11px;color:#484f58;margin-top:8px">No adsets individually meet the 50% threshold — check at campaign level only.</div>';
+
+      return '<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:14px;margin-bottom:12px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">' +
+          '<div>' +
+            '<span style="background:#21262d;border-radius:4px;padding:2px 7px;font-size:10px;color:#8b949e;text-transform:uppercase;margin-right:8px">' + c.channel + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#e6edf3">' + c.campaign_name + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:12px;font-size:12px">' +
+            '<span style="color:#3fb950">Qual <strong>' + c.qual_rate + '%</strong></span>' +
+            '<span style="color:#e6edf3">CPQL <strong>$' + (c.cpql ? c.cpql.toFixed(0) : '—') + '</strong></span>' +
+            '<span style="color:#58a6ff">ROAS <strong>' + (c.roas ? c.roas.toFixed(2) : '—') + '</strong></span>' +
+            '<span style="color:#8b949e">$' + c.spend.toFixed(0) + ' · ' + c.sqls + ' SQLs</span>' +
+          '</div>' +
+        '</div>' +
+        adsetSection +
+        '<div style="margin-top:10px;font-size:11px;color:#484f58">Campaign ID: ' + (c.campaign_id||'—') + ' · Account: ' + (c.account_id||'—') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  overlay.style.display = 'flex';
+}
+
+function closeDupModal() {
+  document.getElementById('dup-modal-overlay').style.display = 'none';
+}
+
+// ── On-demand: Generic audit runner ───────────────────────────────────────────
+function runAudit(key, btnId, statusId) {
+  const btn  = document.getElementById(btnId);
+  const stat = document.getElementById(statusId);
+  const endpoint = key === 'keyword_audit' ? '/api/ondemand/keyword-audit' : '/api/ondemand/ad-audit';
+  btn.disabled = true;
+  btn.style.color = '#8b949e';
+  stat.style.color = '#8b949e';
+  stat.textContent = 'Running…';
+  fetch(endpoint, {method:'POST'})
+    .then(function() {
+      const poll = setInterval(function() {
+        fetch('/api/ondemand/status/' + key)
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (!d.running) {
+              clearInterval(poll);
+              btn.disabled = false; btn.style.color = '#58a6ff';
+              if (d.error) { stat.style.color='#f85149'; stat.textContent='Error: '+d.error.slice(0,120); }
+              else {
+                const rc = d.result && d.result.returncode;
+                stat.style.color = rc === 0 ? '#3fb950' : '#f85149';
+                stat.textContent = rc === 0 ? 'Done — check Asana / #approvals' : 'Finished with errors (rc='+rc+')';
+              }
+            }
+          });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.style.color='#58a6ff'; stat.textContent='Request failed'; stat.style.color='#f85149'; });
+}
+
+// ── On-demand: BQ Refresh button ─────────────────────────────────────────────
+function runBqRefresh() {
+  const btn  = document.getElementById('refresh-btn');
+  const stat = document.getElementById('refresh-ondemand-status');
+  const days = document.getElementById('refresh-days').value;
+  const url  = days ? '/api/refresh?days=' + days : '/api/refresh';
+  btn.disabled = true; btn.style.color = '#8b949e';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued…';
+  fetch(url, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.queued) { btn.disabled=false; btn.style.color='#58a6ff'; stat.textContent='Already running'; return; }
+      stat.textContent = 'Running (' + (days ? days+'d' : 'incremental') + ')…';
+      const poll = setInterval(function() {
+        fetch('/api/refresh/status').then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(poll);
+            btn.disabled=false; btn.style.color='#58a6ff';
+            stat.style.color = s.error ? '#f85149' : '#3fb950';
+            stat.textContent = s.error ? 'Error: '+s.error.slice(0,80) : 'Done — data refreshed';
+          }
+        });
+      }, 5000);
+    })
+    .catch(function() { btn.disabled=false; btn.style.color='#58a6ff'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Asana Backfill ─────────────────────────────────────────────────
+function runAsanaBackfill() {
+  const stat = document.getElementById('asana-backfill-status');
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~60s…';
+  fetch('/api/asana-backfill', {method:'POST'})
+    .then(function() { stat.textContent = 'Running in background — reload in ~60s to see results'; })
+    .catch(function() { stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
 </script>
 </body>
 </html>
