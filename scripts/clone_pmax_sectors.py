@@ -136,10 +136,14 @@ def find_source_asset_group(ga, customer_id: str, sector_name: str):
 
 
 def get_asset_links(ga, customer_id: str, asset_group_resource: str):
-    """Return list of (asset_resource_name, field_type_enum) tied to an asset_group."""
-    # asset_group_asset.field_type tells us how to link the asset in the new group
-    # (HEADLINE, DESCRIPTION, LONG_HEADLINE, MARKETING_IMAGE, SQUARE_MARKETING_IMAGE,
-    #  LOGO, LANDSCAPE_LOGO, BUSINESS_NAME, YOUTUBE_VIDEO, etc.)
+    """Return list of (asset_resource_name, field_type_enum) tied to an asset_group.
+
+    Per-type caps are enforced here to avoid RESOURCE_LIMIT errors:
+      LONG_HEADLINE (17): max 5 per asset group
+      HEADLINE (2): max 15
+      DESCRIPTION (3): max 5
+    """
+    _LIMITS = {17: 5, 2: 15, 3: 5, 7: 5, 21: 5, 22: 5}  # field_type → max count
     q = f"""
         SELECT
             asset_group_asset.asset,
@@ -149,10 +153,82 @@ def get_asset_links(ga, customer_id: str, asset_group_resource: str):
         WHERE asset_group_asset.asset_group = '{asset_group_resource}'
           AND asset_group_asset.status != 'REMOVED'
     """
+    from collections import Counter
+    counts: Counter = Counter()
     out = []
     for r in ga.search(customer_id=customer_id, query=q):
-        out.append((r.asset_group_asset.asset,
-                    r.asset_group_asset.field_type))
+        ft = r.asset_group_asset.field_type
+        limit = _LIMITS.get(ft, 9999)
+        if counts[ft] >= limit:
+            print(f"    [cap] skipping extra {ft} asset (limit={limit})")
+            continue
+        counts[ft] += 1
+        out.append((r.asset_group_asset.asset, ft))
+    return out
+
+
+def get_campaign_level_assets(ga, customer_id: str, campaign_name: str):
+    """Return campaign-level LOGO (21), LANDSCAPE_LOGO (22), BUSINESS_NAME (18)
+    assets from the source campaign — these don't appear in asset_group_asset
+    queries but are required for a valid asset group.
+
+    Logos are dimension-validated: asset_group level requires min 128x128 for
+    square LOGO and min 512x128 for LANDSCAPE_LOGO. Campaign-level logos can
+    include small favicons (32x32) that fail asset_group validation.
+    """
+    _WANT = {18, 21, 22}   # BUSINESS_NAME, LOGO, LANDSCAPE_LOGO
+    q = f"""
+        SELECT campaign.name, campaign_asset.field_type, campaign_asset.asset
+        FROM campaign_asset
+        WHERE campaign.name = '{campaign_name}'
+          AND campaign_asset.status != 'REMOVED'
+    """
+    logo_rns: list[str] = []
+    text_assets: list[tuple] = []
+    for r in ga.search(customer_id=customer_id, query=q):
+        ft = r.campaign_asset.field_type
+        if ft not in _WANT:
+            continue
+        if ft == 18:  # BUSINESS_NAME — not an image, include directly
+            text_assets.append((r.campaign_asset.asset, ft))
+        else:
+            logo_rns.append((r.campaign_asset.asset, ft))
+
+    if not logo_rns:
+        return text_assets
+
+    # Fetch dimensions for image assets to filter out undersized logos
+    rn_list = ", ".join(f"'{rn}'" for rn, _ in logo_rns)
+    dim_q = f"""
+        SELECT
+            asset.resource_name,
+            asset.image_asset.full_size.width_pixels,
+            asset.image_asset.full_size.height_pixels
+        FROM asset
+        WHERE asset.resource_name IN ({rn_list})
+    """
+    dims: dict[str, tuple[int, int]] = {}
+    for r in ga.search(customer_id=customer_id, query=dim_q):
+        a = r.asset
+        dims[a.resource_name] = (
+            a.image_asset.full_size.width_pixels,
+            a.image_asset.full_size.height_pixels,
+        )
+
+    # Asset_group minimums: LOGO ≥ 128×128 (1:1), LANDSCAPE_LOGO ≥ 512×128 (4:1)
+    _MIN = {
+        21: (128, 128),   # LOGO
+        22: (512, 128),   # LANDSCAPE_LOGO
+    }
+    out = list(text_assets)
+    for rn, ft in logo_rns:
+        w, h = dims.get(rn, (0, 0))
+        min_w, min_h = _MIN.get(ft, (1, 1))
+        if w >= min_w and h >= min_h:
+            out.append((rn, ft))
+        else:
+            print(f"    [skip] logo {rn} {w}x{h} below min {min_w}x{min_h} "
+                  f"for field_type={ft}")
     return out
 
 
@@ -323,6 +399,16 @@ def main(execute: bool):
     client = get_client()
     ga     = client.get_service("GoogleAdsService")
 
+    # Campaign-level LOGO + BUSINESS_NAME from source (shared across all sectors)
+    campaign_level_assets = get_campaign_level_assets(
+        ga, SOURCE_CUSTOMER_ID, SOURCE_CAMPAIGN_NAME,
+    )
+    print(f"Campaign-level assets (LOGO/BUSINESS_NAME/LANDSCAPE_LOGO): "
+          f"{len(campaign_level_assets)}")
+    for rn, ft in campaign_level_assets:
+        print(f"  field_type={ft}  {rn}")
+    print()
+
     plans = []
     for sec in SECTORS:
         print(f"--- Sector: {sec['source_asset_group_name']} ---")
@@ -334,8 +420,13 @@ def main(execute: bool):
             continue
         asset_links            = get_asset_links(ga, SOURCE_CUSTOMER_ID, ag_rn)
         audiences, search_themes = get_audience_signals(ga, SOURCE_CUSTOMER_ID, ag_rn)
+        # Merge in campaign-level LOGO/BUSINESS_NAME so the asset group batch
+        # satisfies Google's minimum-asset validation (source keeps them at
+        # campaign level, not asset group level, so they're not in asset_links)
+        all_assets = asset_links + campaign_level_assets
         print(f"  Found source asset_group_id={ag_id}")
-        print(f"    assets to clone:     {len(asset_links)}")
+        print(f"    assets to clone:     {len(asset_links)} ag-level "
+              f"+ {len(campaign_level_assets)} campaign-level = {len(all_assets)} total")
         print(f"    audience signals:    {len(audiences)}")
         print(f"    search themes:       {len(search_themes)}")
         print(f"    new campaign:        {sec['new_campaign_name']}")
@@ -344,7 +435,7 @@ def main(execute: bool):
         print(f"    utm_content:         {sec['utm_content']}")
         plans.append({
             "sec":           sec,
-            "asset_links":   asset_links,
+            "asset_links":   all_assets,
             "audiences":     audiences,
             "search_themes": search_themes,
         })
@@ -411,8 +502,9 @@ def main(execute: bool):
             print(f"SKIP asset_group for {name} — already has: {existing}")
             continue
 
+        n_total = len(p["asset_links"])
         print(f"Creating asset_group '{ag_name}' in {name} "
-              f"(atomic with {len(p['asset_links'])} assets)...")
+              f"(atomic batch: {n_total} asset links)...")
         try:
             ag_rn, n_assets = create_asset_group_with_assets(
                 client, SOURCE_CUSTOMER_ID, camp_rn,
