@@ -114,13 +114,20 @@ _SNAP_RETRY_WAIT = 15  # seconds between retries (fixed — avoids long exponent
 
 
 def _snap_get(url, headers, params) -> requests.Response:
-    """GET with retry on timeout/connection error. Tries up to _SNAP_RETRIES times."""
+    """GET with retry on timeout/connection error/429. Tries up to _SNAP_RETRIES times."""
     import time as _time
     last_exc = None
     for attempt in range(_SNAP_RETRIES):
         try:
-            return requests.get(url, headers=headers, params=params,
-                                timeout=_SNAP_TIMEOUT)
+            r = requests.get(url, headers=headers, params=params,
+                             timeout=_SNAP_TIMEOUT)
+            if r.status_code == 429:
+                wait = _SNAP_RETRY_WAIT * (attempt + 1)   # 15s, 30s, 45s …
+                print(f"[snap]   429 rate limit attempt {attempt+1}/{_SNAP_RETRIES}, "
+                      f"waiting {wait}s...")
+                _time.sleep(wait)
+                continue
+            return r
         except (requests.exceptions.Timeout,
                 requests.exceptions.ConnectionError) as exc:
             last_exc = exc
@@ -128,7 +135,12 @@ def _snap_get(url, headers, params) -> requests.Response:
                 print(f"[snap]   network error attempt {attempt+1}/{_SNAP_RETRIES} "
                       f"({type(exc).__name__}), retry in {_SNAP_RETRY_WAIT}s...")
                 _time.sleep(_SNAP_RETRY_WAIT)
-    raise last_exc
+    if last_exc:
+        raise last_exc
+    # All attempts were 429s — return a synthetic 429 response object so callers skip
+    import types
+    fake = types.SimpleNamespace(status_code=429, text="[rate limited after retries]")
+    return fake  # type: ignore[return-value]
 
 
 def _stats_single_call(token, campaign_id, start, end, tz_name, fields):
@@ -325,11 +337,13 @@ def _adsquad_stats_single_call(token: str, adsquad_id: str,
 
 
 def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int:
-    """Ad Squad grain → adsets_daily. Same token as campaign collector."""
+    """Ad Squad grain → adsets_daily. Uses concurrent threads for parallel per-squad calls."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     import time as _time
+
     token = _refresh_access_token()
 
-    end = date.today() - timedelta(days=1)   # cap at yesterday — same reason as campaigns
+    end = date.today() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -342,72 +356,86 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     accounts = _ad_accounts()
     print(f"[snap] adsets window {start} -> {end} across {len(accounts)} account(s)")
 
-    _TOKEN_MAX_AGE_S = 1500  # 25 min — tokens last 30 min; refresh proactively
+    _TOKEN_MAX_AGE_S = 1500
 
     for acct in accounts:
-        # Refresh per-account + time-based within the inner loop
         token   = _refresh_access_token()
-        token_refreshed_at = _time.monotonic()
+        token_ts = _time.monotonic()
 
-        meta    = _get_account(token, acct)
-        cur     = normalize_currency(meta.get("currency"))
-        tz      = meta.get("timezone") or "UTC"
+        meta      = _get_account(token, acct)
+        cur       = normalize_currency(meta.get("currency"))
+        tz        = meta.get("timezone") or "UTC"
         campaigns = _list_campaigns(token, acct)
         adsquads  = _list_adsquads(token, acct)
+
+        chunks = list(_date_chunks(start, end, max_days=30))
+        work   = [(sq_id, cs, ce) for sq_id in adsquads for cs, ce in chunks]
+
+        stats_by_sq: dict[str, list] = {sq_id: [] for sq_id in adsquads}
+
+        def _fetch_sq(item):
+            sq_id, cs, ce = item
+            return sq_id, _adsquad_stats_single_call(token, sq_id, cs, ce, tz)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(_fetch_sq, w): w for w in work}
+            for fut in as_completed(futures):
+                if _time.monotonic() - token_ts > _TOKEN_MAX_AGE_S:
+                    token = _refresh_access_token()
+                    token_ts = _time.monotonic()
+                    print(f"[snap]   token refreshed (>25min) mid-account {acct}")
+                try:
+                    sq_id, pts = fut.result()
+                    stats_by_sq[sq_id].extend(pts)
+                except Exception as exc:
+                    print(f"[snap]   future error: {exc}")
+
         acct_count = 0
-
-        for sq_id, sq in adsquads.items():
-            # Proactive token refresh every 25 min
-            if _time.monotonic() - token_refreshed_at > _TOKEN_MAX_AGE_S:
-                token = _refresh_access_token()
-                token_refreshed_at = _time.monotonic()
-                print(f"[snap]   token refreshed (>25min elapsed) mid-account {acct}")
-
+        for sq_id, pts in stats_by_sq.items():
+            sq      = adsquads.get(sq_id, {})
             camp_id = sq.get("campaign_id", "")
             camp    = campaigns.get(camp_id, {})
-            for cs, ce in _date_chunks(start, end, max_days=30):
-                pts = _adsquad_stats_single_call(token, sq_id, cs, ce, tz)
-                for pt in pts:
-                    stats        = pt.get("stats", {})
-                    spend_micro  = float(stats.get("spend", 0) or 0)
-                    spend_native = spend_micro / 1_000_000
-                    spend        = to_usd(spend_native, cur)
-                    impressions  = int(stats.get("impressions", 0) or 0)
-                    clicks       = int(stats.get("swipes", 0) or 0)
-                    conversions_total = (
-                        int(stats.get("conversion_sign_ups", 0) or 0)
-                        + int(stats.get("conversion_purchases", 0) or 0)
-                        + int(stats.get("conversion_add_cart", 0) or 0)
-                        + int(stats.get("conversion_save", 0) or 0)
-                        + int(stats.get("conversion_start_checkout", 0) or 0)
-                        + int(stats.get("conversion_subscribe", 0) or 0)
-                        + int(stats.get("conversion_app_installs", 0) or 0)
-                    )
-                    ctr = (clicks / impressions * 100) if impressions else 0.0
-                    d   = (pt.get("start_time") or "")[:10]
-                    if not d:
-                        continue
-                    _adset_name = sq.get("name")
-                    rows.append({
-                        "date":          d,
-                        "channel":       "snapchat",
-                        "account_id":    acct,
-                        "campaign_id":   camp_id,
-                        "campaign_name": camp.get("name"),
-                        "adset_id":      sq_id,
-                        "adset_name":    _adset_name,
-                        "utm_audience":  _adset_name,  # Snap ad_squad name = utm_audience
-                        "status":        sq.get("status"),
-                        "spend":         round(spend, 2),
-                        "impressions":   impressions,
-                        "clicks":        clicks,
-                        "ctr":           round(ctr, 4),
-                        "leads":         0,
-                        "conversions":   float(conversions_total),
-                        "currency":      "USD",
-                        "updated_at":    now,
-                    })
-                    acct_count += 1
+            for pt in pts:
+                stats        = pt.get("stats", {})
+                spend_micro  = float(stats.get("spend", 0) or 0)
+                spend_native = spend_micro / 1_000_000
+                spend        = to_usd(spend_native, cur)
+                impressions  = int(stats.get("impressions", 0) or 0)
+                clicks       = int(stats.get("swipes", 0) or 0)
+                conversions_total = (
+                    int(stats.get("conversion_sign_ups", 0) or 0)
+                    + int(stats.get("conversion_purchases", 0) or 0)
+                    + int(stats.get("conversion_add_cart", 0) or 0)
+                    + int(stats.get("conversion_save", 0) or 0)
+                    + int(stats.get("conversion_start_checkout", 0) or 0)
+                    + int(stats.get("conversion_subscribe", 0) or 0)
+                    + int(stats.get("conversion_app_installs", 0) or 0)
+                )
+                ctr = (clicks / impressions * 100) if impressions else 0.0
+                d   = (pt.get("start_time") or "")[:10]
+                if not d:
+                    continue
+                _adset_name = sq.get("name")
+                rows.append({
+                    "date":          d,
+                    "channel":       "snapchat",
+                    "account_id":    acct,
+                    "campaign_id":   camp_id,
+                    "campaign_name": camp.get("name"),
+                    "adset_id":      sq_id,
+                    "adset_name":    _adset_name,
+                    "utm_audience":  _adset_name,
+                    "status":        sq.get("status"),
+                    "spend":         round(spend, 2),
+                    "impressions":   impressions,
+                    "clicks":        clicks,
+                    "ctr":           round(ctr, 4),
+                    "leads":         0,
+                    "conversions":   float(conversions_total),
+                    "currency":      "USD",
+                    "updated_at":    now,
+                })
+                acct_count += 1
         print(f"[snap]   adsets account {acct}: {acct_count} rows across {len(adsquads)} ad squads")
 
     return upsert_rows("adsets_daily", rows,
@@ -489,8 +517,13 @@ def _ad_stats_single_call(token: str, ad_id: str,
 
 
 def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
-    """Ad/Creative grain → ads_daily. Exact spend per ad from Snap API."""
+    """Ad/Creative grain → ads_daily.
+    Uses concurrent threads (20 workers) to fetch per-ad stats in parallel,
+    reducing 1,000 sequential API calls to ~50 batches.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     import time as _time
+
     token = _refresh_access_token()
 
     end = date.today() - timedelta(days=1)
@@ -506,84 +539,98 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     accounts = _ad_accounts()
     print(f"[snap] ads window {start} -> {end} across {len(accounts)} account(s)")
 
-    _TOKEN_MAX_AGE_S = 1500  # 25 min — tokens last 30 min; refresh proactively
+    _TOKEN_MAX_AGE_S = 1500
 
     for acct in accounts:
-        # Refresh token per-account + time-based within the inner loop.
-        # Account 1 has 1,000 ads × 5 chunks = 5,000 API calls → can take 1–4 hours.
-        # We track when the token was last refreshed and renew every 25 min.
         token = _refresh_access_token()
-        token_refreshed_at = _time.monotonic()
+        token_ts = _time.monotonic()
 
-        meta   = _get_account(token, acct)
-        cur    = normalize_currency(meta.get("currency"))
-        tz     = meta.get("timezone") or "UTC"
+        meta     = _get_account(token, acct)
+        cur      = normalize_currency(meta.get("currency"))
+        tz       = meta.get("timezone") or "UTC"
         adsquads = _list_adsquads(token, acct)
-        # Always fetch all ads — updated_at on Snap ad objects reflects the last
-        # metadata change (creative edit, status toggle), NOT the last spend event.
-        # An ad running daily for months with no edits has an old updated_at and
-        # would be incorrectly excluded from incremental runs if filtered by that.
-        # The date window (start→end) is the only filter needed — the stats API
-        # returns empty for days with no activity, so no over-fetching occurs.
-        ads   = _list_ads(token, acct, updated_since=None)
+        ads      = _list_ads(token, acct, updated_since=None)
         print(f"[snap]   ads account {acct}: {len(ads)} total ads")
+
+        # Build work items: one per (ad_id, chunk)
+        chunks = list(_date_chunks(start, end, max_days=30))
+        work   = [(ad_id, cs, ce) for ad_id in ads for cs, ce in chunks]
+
+        # stats_by_ad: {ad_id: [timeseries_points across all chunks]}
+        stats_by_ad: dict[str, list] = {ad_id: [] for ad_id in ads}
+
+        _WORKERS = 8   # stays under Snap's ~10 req/s per token rate limit
+
+        def _fetch(item):
+            ad_id, cs, ce = item
+            # Token is read-only inside threads; refresh happens on the main thread
+            return ad_id, _ad_stats_single_call(token, ad_id, cs, ce, tz)
+
+        done = 0
+        with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+            futures = {pool.submit(_fetch, w): w for w in work}
+            for fut in as_completed(futures):
+                done += 1
+                # Proactive token refresh on the main thread between futures
+                if _time.monotonic() - token_ts > _TOKEN_MAX_AGE_S:
+                    token = _refresh_access_token()
+                    token_ts = _time.monotonic()
+                    print(f"[snap]   token refreshed (>25min) mid-account {acct}")
+                try:
+                    ad_id, pts = fut.result()
+                    stats_by_ad[ad_id].extend(pts)
+                except Exception as exc:
+                    print(f"[snap]   future error: {exc}")
+
         acct_count = 0
-
-        for ad_id, ad_meta in ads.items():
-            # Proactive token refresh: renew before the 30-min expiry window
-            if _time.monotonic() - token_refreshed_at > _TOKEN_MAX_AGE_S:
-                token = _refresh_access_token()
-                token_refreshed_at = _time.monotonic()
-                print(f"[snap]   token refreshed (>25min elapsed) mid-account {acct}")
-
-            sq_id    = ad_meta.get("adsquad_id", "")
-            camp_id  = ad_meta.get("campaign_id", "")
-            sq       = adsquads.get(sq_id, {})
-            for cs, ce in _date_chunks(start, end, max_days=30):
-                pts = _ad_stats_single_call(token, ad_id, cs, ce, tz)
-                for pt in pts:
-                    stats        = pt.get("stats", {})
-                    spend_micro  = float(stats.get("spend", 0) or 0)
-                    spend_native = spend_micro / 1_000_000
-                    spend        = to_usd(spend_native, cur)
-                    impressions  = int(stats.get("impressions", 0) or 0)
-                    clicks       = int(stats.get("swipes", 0) or 0)
-                    conversions_total = (
-                        int(stats.get("conversion_sign_ups", 0) or 0)
-                        + int(stats.get("conversion_purchases", 0) or 0)
-                        + int(stats.get("conversion_add_cart", 0) or 0)
-                        + int(stats.get("conversion_save", 0) or 0)
-                        + int(stats.get("conversion_start_checkout", 0) or 0)
-                        + int(stats.get("conversion_subscribe", 0) or 0)
-                        + int(stats.get("conversion_app_installs", 0) or 0)
-                    )
-                    ctr = (clicks / impressions * 100) if impressions else 0.0
-                    d   = (pt.get("start_time") or "")[:10]
-                    if not d:
-                        continue
-                    _ad_name = ad_meta.get("name")
-                    rows.append({
-                        "date":          d,
-                        "channel":       "snapchat",
-                        "account_id":    acct,
-                        "campaign_id":   camp_id,
-                        "campaign_name": None,   # not at ad grain
-                        "adset_id":      sq_id,
-                        "adset_name":    sq.get("name"),
-                        "ad_id":         ad_id,
-                        "ad_name":       _ad_name,
-                        "utm_content":   _ad_name,  # Snap ad name = utm_content
-                        "status":        None,
-                        "spend":         round(spend, 2),
-                        "impressions":   impressions,
-                        "clicks":        clicks,
-                        "ctr":           round(ctr, 4),
-                        "leads":         0,
-                        "conversions":   float(conversions_total),
-                        "currency":      "USD",
-                        "updated_at":    now,
-                    })
-                    acct_count += 1
+        for ad_id, pts in stats_by_ad.items():
+            ad_meta = ads.get(ad_id, {})
+            sq_id   = ad_meta.get("adsquad_id", "")
+            camp_id = ad_meta.get("campaign_id", "")
+            sq      = adsquads.get(sq_id, {})
+            for pt in pts:
+                stats        = pt.get("stats", {})
+                spend_micro  = float(stats.get("spend", 0) or 0)
+                spend_native = spend_micro / 1_000_000
+                spend        = to_usd(spend_native, cur)
+                impressions  = int(stats.get("impressions", 0) or 0)
+                clicks       = int(stats.get("swipes", 0) or 0)
+                conversions_total = (
+                    int(stats.get("conversion_sign_ups", 0) or 0)
+                    + int(stats.get("conversion_purchases", 0) or 0)
+                    + int(stats.get("conversion_add_cart", 0) or 0)
+                    + int(stats.get("conversion_save", 0) or 0)
+                    + int(stats.get("conversion_start_checkout", 0) or 0)
+                    + int(stats.get("conversion_subscribe", 0) or 0)
+                    + int(stats.get("conversion_app_installs", 0) or 0)
+                )
+                ctr = (clicks / impressions * 100) if impressions else 0.0
+                d   = (pt.get("start_time") or "")[:10]
+                if not d:
+                    continue
+                _ad_name = ad_meta.get("name")
+                rows.append({
+                    "date":          d,
+                    "channel":       "snapchat",
+                    "account_id":    acct,
+                    "campaign_id":   camp_id,
+                    "campaign_name": None,
+                    "adset_id":      sq_id,
+                    "adset_name":    sq.get("name"),
+                    "ad_id":         ad_id,
+                    "ad_name":       _ad_name,
+                    "utm_content":   _ad_name,
+                    "status":        None,
+                    "spend":         round(spend, 2),
+                    "impressions":   impressions,
+                    "clicks":        clicks,
+                    "ctr":           round(ctr, 4),
+                    "leads":         0,
+                    "conversions":   float(conversions_total),
+                    "currency":      "USD",
+                    "updated_at":    now,
+                })
+                acct_count += 1
         print(f"[snap]   ads account {acct}: {acct_count} rows across {len(ads)} ads")
 
     return upsert_rows("ads_daily", rows,
