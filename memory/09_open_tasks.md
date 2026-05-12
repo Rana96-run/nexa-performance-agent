@@ -138,9 +138,9 @@ mirror (and extend) the Looker boards the team already trusts.
   Find Best Campaign to Duplicate (Meta/social), Duplicate Search/PMax Campaign
   (Google/MS with keyword policy filter + Asana task creation), BQ Refresh,
   Keyword Audit, Ad Audit, Asana Backfill.
-- [ ] **MS Ads account 2 reporting access** — `AccountNotAuthorized` for account 187231519.
-  Need to grant the Azure app (3d17f0ff-f9c0-4734-b6c2-d231c678fba8) access in
-  Microsoft Ads UI: Accounts & Billing → Users → invite the app or grant Super Admin.
+- [x] **MS Ads account 2 reporting access** — RESOLVED 2026-05-12. Added
+  rana.khalid@qoyod.com as Super Admin to account 187231519 via Microsoft Ads UI.
+  Full YTD backfill complete: campaigns✅ ads=72 rows, keywords=195 rows.
 
 ## P2 — Second Microsoft Ads account — DONE 2026-05-10
 
