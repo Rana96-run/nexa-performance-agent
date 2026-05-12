@@ -197,8 +197,12 @@ def resolve_channel(
     campaign_name = campaign_name or lead_utm_campaign
 
     # 1. Explicit qoyod_source label
+    # "direct" is NOT treated as final here — a lead tagged Direct Traffic
+    # in HubSpot may still have a paid original_traffic_source (e.g. PAID_SOCIAL).
+    # We fall through to step 2 so the paid signal can override the direct tag.
+    # All other explicit labels (Google Ads, Meta Ads, etc.) are trusted.
     ch = channel_from_qoyod_source(qoyod_source)
-    if ch and ch != "other":
+    if ch and ch not in ("other", "direct"):
         return ch
 
     # Pre-compute drilldown-blob for keyword detection
