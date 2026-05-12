@@ -338,7 +338,7 @@ def filter_valid_rows(rows: list[dict], table_name: str
         for bucket, info in examples.items():
             ex = info["row"]
             ex_brief = {k: ex.get(k) for k in ("date","channel","account_id","campaign_id","spend","currency") if k in ex}
-            print(f"  ↳ example [{bucket}]: {info['reason']} | {ex_brief}")
+            print(f"  -> example [{bucket}]: {info['reason']} | {ex_brief}")
     return valid, dropped
 
 
