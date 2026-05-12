@@ -2262,6 +2262,377 @@ def ondemand_status(key: str):
     return jsonify(_ONDEMAND_STATUS.get(key, {"running": False, "result": None, "error": None}))
 
 
+@app.route("/api/search-duplicate-candidates", methods=["GET"])
+def search_duplicate_candidates():
+    """
+    Find top Search / PMax campaigns worth duplicating, with their best keywords
+    and best ads already filtered through keyword policy rules.
+
+    Campaign filter (last N days):
+      - channel in google_ads / microsoft_ads (search channels)
+      - has keywords in keywords_daily (= is Search or PMax, not Display/Video)
+      - qual_rate >= 35%, CPQL < channel-acceptable, spend >= $100
+
+    Keyword filter (winning keywords only):
+      - ENABLED, conversions > 0  OR  leads_qualified > 0
+      - NOT policy-blocked (always-negative, brand-in-non-brand, competitor-in-generic)
+      - quality_score >= 5  (or converting exception: conv > 4 and CPA <= $70)
+      - NOT zero-conv wasted-spend (spend > $80, 0 conv, age >= 10d) — excluded
+      - Sorted by conversions DESC, then CPQL ASC
+
+    Ad filter (winning ads only):
+      - ENABLED, leads > 0 (at least one HubSpot lead)
+      - qual_rate >= 40%
+      - Sorted by qual_rate DESC, CPQL ASC
+    """
+    from collectors.bq_writer import get_client as get_bq
+    from executors.keyword_policy import (
+        is_always_negative, is_brand_only, is_competitor,
+        is_language_mismatch,
+    )
+    import os, re
+    bq = get_bq()
+    P = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+    D = os.getenv("BQ_DATASET", "qoyod_marketing")
+    days = int(request.args.get("days", 30))
+
+    try:
+        # ── 1. Top qualifying campaigns ────────────────────────────────────────
+        camp_sql = f"""
+            WITH hs AS (
+              SELECT date, lead_utm_campaign,
+                     SUM(leads_total)     AS leads,
+                     SUM(leads_qualified) AS sqls
+              FROM `{P}.{D}.hubspot_leads_module_daily`
+              GROUP BY date, lead_utm_campaign
+            ),
+            deals AS (
+              SELECT deal_utm_campaign, SUM(amount_won) AS revenue_won
+              FROM `{P}.{D}.hubspot_deals_daily`
+              WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              GROUP BY deal_utm_campaign
+            ),
+            has_keywords AS (
+              SELECT DISTINCT campaign_name
+              FROM `{P}.{D}.keywords_daily`
+              WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+                AND channel IN ('google_ads', 'microsoft_ads')
+            )
+            SELECT
+              c.channel,
+              c.campaign_name,
+              MAX(c.account_id)                                               AS account_id,
+              MAX(c.campaign_id)                                              AS campaign_id,
+              ROUND(SUM(c.spend), 2)                                          AS spend,
+              SUM(hs.leads)                                                   AS leads,
+              SUM(hs.sqls)                                                    AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)), 3)   AS qual_rate,
+              ROUND(SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls),0)), 2)    AS cpql,
+              ROUND(SAFE_DIVIDE(MAX(d.revenue_won), NULLIF(SUM(c.spend),0)), 3) AS roas
+            FROM `{P}.{D}.campaigns_daily` c
+            INNER JOIN has_keywords hk
+              ON LOWER(c.campaign_name) = LOWER(hk.campaign_name)
+            LEFT JOIN hs
+              ON c.date = hs.date
+             AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+            LEFT JOIN deals d
+              ON LOWER(c.campaign_name) = LOWER(d.deal_utm_campaign)
+            WHERE c.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              AND c.channel IN ('google_ads', 'microsoft_ads')
+              AND c.status = 'ENABLED'
+            GROUP BY c.channel, c.campaign_name
+            HAVING SUM(c.spend) >= 100
+               AND SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)) >= 0.35
+               AND (
+                 SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls),0)) < 130
+                 OR SUM(hs.sqls) = 0
+               )
+            ORDER BY qual_rate DESC NULLS LAST, cpql ASC NULLS LAST
+            LIMIT 10
+        """
+        camps = list(bq.query(camp_sql).result())
+        if not camps:
+            return jsonify({"candidates": [], "period_days": days,
+                            "msg": "No Search/PMax campaigns meet the criteria in this period."})
+
+        camp_names_lower = [r.campaign_name.lower() for r in camps]
+        esc = lambda s: s.replace("'", "''")
+        names_sql = ", ".join(f"'{esc(n)}'" for n in camp_names_lower)
+
+        # ── 2. Top winning keywords for these campaigns ────────────────────────
+        kw_sql = f"""
+            WITH kw_agg AS (
+              SELECT
+                k.campaign_name,
+                k.adgroup_name,
+                k.keyword_id,
+                k.keyword_text,
+                k.match_type,
+                MAX(k.quality_score)                AS quality_score,
+                MAX(k.status)                       AS status,
+                ROUND(SUM(k.spend), 2)              AS spend,
+                SUM(k.conversions)                  AS platform_conv,
+                SUM(k.impressions)                  AS impressions,
+                MIN(k.date)                         AS first_seen,
+                DATE_DIFF(CURRENT_DATE(), MIN(k.date), DAY) AS age_days
+              FROM `{P}.{D}.keywords_daily` k
+              WHERE k.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+                AND LOWER(k.campaign_name) IN ({names_sql})
+                AND k.status = 'ENABLED'
+              GROUP BY k.campaign_name, k.adgroup_name, k.keyword_id, k.keyword_text, k.match_type
+            ),
+            vkw AS (
+              SELECT
+                utm_campaign,
+                utm_term,
+                SUM(leads)           AS leads,
+                SUM(leads_qualified) AS sqls,
+                ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0)), 3) AS qual_rate,
+                ROUND(AVG(CPQL), 2)  AS cpql
+              FROM `{P}.{D}.v_keyword_performance`
+              WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+                AND LOWER(utm_campaign) IN ({names_sql})
+              GROUP BY utm_campaign, utm_term
+            )
+            SELECT
+              k.*,
+              COALESCE(v.leads, 0)     AS hs_leads,
+              COALESCE(v.sqls, 0)      AS sqls,
+              v.qual_rate,
+              v.cpql                   AS hs_cpql
+            FROM kw_agg k
+            LEFT JOIN vkw v
+              ON LOWER(k.campaign_name) = LOWER(v.utm_campaign)
+             AND LOWER(k.keyword_text)  = LOWER(v.utm_term)
+            WHERE k.platform_conv > 0 OR COALESCE(v.sqls, 0) > 0
+            ORDER BY k.platform_conv DESC, k.spend ASC
+        """
+        kw_rows = list(bq.query(kw_sql).result())
+
+        # Apply keyword policy rules in Python
+        def _kw_passes(kw, campaign_name: str) -> tuple[bool, str]:
+            txt = kw.keyword_text or ""
+            if is_always_negative(txt):
+                return False, "always_negative"
+            if is_brand_only(txt) and "brand" not in campaign_name.lower():
+                return False, "brand_in_non_brand"
+            if is_competitor(txt) and "competitor" not in campaign_name.lower():
+                return False, "competitor_in_generic"
+            if is_language_mismatch(txt, campaign_name):
+                return False, "language_mismatch"
+            qs = int(kw.quality_score or 0)
+            conv = float(kw.platform_conv or 0)
+            # QS < 5 check — converting exception: conv > 4
+            if qs > 0 and qs < 5 and conv <= 4:
+                return False, "low_qs_non_converting"
+            # Wasted spend: spend > $80, 0 conv, age >= 10 days
+            if float(kw.spend or 0) > 80 and conv == 0 and int(kw.age_days or 0) >= 10:
+                return False, "wasted_spend"
+            return True, "ok"
+
+        # ── 3. Top winning ads for these campaigns ─────────────────────────────
+        ad_sql = f"""
+            WITH ad_agg AS (
+              SELECT
+                a.campaign_name,
+                a.adset_name,
+                a.ad_id,
+                a.ad_name,
+                MAX(a.status)          AS status,
+                ROUND(SUM(a.spend), 2) AS spend,
+                SUM(a.leads)           AS platform_leads,
+                SUM(a.conversions)     AS conversions,
+                MAX(a.final_url)       AS final_url
+              FROM `{P}.{D}.ads_daily` a
+              WHERE a.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+                AND LOWER(a.campaign_name) IN ({names_sql})
+                AND a.channel IN ('google_ads', 'microsoft_ads')
+                AND a.status = 'ENABLED'
+              GROUP BY a.campaign_name, a.adset_name, a.ad_id, a.ad_name
+            ),
+            vad AS (
+              SELECT
+                utm_campaign,
+                utm_content,
+                SUM(leads)            AS leads,
+                SUM(leads_qualified)  AS sqls,
+                ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0)), 3) AS qual_rate,
+                ROUND(AVG(CPQL), 2)   AS cpql
+              FROM `{P}.{D}.v_ad_performance`
+              WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+                AND LOWER(utm_campaign) IN ({names_sql})
+              GROUP BY utm_campaign, utm_content
+            )
+            SELECT
+              a.*,
+              COALESCE(v.leads, 0)  AS hs_leads,
+              COALESCE(v.sqls, 0)   AS sqls,
+              v.qual_rate,
+              v.cpql                AS hs_cpql
+            FROM ad_agg a
+            LEFT JOIN vad v
+              ON LOWER(a.campaign_name) = LOWER(v.utm_campaign)
+             AND LOWER(a.ad_name)       = LOWER(v.utm_content)
+            WHERE a.platform_leads > 0 OR COALESCE(v.sqls, 0) > 0
+            ORDER BY v.qual_rate DESC NULLS LAST, a.spend ASC
+        """
+        ad_rows = list(bq.query(ad_sql).result())
+
+        # ── 4. Assemble per-campaign response ──────────────────────────────────
+        kw_map: dict[str, list] = {}
+        for k in kw_rows:
+            passed, reason = _kw_passes(k, k.campaign_name)
+            kw_map.setdefault(k.campaign_name.lower(), []).append({
+                "keyword":     k.keyword_text,
+                "match_type":  k.match_type,
+                "adgroup":     k.adgroup_name,
+                "qs":          int(k.quality_score or 0),
+                "conv":        float(k.platform_conv or 0),
+                "hs_sqls":     int(k.sqls or 0),
+                "qual_rate":   round(float(k.qual_rate or 0) * 100, 1) if k.qual_rate else None,
+                "hs_cpql":     float(k.hs_cpql) if k.hs_cpql else None,
+                "spend":       float(k.spend or 0),
+                "age_days":    int(k.age_days or 0),
+                "passes":      passed,
+                "skip_reason": reason if not passed else None,
+            })
+
+        ad_map: dict[str, list] = {}
+        for a in ad_rows:
+            qr = float(a.qual_rate or 0) if a.qual_rate else 0
+            ad_map.setdefault(a.campaign_name.lower(), []).append({
+                "ad_name":    a.ad_name,
+                "ad_id":      a.ad_id,
+                "adgroup":    a.adset_name,
+                "spend":      float(a.spend or 0),
+                "hs_leads":   int(a.hs_leads or 0),
+                "sqls":       int(a.sqls or 0),
+                "qual_rate":  round(qr * 100, 1),
+                "hs_cpql":    float(a.hs_cpql) if a.hs_cpql else None,
+                "final_url":  a.final_url or "",
+            })
+
+        candidates = []
+        for r in camps:
+            key = r.campaign_name.lower()
+            kws = kw_map.get(key, [])
+            winning_kws   = [k for k in kws if k["passes"]]
+            excluded_kws  = [k for k in kws if not k["passes"]]
+            winning_ads   = [a for a in ad_map.get(key, []) if a["qual_rate"] >= 40]
+            candidates.append({
+                "channel":       r.channel,
+                "campaign_name": r.campaign_name,
+                "campaign_id":   r.campaign_id,
+                "account_id":    r.account_id,
+                "spend":         float(r.spend or 0),
+                "leads":         int(r.leads or 0),
+                "sqls":          int(r.sqls or 0),
+                "qual_rate":     round(float(r.qual_rate or 0) * 100, 1),
+                "cpql":          float(r.cpql) if r.cpql else None,
+                "roas":          float(r.roas) if r.roas else None,
+                "winning_keywords": winning_kws[:20],
+                "excluded_keywords": excluded_kws[:10],
+                "winning_ads":   winning_ads[:10],
+            })
+
+        return jsonify({"candidates": candidates, "period_days": days})
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/ondemand/create-search-duplicate-task", methods=["POST"])
+def create_search_duplicate_task():
+    """
+    Create an Asana task with the duplicate campaign blueprint (keywords + ads).
+    Follows the approval flow — no auto-execution.
+    """
+    data = request.get_json(silent=True) or {}
+    campaign = data.get("campaign", {})
+    if not campaign:
+        return jsonify({"error": "campaign data required"}), 400
+
+    try:
+        from executors.asana import create_task
+        from datetime import date, timedelta
+
+        name    = campaign.get("campaign_name", "Unknown")
+        channel = campaign.get("channel", "google_ads")
+        channel_label = {"google_ads": "Google Ads", "microsoft_ads": "Microsoft Ads"}.get(channel, channel)
+
+        kws  = campaign.get("winning_keywords", [])
+        ads  = campaign.get("winning_ads", [])
+        days = data.get("period_days", 30)
+
+        today    = date.today()
+        due      = (today + timedelta(days=3)).isoformat()
+        period   = f"{(today - timedelta(days=days)).isoformat()} to {today.isoformat()}"
+
+        kw_lines = "\n".join(
+            f"  [{k['match_type']}] {k['keyword']}"
+            f" — AdGroup: {k['adgroup']}"
+            f" — QS: {k['qs']}"
+            f" — Conv: {k['conv']}"
+            + (f" — CPQL: ${k['hs_cpql']:.0f}" if k["hs_cpql"] else "")
+            for k in kws
+        ) or "  (none found)"
+
+        ad_lines = "\n".join(
+            f"  {a['ad_name']}"
+            f" — AdGroup: {a['adgroup']}"
+            f" — Qual: {a['qual_rate']}%"
+            f" — SQLs: {a['sqls']}"
+            + (f" — CPQL: ${a['hs_cpql']:.0f}" if a["hs_cpql"] else "")
+            for a in ads
+        ) or "  (none found)"
+
+        qual_pct = campaign.get("qual_rate", 0)
+        cpql_val = f"${campaign['cpql']:.0f}" if campaign.get("cpql") else "—"
+        roas_val = f"{campaign['roas']:.2f}" if campaign.get("roas") else "—"
+
+        body = (
+            f"Duplicate this {channel_label} campaign keeping only the top-performing keywords and ads below.\n\n"
+            f"SOURCE CAMPAIGN: {name}\n"
+            f"Period: {period}\n"
+            f"Spend: ${campaign.get('spend',0):.0f}  |  Leads: {campaign.get('leads',0)}"
+            f"  |  SQLs: {campaign.get('sqls',0)}  |  Qual: {qual_pct}%"
+            f"  |  CPQL: {cpql_val}  |  ROAS: {roas_val}\n\n"
+            f"TOP KEYWORDS TO KEEP ({len(kws)}):\n{kw_lines}\n\n"
+            f"TOP ADS TO KEEP ({len(ads)}):\n{ad_lines}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Duplicate the source campaign in {channel_label} Ads Manager\n"
+            f"2. Remove all keywords NOT in the list above\n"
+            f"3. Remove all ads NOT in the list above\n"
+            f"4. Set initial budget to 50% of source campaign\n"
+            f"5. Tag the new campaign with _Duplicate_ or _v2 suffix\n"
+            f"6. Let run for 7 days before comparing performance\n\n"
+            f"Created: {today.isoformat()}\n"
+            f"Due: {due}\n"
+            f"Priority: High\n"
+            f"Type: Campaign Duplication\n"
+            f"Channel: {channel_label}\n"
+            f"Asset level: Campaign\n"
+            f"Action: Duplicate"
+        )
+
+        gid = create_task(
+            title=f"Duplicate {name} — top keywords + ads",
+            description=body,
+            project_key="optimization",
+            task_type="Recommendation",
+            channel=channel,
+            asset_level="campaign",
+            action="duplicate",
+        )
+        return jsonify({"task_gid": gid,
+                        "task_url": f"https://app.asana.com/0/0/{gid}" if gid else None})
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── Startup: warn if pending approvals were lost on redeploy ─────────────────
 
 def _check_pending_on_startup():

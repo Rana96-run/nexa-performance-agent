@@ -1404,6 +1404,29 @@ a:hover{text-decoration:underline}
           <div id="dup-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
         </div>
 
+        <!-- Search / PMax Duplicate Finder -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Duplicate Search / PMax Campaign</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Finds top Search &amp; PMax campaigns, extracts winning keywords<br>
+            (policy-filtered) and winning ads &mdash; creates Asana task blueprint
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="search-dup-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+            </select>
+            <button id="search-dup-btn" onclick="runSearchDupFinder()"
+                    style="background:none;border:1px solid #238636;border-radius:6px;
+                           color:#3fb950;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Find Candidates
+            </button>
+          </div>
+          <div id="search-dup-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
+        </div>
+
         <!-- BQ Refresh -->
         <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
           <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">BQ Data Refresh</div>
@@ -1481,6 +1504,22 @@ a:hover{text-decoration:underline}
           <div id="asana-backfill-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Search/PMax duplicate modal -->
+  <div id="search-dup-overlay" onclick="closeSearchDupModal()"
+       style="display:none;position:fixed;inset:0;background:#00000099;z-index:400;
+              align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                width:100%;max-width:920px;padding:24px;position:relative"
+         onclick="event.stopPropagation()">
+      <button onclick="closeSearchDupModal()"
+              style="position:absolute;top:12px;right:14px;background:none;border:none;
+                     color:#8b949e;font-size:18px;cursor:pointer">✕</button>
+      <div style="font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:4px">Search / PMax Duplicate Blueprint</div>
+      <div id="search-dup-sub" style="font-size:12px;color:#8b949e;margin-bottom:18px"></div>
+      <div id="search-dup-body"></div>
     </div>
   </div>
 
@@ -1630,7 +1669,7 @@ function runHealthCheck() {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') { closeWorkflowDirect(); closeDupModal(); }
+  if (e.key === 'Escape') { closeWorkflowDirect(); closeDupModal(); closeSearchDupModal(); }
 });
 
 // ── On-demand: Duplicate Campaign Finder ──────────────────────────────────────
@@ -1712,6 +1751,142 @@ function showDupModal(data) {
 
 function closeDupModal() {
   document.getElementById('dup-modal-overlay').style.display = 'none';
+}
+
+// ── On-demand: Search / PMax Duplicate Finder ────────────────────────────────
+function runSearchDupFinder() {
+  const btn  = document.getElementById('search-dup-btn');
+  const stat = document.getElementById('search-dup-status');
+  const days = document.getElementById('search-dup-days').value;
+  btn.textContent = 'Searching…'; btn.disabled = true;
+  stat.style.color = '#8b949e'; stat.textContent = 'Querying BQ…';
+  fetch('/api/search-duplicate-candidates?days=' + days)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = 'Find Candidates'; btn.disabled = false;
+      if (data.error) { stat.style.color='#f85149'; stat.textContent='Error: '+data.error; return; }
+      stat.style.color = '#8b949e';
+      stat.textContent = (data.candidates||[]).length + ' candidate(s) — last ' + data.period_days + ' days';
+      showSearchDupModal(data);
+    })
+    .catch(function() {
+      btn.textContent = 'Find Candidates'; btn.disabled = false;
+      stat.style.color='#f85149'; stat.textContent='Request failed';
+    });
+}
+
+function showSearchDupModal(data) {
+  const overlay = document.getElementById('search-dup-overlay');
+  const body    = document.getElementById('search-dup-body');
+  const sub     = document.getElementById('search-dup-sub');
+  sub.textContent = data.candidates.length + ' campaign(s) · Qual ≥35% · CPQL <$130 · has keywords · last ' + data.period_days + ' days';
+
+  if (!data.candidates.length) {
+    body.innerHTML = '<div style="color:#8b949e;font-size:13px;padding:8px 0">No qualifying Search/PMax campaigns found. Try a longer window.</div>';
+  } else {
+    body.innerHTML = data.candidates.map(function(c, ci) {
+      // Keywords table
+      const winKws = c.winning_keywords || [];
+      const exclKws = c.excluded_keywords || [];
+      const kwRows = winKws.map(function(k) {
+        return '<tr>' +
+          '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:#c9d1d9">' + k.keyword + '</td>' +
+          '<td style="padding:4px 8px;font-size:11px;color:#8b949e;text-transform:uppercase">' + (k.match_type||'') + '</td>' +
+          '<td style="padding:4px 8px;font-size:11px;color:#8b949e;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (k.adgroup||'') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:' + (k.qs>=7?'#3fb950':k.qs>=5?'#d29922':'#f85149') + '">' + (k.qs||'—') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#e6edf3">' + k.conv + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:' + (k.qual_rate>=50?'#3fb950':'#e6edf3') + '">' + (k.qual_rate!=null?k.qual_rate+'%':'—') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#8b949e">' + (k.hs_cpql?'$'+k.hs_cpql.toFixed(0):'—') + '</td>' +
+        '</tr>';
+      }).join('');
+
+      const kwSection = winKws.length
+        ? '<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Winning Keywords (' + winKws.length + ')' + (exclKws.length?' <span style="color:#f85149;font-weight:400">· ' + exclKws.length + ' excluded by policy</span>':'') + '</div>' +
+          '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="color:#484f58;font-size:10px;text-transform:uppercase">' +
+          '<th style="padding:4px 8px;text-align:left">Keyword</th><th style="padding:4px 8px;text-align:left">Match</th>' +
+          '<th style="padding:4px 8px;text-align:left">Ad Group</th><th style="padding:4px 8px;text-align:right">QS</th>' +
+          '<th style="padding:4px 8px;text-align:right">Conv</th><th style="padding:4px 8px;text-align:right">Qual%</th>' +
+          '<th style="padding:4px 8px;text-align:right">CPQL</th></tr>' +
+          kwRows + '</table></div></div>'
+        : '<div style="font-size:11px;color:#484f58;margin-top:8px">No winning keywords found for this period.</div>';
+
+      // Ads table
+      const winAds = c.winning_ads || [];
+      const adRows = winAds.map(function(a) {
+        return '<tr>' +
+          '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:#c9d1d9;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + a.ad_name + '</td>' +
+          '<td style="padding:4px 8px;font-size:11px;color:#8b949e;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (a.adgroup||'') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#3fb950">' + a.qual_rate + '%</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#e6edf3">' + a.sqls + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#8b949e">' + (a.hs_cpql?'$'+a.hs_cpql.toFixed(0):'—') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#8b949e">$' + a.spend.toFixed(0) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      const adSection = winAds.length
+        ? '<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Winning Ads (' + winAds.length + ')</div>' +
+          '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="color:#484f58;font-size:10px;text-transform:uppercase">' +
+          '<th style="padding:4px 8px;text-align:left">Ad</th><th style="padding:4px 8px;text-align:left">Ad Group</th>' +
+          '<th style="padding:4px 8px;text-align:right">Qual%</th><th style="padding:4px 8px;text-align:right">SQLs</th>' +
+          '<th style="padding:4px 8px;text-align:right">CPQL</th><th style="padding:4px 8px;text-align:right">Spend</th></tr>' +
+          adRows + '</table></div></div>'
+        : '<div style="font-size:11px;color:#484f58;margin-top:8px">No qualifying ads (qual ≥40%) found.</div>';
+
+      return '<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:16px;margin-bottom:14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">' +
+          '<div>' +
+            '<span style="background:#21262d;border-radius:4px;padding:2px 7px;font-size:10px;color:#8b949e;text-transform:uppercase;margin-right:8px">' + c.channel.replace('_',' ') + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#e6edf3">' + c.campaign_name + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap">' +
+            '<span style="color:#3fb950">Qual <strong>' + c.qual_rate + '%</strong></span>' +
+            '<span style="color:#e6edf3">CPQL <strong>' + (c.cpql?'$'+c.cpql.toFixed(0):'—') + '</strong></span>' +
+            '<span style="color:#58a6ff">ROAS <strong>' + (c.roas?c.roas.toFixed(2):'—') + '</strong></span>' +
+            '<span style="color:#8b949e">$' + c.spend.toFixed(0) + ' · ' + c.sqls + ' SQLs</span>' +
+          '</div>' +
+        '</div>' +
+        kwSection + adSection +
+        '<div style="margin-top:12px;display:flex;align-items:center;gap:10px">' +
+          '<button onclick="createSearchDupTask(' + ci + ', this)" data-campaign=\'' + JSON.stringify(c).replace(/'/g,"&#39;") + '\'' +
+          ' style="background:#238636;border:none;border-radius:6px;color:#fff;font-size:11px;' +
+          'padding:5px 14px;cursor:pointer;font-weight:600">Create Asana Task</button>' +
+          '<span id="search-dup-task-status-' + ci + '" style="font-size:11px;color:#8b949e"></span>' +
+        '</div>' +
+        '<div style="margin-top:6px;font-size:10px;color:#484f58">Campaign ID: ' + (c.campaign_id||'—') + ' · Account: ' + (c.account_id||'—') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  overlay.style.display = 'flex';
+}
+
+function createSearchDupTask(idx, btn) {
+  const stat = document.getElementById('search-dup-task-status-' + idx);
+  const campaign = JSON.parse(btn.getAttribute('data-campaign'));
+  const periodDays = parseInt(document.getElementById('search-dup-days').value);
+  btn.disabled = true; btn.textContent = 'Creating…';
+  stat.style.color = '#8b949e'; stat.textContent = '';
+  fetch('/api/ondemand/create-search-duplicate-task', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({campaign: campaign, period_days: periodDays})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    btn.disabled = false; btn.textContent = 'Create Asana Task';
+    if (d.error) { stat.style.color='#f85149'; stat.textContent='Error: '+d.error.slice(0,80); return; }
+    stat.style.color = '#3fb950';
+    stat.innerHTML = 'Task created — <a href="' + d.task_url + '" target="_blank" style="color:#58a6ff">open in Asana</a>';
+  })
+  .catch(function() {
+    btn.disabled=false; btn.textContent='Create Asana Task';
+    stat.style.color='#f85149'; stat.textContent='Request failed';
+  });
+}
+
+function closeSearchDupModal() {
+  document.getElementById('search-dup-overlay').style.display = 'none';
 }
 
 // ── On-demand: Generic audit runner ───────────────────────────────────────────
