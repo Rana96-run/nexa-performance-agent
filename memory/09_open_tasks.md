@@ -14,9 +14,10 @@ the bottom of the relevant section.
 
 
 
-- [ ] **Re-mint LinkedIn tokens** — `LI_ACCESS_TOKEN/ORG_URN/AD_ACCOUNT_URN`
-  currently empty. Run `python scripts/linkedin_oauth.py` then `... orgs`,
-  paste outputs to `.env`. Follow-ups via `scripts/linkedin_refresh.py`.
+- [x] **LinkedIn tokens** — VERIFIED WORKING 2026-05-12. `LI_ACCESS_TOKEN` was
+  already set and valid; health check confirms `LinkedIn -> OK (2 account(s))`.
+  No re-mint needed. `linkedin_oauth.py` handler bug fixed (was firing on
+  favicon/prefetch requests before user could approve).
 - [ ] **Run YouTube OAuth** — `python scripts/youtube_oauth.py`. Writes
   `YT_REFRESH_TOKEN` + `YT_CHANNEL_ID` to `.env` (slots empty today).
 - [x] **Microsoft Ads** — UNBLOCKED + FULLY CONNECTED 2026-05-06. Admin granted
@@ -120,6 +121,26 @@ mirror (and extend) the Looker boards the team already trusts.
 - [ ] Weekly email digest via existing Gmail SMTP (creds set) of top KPIs
 - [ ] A/B test tracker view (campaigns with same utm_audience, different utm_content)
 - [ ] SEMrush integration for keyword / competitor view (API key set)
+
+## Done this session (2026-05-12)
+
+- [x] **MS Ads tokens re-minted** — account 1 (188176729) new `MS_REFRESH_TOKEN` minted
+  via `microsoft_oauth.py`, saved to .env + Railway. Account 2 (187231519) had
+  `MS_REFRESH_TOKEN_2` stored with a leading `'` in Railway — stripped and re-set.
+  Both accounts now authenticate (`_get_access_token_for` OK for both).
+- [x] **MS Ads YTD campaigns backfill** — 538 rows (account 188176729, Jan 2026 → May 12).
+  Account 187231519 blocked by `AccountNotAuthorized` on Reporting API — token works
+  but that account hasn't granted reporting access to the Azure app. Adsets/ads/keywords
+  backfill running in background.
+- [x] **TikTok added to health check** — was missing from `scripts/health_check.py`.
+  Now pings `/advertiser/info/` API to verify token + account access.
+- [x] **Activity dashboard On-Demand Actions section** — 5 action cards:
+  Find Best Campaign to Duplicate (Meta/social), Duplicate Search/PMax Campaign
+  (Google/MS with keyword policy filter + Asana task creation), BQ Refresh,
+  Keyword Audit, Ad Audit, Asana Backfill.
+- [ ] **MS Ads account 2 reporting access** — `AccountNotAuthorized` for account 187231519.
+  Need to grant the Azure app (3d17f0ff-f9c0-4734-b6c2-d231c678fba8) access in
+  Microsoft Ads UI: Accounts & Billing → Users → invite the app or grant Super Admin.
 
 ## P2 — Second Microsoft Ads account — DONE 2026-05-10
 
