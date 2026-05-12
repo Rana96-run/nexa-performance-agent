@@ -84,6 +84,27 @@ SECTORS = [
         "final_url":               "https://campaigns.qoyod.com/ar/technology-sector",
         "daily_budget_usd":        90.0,
     },
+    {
+        "source_asset_group_name": "Real Estate",
+        "new_campaign_name":       "PMax_AR_Invoice_RealEstate",
+        "utm_content":             "Google_Pmax_AR_Feature_RealEstate_HubSpot",
+        "final_url":               "https://campaigns.qoyod.com/ar/real-estate-sector",
+        "daily_budget_usd":        30.0,
+    },
+    {
+        "source_asset_group_name": "Retail",
+        "new_campaign_name":       "PMax_AR_Invoice_Retail",
+        "utm_content":             "Google_Pmax_AR_Feature_Retail_HubSpot",
+        "final_url":               "https://campaigns.qoyod.com/ar/retail-sector",
+        "daily_budget_usd":        30.0,
+    },
+    {
+        "source_asset_group_name": "Pmax_E-Invoice_WP",
+        "new_campaign_name":       "PMax_AR_Invoice_WP",
+        "utm_content":             "Google_Pmax_AR_Feature_WP_HubSpot",
+        "final_url":               "https://qoyod.com/ar/",
+        "daily_budget_usd":        30.0,
+    },
 ]
 
 
