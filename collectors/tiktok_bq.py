@@ -273,6 +273,7 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
             meta         = adgroup_meta.get(adgroup_id, {})
             spend_native = float(metrics.get("spend", 0) or 0)
             spend        = to_usd(spend_native, native_cur)
+            _adset_name = metrics.get("adgroup_name") or meta.get("name")
             rows.append({
                 "date":          day,
                 "channel":       "tiktok",
@@ -280,7 +281,8 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
                 "campaign_id":   meta.get("campaign_id", ""),
                 "campaign_name": None,   # not available at adgroup grain
                 "adset_id":      adgroup_id,
-                "adset_name":    metrics.get("adgroup_name") or meta.get("name"),
+                "adset_name":    _adset_name,
+                "utm_audience":  _adset_name,  # TikTok ad_group name = utm_audience
                 "status":        None,
                 "spend":         round(spend, 2),
                 "impressions":   int(metrics.get("impressions", 0) or 0),
@@ -339,6 +341,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
             meta         = ad_meta.get(ad_id, {})
             spend_native = float(metrics.get("spend", 0) or 0)
             spend        = to_usd(spend_native, native_cur)
+            _ad_name = metrics.get("ad_name") or meta.get("name")
             rows.append({
                 "date":          day,
                 "channel":       "tiktok",
@@ -348,7 +351,8 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "adset_id":      meta.get("adgroup_id", ""),
                 "adset_name":    None,
                 "ad_id":         ad_id,
-                "ad_name":       metrics.get("ad_name") or meta.get("name"),
+                "ad_name":       _ad_name,
+                "utm_content":   _ad_name,  # TikTok ad name = utm_content
                 "status":        None,
                 "spend":         round(spend, 2),
                 "impressions":   int(metrics.get("impressions", 0) or 0),

@@ -387,6 +387,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                     d   = (pt.get("start_time") or "")[:10]
                     if not d:
                         continue
+                    _adset_name = sq.get("name")
                     rows.append({
                         "date":          d,
                         "channel":       "snapchat",
@@ -394,7 +395,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                         "campaign_id":   camp_id,
                         "campaign_name": camp.get("name"),
                         "adset_id":      sq_id,
-                        "adset_name":    sq.get("name"),
+                        "adset_name":    _adset_name,
+                        "utm_audience":  _adset_name,  # Snap ad_squad name = utm_audience
                         "status":        sq.get("status"),
                         "spend":         round(spend, 2),
                         "impressions":   impressions,
@@ -559,6 +561,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                     d   = (pt.get("start_time") or "")[:10]
                     if not d:
                         continue
+                    _ad_name = ad_meta.get("name")
                     rows.append({
                         "date":          d,
                         "channel":       "snapchat",
@@ -568,7 +571,8 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                         "adset_id":      sq_id,
                         "adset_name":    sq.get("name"),
                         "ad_id":         ad_id,
-                        "ad_name":       ad_meta.get("name"),
+                        "ad_name":       _ad_name,
+                        "utm_content":   _ad_name,  # Snap ad name = utm_content
                         "status":        None,
                         "spend":         round(spend, 2),
                         "impressions":   impressions,

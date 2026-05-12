@@ -300,6 +300,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 group_urn = urn
                 break
 
+        _adset_name = meta.get("name", camp_urn)
         rows.append({
             "date":          day,
             "channel":       "linkedin",
@@ -307,7 +308,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
             "campaign_id":   group_urn or camp_urn,   # Campaign Group = utm_campaign
             "campaign_name": group_name,
             "adset_id":      camp_urn,                # Campaign = utm_audience
-            "adset_name":    meta.get("name", camp_urn),
+            "adset_name":    _adset_name,
+            "utm_audience":  _adset_name,             # LinkedIn Campaign name = utm_audience
             "status":        meta.get("status", ""),
             "spend":         round(spend, 2),
             "impressions":   impr,

@@ -139,6 +139,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False):
                     "campaign_name": ins.get("campaign_name"),
                     "adset_id":      str(ins.get("adset_id")),
                     "adset_name":    ins.get("adset_name"),
+                    "utm_audience":  ins.get("adset_name"),  # Meta {{adset.name}} resolves to this
                     "status":        None,
                     "spend":         round(spend, 2),
                     "impressions":   int(ins.get("impressions", 0) or 0),
@@ -199,6 +200,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                     "adset_name":    ins.get("adset_name"),
                     "ad_id":         str(ins.get("ad_id")),
                     "ad_name":       ins.get("ad_name"),
+                    "utm_content":   ins.get("ad_name"),  # Meta {{ad.name}} resolves to this
                     "status":        None,
                     "spend":         round(spend, 2),
                     "impressions":   int(ins.get("impressions", 0) or 0),
