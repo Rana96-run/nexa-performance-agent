@@ -1161,54 +1161,35 @@ LEFT JOIN deals d
 
 V_LP_PERFORMANCE_WEEKLY_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly` AS
--- Landing-page type comparison: HubSpot LP (campaigns.qoyod.com) vs
--- WordPress LP (lp.qoyod.com). Google Ads only — other channels
--- have no final_url stored yet.
---
--- Join strategy: campaign-level. Google Ads ad.name is empty for most RSAs;
--- join HubSpot leads via campaign_name → lead_utm_campaign instead.
--- This tells us CPL/CPQL per LP type per campaign per week.
---
--- Grain: week × lp_type × campaign_name.
-WITH campaign_lp AS (
-  -- Determine the dominant LP type for each campaign based on where most
-  -- spend went. A campaign may have a mix (unlikely, but handled).
+-- Landing-page comparison across all pages under campaigns.qoyod.com and lp.qoyod.com.
+-- Google Ads only — other channels have no final_url stored yet.
+-- Spend/impressions/clicks sourced directly from ads_daily at page grain.
+-- HubSpot leads attributed proportionally by each page's spend share within the
+-- campaign week — since HubSpot only tracks leads at campaign level.
+-- Grain: week × lp_type × lp_domain × lp_page × campaign_name.
+WITH platform AS (
   SELECT
+    DATE_TRUNC(date, WEEK(MONDAY))                       AS week_start,
     campaign_name,
     CASE
       WHEN LOWER(final_url) LIKE '%campaigns.qoyod.com%' THEN 'HubSpot LP'
       WHEN LOWER(final_url) LIKE '%lp.qoyod.com%'        THEN 'WordPress LP'
       ELSE 'Other / Unknown'
-    END                                            AS lp_type,
-    REGEXP_EXTRACT(final_url, r'https?://([^/?#]+)') AS lp_domain,
-    SUM(spend)                                     AS spend_check
+    END                                                  AS lp_type,
+    REGEXP_EXTRACT(final_url, r'https?://([^/?#]+)')     AS lp_domain,
+    REGEXP_EXTRACT(final_url, r'(https?://[^?#]+)')      AS lp_page,
+    SUM(spend)                                           AS spend,
+    SUM(impressions)                                     AS impressions,
+    SUM(clicks)                                          AS clicks
   FROM `{PROJECT_ID}.{DATASET}.ads_daily`
   WHERE channel = 'google_ads' AND final_url IS NOT NULL
-  GROUP BY 1, 2, 3
+  GROUP BY 1, 2, 3, 4, 5
 ),
-campaign_lp_dominant AS (
-  -- Take the lp_type that captured the most spend per campaign
-  SELECT campaign_name, lp_type, lp_domain,
-    ROW_NUMBER() OVER (PARTITION BY campaign_name ORDER BY spend_check DESC) AS rn
-  FROM campaign_lp
-),
-lp_map AS (
-  SELECT campaign_name, lp_type, lp_domain
-  FROM campaign_lp_dominant WHERE rn = 1
-),
-platform AS (
-  SELECT
-    DATE_TRUNC(date, WEEK(MONDAY))        AS week_start,
-    m.lp_type,
-    m.lp_domain,
-    c.campaign_name,
-    SUM(c.spend)                          AS spend,
-    SUM(c.impressions)                    AS impressions,
-    SUM(c.clicks)                         AS clicks
-  FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
-  JOIN lp_map m USING (campaign_name)
-  WHERE c.channel = 'google_ads'
-  GROUP BY 1, 2, 3, 4
+campaign_weekly_spend AS (
+  -- Total spend per campaign per week, used to compute each page's share
+  SELECT week_start, campaign_name, SUM(spend) AS total_spend
+  FROM platform
+  GROUP BY 1, 2
 ),
 hs AS (
   SELECT
@@ -1225,30 +1206,42 @@ SELECT
   p.week_start,
   p.lp_type,
   p.lp_domain,
+  p.lp_page,
   p.campaign_name,
   p.spend,
   p.impressions,
   p.clicks,
   SAFE_DIVIDE(p.clicks, NULLIF(p.impressions, 0)) * 100              AS ctr_pct,
-  COALESCE(h.hs_leads, 0)                                            AS hs_leads,
-  COALESCE(h.hs_qualified, 0)                                        AS hs_qualified,
-  COALESCE(h.hs_disqualified, 0)                                     AS hs_disqualified,
-  SAFE_DIVIDE(h.hs_disqualified, NULLIF(h.hs_qualified + h.hs_disqualified, 0)) * 100 AS disq_rate_pct,
-  SAFE_DIVIDE(p.spend, NULLIF(h.hs_leads, 0))                        AS cpl,
-  SAFE_DIVIDE(p.spend, NULLIF(h.hs_qualified, 0))                    AS cpql
+  ROUND(COALESCE(h.hs_leads, 0)        * SAFE_DIVIDE(p.spend, cws.total_spend)) AS hs_leads,
+  ROUND(COALESCE(h.hs_qualified, 0)    * SAFE_DIVIDE(p.spend, cws.total_spend)) AS hs_qualified,
+  ROUND(COALESCE(h.hs_disqualified, 0) * SAFE_DIVIDE(p.spend, cws.total_spend)) AS hs_disqualified,
+  SAFE_DIVIDE(
+    ROUND(COALESCE(h.hs_disqualified, 0) * SAFE_DIVIDE(p.spend, cws.total_spend)),
+    NULLIF(
+      ROUND(COALESCE(h.hs_qualified,    0) * SAFE_DIVIDE(p.spend, cws.total_spend)) +
+      ROUND(COALESCE(h.hs_disqualified, 0) * SAFE_DIVIDE(p.spend, cws.total_spend)),
+    0)
+  ) * 100                                                             AS disq_rate_pct,
+  SAFE_DIVIDE(p.spend,
+    NULLIF(ROUND(COALESCE(h.hs_leads,      0) * SAFE_DIVIDE(p.spend, cws.total_spend)), 0)) AS cpl,
+  SAFE_DIVIDE(p.spend,
+    NULLIF(ROUND(COALESCE(h.hs_qualified,  0) * SAFE_DIVIDE(p.spend, cws.total_spend)), 0)) AS cpql
 FROM platform p
+LEFT JOIN campaign_weekly_spend cws
+  ON p.week_start = cws.week_start AND p.campaign_name = cws.campaign_name
 LEFT JOIN hs h
   ON p.week_start = h.week_start
   AND LOWER(TRIM(p.campaign_name)) = h.campaign_key
 """
 
-# Aggregated summary by week × lp_type for the Hex LP comparison card.
+# Aggregated summary by week × lp_type × lp_page for the Hex LP comparison card.
 V_LP_WEEKLY_SUMMARY_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_weekly_summary` AS
 SELECT
   week_start,
   lp_type,
   lp_domain,
+  lp_page,
   COUNT(DISTINCT campaign_name)            AS active_campaigns,
   SUM(spend)                               AS spend,
   SUM(impressions)                         AS impressions,
@@ -1261,7 +1254,7 @@ SELECT
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_leads), 0))           AS cpl,
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_qualified), 0))       AS cpql
 FROM `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly`
-GROUP BY 1, 2, 3
+GROUP BY 1, 2, 3, 4
 """
 
 
