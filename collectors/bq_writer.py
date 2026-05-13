@@ -801,8 +801,9 @@ WITH platform AS (
     -- Microsoft, adset_name for Meta/TikTok/Snap). Fall back to adset_name so
     -- channels that don't populate utm_audience still show up.
     COALESCE(utm_audience, adset_name) AS utm_audience,
-    -- adset_id kept for Strategy-C ID-based lead fallback
-    ANY_VALUE(adset_id) AS platform_adset_id,
+    -- IDs kept for Strategy-C/D ID-based lead fallback
+    ANY_VALUE(adset_id)   AS platform_adset_id,
+    ANY_VALUE(campaign_id) AS platform_campaign_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
   FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
   GROUP BY 1, 2, 3, 4
@@ -816,7 +817,8 @@ hubspot AS (
   WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
 ),
--- Strategy C: ID-based fallback — matches when UTM name changed but platform ID didn't.
+-- Strategy C: Adset-ID fallback — matches when UTM name changed but adset ID didn't.
+-- Uses lead_ad_group_id (Meta native adset ID, currently NULL for TikTok).
 -- Only fires when the name match (hubspot CTE) returns NULL leads.
 hubspot_id_adset AS (
   SELECT
@@ -829,6 +831,21 @@ hubspot_id_adset AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE lead_ad_group_id IS NOT NULL
   GROUP BY 1, 2, 3
+),
+-- Strategy D: TikTok campaign-ID fallback — uses lead_campaign_id_sync which HubSpot's
+-- native TikTok integration populates on every lead. Fires when both name match (C-A/B)
+-- AND adset-ID match (C-C) miss. Joins at campaign grain — if multiple adsets share a
+-- campaign, each gets the campaign-level leads as a graceful degradation (better than 0).
+hubspot_tiktok_cam AS (
+  SELECT
+    date,
+    lead_campaign_id_sync                AS campaign_id,
+    SUM(leads_total)                     AS leads,
+    SUM(leads_qualified)                 AS leads_qualified,
+    SUM(leads_disqualified)              AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_campaign_id_sync IS NOT NULL
+  GROUP BY 1, 2
 ),
 deals AS (
   SELECT date, qoyod_source AS channel, deal_utm_campaign AS utm_campaign,
@@ -885,10 +902,10 @@ SELECT
   COALESCE(p.spend, u.spend, 0)             AS spend,
   COALESCE(p.impressions, 0)                AS impressions,
   COALESCE(p.clicks, 0)                     AS clicks,
-  -- Strategy A/B: name match; Strategy C: ID fallback when name match returns nothing
-  COALESCE(h.leads,              h_id.leads,              0) AS leads,
-  COALESCE(h.leads_qualified,    h_id.leads_qualified,    0) AS leads_qualified,
-  COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0) AS leads_disqualified,
+  -- Strategy A/B: name match; C: adset-ID fallback; D: TikTok campaign-ID fallback
+  COALESCE(h.leads,              h_id.leads,              h_cam.leads,              0) AS leads,
+  COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified,    0) AS leads_qualified,
+  COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0) AS leads_disqualified,
   COALESCE(d.deals, 0)                      AS deals,
   COALESCE(d.deals_won,  0)                 AS deals_won,
   COALESCE(d.deals_lost, 0)                 AS deals_lost,
@@ -907,11 +924,11 @@ SELECT
   COALESCE(d.new_biz_amount_open, 0)        AS new_biz_amount_open,
   COALESCE(d.new_biz_amount_total,0)        AS new_biz_amount_total,
   -- Ratios (use whichever lead source matched)
-  SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS qual_rate,
-  SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS disq_rate,
+  SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS qual_rate,
+  SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS disq_rate,
   -- Cost metrics
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads, h_id.leads), 0))            AS CPL,
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified), 0))  AS CPQL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads, h_id.leads, h_cam.leads), 0))            AS CPL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), 0))  AS CPQL,
   SAFE_DIVIDE(d.revenue_won,         NULLIF(COALESCE(p.spend, u.spend), 0)) AS ROAS,
   SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
@@ -919,12 +936,19 @@ FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
   AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
--- Strategy C: ID-based fallback — only activates when name match misses (h.leads IS NULL)
+-- Strategy C: Adset-ID fallback — only activates when name match misses
 LEFT JOIN hubspot_id_adset h_id
   ON h.leads IS NULL
   AND p.date = h_id.date
   AND p.channel = h_id.channel
   AND p.platform_adset_id = h_id.adset_id
+-- Strategy D: TikTok campaign-ID fallback — fires when both name AND adset-ID miss
+LEFT JOIN hubspot_tiktok_cam h_cam
+  ON h.leads IS NULL
+  AND h_id.leads IS NULL
+  AND p.date = h_cam.date
+  AND p.channel = 'tiktok'
+  AND p.platform_campaign_id = h_cam.campaign_id
 LEFT JOIN utmproxy u
   ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
 LEFT JOIN deals d
@@ -943,8 +967,9 @@ WITH platform AS (
     -- utm_content column holds the resolved _adname custom-param value.
     -- Fall back to ad_name for channels without custom params.
     COALESCE(utm_content, ad_name) AS utm_content,
-    -- ad_id kept for Strategy-C ID-based lead fallback
-    ANY_VALUE(ad_id) AS platform_ad_id,
+    -- IDs kept for Strategy-C/D ID-based lead fallback
+    ANY_VALUE(ad_id)      AS platform_ad_id,
+    ANY_VALUE(campaign_id) AS platform_campaign_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
     -- creative_type + status: one value per ad; MAX picks the non-null value across days
     MAX(creative_type) AS creative_type,
@@ -961,7 +986,8 @@ hubspot AS (
   WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4, 5
 ),
--- Strategy C: ID-based fallback — matches when UTM name changed but platform ID didn't.
+-- Strategy C: Ad-ID fallback — matches when UTM name changed but ad ID didn't.
+-- Uses lead_ad_id (Meta native ad ID, currently NULL for TikTok).
 -- Only fires when the name match (hubspot CTE) returns NULL leads.
 hubspot_id_ad AS (
   SELECT
@@ -974,6 +1000,20 @@ hubspot_id_ad AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE lead_ad_id IS NOT NULL
   GROUP BY 1, 2, 3
+),
+-- Strategy D: TikTok campaign-ID fallback — uses lead_campaign_id_sync.
+-- Fires when both name match AND ad-ID match miss. Joins at campaign grain —
+-- all ads in the campaign get the campaign-level leads as graceful degradation.
+hubspot_tiktok_cam AS (
+  SELECT
+    date,
+    lead_campaign_id_sync                AS campaign_id,
+    SUM(leads_total)                     AS leads,
+    SUM(leads_qualified)                 AS leads_qualified,
+    SUM(leads_disqualified)              AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_campaign_id_sync IS NOT NULL
+  GROUP BY 1, 2
 ),
 deals AS (
   SELECT date, qoyod_source AS channel,
@@ -1029,10 +1069,10 @@ SELECT
   p.spend                                    AS spend,
   COALESCE(p.impressions, 0)                 AS impressions,
   COALESCE(p.clicks, 0)                      AS clicks,
-  -- Strategy A/B: name match; Strategy C: ID fallback when name match returns nothing
-  COALESCE(h.leads,              h_id.leads,              0) AS leads,
-  COALESCE(h.leads_qualified,    h_id.leads_qualified,    0) AS leads_qualified,
-  COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0) AS leads_disqualified,
+  -- Strategy A/B: name match; C: ad-ID fallback; D: TikTok campaign-ID fallback
+  COALESCE(h.leads,              h_id.leads,              h_cam.leads,              0) AS leads,
+  COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified,    0) AS leads_qualified,
+  COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0) AS leads_disqualified,
   COALESCE(d.deals, 0)                        AS deals,
   COALESCE(d.deals_won, 0)                    AS deals_won,
   COALESCE(d.deals_lost, 0)                   AS deals_lost,
@@ -1050,10 +1090,10 @@ SELECT
   COALESCE(d.new_biz_amount_lost, 0)          AS new_biz_amount_lost,
   COALESCE(d.new_biz_amount_open, 0)          AS new_biz_amount_open,
   COALESCE(d.new_biz_amount_total,0)          AS new_biz_amount_total,
-  SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS qual_rate,
-  SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS disq_rate,
-  SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads, h_id.leads), 0))           AS CPL,
-  SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified), 0)) AS CPQL,
+  SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS qual_rate,
+  SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS disq_rate,
+  SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads, h_id.leads, h_cam.leads), 0))           AS CPL,
+  SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), 0)) AS CPQL,
   SAFE_DIVIDE(d.revenue_won,         NULLIF(p.spend, 0))     AS ROAS,
   SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(p.spend, 0))     AS new_biz_roas,
   p.creative_type                                             AS creative_type,
@@ -1063,12 +1103,19 @@ FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
   AND LOWER(TRIM(p.utm_content)) = LOWER(TRIM(h.utm_content))
--- Strategy C: ID-based fallback — only activates when name match misses (h.leads IS NULL)
+-- Strategy C: Ad-ID fallback — only activates when name match misses
 LEFT JOIN hubspot_id_ad h_id
   ON h.leads IS NULL
   AND p.date = h_id.date
   AND p.channel = h_id.channel
   AND p.platform_ad_id = h_id.ad_id
+-- Strategy D: TikTok campaign-ID fallback — fires when both name AND ad-ID miss
+LEFT JOIN hubspot_tiktok_cam h_cam
+  ON h.leads IS NULL
+  AND h_id.leads IS NULL
+  AND p.date = h_cam.date
+  AND p.channel = 'tiktok'
+  AND p.platform_campaign_id = h_cam.campaign_id
 LEFT JOIN deals d
   ON COALESCE(p.date, h.date) = d.date
   AND COALESCE(p.channel, h.channel) = d.channel
@@ -1276,6 +1323,16 @@ def create_views():
         (V_LP_PERFORMANCE_WEEKLY_SQL,         "v_lp_performance_weekly"),
         (V_LP_WEEKLY_SUMMARY_SQL,             "v_lp_weekly_summary"),
     ]:
+        table_id = f"{PROJECT_ID}.{DATASET}.{name}"
+        try:
+            t = client.get_table(table_id)
+            if t.table_type == "TABLE":
+                # Previously materialized as a TABLE — drop first so
+                # CREATE OR REPLACE VIEW can proceed cleanly.
+                client.delete_table(table_id)
+                print(f"[INFO] Dropped materialised table {name} before recreating as view.")
+        except Exception:
+            pass  # table doesn't exist yet — fine
         client.query(sql).result()
         print(f"[OK] View {name} created.")
 
