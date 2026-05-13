@@ -440,7 +440,7 @@ def _post_weekly_summary(spikes: list | None = None,
         # No need to duplicate counts in Slack — just point to the dashboard.
         import os as _os
         activity_url = (_os.getenv("ACTIVITY_SHORT_URL")
-                        or "https://nexa-performance-agent.up.railway.app/activity")
+                        or "https://nexa-web-production-6a6b.up.railway.app/activity")
         text += f"\n\n_Agent activity this week:_ <{activity_url}|see what the agent did>"
 
         if is_quiet():
