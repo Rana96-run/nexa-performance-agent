@@ -397,16 +397,10 @@ WITH
     GROUP BY date, qoyod_source, lead_utm_campaign
   ),
   deals AS (
+    -- Slimmed 2026-05-13: only new_biz pipelines kept (Sales+Bookkeeping+Qflavours).
+    -- All-pipeline deal cols (deals_won/lost/open, revenue_won, amount_*, roas)
+    -- intentionally removed — new_biz is the only metric we report at this grain.
     SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
-           SUM(deals_won)    AS deals_won,
-           SUM(deals_lost)   AS deals_lost,
-           SUM(deals_open)   AS deals_open,
-           SUM(deals_total)  AS deals_total,
-           SUM(amount_won)   AS revenue_won,
-           SUM(amount_lost)  AS amount_lost,
-           SUM(amount_open)  AS amount_open,
-           SUM(amount_total) AS amount_total,
-           -- New business (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
                     THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
@@ -438,14 +432,7 @@ SELECT
   IFNULL(l.qualified, 0)    AS qualified,
   IFNULL(l.disqualified, 0) AS disqualified,
   IFNULL(l.leads, 0) - IFNULL(l.qualified, 0) - IFNULL(l.disqualified, 0) AS open_leads,
-  -- Deal metrics — all pipelines
-  IFNULL(d.deals_won, 0)                    AS deals_won,
-  IFNULL(d.deals_lost, 0)                   AS deals_lost,
-  IFNULL(d.deals_open, 0)                   AS deals_open,
-  ROUND(IFNULL(d.revenue_won, 0), 2)        AS revenue_won,
-  ROUND(IFNULL(d.amount_lost, 0), 2)        AS amount_lost,
-  ROUND(IFNULL(d.amount_open, 0), 2)        AS amount_open,
-  -- New business pipelines only — full parallel set
+  -- New business pipelines only — all-pipeline deal cols removed 2026-05-13
   IFNULL(d.new_biz_deals_won,   0)             AS new_biz_deals_won,
   IFNULL(d.new_biz_deals_lost,  0)             AS new_biz_deals_lost,
   IFNULL(d.new_biz_deals_open,  0)             AS new_biz_deals_open,
@@ -457,7 +444,7 @@ SELECT
   -- KPIs
   ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads, 0)),      2) AS cpl,
   ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)),  2) AS cpql,
-  ROUND(SAFE_DIVIDE(d.revenue_won,         NULLIF(s.spend, 0)), 2) AS roas,
+  -- All-pipeline roas removed 2026-05-13 — new_biz_roas is the only ROAS at this grain
   ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(s.spend, 0)), 2) AS new_biz_roas,
   ROUND(SAFE_DIVIDE(s.clicks,    NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
   ROUND(SAFE_DIVIDE(l.leads,     NULLIF(s.clicks, 0))      * 100, 4) AS cvr_pct,

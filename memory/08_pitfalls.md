@@ -3,6 +3,21 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## UTM param → ad hierarchy level (must memorise)
+
+| Ad-platform level | HubSpot UTM property        |
+|-------------------|-----------------------------|
+| Campaign          | `lead_utm_campaign`         |
+| Ad Set / Ad Group | `lead_utm_audience`  ← NOT `lead_utm_medium` |
+| Ad                | `lead_utm_content`          |
+| Keyword           | `lead_utm_term`             |
+| Source/channel    | `lead_utm_source`           |
+| Channel-type      | `lead_utm_medium`  (cpc / paid_social — NOT an adset name) |
+
+`lead_utm_medium` never carries the adset name. Adset name lives in
+`lead_utm_audience`. `v_adset_performance` Strategy B already joins on
+`lead_utm_audience` correctly. Date discovered: 2026-05-13.
+
 ## Deals sync — parallel runs duplicate the table
 
 - **Symptom:** `hubspot_deals_daily` ends up with 1.5–2x more rows than HubSpot
