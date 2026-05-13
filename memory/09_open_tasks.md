@@ -10,19 +10,17 @@ the bottom of the relevant section.
 - [ ] **Get Funnel.io read API token** — ask Amar for workspace API token
   + account_id + project_id. Fill `FUNNEL_API_TOKEN/ACCOUNT_ID/PROJECT_ID`.
 
-## P1 — PMax sector campaigns (PAUSED — needs Amar in Google Ads UI)
+## P1 — PMax sector campaigns (DONE — 2026-05-13)
 
-All 5 campaigns created via API with full asset groups. Remaining manual steps:
-- [ ] **Add audience signals** in UI (HubSpot SQL, website visitors — API can't copy)
-  for: Services, Technology, RealEstate, Retail, WP
-- [ ] **Pause source asset groups** in `PMax_AR_Invoice_FiveSectors`
-  (Services, Technology, Real Estate, Retail, Pmax_E-Invoice_WP)
-- [ ] **Enable the 5 new campaigns** after review
+All 5 sector campaigns created via API. Amar enabled 3 preferred campaigns,
+paused the 5 sector campaigns. Audience signals added manually in UI.
 
 Campaign IDs (customer 5753494964):
 - Services: 23834877561 → ag/6712034766 (52 assets)
 - Technology: 23844719995 → ag/6712034769 (53 assets, 26 search themes)
 - Real Estate: 23835216687 → ag/6712037109 (52 assets, 28 search themes)
+- Retail: 23845053748 → ag/6712036947 (50 assets, 19 search themes)
+- WP: 23840470733 → ag/6712057318 (51 assets, 42 search themes)
 - Retail: 23845053748 → ag/6712036947 (50 assets, 19 search themes)
 - WP: 23840470733 → ag/6712057318 (51 assets, 42 search themes)
 
