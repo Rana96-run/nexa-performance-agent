@@ -57,6 +57,25 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-05-13)
+
+- [x] **Railway dual-project fix** — found two `nexa-performance-agent` projects (trial + pro)
+  both auto-deploying from GitHub. Deleted the trial personal workspace project. Canonical
+  project: `57f124d0` in Marketing Workspace. Documented in `memory/08_pitfalls.md`.
+- [x] **PMax ads tab fix** — added `AND LOWER(utm_campaign) NOT LIKE '%pmax%'` to Google Ads
+  `3_ads.sql` to remove PMax asset group names that were appearing as ad names with 0 leads.
+- [x] **TikTok/Meta ID-based attribution (Strategy C/D)** — added new matching layers to
+  `v_adset_performance` and `v_ad_performance` for when UTM names break:
+  - Strategy C: adset-ID fallback via `lead_ad_group_id` (future Meta use)
+  - Strategy D (new): TikTok campaign-ID fallback via `lead_campaign_id_sync` →
+    `adsets_daily.campaign_id`. Confirmed `lead_campaign_id_sync` matches `campaigns_daily.campaign_id`
+    exactly for TikTok leads (e.g. `1863074553592178`). `campaign_id` / `ad_group_id` / `ad_id`
+    are NULL for both TikTok and Meta as of 2026-05-13.
+  - New BQ columns: `lead_campaign_id_sync`, `lead_campaign_id`, `lead_ad_group_id`, `lead_ad_id`
+    in both `hubspot_leads_individual` and `hubspot_leads_module_daily`.
+  - `create_views()` updated: auto-drops TABLE before recreating as VIEW (prevents lock).
+  - Cursor sync (`mirror`) running to backfill IDs for all 2026 leads.
+
 ## Done this session (2026-05-12)
 
 - [x] **Snap concurrent API** — replaced sequential per-ad calls with
