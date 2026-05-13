@@ -3,6 +3,23 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## Deals sync — parallel runs duplicate the table
+
+- **Symptom:** `hubspot_deals_daily` ends up with 1.5–2x more rows than HubSpot
+  for the same window. Per-bucket counts show 2+ rows with `updated_at`
+  timestamps seconds apart.
+- **Cause:** Two `collect_and_write()` calls running near-simultaneously
+  (e.g., I run a manual backfill while the 6h scheduler also triggers).
+  The DELETE-before-INSERT in `upsert_rows()` is not transactional with the
+  load job — each run's DELETE fires before either's INSERT, so both runs
+  insert their full row set and neither's DELETE catches the other.
+- **Fix when it happens:** TRUNCATE the table, run a single fresh YTD
+  backfill (`railway run python -m collectors.hubspot_deals_bq`), verify
+  dedupe with `COUNT(*)` vs `COUNT(DISTINCT full_key)` — should equal 1.00x.
+- **Prevent:** Never run a manual deals sync without first checking
+  scheduler logs for an in-progress run. If unsure, wait 6h between runs.
+  Date discovered: 2026-05-13.
+
 ## BigQuery
 
 - **Streaming buffer blocks DELETE for 90 min.** Rows inserted via streaming
