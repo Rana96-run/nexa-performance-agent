@@ -1174,10 +1174,15 @@ WITH platform AS (
     CASE
       WHEN LOWER(final_url) LIKE '%campaigns.qoyod.com%' THEN 'HubSpot LP'
       WHEN LOWER(final_url) LIKE '%lp.qoyod.com%'        THEN 'WordPress LP'
+      WHEN LOWER(final_url) LIKE '%www.qoyod.com%'        THEN 'Main Site'
       ELSE 'Other / Unknown'
     END                                                  AS lp_type,
     REGEXP_EXTRACT(final_url, r'https?://([^/?#]+)')     AS lp_domain,
-    REGEXP_EXTRACT(final_url, r'(https?://[^?#]+)')      AS lp_page,
+    -- Strip trailing slash and query string so /page and /page/ merge into one row
+    REGEXP_REPLACE(
+      REGEXP_EXTRACT(final_url, r'(https?://[^?#]+)'),
+      r'/$', ''
+    )                                                    AS lp_page,
     SUM(spend)                                           AS spend,
     SUM(impressions)                                     AS impressions,
     SUM(clicks)                                          AS clicks
