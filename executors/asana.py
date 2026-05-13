@@ -411,8 +411,8 @@ def _ensure_status_field_on_projects(client):
             continue
         try:
             proj_api.add_custom_field_setting_for_project(
+                {"data": {"custom_field": _CF_STATUS_GID}},
                 pid,
-                {"data": {"custom_field": _CF_STATUS_GID, "is_important": True}},
                 {},
             )
             added += 1
