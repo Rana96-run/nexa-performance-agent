@@ -74,11 +74,16 @@ def _check_bq_staleness() -> list[str]:
         return []
 
 
-def _hubspot_leads_collector() -> int:
+def _hubspot_leads_collector(**kwargs) -> int:
     """
     Full mirror of ALL HubSpot leads every 6-hour cycle.
     Identical approach to Funnel.io: pull current state of every lead,
     overwrite BQ. No cursor, no delta, no drift — ever.
+
+    Accepts and ignores any kwargs (e.g. `incremental=True` from the scheduler
+    runner). sync_full_mirror is always full — there's no incremental mode for
+    leads. Established 2026-05-13 after the scheduler started passing
+    `incremental=True` and breaking lead sync for 36+ hours.
     """
     return hubspot_leads_bq.sync_full_mirror()
 
