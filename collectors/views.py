@@ -368,8 +368,18 @@ GROUP BY 1,2,3,4,5,6
 # "data through {yesterday}".
 PAID_CHANNEL_CAMPAIGN_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_campaign_daily` AS
+-- ID-first attribution (Option B, 2026-05-13):
+--   spend is grouped by (date, channel, campaign_id) — the latest campaign_name
+--   is just a display label via ANY_VALUE().
+--   Leads + deals are split into two mutually-exclusive buckets:
+--     *_by_id   → rows with lead/deal_campaign_id_sync IS NOT NULL
+--                 (Snap/Meta/TikTok Instantform — native platform ID populated)
+--     *_by_name → rows with sync_id IS NULL
+--                 (Google/Bing/LinkedIn website forms — UTM name is the only signal)
+--   Sums are safe because the two buckets are disjoint on sync_id.
+-- This consolidates renames (same ID gets all leads+spend+deals regardless of
+-- how often the name changed) AND separates duplicate-name campaigns by ID.
 WITH
-  -- Map our channel slug -> the qoyod_source label HubSpot writes
   channel_map AS (
     SELECT 'google_ads'    AS channel, 'Google Ads'    AS qoyod_source UNION ALL
     SELECT 'meta',                     'Meta Ads'                       UNION ALL
@@ -379,27 +389,63 @@ WITH
     SELECT 'microsoft_ads',            'Microsoft Ads'
   ),
   spend AS (
-    SELECT date, channel, campaign_name,
+    SELECT date, channel, campaign_id,
+           ANY_VALUE(campaign_name) AS campaign_name,   -- latest name for display
            SUM(spend)        AS spend,
            SUM(impressions)  AS impressions,
            SUM(clicks)       AS clicks
     FROM `{P}.{D}.campaigns_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-    GROUP BY date, channel, campaign_name
+    GROUP BY date, channel, campaign_id
   ),
-  leads AS (
+  -- Leads: ID-matched bucket (Snap / Meta / TikTok Instantform)
+  leads_by_id AS (
+    SELECT date, qoyod_source, lead_campaign_id_sync AS campaign_id,
+           SUM(leads_total)        AS leads,
+           SUM(leads_qualified)    AS qualified,
+           SUM(leads_disqualified) AS disqualified
+    FROM `{P}.{D}.hubspot_leads_module_daily`
+    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+      AND lead_campaign_id_sync IS NOT NULL
+    GROUP BY date, qoyod_source, lead_campaign_id_sync
+  ),
+  -- Leads: name-matched bucket (Google / Microsoft / LinkedIn website forms — no sync ID)
+  leads_by_name AS (
     SELECT date, qoyod_source, lead_utm_campaign AS campaign_name,
            SUM(leads_total)        AS leads,
            SUM(leads_qualified)    AS qualified,
            SUM(leads_disqualified) AS disqualified
     FROM `{P}.{D}.hubspot_leads_module_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+      AND lead_campaign_id_sync IS NULL
     GROUP BY date, qoyod_source, lead_utm_campaign
   ),
-  deals AS (
-    -- Slimmed 2026-05-13: only new_biz pipelines kept (Sales+Bookkeeping+Qflavours).
-    -- All-pipeline deal cols (deals_won/lost/open, revenue_won, amount_*, roas)
-    -- intentionally removed — new_biz is the only metric we report at this grain.
+  -- Deals: ID-matched bucket (new_biz pipelines only)
+  deals_by_id AS (
+    SELECT date, qoyod_source, deal_campaign_id_sync AS campaign_id,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN deals_total ELSE 0 END) AS new_biz_deals_total,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+                    THEN amount_total ELSE 0 END) AS new_biz_amount_total
+    FROM `{P}.{D}.hubspot_deals_daily`
+    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+      AND deal_campaign_id_sync IS NOT NULL
+    GROUP BY date, qoyod_source, deal_campaign_id_sync
+  ),
+  -- Deals: name-matched bucket (new_biz pipelines only — no sync ID)
+  deals_by_name AS (
     SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
                     THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
@@ -419,44 +465,62 @@ WITH
                     THEN amount_total ELSE 0 END) AS new_biz_amount_total
     FROM `{P}.{D}.hubspot_deals_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+      AND deal_campaign_id_sync IS NULL
     GROUP BY date, qoyod_source, deal_utm_campaign
   )
 SELECT
   s.date,
   s.channel,
+  s.campaign_id,                                       -- NEW: exposed for disambiguation
   s.campaign_name,
   ROUND(s.spend, 2)         AS spend,
   s.impressions,
   s.clicks,
-  IFNULL(l.leads, 0)        AS leads,
-  IFNULL(l.qualified, 0)    AS qualified,
-  IFNULL(l.disqualified, 0) AS disqualified,
-  IFNULL(l.leads, 0) - IFNULL(l.qualified, 0) - IFNULL(l.disqualified, 0) AS open_leads,
-  -- New business pipelines only — all-pipeline deal cols removed 2026-05-13
-  IFNULL(d.new_biz_deals_won,   0)             AS new_biz_deals_won,
-  IFNULL(d.new_biz_deals_lost,  0)             AS new_biz_deals_lost,
-  IFNULL(d.new_biz_deals_open,  0)             AS new_biz_deals_open,
-  IFNULL(d.new_biz_deals_total, 0)             AS new_biz_deals_total,
-  ROUND(IFNULL(d.new_biz_revenue_won, 0), 2)   AS new_biz_revenue_won,
-  ROUND(IFNULL(d.new_biz_amount_lost, 0), 2)   AS new_biz_amount_lost,
-  ROUND(IFNULL(d.new_biz_amount_open, 0), 2)   AS new_biz_amount_open,
-  ROUND(IFNULL(d.new_biz_amount_total,0), 2)   AS new_biz_amount_total,
-  -- KPIs
-  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads, 0)),      2) AS cpl,
-  ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)),  2) AS cpql,
-  -- All-pipeline roas removed 2026-05-13 — new_biz_roas is the only ROAS at this grain
-  ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(s.spend, 0)), 2) AS new_biz_roas,
-  ROUND(SAFE_DIVIDE(s.clicks,    NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
-  ROUND(SAFE_DIVIDE(l.leads,     NULLIF(s.clicks, 0))      * 100, 4) AS cvr_pct,
-  ROUND(SAFE_DIVIDE(l.qualified, NULLIF(l.leads, 0))       * 100, 2) AS qual_rate_pct
+  -- Mutually exclusive buckets — sum is safe
+  IFNULL(li.leads, 0)        + IFNULL(ln.leads, 0)        AS leads,
+  IFNULL(li.qualified, 0)    + IFNULL(ln.qualified, 0)    AS qualified,
+  IFNULL(li.disqualified, 0) + IFNULL(ln.disqualified, 0) AS disqualified,
+  (IFNULL(li.leads,0) + IFNULL(ln.leads,0))
+    - (IFNULL(li.qualified,0) + IFNULL(ln.qualified,0))
+    - (IFNULL(li.disqualified,0) + IFNULL(ln.disqualified,0)) AS open_leads,
+  -- New business deals — ID + name buckets summed
+  IFNULL(di.new_biz_deals_won,   0) + IFNULL(dn.new_biz_deals_won,   0) AS new_biz_deals_won,
+  IFNULL(di.new_biz_deals_lost,  0) + IFNULL(dn.new_biz_deals_lost,  0) AS new_biz_deals_lost,
+  IFNULL(di.new_biz_deals_open,  0) + IFNULL(dn.new_biz_deals_open,  0) AS new_biz_deals_open,
+  IFNULL(di.new_biz_deals_total, 0) + IFNULL(dn.new_biz_deals_total, 0) AS new_biz_deals_total,
+  ROUND(IFNULL(di.new_biz_revenue_won, 0) + IFNULL(dn.new_biz_revenue_won, 0), 2) AS new_biz_revenue_won,
+  ROUND(IFNULL(di.new_biz_amount_lost, 0) + IFNULL(dn.new_biz_amount_lost, 0), 2) AS new_biz_amount_lost,
+  ROUND(IFNULL(di.new_biz_amount_open, 0) + IFNULL(dn.new_biz_amount_open, 0), 2) AS new_biz_amount_open,
+  ROUND(IFNULL(di.new_biz_amount_total,0) + IFNULL(dn.new_biz_amount_total,0), 2) AS new_biz_amount_total,
+  -- KPIs — use the summed lead totals
+  ROUND(SAFE_DIVIDE(s.spend,
+        NULLIF(IFNULL(li.leads,0) + IFNULL(ln.leads,0), 0)),     2) AS cpl,
+  ROUND(SAFE_DIVIDE(s.spend,
+        NULLIF(IFNULL(li.qualified,0) + IFNULL(ln.qualified,0), 0)), 2) AS cpql,
+  ROUND(SAFE_DIVIDE(
+        IFNULL(di.new_biz_revenue_won,0) + IFNULL(dn.new_biz_revenue_won,0),
+        NULLIF(s.spend, 0)), 2) AS new_biz_roas,
+  ROUND(SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
+  ROUND(SAFE_DIVIDE(IFNULL(li.leads,0) + IFNULL(ln.leads,0),
+        NULLIF(s.clicks, 0)) * 100, 4) AS cvr_pct,
+  ROUND(SAFE_DIVIDE(IFNULL(li.qualified,0) + IFNULL(ln.qualified,0),
+        NULLIF(IFNULL(li.leads,0) + IFNULL(ln.leads,0), 0)) * 100, 2) AS qual_rate_pct
 FROM spend s
-LEFT JOIN channel_map cm  ON cm.channel = s.channel
-LEFT JOIN leads l         ON l.date = s.date
-                         AND l.qoyod_source = cm.qoyod_source
-                         AND LOWER(l.campaign_name) = LOWER(s.campaign_name)
-LEFT JOIN deals d         ON d.date = s.date
-                         AND d.qoyod_source = cm.qoyod_source
-                         AND LOWER(d.campaign_name) = LOWER(s.campaign_name)
+LEFT JOIN channel_map cm   ON cm.channel = s.channel
+-- ID-match (Snap/Meta/TikTok Instantform — survives renames + separates duplicate names)
+LEFT JOIN leads_by_id li   ON li.date = s.date
+                          AND li.qoyod_source = cm.qoyod_source
+                          AND li.campaign_id = s.campaign_id
+-- Name-match (Google/Microsoft/LinkedIn website forms — no sync ID populated)
+LEFT JOIN leads_by_name ln ON ln.date = s.date
+                          AND ln.qoyod_source = cm.qoyod_source
+                          AND LOWER(ln.campaign_name) = LOWER(s.campaign_name)
+LEFT JOIN deals_by_id di   ON di.date = s.date
+                          AND di.qoyod_source = cm.qoyod_source
+                          AND di.campaign_id = s.campaign_id
+LEFT JOIN deals_by_name dn ON dn.date = s.date
+                          AND dn.qoyod_source = cm.qoyod_source
+                          AND LOWER(dn.campaign_name) = LOWER(s.campaign_name)
 """
 
 

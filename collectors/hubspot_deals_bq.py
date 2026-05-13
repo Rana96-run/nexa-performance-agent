@@ -30,6 +30,10 @@ PROPERTIES = [
     "deal_qoyod_source",
     "deal_utm_campaign", "deal_utm_audience", "deal_utm_content",
     "deal_utm_term", "deal_utm_source", "deal_utm_medium",
+    # Sync properties from native platform integrations (TikTok/Meta/Snap Instantform).
+    # Populated for the same lead → deal conversions. Enable ID-based attribution
+    # so renamed campaigns/adsets/ads consolidate spend+leads+deals under one row.
+    "deal_campaign_id_sync", "deal_adgroup_id_sync", "deal_ad_id_sync",
     # Fallback chain — see analysers/channel_inference.py.
     "deal_original_traffic_source",
     "deal_latest_traffic_source",
@@ -301,6 +305,9 @@ def collect_and_write(days: int = None, start_date: date = None,
                     (p.get("deal_utm_source") or "").strip() or None,
                     (p.get("deal_utm_medium") or "").strip() or None,
                     (p.get("deal_utm_term") or "").strip() or None,
+                    (p.get("deal_campaign_id_sync") or "").strip() or None,
+                    (p.get("deal_adgroup_id_sync")  or "").strip() or None,
+                    (p.get("deal_ad_id_sync")       or "").strip() or None,
                 )
                 b = buckets[key]
                 b["n"] += 1
@@ -402,6 +409,9 @@ def collect_and_write(days: int = None, start_date: date = None,
                         (p.get("deal_utm_source") or "").strip() or None,
                         (p.get("deal_utm_medium") or "").strip() or None,
                         (p.get("deal_utm_term") or "").strip() or None,
+                        (p.get("deal_campaign_id_sync") or "").strip() or None,
+                        (p.get("deal_adgroup_id_sync")  or "").strip() or None,
+                        (p.get("deal_ad_id_sync")       or "").strip() or None,
                     )
                     b = buckets[key]
                     b["n"] += 1
@@ -430,7 +440,8 @@ def collect_and_write(days: int = None, start_date: date = None,
     rows = []
     for key, b in buckets.items():
         (d, src, pipeline, status,
-         utm_c, utm_a, utm_co, utm_s, utm_m, utm_t) = key
+         utm_c, utm_a, utm_co, utm_s, utm_m, utm_t,
+         cam_id_sync, ag_id_sync, ad_id_sync) = key
         avg_time = (b["time_in_stage_sum"] / b["time_in_stage_n"]
                     if b["time_in_stage_n"] else None)
         # If a bucket contains multiple native currencies (e.g. SAR + USD mixed),
@@ -449,6 +460,10 @@ def collect_and_write(days: int = None, start_date: date = None,
             "deal_utm_source": utm_s,
             "deal_utm_medium": utm_m,
             "deal_utm_term": utm_t,
+            # Sync IDs from native platform integrations (TikTok/Meta/Snap)
+            "deal_campaign_id_sync": cam_id_sync,
+            "deal_adgroup_id_sync":  ag_id_sync,
+            "deal_ad_id_sync":       ad_id_sync,
             "deals_total": b["n"],
             "deals_won": b["won"],
             "deals_lost": b["lost"],
@@ -491,6 +506,10 @@ def _ensure_table_exists():
         bigquery.SchemaField("deal_utm_source", "STRING"),
         bigquery.SchemaField("deal_utm_medium", "STRING"),
         bigquery.SchemaField("deal_utm_term", "STRING"),
+        # Platform sync IDs (TikTok/Meta/Snap Instantform) for ID-based attribution
+        bigquery.SchemaField("deal_campaign_id_sync", "STRING"),
+        bigquery.SchemaField("deal_adgroup_id_sync",  "STRING"),
+        bigquery.SchemaField("deal_ad_id_sync",       "STRING"),
         bigquery.SchemaField("deals_total", "INT64"),
         bigquery.SchemaField("deals_won", "INT64"),
         bigquery.SchemaField("deals_lost", "INT64"),

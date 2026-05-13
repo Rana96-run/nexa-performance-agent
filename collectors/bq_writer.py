@@ -848,10 +848,32 @@ hubspot_id_cam AS (
   WHERE lead_campaign_id_sync IS NOT NULL
   GROUP BY 1, 2
 ),
-deals AS (
-  -- Slimmed 2026-05-13: only new_biz pipelines kept (Sales+Bookkeeping+Qflavours).
-  -- All-pipeline deal cols (deals_won/lost/open, revenue_won, amount_*, ROAS)
-  -- intentionally removed — new_biz is the only metric we report at this grain.
+-- Deals: ID-matched bucket (Snap/Meta/TikTok Instantform — survives adset renames)
+deals_by_id AS (
+  SELECT date, qoyod_source AS channel,
+    deal_adgroup_id_sync AS adset_id,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+  WHERE deal_adgroup_id_sync IS NOT NULL
+  GROUP BY 1, 2, 3
+),
+-- Deals: name-matched bucket (Google/Bing/LinkedIn website forms — no sync ID)
+deals_by_name AS (
   SELECT date, qoyod_source AS channel, deal_utm_campaign AS utm_campaign,
     deal_utm_audience AS utm_audience,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
@@ -871,7 +893,8 @@ deals AS (
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN amount_total ELSE 0 END) AS new_biz_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_utm_audience IS NOT NULL
+  WHERE deal_adgroup_id_sync IS NULL
+    AND deal_utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
 ),
 utmproxy AS (
@@ -901,23 +924,24 @@ SELECT
   COALESCE(h.leads,              h_id.leads,              h_cam.leads,              0) AS leads,
   COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified,    0) AS leads_qualified,
   COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0) AS leads_disqualified,
-  -- New business only — all-pipeline deal cols removed 2026-05-13
-  COALESCE(d.new_biz_deals_won,   0)        AS new_biz_deals_won,
-  COALESCE(d.new_biz_deals_lost,  0)        AS new_biz_deals_lost,
-  COALESCE(d.new_biz_deals_open,  0)        AS new_biz_deals_open,
-  COALESCE(d.new_biz_deals_total, 0)        AS new_biz_deals_total,
-  COALESCE(d.new_biz_revenue_won, 0)        AS new_biz_revenue_won,
-  COALESCE(d.new_biz_amount_lost, 0)        AS new_biz_amount_lost,
-  COALESCE(d.new_biz_amount_open, 0)        AS new_biz_amount_open,
-  COALESCE(d.new_biz_amount_total,0)        AS new_biz_amount_total,
+  -- New business only — ID + name buckets summed (mutually exclusive on sync_id)
+  IFNULL(di.new_biz_deals_won,   0) + IFNULL(dn.new_biz_deals_won,   0) AS new_biz_deals_won,
+  IFNULL(di.new_biz_deals_lost,  0) + IFNULL(dn.new_biz_deals_lost,  0) AS new_biz_deals_lost,
+  IFNULL(di.new_biz_deals_open,  0) + IFNULL(dn.new_biz_deals_open,  0) AS new_biz_deals_open,
+  IFNULL(di.new_biz_deals_total, 0) + IFNULL(dn.new_biz_deals_total, 0) AS new_biz_deals_total,
+  IFNULL(di.new_biz_revenue_won, 0) + IFNULL(dn.new_biz_revenue_won, 0) AS new_biz_revenue_won,
+  IFNULL(di.new_biz_amount_lost, 0) + IFNULL(dn.new_biz_amount_lost, 0) AS new_biz_amount_lost,
+  IFNULL(di.new_biz_amount_open, 0) + IFNULL(dn.new_biz_amount_open, 0) AS new_biz_amount_open,
+  IFNULL(di.new_biz_amount_total,0) + IFNULL(dn.new_biz_amount_total,0) AS new_biz_amount_total,
   -- Ratios (use whichever lead source matched)
   SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS qual_rate,
   SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS disq_rate,
   -- Cost metrics
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads, h_id.leads, h_cam.leads), 0))            AS CPL,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), 0))  AS CPQL,
-  -- All-pipeline ROAS removed 2026-05-13 — new_biz_roas is the only ROAS at this grain
-  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
+  -- new_biz_roas: revenue from both deal buckets / spend
+  SAFE_DIVIDE(IFNULL(di.new_biz_revenue_won,0) + IFNULL(dn.new_biz_revenue_won,0),
+              NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
 FROM platform p
 FULL OUTER JOIN hubspot h
@@ -938,10 +962,15 @@ LEFT JOIN hubspot_id_cam h_cam
   AND p.platform_campaign_id = h_cam.campaign_id
 LEFT JOIN utmproxy u
   ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
-LEFT JOIN deals d
-  ON COALESCE(p.date, h.date) = d.date
-  AND COALESCE(p.channel, h.channel) = d.channel
-  AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(d.utm_audience))
+-- Deals: ID-match (Snap/Meta/TikTok Instantform — survives adset renames)
+LEFT JOIN deals_by_id di
+  ON p.date = di.date AND p.channel = di.channel
+  AND p.platform_adset_id = di.adset_id
+-- Deals: name-match (Google/Bing/LinkedIn website forms — no sync ID)
+LEFT JOIN deals_by_name dn
+  ON COALESCE(p.date, h.date) = dn.date
+  AND COALESCE(p.channel, h.channel) = dn.channel
+  AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(dn.utm_audience))
 """
 
 
@@ -1001,10 +1030,32 @@ hubspot_id_cam AS (
   WHERE lead_campaign_id_sync IS NOT NULL
   GROUP BY 1, 2
 ),
-deals AS (
-  -- Slimmed 2026-05-13: only new_biz pipelines kept (Sales+Bookkeeping+Qflavours).
-  -- All-pipeline deal cols (deals_won/lost/open, revenue_won, amount_*, ROAS)
-  -- intentionally removed — new_biz is the only metric we report at this grain.
+-- Deals: ID-matched bucket (survives ad renames)
+deals_by_id AS (
+  SELECT date, qoyod_source AS channel,
+    deal_ad_id_sync AS ad_id,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+  WHERE deal_ad_id_sync IS NOT NULL
+  GROUP BY 1, 2, 3
+),
+-- Deals: name-matched bucket (no sync ID)
+deals_by_name AS (
   SELECT date, qoyod_source AS channel,
     deal_utm_campaign AS utm_campaign,
     deal_utm_content AS utm_content,
@@ -1025,7 +1076,8 @@ deals AS (
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN amount_total ELSE 0 END) AS new_biz_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_utm_content IS NOT NULL
+  WHERE deal_ad_id_sync IS NULL
+    AND deal_utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4
 )
 SELECT
@@ -1053,21 +1105,22 @@ SELECT
   COALESCE(h.leads,              h_id.leads,              h_cam.leads,              0) AS leads,
   COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified,    0) AS leads_qualified,
   COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0) AS leads_disqualified,
-  -- New business only — all-pipeline deal cols removed 2026-05-13
-  COALESCE(d.new_biz_deals_won,   0)          AS new_biz_deals_won,
-  COALESCE(d.new_biz_deals_lost,  0)          AS new_biz_deals_lost,
-  COALESCE(d.new_biz_deals_open,  0)          AS new_biz_deals_open,
-  COALESCE(d.new_biz_deals_total, 0)          AS new_biz_deals_total,
-  COALESCE(d.new_biz_revenue_won, 0)          AS new_biz_revenue_won,
-  COALESCE(d.new_biz_amount_lost, 0)          AS new_biz_amount_lost,
-  COALESCE(d.new_biz_amount_open, 0)          AS new_biz_amount_open,
-  COALESCE(d.new_biz_amount_total,0)          AS new_biz_amount_total,
+  -- New business only — ID + name buckets summed (mutually exclusive on sync_id)
+  IFNULL(di.new_biz_deals_won,   0) + IFNULL(dn.new_biz_deals_won,   0) AS new_biz_deals_won,
+  IFNULL(di.new_biz_deals_lost,  0) + IFNULL(dn.new_biz_deals_lost,  0) AS new_biz_deals_lost,
+  IFNULL(di.new_biz_deals_open,  0) + IFNULL(dn.new_biz_deals_open,  0) AS new_biz_deals_open,
+  IFNULL(di.new_biz_deals_total, 0) + IFNULL(dn.new_biz_deals_total, 0) AS new_biz_deals_total,
+  IFNULL(di.new_biz_revenue_won, 0) + IFNULL(dn.new_biz_revenue_won, 0) AS new_biz_revenue_won,
+  IFNULL(di.new_biz_amount_lost, 0) + IFNULL(dn.new_biz_amount_lost, 0) AS new_biz_amount_lost,
+  IFNULL(di.new_biz_amount_open, 0) + IFNULL(dn.new_biz_amount_open, 0) AS new_biz_amount_open,
+  IFNULL(di.new_biz_amount_total,0) + IFNULL(dn.new_biz_amount_total,0) AS new_biz_amount_total,
   SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS qual_rate,
   SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified, 0), 0)) AS disq_rate,
   SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads, h_id.leads, h_cam.leads), 0))           AS CPL,
   SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, h_cam.leads_qualified), 0)) AS CPQL,
-  -- All-pipeline ROAS removed 2026-05-13 — new_biz_roas is the only ROAS at this grain
-  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(p.spend, 0))     AS new_biz_roas,
+  -- new_biz_roas: revenue from both deal buckets / spend
+  SAFE_DIVIDE(IFNULL(di.new_biz_revenue_won,0) + IFNULL(dn.new_biz_revenue_won,0),
+              NULLIF(p.spend, 0))     AS new_biz_roas,
   p.creative_type                                             AS creative_type,
   p.status                                                   AS status,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')            AS data_source
@@ -1088,10 +1141,15 @@ LEFT JOIN hubspot_id_cam h_cam
   AND p.date = h_cam.date
   AND p.channel IN ('tiktok', 'meta', 'snapchat')
   AND p.platform_campaign_id = h_cam.campaign_id
-LEFT JOIN deals d
-  ON COALESCE(p.date, h.date) = d.date
-  AND COALESCE(p.channel, h.channel) = d.channel
-  AND LOWER(TRIM(COALESCE(p.utm_content, h.utm_content))) = LOWER(TRIM(d.utm_content))
+-- Deals: ID-match (survives ad renames)
+LEFT JOIN deals_by_id di
+  ON p.date = di.date AND p.channel = di.channel
+  AND p.platform_ad_id = di.ad_id
+-- Deals: name-match (no sync ID)
+LEFT JOIN deals_by_name dn
+  ON COALESCE(p.date, h.date) = dn.date
+  AND COALESCE(p.channel, h.channel) = dn.channel
+  AND LOWER(TRIM(COALESCE(p.utm_content, h.utm_content))) = LOWER(TRIM(dn.utm_content))
 """
 
 
