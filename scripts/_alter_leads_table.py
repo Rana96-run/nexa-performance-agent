@@ -10,8 +10,7 @@ ds   = os.environ["BQ_DATASET"]
 
 for table_name in ("hubspot_leads_module_daily", "hubspot_leads_individual"):
     table_id = f"{proj}.{ds}.{table_name}"
-    for col in ("lead_campaign_id_sync", "lead_adgroup_id_sync", "lead_ad_id_sync",
-                "lead_campaign_id", "lead_ad_group_id", "lead_ad_id"):
+    for col in ("lead_campaign_id_sync", "lead_adgroup_id_sync", "lead_ad_id_sync"):
         try:
             client.query(
                 f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
