@@ -327,6 +327,7 @@ def create_full_campaign(
     job_function_urns: list[str] | None = None,
     seniority_urns: list[str] | None = None,
     audience_match_urns: list[str] | None = None,
+    clone_from_campaign_id: str | int | None = None,
 ) -> dict:
     """
     Full LinkedIn campaign setup in one call.
@@ -339,7 +340,13 @@ def create_full_campaign(
     For LEAD_GENERATION:   pass lead_gen_form_urn + share_urn
     For WEBSITE_CONVERSIONS: pass landing_url (UTMs auto-appended) + share_urn
 
-    Returns dict with campaign_id, adset_id, ad_id (if share_urn provided).
+    clone_from_campaign_id: if set, all creatives from that ad set are cloned
+      into the new ad set instead of creating a single placeholder ad.
+      Requires rw_organization_admin scope (re-mint token via scripts/linkedin_oauth.py).
+      share_urn is ignored when clone_from_campaign_id is set.
+
+    Returns dict with campaign_id, adset_id, ad_id (if share_urn provided),
+      and cloned_creatives list (if clone_from_campaign_id set).
 
     Example:
       create_full_campaign(
@@ -351,7 +358,7 @@ def create_full_campaign(
           objective="LEAD_GENERATION",
           cost_type="CPC",
           lead_gen_form_urn="urn:li:leadGenForm:12345",
-          share_urn="urn:li:ugcPost:67890",
+          clone_from_campaign_id="123456789",  # clone all ads from this ad set
       )
     """
     result: dict = {}
@@ -383,8 +390,16 @@ def create_full_campaign(
     result["adset_id"] = adset_id
     result["adset_name"] = adset_name
 
-    # 3. Ad (only if share_urn provided — can be added later otherwise)
-    if share_urn:
+    # 3. Ad — clone from source campaign, or create from share_urn, or skip
+    if clone_from_campaign_id:
+        cloned = clone_campaign_creatives(
+            source_campaign_id=clone_from_campaign_id,
+            target_campaign_id=adset_id,
+        )
+        result["cloned_creatives"] = cloned
+        result["ad_id"]   = cloned[0]["id"] if cloned else None
+        result["ad_name"] = cloned[0]["name"] if cloned else None
+    elif share_urn:
         ad_name_raw = f"{product}V1_{language}"
         if objective == "LEAD_GENERATION" and lead_gen_form_urn:
             ad = create_ad_lead_gen(
@@ -597,6 +612,111 @@ def list_creatives(limit: int = 20) -> list[dict]:
 
     print(f"[li] list_creatives -> {len(results)} assets (org={org_urn})")
     return results
+
+
+def list_campaign_creatives(campaign_id: str | int) -> list[dict]:
+    """
+    List all ad creatives attached to a LinkedIn campaign (ad set in UI).
+
+    Returns list of dicts with keys:
+      id, reference, type, lead_gen_form_urn, status, name
+
+    Requires rw_ads (or rw_organization_admin) scope.
+    """
+    campaign_urn = f"urn:li:sponsoredCampaign:{campaign_id}"
+    r = _get(
+        "/adCreatives",
+        params={
+            "q":          "campaign",
+            "campaign":   campaign_urn,
+            "projection": "(elements*(id,reference,type,leadGenFormRef,status,name))",
+            "count":      100,
+        },
+    )
+    creatives = []
+    for el in r.get("elements", []):
+        creatives.append({
+            "id":               el.get("id"),
+            "reference":        el.get("reference"),
+            "type":             el.get("type"),
+            "lead_gen_form_urn": el.get("leadGenFormRef"),
+            "status":           el.get("status"),
+            "name":             el.get("name"),
+        })
+    print(f"[li] list_campaign_creatives({campaign_id}) -> {len(creatives)} creatives")
+    return creatives
+
+
+def clone_campaign_creatives(
+    source_campaign_id: str | int,
+    target_campaign_id: str | int,
+    name_suffix: str = "_clone",
+    dry_run: bool = False,
+) -> list[dict]:
+    """
+    Clone all creatives from source_campaign_id to target_campaign_id.
+
+    For each creative in the source ad set, creates an identical creative
+    in the target ad set referencing the same organic post (share/ugcPost URN)
+    and lead gen form (if any). Both campaigns must belong to the same ad account.
+
+    Args:
+        source_campaign_id: LinkedIn campaign (ad set) ID to copy from.
+        target_campaign_id: LinkedIn campaign (ad set) ID to copy to.
+        name_suffix: appended to each cloned creative's name. Default "_clone".
+        dry_run: if True, print what would be created without calling the API.
+
+    Returns:
+        list of created creative dicts: [{id, name, reference, type}, ...]
+
+    Requires:
+        rw_ads scope (rw_organization_admin for org-owned media).
+    """
+    source_creatives = list_campaign_creatives(source_campaign_id)
+    if not source_creatives:
+        print(f"[li] clone_campaign_creatives: no creatives found in campaign {source_campaign_id}")
+        return []
+
+    target_urn = f"urn:li:sponsoredCampaign:{target_campaign_id}"
+    created = []
+
+    for cr in source_creatives:
+        ref  = cr.get("reference")
+        ctype = cr.get("type") or "SPONSORED_STATUS_UPDATE"
+        lgf  = cr.get("lead_gen_form_urn")
+        orig_name = cr.get("name") or f"creative_{cr.get('id')}"
+        new_name = orig_name + name_suffix
+
+        if not ref:
+            print(f"[li]   skip creative {cr.get('id')} — no reference URN")
+            continue
+
+        payload: dict = {
+            "campaign":  target_urn,
+            "reference": ref,
+            "status":    "DRAFT",
+            "name":      new_name,
+            "type":      ctype,
+        }
+        if lgf:
+            payload["leadGenFormRef"] = lgf
+
+        if dry_run:
+            print(f"[li][dry_run] would create: {new_name} | ref={ref} | lgf={lgf}")
+            created.append({"id": None, "name": new_name, "reference": ref, "type": ctype})
+            continue
+
+        try:
+            r = _post("/adCreatives", payload)
+            new_id = r.get("_restli_id") or r.get("id")
+            print(f"[li]   cloned creative -> {new_name} (id={new_id})")
+            created.append({"id": new_id, "name": new_name, "reference": ref, "type": ctype})
+        except Exception as e:
+            print(f"[li]   FAILED to clone {orig_name}: {e}")
+
+    print(f"[li] clone_campaign_creatives: {len(created)}/{len(source_creatives)} cloned "
+          f"({'dry run' if dry_run else 'live'})")
+    return created
 
 
 # ── Targeting helpers ─────────────────────────────────────────────────────────

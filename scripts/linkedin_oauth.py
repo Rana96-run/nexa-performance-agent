@@ -25,7 +25,9 @@ load_dotenv(override=True)
 CLIENT_ID     = os.getenv("LI_CLIENT_ID")
 CLIENT_SECRET = os.getenv("LI_CLIENT_SECRET")
 REDIRECT_URI  = os.getenv("LI_REDIRECT_URI", "http://localhost:8080/callback")
-SCOPES        = "r_ads r_ads_reporting rw_ads r_basicprofile openid profile email"
+SCOPES        = "r_ads r_ads_reporting rw_ads rw_organization_admin r_basicprofile openid profile email"
+# rw_organization_admin added 2026-05-13: required to list and clone ad creatives
+# that reference organization-owned media (images, videos, organic posts).
 
 _code: str | None = None
 _done = threading.Event()
