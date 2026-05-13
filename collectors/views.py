@@ -688,12 +688,15 @@ def _sub_campaign_views():
         V_KEYWORD_PERFORMANCE_SQL,
         V_LP_PERFORMANCE_WEEKLY_SQL,
         V_LP_WEEKLY_SUMMARY_SQL,
+        V_SIGNUP_FUNNEL_WEEKLY_SQL,
     )
     return [
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
         # LP A/B test views — v_lp_weekly_summary depends on v_lp_performance_weekly
         ("v_lp_performance_weekly", V_LP_PERFORMANCE_WEEKLY_SQL),
         ("v_lp_weekly_summary",     V_LP_WEEKLY_SUMMARY_SQL),
+        # Signup funnel — ad-level attribution for www.qoyod.com campaigns
+        ("v_signup_funnel_weekly",  V_SIGNUP_FUNNEL_WEEKLY_SQL),
     ]
 
 

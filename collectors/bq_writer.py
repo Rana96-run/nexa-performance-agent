@@ -1219,9 +1219,13 @@ WITH platform AS (
     DATE_TRUNC(date, WEEK(MONDAY))                       AS week_start,
     campaign_name,
     CASE
-      WHEN LOWER(final_url) LIKE '%campaigns.qoyod.com%' THEN 'HubSpot LP'
-      WHEN LOWER(final_url) LIKE '%lp.qoyod.com%'        THEN 'WordPress LP'
-      WHEN LOWER(final_url) LIKE '%www.qoyod.com%'        THEN 'Main Site'
+      WHEN LOWER(final_url) LIKE '%campaigns.qoyod.com%'                         THEN 'HubSpot LP'
+      WHEN LOWER(final_url) LIKE '%lp.qoyod.com%'                                THEN 'WordPress LP'
+      WHEN LOWER(final_url) LIKE '%www.qoyod.com%'
+        AND (   LOWER(final_url) LIKE '%signup%'
+             OR LOWER(final_url) LIKE '%free_trial%'
+             OR LOWER(final_url) LIKE '%register%')                               THEN 'Signup'
+      WHEN LOWER(final_url) LIKE '%www.qoyod.com%'                               THEN 'Main Site'
       ELSE 'Other / Unknown'
     END                                                  AS lp_type,
     REGEXP_EXTRACT(final_url, r'https?://([^/?#]+)')     AS lp_domain,
@@ -1307,6 +1311,124 @@ SELECT
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(hs_qualified), 0))       AS cpql
 FROM `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly`
 GROUP BY 1, 2, 3, 4
+"""
+
+V_SIGNUP_FUNNEL_WEEKLY_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_signup_funnel_weekly` AS
+-- Ad-level performance for campaigns landing on www.qoyod.com (Main Site + Signup pages).
+-- Since no ad links directly to /signup, these campaigns ARE the signup funnel —
+-- HubSpot lead = a completed registration attributed to the ad's UTM.
+--
+-- Attribution priority:
+--   1. ad-level   — ads_daily.utm_content = hubspot.lead_utm_content (exact match)
+--   2. proportional — campaign-level hs leads × (ad spend / campaign spend)
+-- The attribution_method column shows which was used per row.
+--
+-- Grain: week × campaign_name × ad_id.
+WITH ads AS (
+  SELECT
+    DATE_TRUNC(date, WEEK(MONDAY))                                    AS week_start,
+    campaign_name,
+    ad_id,
+    COALESCE(NULLIF(ad_name, ''), utm_content, ad_id)                 AS ad_label,
+    utm_content,
+    REGEXP_REPLACE(
+      REGEXP_EXTRACT(final_url, r'(https?://[^?#]+)'), r'/$', ''
+    )                                                                  AS lp_page,
+    SUM(spend)                                                         AS spend,
+    SUM(impressions)                                                   AS impressions,
+    SUM(clicks)                                                        AS clicks
+  FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+  WHERE channel = 'google_ads'
+    AND LOWER(final_url) LIKE '%www.qoyod.com%'
+    AND final_url IS NOT NULL
+  GROUP BY 1, 2, 3, 4, 5, 6
+),
+campaign_weekly_spend AS (
+  SELECT week_start, campaign_name, SUM(spend) AS total_spend
+  FROM ads
+  GROUP BY 1, 2
+),
+hs_ad AS (
+  -- Ad-level: when utm_content is set on both sides
+  SELECT
+    DATE_TRUNC(date, WEEK(MONDAY))        AS week_start,
+    LOWER(TRIM(lead_utm_content))         AS utm_content_key,
+    SUM(leads_total)                      AS hs_leads,
+    SUM(leads_qualified)                  AS hs_qualified,
+    SUM(leads_disqualified)               AS hs_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE qoyod_source = 'Google Ads'
+    AND lead_utm_content IS NOT NULL AND TRIM(lead_utm_content) != ''
+  GROUP BY 1, 2
+),
+hs_campaign AS (
+  -- Campaign-level fallback
+  SELECT
+    DATE_TRUNC(date, WEEK(MONDAY))        AS week_start,
+    LOWER(TRIM(lead_utm_campaign))        AS campaign_key,
+    SUM(leads_total)                      AS hs_leads,
+    SUM(leads_qualified)                  AS hs_qualified,
+    SUM(leads_disqualified)               AS hs_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE qoyod_source = 'Google Ads'
+  GROUP BY 1, 2
+)
+SELECT
+  a.week_start,
+  a.campaign_name,
+  a.ad_id,
+  a.ad_label,
+  a.utm_content,
+  a.lp_page,
+  ROUND(a.spend, 2)                                                    AS spend,
+  a.impressions,
+  a.clicks,
+  SAFE_DIVIDE(a.clicks, NULLIF(a.impressions, 0)) * 100               AS ctr_pct,
+  -- Leads: prefer ad-level; fall back to proportional campaign share
+  COALESCE(
+    h_ad.hs_leads,
+    ROUND(COALESCE(h_camp.hs_leads, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))
+  )                                                                    AS hs_leads,
+  COALESCE(
+    h_ad.hs_qualified,
+    ROUND(COALESCE(h_camp.hs_qualified, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))
+  )                                                                    AS hs_qualified,
+  COALESCE(
+    h_ad.hs_disqualified,
+    ROUND(COALESCE(h_camp.hs_disqualified, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))
+  )                                                                    AS hs_disqualified,
+  -- Disqualification rate
+  SAFE_DIVIDE(
+    COALESCE(h_ad.hs_disqualified, ROUND(COALESCE(h_camp.hs_disqualified, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))),
+    NULLIF(
+      COALESCE(h_ad.hs_qualified,    ROUND(COALESCE(h_camp.hs_qualified,    0) * SAFE_DIVIDE(a.spend, cws.total_spend))) +
+      COALESCE(h_ad.hs_disqualified, ROUND(COALESCE(h_camp.hs_disqualified, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))),
+    0)
+  ) * 100                                                              AS disq_rate_pct,
+  -- Click-to-lead conversion rate (proxy for signup conversion rate from ads)
+  SAFE_DIVIDE(
+    COALESCE(h_ad.hs_leads, ROUND(COALESCE(h_camp.hs_leads, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))),
+    NULLIF(a.clicks, 0)
+  ) * 100                                                              AS click_to_lead_pct,
+  -- CPL / CPQL
+  SAFE_DIVIDE(a.spend,
+    NULLIF(COALESCE(h_ad.hs_leads,     ROUND(COALESCE(h_camp.hs_leads,     0) * SAFE_DIVIDE(a.spend, cws.total_spend))), 0)
+  )                                                                    AS cpl,
+  SAFE_DIVIDE(a.spend,
+    NULLIF(COALESCE(h_ad.hs_qualified, ROUND(COALESCE(h_camp.hs_qualified, 0) * SAFE_DIVIDE(a.spend, cws.total_spend))), 0)
+  )                                                                    AS cpql,
+  IF(h_ad.hs_leads IS NOT NULL, 'ad_level', 'campaign_proportional')  AS attribution_method
+FROM ads a
+LEFT JOIN campaign_weekly_spend cws
+  ON a.week_start = cws.week_start AND a.campaign_name = cws.campaign_name
+LEFT JOIN hs_ad h_ad
+  ON a.week_start = h_ad.week_start
+  AND a.utm_content IS NOT NULL
+  AND LOWER(TRIM(a.utm_content)) = h_ad.utm_content_key
+LEFT JOIN hs_campaign h_camp
+  ON a.week_start = h_camp.week_start
+  AND LOWER(TRIM(a.campaign_name)) = h_camp.campaign_key
 """
 
 
