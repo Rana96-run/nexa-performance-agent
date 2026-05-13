@@ -532,6 +532,26 @@ if __name__ == "__main__":
                         help="Number of days to look back (positional)")
     parser.add_argument("--start-date", type=lambda s: date.fromisoformat(s),
                         default=None, help="Explicit start date YYYY-MM-DD")
+    parser.add_argument("--no-rebuild", action="store_true",
+                        help="Skip auto-rebuild of materialized views after backfill")
     args = parser.parse_args()
-    n = collect_and_write(days=args.days, start_date=args.start_date)
-    print(f"HubSpot Deals backfill complete: {n} rows")
+    # Phase 3 (stability): collector mutex prevents parallel runs from racing
+    # through DELETE-then-INSERT and causing duplicate rows in BQ.
+    from collectors._lock import collector_lock, CollectorLockBusy
+    try:
+        with collector_lock("hubspot_deals_sync"):
+            n = collect_and_write(days=args.days, start_date=args.start_date)
+            print(f"HubSpot Deals backfill complete: {n} rows")
+    except CollectorLockBusy as e:
+        print(f"[lock] BUSY — refusing to run: {e}")
+        sys.exit(2)
+    # Phase 2 (stability): auto-rebuild materialized views so deal counts +
+    # ROAS reflect the new partition immediately. Without this, Hex shows
+    # stale numbers until the next 6h scheduler cycle.
+    if not args.no_rebuild:
+        try:
+            from collectors.views import materialize_heavy_views
+            print("\n[auto-rebuild] refreshing materialized views...")
+            materialize_heavy_views()
+        except Exception as e:
+            print(f"[auto-rebuild] failed (non-fatal): {e}")

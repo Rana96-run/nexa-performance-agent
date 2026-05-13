@@ -1041,5 +1041,21 @@ if __name__ == "__main__":
 
     else:  # backfill / legacy
         days = int(sys.argv[1]) if sys.argv[1].isdigit() else None
-        n = collect_and_write(days=days)
-        print(f"HubSpot Lead module backfill complete: {n} rows")
+        # Phase 3 (stability): mutex to prevent parallel runs from racing.
+        from collectors._lock import collector_lock, CollectorLockBusy
+        try:
+            with collector_lock("hubspot_leads_sync"):
+                n = collect_and_write(days=days)
+                print(f"HubSpot Lead module backfill complete: {n} rows")
+        except CollectorLockBusy as e:
+            print(f"[lock] BUSY — refusing to run: {e}")
+            sys.exit(2)
+        # Phase 2: auto-rebuild views so dashboards reflect new data
+        # without a separate manual step.
+        if "--no-rebuild" not in sys.argv:
+            try:
+                from collectors.views import materialize_heavy_views
+                print("\n[auto-rebuild] refreshing materialized views...")
+                materialize_heavy_views()
+            except Exception as e:
+                print(f"[auto-rebuild] failed (non-fatal): {e}")
