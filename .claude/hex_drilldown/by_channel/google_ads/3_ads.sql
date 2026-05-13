@@ -57,6 +57,9 @@ SELECT * FROM (
   FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
   WHERE channel = 'google_ads'
     AND date BETWEEN {{ start_date }} AND {{ end_date }}
+    -- Exclude PMax asset groups — they appear at adset grain, not ad grain.
+    -- PMax campaigns always contain 'pmax' in the campaign name.
+    AND LOWER(utm_campaign) NOT LIKE '%pmax%'
     {% if effective_campaign %}
     AND LOWER(TRIM(utm_campaign)) = LOWER(TRIM({{ effective_campaign }}))
     {% endif %}
