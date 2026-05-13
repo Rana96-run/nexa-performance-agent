@@ -504,6 +504,14 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
 
 ## Railway deployment (extended)
 
+- **Duplicate Railway project across personal + team workspace = double deployments.**
+  Both `rana96-run's Projects` (trial, ID `1b3ee05a`) and `Marketing Workspace` (pro, ID `57f124d0`)
+  had `nexa-performance-agent` connected to the same GitHub repo. Every git push triggered two
+  Railway deployments, causing double cron runs, doubled API calls (Meta/Snap/TikTok/HubSpot),
+  and Snapchat 429 storms. Fix (2026-05-13): deleted the service and project from the trial
+  personal workspace via Railway dashboard. The canonical project is `57f124d0` in Marketing Workspace.
+  Local `railway` CLI must always link to Marketing Workspace: `railway project link -p "nexa-performance-agent" -w "Marketing Workspace"`.
+
 - **`/tmp` is wiped on every redeploy.** `pending_approvals.json` (and any ephemeral state written to
   `/tmp`) is lost on each deploy. If the team pushes code between the 03:00 nightly approval post and
   morning reaction, the approval metadata is gone. Always write persistent state to BQ or the repo
