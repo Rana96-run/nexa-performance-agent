@@ -817,25 +817,25 @@ hubspot AS (
   WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
 ),
--- Strategy C: Adset-ID fallback — matches when UTM name changed but adset ID didn't.
--- Uses lead_ad_group_id (Meta native adset ID, currently NULL for TikTok).
--- Only fires when the name match (hubspot CTE) returns NULL leads.
+-- Strategy C: Exact adset-ID fallback — matches when UTM name changed but adset ID didn't.
+-- Uses lead_adgroup_id_sync (confirmed populated for TikTok + Meta Instantform leads).
+-- Only fires when the name match (hubspot A/B) returns NULL leads.
 hubspot_id_adset AS (
   SELECT
     date,
     qoyod_source                         AS channel,
-    lead_ad_group_id                     AS adset_id,
+    lead_adgroup_id_sync                 AS adset_id,
     SUM(leads_total)                     AS leads,
     SUM(leads_qualified)                 AS leads_qualified,
     SUM(leads_disqualified)              AS leads_disqualified
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-  WHERE lead_ad_group_id IS NOT NULL
+  WHERE lead_adgroup_id_sync IS NOT NULL
   GROUP BY 1, 2, 3
 ),
--- Strategy D: Campaign-ID fallback — uses lead_campaign_id_sync which HubSpot's
--- native TikTok + Meta integrations populate on every lead. Fires when both name
--- match (A/B) AND adset-ID match (C) miss. Joins at campaign grain — if multiple
--- adsets share a campaign, each gets the campaign-level leads (graceful degradation).
+-- Strategy D: Campaign-ID fallback — uses lead_campaign_id_sync. Fires when both
+-- name match (A/B) AND exact adset-ID match (C) miss. Joins at campaign grain;
+-- if multiple adsets share a campaign, all get the campaign-level leads (graceful
+-- degradation — e.g. adset renamed AND adset ID not found in lead data).
 -- Confirmed: TikTok + Meta numeric IDs match campaigns_daily.campaign_id exactly.
 hubspot_id_cam AS (
   SELECT
@@ -948,7 +948,7 @@ LEFT JOIN hubspot_id_cam h_cam
   ON h.leads IS NULL
   AND h_id.leads IS NULL
   AND p.date = h_cam.date
-  AND p.channel IN ('tiktok', 'meta')
+  AND p.channel IN ('tiktok', 'meta', 'snapchat')
   AND p.platform_campaign_id = h_cam.campaign_id
 LEFT JOIN utmproxy u
   ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
@@ -987,25 +987,24 @@ hubspot AS (
   WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4, 5
 ),
--- Strategy C: Ad-ID fallback — matches when UTM name changed but ad ID didn't.
--- Uses lead_ad_id (Meta native ad ID, currently NULL for TikTok).
--- Only fires when the name match (hubspot CTE) returns NULL leads.
+-- Strategy C: Exact ad-ID fallback — matches when UTM name changed but ad ID didn't.
+-- Uses lead_ad_id_sync (confirmed populated for TikTok + Meta Instantform leads).
+-- Only fires when the name match (hubspot A/B) returns NULL leads.
 hubspot_id_ad AS (
   SELECT
     date,
     qoyod_source                         AS channel,
-    lead_ad_id                           AS ad_id,
+    lead_ad_id_sync                      AS ad_id,
     SUM(leads_total)                     AS leads,
     SUM(leads_qualified)                 AS leads_qualified,
     SUM(leads_disqualified)              AS leads_disqualified
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-  WHERE lead_ad_id IS NOT NULL
+  WHERE lead_ad_id_sync IS NOT NULL
   GROUP BY 1, 2, 3
 ),
--- Strategy D: TikTok campaign-ID fallback — uses lead_campaign_id_sync.
--- Fires when both name match AND ad-ID match miss. Joins at campaign grain —
--- all ads in the campaign get the campaign-level leads as graceful degradation.
-hubspot_tiktok_cam AS (
+-- Strategy D: Campaign-ID fallback — uses lead_campaign_id_sync. Fires when both
+-- name match (A/B) AND exact ad-ID match (C) miss. Joins at campaign grain.
+hubspot_id_cam AS (
   SELECT
     date,
     lead_campaign_id_sync                AS campaign_id,
@@ -1110,12 +1109,12 @@ LEFT JOIN hubspot_id_ad h_id
   AND p.date = h_id.date
   AND p.channel = h_id.channel
   AND p.platform_ad_id = h_id.ad_id
--- Strategy D: TikTok campaign-ID fallback — fires when both name AND ad-ID miss
-LEFT JOIN hubspot_tiktok_cam h_cam
+-- Strategy D: Campaign-ID fallback (TikTok + Meta) — fires when both name AND ad-ID miss
+LEFT JOIN hubspot_id_cam h_cam
   ON h.leads IS NULL
   AND h_id.leads IS NULL
   AND p.date = h_cam.date
-  AND p.channel = 'tiktok'
+  AND p.channel IN ('tiktok', 'meta', 'snapchat')
   AND p.platform_campaign_id = h_cam.campaign_id
 LEFT JOIN deals d
   ON COALESCE(p.date, h.date) = d.date

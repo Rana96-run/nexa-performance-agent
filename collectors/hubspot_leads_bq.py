@@ -60,10 +60,16 @@ PROPERTIES = [
     #   Matches campaigns_daily.campaign_id for TikTok. Example: "1863074553592178".
     # campaign_id / ad_group_id / ad_id: Meta native IDs (NULL in practice as of
     #   2026-05-13 — kept for future use if Meta integration starts populating them).
-    "lead_campaign_id_sync",  # TikTok campaign ID — USE THIS for TikTok matching
-    "campaign_id",            # Meta campaign_id (currently NULL)
-    "ad_group_id",            # Meta adset id (currently NULL)
-    "ad_id",                  # Meta ad_id (currently NULL)
+    # Sync properties — populated by HubSpot's native TikTok + Meta integrations.
+    # All three IDs confirmed populated for Instantform leads (2026-05-13).
+    # Google Ads / Microsoft Ads leads have NULL here (come via website, not native forms).
+    "lead_campaign_id_sync",  # TikTok + Meta campaign ID (stable even after rename)
+    "lead_adgroup_id_sync",   # TikTok + Meta adset ID   (exact adset-level fallback)
+    "lead_ad_id_sync",        # TikTok + Meta ad ID      (exact ad-level fallback)
+    # Legacy native properties — always NULL in practice; kept for future use.
+    "campaign_id",
+    "ad_group_id",
+    "ad_id",
     # Fallback chain — see analysers/channel_inference.py.
     # The two *_traffic_source enums hold high-level source type
     # (PAID_SEARCH / PAID_SOCIAL / ORGANIC_SEARCH / ...).
@@ -331,10 +337,13 @@ def _ensure_table_exists():
         bigquery.SchemaField("lead_utm_source", "STRING"),
         bigquery.SchemaField("lead_utm_medium", "STRING"),
         bigquery.SchemaField("lead_utm_term", "STRING"),
-        # Platform IDs — stable fallback when UTM names change (TikTok, Meta).
-        # lead_campaign_id_sync: TikTok campaign ID (confirmed populated via HubSpot native sync).
-        # lead_campaign_id / ad_group_id / ad_id: Meta native IDs (NULL in practice, kept for future use).
+        # Sync IDs — populated by HubSpot's native TikTok + Meta integrations for Instantform leads.
+        # All three confirmed populated for TikTok + Meta (2026-05-13). NULL for Google/Microsoft/Snap.
+        # Used as Strategy C (exact adset/ad-level ID fallback) and Strategy D (campaign-level fallback).
         bigquery.SchemaField("lead_campaign_id_sync", "STRING"),
+        bigquery.SchemaField("lead_adgroup_id_sync",  "STRING"),
+        bigquery.SchemaField("lead_ad_id_sync",       "STRING"),
+        # Legacy native properties — always NULL in practice; kept for future use.
         bigquery.SchemaField("lead_campaign_id",  "STRING"),
         bigquery.SchemaField("lead_ad_group_id",  "STRING"),
         bigquery.SchemaField("lead_ad_id",        "STRING"),
@@ -352,7 +361,8 @@ def _ensure_table_exists():
     client.create_table(table, exists_ok=True)
     # ALTER existing table to add new columns if they don't exist yet.
     # create_table(exists_ok=True) won't update schema of an already-created table.
-    for col in ("lead_campaign_id_sync", "lead_campaign_id", "lead_ad_group_id", "lead_ad_id"):
+    for col in ("lead_campaign_id_sync", "lead_adgroup_id_sync", "lead_ad_id_sync",
+                "lead_campaign_id", "lead_ad_group_id", "lead_ad_id"):
         try:
             client.query(
                 f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
@@ -386,10 +396,12 @@ _INDIVIDUAL_SCHEMA = [
     _bq.SchemaField("lead_utm_medium",      "STRING"),
     _bq.SchemaField("lead_utm_term",        "STRING"),
     # Platform IDs — stable fallback when UTM names change (TikTok, Meta)
-    _bq.SchemaField("lead_campaign_id_sync", "STRING"),
-    _bq.SchemaField("lead_campaign_id",     "STRING"),
-    _bq.SchemaField("lead_ad_group_id",     "STRING"),
-    _bq.SchemaField("lead_ad_id",           "STRING"),
+    _bq.SchemaField("lead_campaign_id_sync",  "STRING"),
+    _bq.SchemaField("lead_adgroup_id_sync",  "STRING"),
+    _bq.SchemaField("lead_ad_id_sync",       "STRING"),
+    _bq.SchemaField("lead_campaign_id",      "STRING"),
+    _bq.SchemaField("lead_ad_group_id",      "STRING"),
+    _bq.SchemaField("lead_ad_id",            "STRING"),
     _bq.SchemaField("top_disq_reason",      "STRING"),
     _bq.SchemaField("top_disq_sub_reason",  "STRING"),
     _bq.SchemaField("updated_at",           "TIMESTAMP"),
@@ -519,10 +531,12 @@ def _row_from_lead(lead: dict) -> dict | None:
         "lead_utm_medium":     (p.get("lead_utm_medium") or "").strip() or None,
         "lead_utm_term":       (p.get("lead_utm_term") or "").strip() or None,
         # Platform IDs — stable fallback when names change
-        "lead_campaign_id_sync": (p.get("lead_campaign_id_sync") or "").strip() or None,
-        "lead_campaign_id":    (p.get("campaign_id") or "").strip() or None,
-        "lead_ad_group_id":    (p.get("ad_group_id") or "").strip() or None,
-        "lead_ad_id":          (p.get("ad_id") or "").strip() or None,
+        "lead_campaign_id_sync":  (p.get("lead_campaign_id_sync")  or "").strip() or None,
+        "lead_adgroup_id_sync":   (p.get("lead_adgroup_id_sync")   or "").strip() or None,
+        "lead_ad_id_sync":        (p.get("lead_ad_id_sync")        or "").strip() or None,
+        "lead_campaign_id":       (p.get("campaign_id")            or "").strip() or None,
+        "lead_ad_group_id":       (p.get("ad_group_id")            or "").strip() or None,
+        "lead_ad_id":             (p.get("ad_id")                  or "").strip() or None,
         "top_disq_reason":     disq_reason,
         "top_disq_sub_reason": disq_sub,
         "updated_at":          datetime.now(timezone.utc).isoformat(),
@@ -599,21 +613,27 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
         # First-seen ID wins (consistent within a name bucket)
         if key not in bucket_ids:
             bucket_ids[key] = {
-                "campaign_id_sync": getattr(row, "lead_campaign_id_sync", None),
-                "campaign_id":  getattr(row, "lead_campaign_id",  None),
-                "ad_group_id":  getattr(row, "lead_ad_group_id",  None),
-                "ad_id":        getattr(row, "lead_ad_id",         None),
+                "campaign_id_sync":  getattr(row, "lead_campaign_id_sync", None),
+                "adgroup_id_sync":   getattr(row, "lead_adgroup_id_sync",  None),
+                "ad_id_sync":        getattr(row, "lead_ad_id_sync",        None),
+                "campaign_id":       getattr(row, "lead_campaign_id",       None),
+                "ad_group_id":       getattr(row, "lead_ad_group_id",       None),
+                "ad_id":             getattr(row, "lead_ad_id",             None),
             }
         else:
             ids = bucket_ids[key]
             if not ids["campaign_id_sync"]:
-                ids["campaign_id_sync"] = getattr(row, "lead_campaign_id_sync", None)
+                ids["campaign_id_sync"]  = getattr(row, "lead_campaign_id_sync", None)
+            if not ids["adgroup_id_sync"]:
+                ids["adgroup_id_sync"]   = getattr(row, "lead_adgroup_id_sync",  None)
+            if not ids["ad_id_sync"]:
+                ids["ad_id_sync"]        = getattr(row, "lead_ad_id_sync",        None)
             if not ids["campaign_id"]:
-                ids["campaign_id"] = getattr(row, "lead_campaign_id",  None)
+                ids["campaign_id"]       = getattr(row, "lead_campaign_id",       None)
             if not ids["ad_group_id"]:
-                ids["ad_group_id"] = getattr(row, "lead_ad_group_id",  None)
+                ids["ad_group_id"]       = getattr(row, "lead_ad_group_id",       None)
             if not ids["ad_id"]:
-                ids["ad_id"]       = getattr(row, "lead_ad_id",         None)
+                ids["ad_id"]             = getattr(row, "lead_ad_id",             None)
 
     now = datetime.now(timezone.utc).isoformat()
     daily_rows = []
@@ -633,9 +653,11 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
             "lead_utm_source":     utm_s,
             "lead_utm_medium":     utm_m,
             "lead_utm_term":       utm_t,
-            "lead_campaign_id_sync": ids.get("campaign_id_sync"),
-            "lead_campaign_id":    ids.get("campaign_id"),
-            "lead_ad_group_id":    ids.get("ad_group_id"),
+            "lead_campaign_id_sync":  ids.get("campaign_id_sync"),
+            "lead_adgroup_id_sync":   ids.get("adgroup_id_sync"),
+            "lead_ad_id_sync":        ids.get("ad_id_sync"),
+            "lead_campaign_id":       ids.get("campaign_id"),
+            "lead_ad_group_id":       ids.get("ad_group_id"),
             "lead_ad_id":          ids.get("ad_id"),
             "leads_total":         b["total"],
             "leads_qualified":     b["qualified"],
