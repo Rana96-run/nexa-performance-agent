@@ -920,7 +920,9 @@ WITH platform AS (
     -- utm_content column holds the resolved _adname custom-param value.
     -- Fall back to ad_name for channels without custom params.
     COALESCE(utm_content, ad_name) AS utm_content,
-    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
+    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
+    -- creative_type: one value per ad; MAX picks the non-null value across days
+    MAX(creative_type) AS creative_type
   FROM `{PROJECT_ID}.{DATASET}.ads_daily`
   GROUP BY 1, 2, 3, 4, 5
 ),
@@ -1013,6 +1015,7 @@ SELECT
   SAFE_DIVIDE(p.spend, NULLIF(h.leads_qualified, 0))         AS CPQL,
   SAFE_DIVIDE(d.revenue_won,         NULLIF(p.spend, 0))     AS ROAS,
   SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(p.spend, 0))     AS new_biz_roas,
+  p.creative_type                                             AS creative_type,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')            AS data_source
 FROM platform p
 FULL OUTER JOIN hubspot h
