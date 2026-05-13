@@ -164,48 +164,65 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False):
 def _ad_metadata_lookup(account_id: str) -> dict[str, dict]:
     """Return {ad_id: {creative_type, status}} for every ad in the account.
 
-    Uses the Ads API (not Insights) — one call per account, zero per row.
+    Two-step: (1) get ads with effective_status + creative id, (2) batch-fetch
+    AdCreative object_type. Joined on creative_id → ad_id.
 
-    creative_type mapping (from Meta effective_object_story_type / object_type):
-      *VIDEO*          → video
-      *CAROUSEL* / *MULTI_SHARE* → carousel
-      *COLLECTION*     → collection
-      *PHOTO* / LINK / IMAGE → image
-      else             → other
+    Avoids requesting nested creative fields on the ads endpoint (not permitted).
+    creative_type mapping (from AdCreative.object_type):
+      VIDEO                     → video
+      CAROUSEL / *MULTI_SHARE*  → carousel
+      *COLLECTION*              → collection
+      PAGE_PHOTO / PHOTO / LINK → image
+      else                      → other
 
-    status: Meta effective_status — ACTIVE | PAUSED | ARCHIVED | DELETED |
-      CAMPAIGN_PAUSED | ADSET_PAUSED (we normalise to ACTIVE / PAUSED / OTHER)
+    status: Meta effective_status normalised to ACTIVE / PAUSED / OTHER
     """
-    meta: dict[str, dict] = {}
+    from facebook_business.adobjects.adcreative import AdCreative
+    result: dict[str, dict] = {}
     try:
-        ads = AdAccount(account_id).get_ads(
-            fields=["id", "effective_status",
-                    "creative{object_type,effective_object_story_type}"]
-        )
+        # Step 1: get all ads — effective_status + creative ID
+        ads = AdAccount(account_id).get_ads(fields=["id", "effective_status", "creative"])
+        ad_creative_map: dict[str, str] = {}   # {ad_id: creative_id}
         for ad in ads:
-            creative = ad.get("creative") or {}
-            raw = (
-                creative.get("effective_object_story_type")
-                or creative.get("object_type")
-                or ""
-            ).upper()
-            if "VIDEO" in raw:
-                ctype = "video"
-            elif "CAROUSEL" in raw or "MULTI_SHARE" in raw:
-                ctype = "carousel"
-            elif "COLLECTION" in raw:
-                ctype = "collection"
-            elif "PHOTO" in raw or "IMAGE" in raw or raw == "LINK":
-                ctype = "image"
-            else:
-                ctype = "other"
+            ad_id = str(ad["id"])
             eff = (ad.get("effective_status") or "").upper()
             status = "ACTIVE" if eff == "ACTIVE" else ("PAUSED" if "PAUSE" in eff else (eff or None))
-            meta[str(ad["id"])] = {"creative_type": ctype, "status": status}
-        print(f"[meta]   ad metadata fetched for {account_id}: {len(meta)} ads")
+            creative_id = str((ad.get("creative") or {}).get("id") or "")
+            result[ad_id] = {"creative_type": None, "status": status}
+            if creative_id:
+                ad_creative_map[creative_id] = ad_id
+
+        # Step 2: batch-fetch creative object_type for all unique creative IDs
+        creative_ids = list(ad_creative_map.keys())
+        BATCH = 50   # stay well under Graph API batch limit
+        for i in range(0, len(creative_ids), BATCH):
+            chunk = creative_ids[i:i + BATCH]
+            for cid in chunk:
+                try:
+                    cr = AdCreative(cid).api_get(fields=["id", "object_type"])
+                    raw = (cr.get("object_type") or "").upper()
+                    if "VIDEO" in raw:
+                        ctype = "video"
+                    elif "CAROUSEL" in raw or "MULTI_SHARE" in raw:
+                        ctype = "carousel"
+                    elif "COLLECTION" in raw:
+                        ctype = "collection"
+                    elif "PHOTO" in raw or raw in ("LINK", "IMAGE"):
+                        ctype = "image"
+                    elif raw:
+                        ctype = "other"
+                    else:
+                        ctype = None
+                    ad_id = ad_creative_map.get(cid)
+                    if ad_id and ad_id in result:
+                        result[ad_id]["creative_type"] = ctype
+                except Exception:
+                    pass   # single creative failure doesn't abort the whole batch
+
+        print(f"[meta]   ad metadata fetched for {account_id}: {len(result)} ads")
     except Exception as e:
         print(f"[meta]   ad metadata lookup failed for {account_id}: {e}")
-    return meta
+    return result
 
 
 # ── Ad level → ads_daily ─────────────────────────────────────────────────────
