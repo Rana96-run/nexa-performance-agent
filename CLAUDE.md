@@ -63,6 +63,28 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
   "running — will confirm" instead. This rule exists because premature "done"
   statements on 2026-05-11 caused the same fix to be re-done 3 times.
 
+- **Use fresh keys + schemas + memory for every verification, never
+  memory.** Before any dedupe check, freshness query, reconciliation,
+  or "verify before reporting" step:
+  1. Read the live table schema (`client.get_table(...).schema`) — not
+     your cached recollection of columns. Schemas evolve.
+  2. Read the collector's actual `key_fields=[...]` list for the table —
+     dedupe checks with partial keys produce false alarms.
+  3. Re-read `memory/01_architecture.md` if you haven't this session —
+     table names, view names, and recent migrations change.
+  4. Pull source-of-truth side live (HubSpot API, ad platform API) — not
+     a user screenshot or a yesterday's BQ snapshot.
+
+  Established 2026-05-13 after I:
+   - reported "1.073x leads duplication" from a partial-key dedupe check
+     (false alarm — full key was 1.000x clean)
+   - tried to query `paid_channel_daily.leads` after it was renamed to
+     `leads_total` (memory was stale)
+   - asked the user to verify HubSpot manually instead of pulling via
+     API myself (had the token the whole time)
+
+  See `.claude/skills/bq-verify.md` for the per-check protocol.
+
 - **Always reconcile BQ to HubSpot on a 7-day sample after any deal/lead
   schema, view, or attribution change.** Before declaring "done" on anything
   touching `hubspot_deals_daily`, `hubspot_leads_module_daily`, or any view
