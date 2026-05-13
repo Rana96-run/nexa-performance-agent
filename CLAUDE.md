@@ -74,6 +74,15 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
   samples make discrepancies obvious; wide samples hide them. Established on
   2026-05-13 after deals createdate migration silently drifted from HubSpot.
 
+  **Verification is YOUR job, not the user's.** Never write "please verify in
+  HubSpot" or "confirm these numbers" — you have the HubSpot API token
+  (`HUBSPOT_ACCESS_TOKEN`). Pull the data yourself via the API in a windowed
+  search, apply the same filters (channel × pipeline × createdate range),
+  compare to BQ, report the deltas. The user shouldn't have to open HubSpot
+  to validate your work. On 2026-05-13 I declared deals work "done" and asked
+  the user to verify — they pushed back, and a direct API check immediately
+  revealed 1.84× duplication that should have been caught before reporting.
+
 - **No streaming BQ inserts.** Use `load_table_from_file(BytesIO(ndjson))`
   always. See `memory/08_pitfalls.md`.
 - **HubSpot is read-only** unless Amar explicitly approves in Slack.
