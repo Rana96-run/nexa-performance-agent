@@ -3,6 +3,34 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
+## P1 — Option B ID-first attribution rebuild (DONE — 2026-05-14)
+
+`paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance` now
+join leads + deals on `*_id_sync` first, with name-fallback for channels that
+don't populate sync IDs (Google/Bing/LinkedIn website forms).
+
+Verified outcomes:
+- Snapchat duplicate-name campaign correctly separates into 2 rows by `campaign_id`
+  (one $582 spend + 17 leads, one $0 spend + 1 deal won)
+- Google name-fallback reconciles within 0.5% to HubSpot
+- Snapchat ID-attribution reconciles within ~2.5% sync lag
+
+Deal sync columns added to `hubspot_deals_daily`:
+`deal_campaign_id_sync`, `deal_adgroup_id_sync`, `deal_ad_id_sync`.
+YTD backfill complete (15,431 rows). Coverage: Snap 94%, Meta 88%, TikTok 87%,
+Google 1% (expected — those go through name-fallback).
+
+### Hex follow-up (manual — flagged for Amar)
+
+Hex dashboards reading `deals_won`, `revenue_won`, `roas`, `amount_total`,
+`amount_lost`, `amount_open` from the 3 views will break. Rename to:
+- `deals_won` → `new_biz_deals_won`
+- `revenue_won` → `new_biz_revenue_won`
+- `roas` → `new_biz_roas`
+- etc.
+The 3 views now expose `campaign_id` (new column on `paid_channel_campaign_daily`)
+— useful for disambiguating duplicate-named campaigns.
+
 ## P0 — Unblocks everything else
 
 - [ ] **Run YouTube OAuth** — `python scripts/youtube_oauth.py`. Writes
