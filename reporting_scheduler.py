@@ -334,6 +334,22 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] Hex refresh failed (non-fatal): {e}")
 
+    # ── Daily BQ ↔ HubSpot reconciliation (Phase 1 stability) ────────────────
+    # Runs ONCE per day (only on the morning Riyadh cycle = utc_hour 5).
+    # Catches silent collector failures, stale views, schema drift within 24h.
+    # Posts to #approvals only when drift exceeds threshold; otherwise silent.
+    if utc_hour == 5:  # 05:00 UTC = 08:00 Riyadh
+        try:
+            from scripts.daily_reconciliation import run as run_reconciliation
+            run_reconciliation(days_back=7, post_to_slack=True)
+        except Exception as e:
+            print(f"[scheduler] daily reconciliation failed (non-fatal): {e}")
+            log_activity_async(
+                role="bq_refresh", action="daily_reconciliation",
+                status="failed",
+                details={"error": str(e)[:300]},
+            )
+
     ended = datetime.now(timezone.utc)
     elapsed = (ended - started).total_seconds()
     print(f"\n[scheduler] Done in {elapsed:.0f}s")
