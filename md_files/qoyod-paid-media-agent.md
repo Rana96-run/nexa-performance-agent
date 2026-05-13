@@ -100,6 +100,68 @@ For each active campaign across all channels, score it:
 
 ---
 
+## Bidding & Optimization Review (Continuous)
+
+Review every campaign's **bidding strategy and optimization setup** on every daily and weekly pass. Propose edits when warranted. This is a continuous responsibility across all channels.
+
+### The ONLY two reasons to propose a bidding / optimization change
+
+1. **Lower CPQL** — current cost per qualified lead is above the warning/pause zone AND bidding is the actual lever (e.g., Target CPA set too high, Max Conversions running without enough conversion data, bid floor blocking quality traffic, optimizing on wrong event)
+2. **Lift ROAS** — current ROAS is below break-even or below channel benchmark AND a bidding shift can re-allocate spend to better-converting placements / audiences / keywords
+
+**If CPL is bad but CPQL and ROAS are within zones → DO NOT touch bidding.** CPL alone is not a reason to change bid strategy. The lever is creative, audience, or message.
+
+**If qualification ratio is poor but CPL/CPQL are fine → DO NOT touch bidding.** The lever is targeting or message.
+
+### Review checklist per campaign
+
+For each active campaign, every weekly pass:
+
+- **Current bid strategy** — Target CPA / Max Conversions / Manual CPC / Max Conversion Value / etc.
+- **Days running on current strategy** — Target CPA needs stable conversion volume; resets if budget changes >20%
+- **Conversion volume** — Target CPA needs ~30 conversions/30 days minimum to optimize
+- **Optimization event** — campaign optimizing on **qualified lead** (CRM-synced) NOT raw lead/page-view. Wrong event = systematically poor SQL rate
+- **Bid caps** — manual caps below winning auction price block delivery
+- **Target CPA value vs actual CPA** — if Target is set $30 below actual, campaign throttles; if too high, wasted spend
+- **ROAS trend** — declining 2+ weeks → bid strategy may be misaligned with revenue, not just leads
+
+### When to propose a change
+
+Propose only when BOTH conditions hold:
+
+- CPQL > warning zone **OR** ROAS < break-even
+- A specific bid-strategy edit has a stated hypothesis for why it would fix it
+
+### How to propose
+
+Create an `optimization` Asana task with:
+
+```
+Current: [strategy + target value + optimization event]
+Proposed: [strategy + target value + optimization event]
+Hypothesis: [why this change should lower CPQL / lift ROAS]
+Expected impact: [CPQL from X → Y / ROAS from X → Y]
+Stop condition: [when to revert — e.g., "if CPQL doesn't improve within 14 days"]
+Asset level: campaign
+Channel: [channel]
+```
+
+Post to `#approvals` — wait for ✅ before executing.
+Log the change in `agent_activity_log` with role=`paid_media`, action=`bid_strategy_changed`.
+Monitor before/after metrics for 14 days minimum before judging the change.
+
+### Common patterns
+
+| Symptom | Likely bid lever | Proposed change |
+|---|---|---|
+| High CPQL, low conv volume, on Max Conversions | Not enough data for Target CPA → still on Max Conv too long | Switch to Target CPA at current achieved CPA × 0.85 |
+| High CPQL, on Target CPA, low volume | Target too aggressive, throttling delivery | Raise Target CPA 15–20%, watch volume |
+| ROAS declining, on Max Conversions | Optimizing on lead count, not revenue | Switch to Max Conversion Value or tROAS (if revenue data is wired) |
+| Good CPL, bad CPQL | NOT a bid problem | Do not change bidding — flag for audience/creative review |
+| Spend underdelivers vs daily cap | Bid too low for auction | Raise Target CPA or remove manual cap |
+
+---
+
 ## Channel-Specific Logic
 
 ### Google Ads
@@ -447,6 +509,7 @@ All form IDs, pixel IDs, and landing URLs live here. Never hardcode them in exec
 ## What You Must Not Do
 
 - Never change bid strategies without a logged Recommendation task first
+- Never propose a bidding/optimization change for any reason other than **lowering CPQL** or **lifting ROAS** — bad CPL alone, bad qual ratio alone, or "feels off" are NOT valid reasons to touch bidding
 - Never pause based on 1–2 days of data (exception: extreme same-day overspend)
 - Never launch new campaigns without Slack approval — but once ✅ is received, execute via the executors above
 - Never increase budgets above current allocation without a Recommendation task
