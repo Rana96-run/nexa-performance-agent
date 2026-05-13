@@ -63,6 +63,17 @@ A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically
   "running — will confirm" instead. This rule exists because premature "done"
   statements on 2026-05-11 caused the same fix to be re-done 3 times.
 
+- **Always reconcile BQ to HubSpot on a 7-day sample after any deal/lead
+  schema, view, or attribution change.** Before declaring "done" on anything
+  touching `hubspot_deals_daily`, `hubspot_leads_module_daily`, or any view
+  that aggregates them: pull last-7-day counts and amounts from BQ for the
+  relevant filter (channel × pipeline × stage), then compare to HubSpot's own
+  UI for the same window. Match within sync timing (~1%) is the bar. If they
+  don't reconcile, the change is NOT done — fix the gap before reporting back.
+  Use a SMALL sample (7 days, one pipeline, one channel) not a wide one — small
+  samples make discrepancies obvious; wide samples hide them. Established on
+  2026-05-13 after deals createdate migration silently drifted from HubSpot.
+
 - **No streaming BQ inserts.** Use `load_table_from_file(BytesIO(ndjson))`
   always. See `memory/08_pitfalls.md`.
 - **HubSpot is read-only** unless Amar explicitly approves in Slack.
