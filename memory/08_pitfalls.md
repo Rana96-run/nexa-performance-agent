@@ -570,6 +570,30 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   Looker Studio layer above them (charts, data sources, filters, scorecards) requires manual UI work
   at lookerstudio.google.com. Hex is the canonical automated dashboard.
 
+## TikTok lead attribution — correct HubSpot property for campaign ID
+
+- **`campaign_id` / `ad_group_id` / `ad_id` on the Lead Module (0-136) are NULL for TikTok.**
+  These properties exist but are never populated by HubSpot's native TikTok integration.
+- **`lead_campaign_id_sync` IS populated** with the TikTok campaign ID (e.g. `1863074553592178`).
+  It matches `campaigns_daily.campaign_id` exactly. This is the correct property for ID-based
+  campaign matching (Strategy D in v_adset_performance / v_ad_performance).
+- **No adset-ID or ad-ID equivalent exists** for TikTok on the Lead Module. `lead_campaign_id_sync`
+  is campaign-grain only. If multiple adsets belong to the same campaign, the ID fallback spreads
+  campaign-level leads to all adsets (graceful degradation — better than 0).
+- **Meta native `campaign_id` etc. are also NULL** in practice as of 2026-05-13. Kept in the
+  collector for future use if Meta's integration starts populating them.
+- Established 2026-05-13 via `scripts/_check_tiktok_lead.py` deep-probe of HubSpot API.
+
+## BQ views silently become TABLE after materialisation
+
+- **`CREATE OR REPLACE VIEW` fails with "is currently a TABLE"** when a BQ view has previously
+  been materialised (e.g. by an ETL process, or `bq_writer.py bootstrap`). The fix is to DELETE
+  the table first, then run `CREATE OR REPLACE VIEW`. `create_views()` in `bq_writer.py` now
+  auto-detects `table_type == "TABLE"` and drops before recreating.
+- Views affected: `utm_paid_attribution_daily`, `v_adset_performance`, `v_ad_performance`
+  were found as TABLE in production. Now recreated as VIEWs (2026-05-13).
+- To fix manually: `python -m scripts._fix_views` or re-run the `create_views()` function.
+
 ## Freshness checks
 
 - **Don't trust `updated_at` for freshness.** A collector that runs successfully but fetches
