@@ -52,6 +52,13 @@ PROPERTIES = [
     "lead_qoyod_source",
     "lead_utm_campaign", "lead_utm_audience", "lead_utm_content",
     "lead_utm_term", "lead_utm_source", "lead_utm_medium",
+    # Platform IDs — stable even when campaign/adset/ad names change.
+    # TikTok (and Meta) populate these on every lead form submission.
+    # Used as Strategy-C fallback in v_adset_performance / v_ad_performance
+    # when name-based UTM matching returns 0 leads (e.g. after a rename).
+    "campaign_id",   # TikTok campaign_id / Meta campaign_id
+    "ad_group_id",   # TikTok ad group id / Meta adset id
+    "ad_id",         # TikTok ad_id / Meta ad_id
     # Fallback chain — see analysers/channel_inference.py.
     # The two *_traffic_source enums hold high-level source type
     # (PAID_SEARCH / PAID_SOCIAL / ORGANIC_SEARCH / ...).
@@ -319,6 +326,10 @@ def _ensure_table_exists():
         bigquery.SchemaField("lead_utm_source", "STRING"),
         bigquery.SchemaField("lead_utm_medium", "STRING"),
         bigquery.SchemaField("lead_utm_term", "STRING"),
+        # Platform IDs — stable fallback when UTM names change (TikTok, Meta)
+        bigquery.SchemaField("lead_campaign_id",  "STRING"),
+        bigquery.SchemaField("lead_ad_group_id",  "STRING"),
+        bigquery.SchemaField("lead_ad_id",        "STRING"),
         bigquery.SchemaField("leads_total", "INT64"),
         bigquery.SchemaField("leads_qualified", "INT64"),
         bigquery.SchemaField("leads_disqualified", "INT64"),
@@ -331,6 +342,15 @@ def _ensure_table_exists():
     table.time_partitioning = bigquery.TimePartitioning(field="date")
     table.clustering_fields = ["qoyod_source", "pipeline"]
     client.create_table(table, exists_ok=True)
+    # ALTER existing table to add new columns if they don't exist yet.
+    # create_table(exists_ok=True) won't update schema of an already-created table.
+    for col in ("lead_campaign_id", "lead_ad_group_id", "lead_ad_id"):
+        try:
+            client.query(
+                f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
+            ).result()
+        except Exception:
+            pass  # column already exists or ALTER not supported — upsert ALLOW_FIELD_ADDITION handles it
 
 
 # ── Cursor-based CDC (exact HubSpot mirror) ──────────────────────────────────
@@ -357,6 +377,10 @@ _INDIVIDUAL_SCHEMA = [
     _bq.SchemaField("lead_utm_source",      "STRING"),
     _bq.SchemaField("lead_utm_medium",      "STRING"),
     _bq.SchemaField("lead_utm_term",        "STRING"),
+    # Platform IDs — stable fallback when UTM names change (TikTok, Meta)
+    _bq.SchemaField("lead_campaign_id",     "STRING"),
+    _bq.SchemaField("lead_ad_group_id",     "STRING"),
+    _bq.SchemaField("lead_ad_id",           "STRING"),
     _bq.SchemaField("top_disq_reason",      "STRING"),
     _bq.SchemaField("top_disq_sub_reason",  "STRING"),
     _bq.SchemaField("updated_at",           "TIMESTAMP"),
@@ -485,6 +509,10 @@ def _row_from_lead(lead: dict) -> dict | None:
         "lead_utm_source":     (p.get("lead_utm_source") or "").strip() or None,
         "lead_utm_medium":     (p.get("lead_utm_medium") or "").strip() or None,
         "lead_utm_term":       (p.get("lead_utm_term") or "").strip() or None,
+        # Platform IDs — stable fallback when names change
+        "lead_campaign_id":    (p.get("campaign_id") or "").strip() or None,
+        "lead_ad_group_id":    (p.get("ad_group_id") or "").strip() or None,
+        "lead_ad_id":          (p.get("ad_id") or "").strip() or None,
         "top_disq_reason":     disq_reason,
         "top_disq_sub_reason": disq_sub,
         "updated_at":          datetime.now(timezone.utc).isoformat(),
@@ -529,6 +557,10 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
         "total": 0, "qualified": 0, "disqualified": 0, "open": 0,
         "disq_reasons": defaultdict(int), "disq_sub_reasons": defaultdict(int),
     })
+    # Capture first-seen platform IDs per bucket — IDs are stable even when
+    # campaign/adset/ad names change (TikTok, Meta).  Within a bucket, all
+    # leads share the same utm name so they should share the same platform ID.
+    bucket_ids: dict = {}
     for row in rows_iter:
         key = (
             str(row.hs_createdate),
@@ -554,6 +586,21 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
                 b["disq_sub_reasons"][row.top_disq_sub_reason] += 1
         if row.is_open:
             b["open"] += 1
+        # First-seen ID wins (consistent within a name bucket)
+        if key not in bucket_ids:
+            bucket_ids[key] = {
+                "campaign_id":  getattr(row, "lead_campaign_id",  None),
+                "ad_group_id":  getattr(row, "lead_ad_group_id",  None),
+                "ad_id":        getattr(row, "lead_ad_id",         None),
+            }
+        else:
+            ids = bucket_ids[key]
+            if not ids["campaign_id"]:
+                ids["campaign_id"] = getattr(row, "lead_campaign_id",  None)
+            if not ids["ad_group_id"]:
+                ids["ad_group_id"] = getattr(row, "lead_ad_group_id",  None)
+            if not ids["ad_id"]:
+                ids["ad_id"]       = getattr(row, "lead_ad_id",         None)
 
     now = datetime.now(timezone.utc).isoformat()
     daily_rows = []
@@ -561,6 +608,7 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
         d, src, pipeline, stage, utm_c, utm_a, utm_co, utm_s, utm_m, utm_t = key
         top_reason = max(b["disq_reasons"], key=b["disq_reasons"].get) if b["disq_reasons"] else None
         top_sub    = max(b["disq_sub_reasons"], key=b["disq_sub_reasons"].get) if b["disq_sub_reasons"] else None
+        ids = bucket_ids.get(key, {})
         daily_rows.append({
             "date":                d,
             "qoyod_source":        src,
@@ -572,6 +620,9 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
             "lead_utm_source":     utm_s,
             "lead_utm_medium":     utm_m,
             "lead_utm_term":       utm_t,
+            "lead_campaign_id":    ids.get("campaign_id"),
+            "lead_ad_group_id":    ids.get("ad_group_id"),
+            "lead_ad_id":          ids.get("ad_id"),
             "leads_total":         b["total"],
             "leads_qualified":     b["qualified"],
             "leads_disqualified":  b["disqualified"],
@@ -751,6 +802,7 @@ def _flush_individual(client, rows: list[dict], label: str = "leads-initial") ->
         schema=_INDIVIDUAL_SCHEMA,
         source_format=_bq.SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition="WRITE_APPEND",
+        schema_update_options=[_bq.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
     )
     client.load_table_from_file(BytesIO(ndjson), table_id, job_config=job_cfg).result()
     print(f"[{label}] flushed {len(rows)} rows")

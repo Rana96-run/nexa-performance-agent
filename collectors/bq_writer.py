@@ -801,6 +801,8 @@ WITH platform AS (
     -- Microsoft, adset_name for Meta/TikTok/Snap). Fall back to adset_name so
     -- channels that don't populate utm_audience still show up.
     COALESCE(utm_audience, adset_name) AS utm_audience,
+    -- adset_id kept for Strategy-C ID-based lead fallback
+    ANY_VALUE(adset_id) AS platform_adset_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
   FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
   GROUP BY 1, 2, 3, 4
@@ -813,6 +815,20 @@ hubspot AS (
   FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
   WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
+),
+-- Strategy C: ID-based fallback — matches when UTM name changed but platform ID didn't.
+-- Only fires when the name match (hubspot CTE) returns NULL leads.
+hubspot_id_adset AS (
+  SELECT
+    date,
+    qoyod_source                         AS channel,
+    lead_ad_group_id                     AS adset_id,
+    SUM(leads_total)                     AS leads,
+    SUM(leads_qualified)                 AS leads_qualified,
+    SUM(leads_disqualified)              AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_ad_group_id IS NOT NULL
+  GROUP BY 1, 2, 3
 ),
 deals AS (
   SELECT date, qoyod_source AS channel, deal_utm_campaign AS utm_campaign,
@@ -869,9 +885,10 @@ SELECT
   COALESCE(p.spend, u.spend, 0)             AS spend,
   COALESCE(p.impressions, 0)                AS impressions,
   COALESCE(p.clicks, 0)                     AS clicks,
-  COALESCE(h.leads, 0)                      AS leads,
-  COALESCE(h.leads_qualified, 0)            AS leads_qualified,
-  COALESCE(h.leads_disqualified, 0)         AS leads_disqualified,
+  -- Strategy A/B: name match; Strategy C: ID fallback when name match returns nothing
+  COALESCE(h.leads,              h_id.leads,              0) AS leads,
+  COALESCE(h.leads_qualified,    h_id.leads_qualified,    0) AS leads_qualified,
+  COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0) AS leads_disqualified,
   COALESCE(d.deals, 0)                      AS deals,
   COALESCE(d.deals_won,  0)                 AS deals_won,
   COALESCE(d.deals_lost, 0)                 AS deals_lost,
@@ -889,12 +906,12 @@ SELECT
   COALESCE(d.new_biz_amount_lost, 0)        AS new_biz_amount_lost,
   COALESCE(d.new_biz_amount_open, 0)        AS new_biz_amount_open,
   COALESCE(d.new_biz_amount_total,0)        AS new_biz_amount_total,
-  -- Ratios
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
+  -- Ratios (use whichever lead source matched)
+  SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS qual_rate,
+  SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS disq_rate,
   -- Cost metrics
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))            AS CPL,
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0))  AS CPQL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads, h_id.leads), 0))            AS CPL,
+  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified), 0))  AS CPQL,
   SAFE_DIVIDE(d.revenue_won,         NULLIF(COALESCE(p.spend, u.spend), 0)) AS ROAS,
   SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
@@ -902,6 +919,12 @@ FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
   AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
+-- Strategy C: ID-based fallback — only activates when name match misses (h.leads IS NULL)
+LEFT JOIN hubspot_id_adset h_id
+  ON h.leads IS NULL
+  AND p.date = h_id.date
+  AND p.channel = h_id.channel
+  AND p.platform_adset_id = h_id.adset_id
 LEFT JOIN utmproxy u
   ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
 LEFT JOIN deals d
@@ -920,6 +943,8 @@ WITH platform AS (
     -- utm_content column holds the resolved _adname custom-param value.
     -- Fall back to ad_name for channels without custom params.
     COALESCE(utm_content, ad_name) AS utm_content,
+    -- ad_id kept for Strategy-C ID-based lead fallback
+    ANY_VALUE(ad_id) AS platform_ad_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
     -- creative_type + status: one value per ad; MAX picks the non-null value across days
     MAX(creative_type) AS creative_type,
@@ -935,6 +960,20 @@ hubspot AS (
   FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
   WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4, 5
+),
+-- Strategy C: ID-based fallback — matches when UTM name changed but platform ID didn't.
+-- Only fires when the name match (hubspot CTE) returns NULL leads.
+hubspot_id_ad AS (
+  SELECT
+    date,
+    qoyod_source                         AS channel,
+    lead_ad_id                           AS ad_id,
+    SUM(leads_total)                     AS leads,
+    SUM(leads_qualified)                 AS leads_qualified,
+    SUM(leads_disqualified)              AS leads_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  WHERE lead_ad_id IS NOT NULL
+  GROUP BY 1, 2, 3
 ),
 deals AS (
   SELECT date, qoyod_source AS channel,
@@ -990,9 +1029,10 @@ SELECT
   p.spend                                    AS spend,
   COALESCE(p.impressions, 0)                 AS impressions,
   COALESCE(p.clicks, 0)                      AS clicks,
-  COALESCE(h.leads, 0)                       AS leads,
-  COALESCE(h.leads_qualified, 0)             AS leads_qualified,
-  COALESCE(h.leads_disqualified, 0)          AS leads_disqualified,
+  -- Strategy A/B: name match; Strategy C: ID fallback when name match returns nothing
+  COALESCE(h.leads,              h_id.leads,              0) AS leads,
+  COALESCE(h.leads_qualified,    h_id.leads_qualified,    0) AS leads_qualified,
+  COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0) AS leads_disqualified,
   COALESCE(d.deals, 0)                        AS deals,
   COALESCE(d.deals_won, 0)                    AS deals_won,
   COALESCE(d.deals_lost, 0)                   AS deals_lost,
@@ -1010,10 +1050,10 @@ SELECT
   COALESCE(d.new_biz_amount_lost, 0)          AS new_biz_amount_lost,
   COALESCE(d.new_biz_amount_open, 0)          AS new_biz_amount_open,
   COALESCE(d.new_biz_amount_total,0)          AS new_biz_amount_total,
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
-  SAFE_DIVIDE(p.spend, NULLIF(h.leads, 0))                   AS CPL,
-  SAFE_DIVIDE(p.spend, NULLIF(h.leads_qualified, 0))         AS CPQL,
+  SAFE_DIVIDE(COALESCE(h.leads_qualified, h_id.leads_qualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS qual_rate,
+  SAFE_DIVIDE(COALESCE(h.leads_disqualified, h_id.leads_disqualified), NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified, 0) + COALESCE(h.leads_disqualified, h_id.leads_disqualified, 0), 0)) AS disq_rate,
+  SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads, h_id.leads), 0))           AS CPL,
+  SAFE_DIVIDE(p.spend, NULLIF(COALESCE(h.leads_qualified, h_id.leads_qualified), 0)) AS CPQL,
   SAFE_DIVIDE(d.revenue_won,         NULLIF(p.spend, 0))     AS ROAS,
   SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(p.spend, 0))     AS new_biz_roas,
   p.creative_type                                             AS creative_type,
@@ -1023,6 +1063,12 @@ FROM platform p
 FULL OUTER JOIN hubspot h
   ON p.date = h.date AND p.channel = h.channel
   AND LOWER(TRIM(p.utm_content)) = LOWER(TRIM(h.utm_content))
+-- Strategy C: ID-based fallback — only activates when name match misses (h.leads IS NULL)
+LEFT JOIN hubspot_id_ad h_id
+  ON h.leads IS NULL
+  AND p.date = h_id.date
+  AND p.channel = h_id.channel
+  AND p.platform_ad_id = h_id.ad_id
 LEFT JOIN deals d
   ON COALESCE(p.date, h.date) = d.date
   AND COALESCE(p.channel, h.channel) = d.channel
