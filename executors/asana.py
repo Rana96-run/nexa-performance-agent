@@ -55,6 +55,11 @@ _ACTION_PRIORITY = {
 # Confirmed present in: Google Ads, Meta, Snapchat optimization projects.
 _CF_ESTIMATED_TIME = "1207977944194162"
 
+# Status — workspace-level enum field (confirmed 2026-05-13).
+# Set on every task so the Status column is populated on creation.
+_CF_STATUS_GID    = "1208009827500816"
+_CF_STATUS_TODO   = "1208009827500819"   # "To do"
+
 # How long (minutes) each action type is estimated to take.
 _ACTION_ESTIMATED_MINUTES: dict[str, int] = {
     "pause":    15,
@@ -303,10 +308,19 @@ def create_task(
     if assignee_gid:
         task_data["assignee"] = assignee_gid
 
+    # Both Rana and Donia follow every task so both show as collaborators.
+    follower_gids = list({ASANA_ASSIGNEE_GOOGLE_ADS_GID, ASANA_ASSIGNEE_DEFAULT_GID}
+                         - {assignee_gid or ""})
+    if follower_gids:
+        task_data["followers"] = follower_gids
+
     # Populate custom fields for the target project.
     # Only set fields confirmed present — avoids 400 errors from missing fields.
     cf: dict = {}
     act_lower = (action or "").lower()
+
+    # Status — workspace-level field; set "To do" on every new task.
+    cf[_CF_STATUS_GID] = _CF_STATUS_TODO
 
     # Estimated time — only for projects confirmed to have this field
     if project_id in _PROJECTS_WITH_ESTIMATED_TIME:
@@ -322,8 +336,7 @@ def create_task(
         if enum_gid:
             cf[pmap["field_gid"]] = enum_gid
 
-    if cf:
-        task_data["custom_fields"] = cf
+    task_data["custom_fields"] = cf
 
     # Section routing — for Optimization projects, route into the
     # asset-level section (e.g. "Campaign", "Ad Set / Group", "Audience").
@@ -383,3 +396,30 @@ def ensure_channel_sections():
             _get_or_create_section(client, project_id, label)
             created += 1
     print(f"[asana] verified/created {created} asset-level sections across {len(ASANA_OPTIMIZATION_PROJECTS)} optimization projects")
+    _ensure_status_field_on_projects(client)
+
+
+def _ensure_status_field_on_projects(client):
+    """Attach the workspace Status field to all perf-marketing projects so it
+    shows as a column.  Safe to call multiple times — Asana ignores duplicates."""
+    from config import ASANA_DAILY_PROJECTS
+    all_pids = list(ASANA_OPTIMIZATION_PROJECTS.values()) + list(ASANA_DAILY_PROJECTS.values())
+    proj_api = asana.ProjectsApi(client)
+    added = 0
+    for pid in all_pids:
+        if not pid:
+            continue
+        try:
+            proj_api.add_custom_field_setting_for_project(
+                pid,
+                {"data": {"custom_field": _CF_STATUS_GID, "is_important": True}},
+                {},
+            )
+            added += 1
+        except AsanaApiException as e:
+            if "already" in str(e).lower() or "duplicate" in str(e).lower() or "400" in str(e):
+                pass  # field already attached — expected on subsequent calls
+            else:
+                print(f"[asana] warn: could not attach Status field to {pid}: {e}")
+    if added:
+        print(f"[asana] attached Status field to {added} project(s)")

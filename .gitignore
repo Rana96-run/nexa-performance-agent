@@ -53,5 +53,10 @@ build/
 *~
 _ms_new_token.tmp
 _ms_rt2_set.bat
-_ms_new_token.tmp
-_ms_rt2_set.bat
+
+# Ad-hoc debug dumps from one-off scripts (project root)
+asana_debug.txt
+asana_fields.txt
+asana_fields_check.txt
+asana_opts.txt
+asana_progress.txt
