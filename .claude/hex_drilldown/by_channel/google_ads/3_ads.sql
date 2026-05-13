@@ -51,6 +51,8 @@ SELECT * FROM (
     ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)                AS new_biz_roas,
     -- Creative type: NULL for Google Ads (no ad-level creative type in the API)
     MAX(creative_type)                                                                    AS creative_type,
+    -- Status: ACTIVE | PAUSED (NULL for channels where not collected)
+    MAX(status)                                                                           AS status,
     MAX(data_source)                                                                      AS spend_source
   FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
   WHERE channel = 'google_ads'

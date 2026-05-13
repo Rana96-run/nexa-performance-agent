@@ -161,25 +161,26 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False):
 
 # ── Creative type lookup ──────────────────────────────────────────────────────
 
-def _creative_type_lookup(account_id: str) -> dict[str, str]:
-    """Return {ad_id: creative_type} for every ad in the account.
+def _ad_metadata_lookup(account_id: str) -> dict[str, dict]:
+    """Return {ad_id: {creative_type, status}} for every ad in the account.
 
-    Uses the Ads API (not Insights) to fetch creative object_type once per
-    account per run, then the insights loop populates creative_type per row
-    with a simple dict lookup — zero extra API calls at row level.
+    Uses the Ads API (not Insights) — one call per account, zero per row.
 
-    Mapping (from Meta effective_object_story_type / object_type):
-      VIDEO / *VIDEO*          → video
-      CAROUSEL / *MULTI_SHARE* → carousel
-      *COLLECTION*             → collection
-      *PHOTO* / LINK / IMAGE   → image
-      else                     → other
+    creative_type mapping (from Meta effective_object_story_type / object_type):
+      *VIDEO*          → video
+      *CAROUSEL* / *MULTI_SHARE* → carousel
+      *COLLECTION*     → collection
+      *PHOTO* / LINK / IMAGE → image
+      else             → other
+
+    status: Meta effective_status — ACTIVE | PAUSED | ARCHIVED | DELETED |
+      CAMPAIGN_PAUSED | ADSET_PAUSED (we normalise to ACTIVE / PAUSED / OTHER)
     """
-    from facebook_business.adobjects.ad import Ad
-    types: dict[str, str] = {}
+    meta: dict[str, dict] = {}
     try:
         ads = AdAccount(account_id).get_ads(
-            fields=["id", "creative{object_type,effective_object_story_type}"]
+            fields=["id", "effective_status",
+                    "creative{object_type,effective_object_story_type}"]
         )
         for ad in ads:
             creative = ad.get("creative") or {}
@@ -198,11 +199,13 @@ def _creative_type_lookup(account_id: str) -> dict[str, str]:
                 ctype = "image"
             else:
                 ctype = "other"
-            types[str(ad["id"])] = ctype
-        print(f"[meta]   creative types fetched for {account_id}: {len(types)} ads")
+            eff = (ad.get("effective_status") or "").upper()
+            status = "ACTIVE" if eff == "ACTIVE" else ("PAUSED" if "PAUSE" in eff else (eff or None))
+            meta[str(ad["id"])] = {"creative_type": ctype, "status": status}
+        print(f"[meta]   ad metadata fetched for {account_id}: {len(meta)} ads")
     except Exception as e:
-        print(f"[meta]   creative type lookup failed for {account_id}: {e}")
-    return types
+        print(f"[meta]   ad metadata lookup failed for {account_id}: {e}")
+    return meta
 
 
 # ── Ad level → ads_daily ─────────────────────────────────────────────────────
@@ -219,7 +222,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
     for account_id in accounts:
         account    = AdAccount(account_id)
         native_cur = _native_currency(account_id)
-        creative_types = _creative_type_lookup(account_id)
+        ad_meta = _ad_metadata_lookup(account_id)
         count_before = len(rows)
         try:
             for ins in account.get_insights(params={
@@ -257,7 +260,8 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                     "conversions":   float(conversions),
                     "frequency":     round(float(ins.get("frequency", 0) or 0), 4),
                     "currency":      "USD",
-                    "creative_type": creative_types.get(str(ins.get("ad_id", ""))),
+                    "creative_type": (ad_meta.get(str(ins.get("ad_id", ""))) or {}).get("creative_type"),
+                    "status":        (ad_meta.get(str(ins.get("ad_id", ""))) or {}).get("status"),
                     "updated_at":    now,
                 })
         except Exception as e:

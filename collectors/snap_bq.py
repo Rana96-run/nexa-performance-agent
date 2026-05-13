@@ -643,6 +643,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                     "conversions":   float(conversions_total),
                     "currency":      "USD",
                     "creative_type": ad_meta.get("creative_type"),
+                    "status":        ad_meta.get("status"),
                     "updated_at":    now,
                 })
                 acct_count += 1

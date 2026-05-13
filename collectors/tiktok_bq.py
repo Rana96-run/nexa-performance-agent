@@ -170,11 +170,15 @@ def _list_ads(advertiser_id: str) -> dict[str, dict]:
                 ctype = "other"
             else:
                 ctype = None
+            # TikTok uses operation_status: ENABLE / DISABLE / DELETE
+            raw_status = (item.get("operation_status") or "").upper()
+            status = "ACTIVE" if raw_status == "ENABLE" else ("PAUSED" if raw_status == "DISABLE" else raw_status or None)
             out[str(item.get("ad_id", ""))] = {
                 "adgroup_id":    str(item.get("adgroup_id", "")),
                 "campaign_id":   str(item.get("campaign_id", "")),
                 "name":          item.get("ad_name", ""),
                 "creative_type": ctype,
+                "status":        status,
             }
         if len(items) < 1000:
             break
@@ -374,6 +378,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "conversions":   float(metrics.get("conversion", 0) or 0),
                 "currency":      "USD",
                 "creative_type": meta.get("creative_type"),
+                "status":        meta.get("status"),
                 "updated_at":    now,
             })
         print(f"[tiktok-bq] ads account {account_id}: {len(report_rows)} stat rows")
