@@ -24,19 +24,23 @@ Campaign IDs (customer 5753494964):
 - Retail: 23845053748 → ag/6712036947 (50 assets, 19 search themes)
 - WP: 23840470733 → ag/6712057318 (51 assets, 42 search themes)
 
-## P1 — Attribution depth
+## P1 — Attribution depth (DONE 2026-05-13)
 
-- [ ] **Creative type tagging** — classify each ad row as
-  `{image, video, carousel, collection, reels, story}`. Requires pulling
-  `creative` fields alongside insights from Meta, TikTok, Snap APIs.
+- [x] **Creative type tagging** — `creative_type STRING` added to `ads_daily` schema.
+  Meta: `_creative_type_lookup()` fetches `creative{object_type}` per account.
+  TikTok: `ad_format` captured in `_list_ads()` and mapped.
+  Snap: `type` field captured in `_list_ads()` and mapped.
+  Google/Microsoft: NULL (no creative type at ad grain).
+  Values: image | video | carousel | collection | story | other
 
-## P2 — LinkedIn campaign cloning
+## P2 — LinkedIn campaign cloning (DONE 2026-05-13)
 
-- [ ] **Clone creatives from closest matching campaign**
-  1. Add `rw_organization_admin` scope in LinkedIn Developer Portal
-  2. Re-mint token: `python scripts/linkedin_oauth.py`
-  3. Build `executors/linkedin.py::clone_creative(source_campaign_id, target_campaign_id)`
-  4. In `create_campaign()`, add optional `clone_from_campaign_id` param
+- [x] `list_campaign_creatives(campaign_id)` — lists all creatives in an ad set
+- [x] `clone_campaign_creatives(source, target)` — copies reference URN + lead gen form
+- [x] `create_full_campaign(..., clone_from_campaign_id=...)` — optional clone param
+- [x] `scripts/linkedin_oauth.py` — added `rw_organization_admin` scope
+- [ ] **Re-mint LinkedIn token** — run `python scripts/linkedin_oauth.py` to get
+  token with new scope before using clone_campaign_creatives()
 
 ## P1 — Funnel.io (blocked on token)
 
