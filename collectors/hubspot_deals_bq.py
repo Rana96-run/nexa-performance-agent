@@ -45,6 +45,23 @@ PROPERTIES = [
 _CACHE = {"stages": None, "pipelines": None}
 
 
+def _to_riyadh_date(ts_iso: str) -> str:
+    """Convert an ISO-8601 UTC timestamp (HubSpot's format) to a Riyadh
+    (UTC+3) YYYY-MM-DD date string. Returns '' on parse failure.
+
+    Why: HubSpot UI filters and Qoyod ops thinking are in Riyadh time.
+    Storing BQ partitions in Riyadh date aligns BQ counts to what the user
+    sees in HubSpot's "yesterday" / "this week" filters.
+    """
+    if not ts_iso:
+        return ""
+    try:
+        ts = datetime.fromisoformat(ts_iso.replace("Z", "+00:00"))
+        return (ts + timedelta(hours=3)).strftime("%Y-%m-%d")
+    except (ValueError, AttributeError):
+        return ts_iso[:10]  # fallback to UTC truncation
+
+
 def _load_pipelines():
     if _CACHE["stages"] is not None:
         return
@@ -233,10 +250,10 @@ def collect_and_write(days: int = None, start_date: date = None,
                 if deal_id:
                     seen_ids.add(deal_id)
                 p = row.get("properties", {})
-                created = (p.get("createdate") or "")[:10]
+                created = _to_riyadh_date(p.get("createdate") or "")
                 if not created:
                     continue
-                closed = (p.get("closedate") or "")[:10] or None
+                closed = _to_riyadh_date(p.get("closedate") or "") or None
                 plabel, slabel, status = _classify_stage(
                     p.get("dealstage"),
                     hs_is_closed_won=p.get("hs_is_closed_won"),

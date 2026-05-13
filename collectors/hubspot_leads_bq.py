@@ -174,7 +174,20 @@ def collect_and_write(days: int = None, start_date: date = None,
                 break
             for row in data.get("results", []):
                 p = row.get("properties", {})
-                created = (p.get("hs_createdate") or "")[:10]
+                # Convert UTC timestamp to Riyadh date (UTC+3) so BQ
+                # partitions align with HubSpot UI's "yesterday" / "this week"
+                # filters. Established 2026-05-13 after the user noticed
+                # BQ showed 148 leads vs HubSpot 161 for the same day —
+                # the gap was the 3-hour timezone shift.
+                cd_raw = p.get("hs_createdate") or ""
+                if not cd_raw:
+                    continue
+                try:
+                    _ts = datetime.fromisoformat(cd_raw.replace("Z", "+00:00"))
+                    created = (_ts + timedelta(hours=3)).strftime("%Y-%m-%d")
+                except (ValueError, AttributeError):
+                    # Fallback to UTC truncation if timestamp can't be parsed
+                    created = cd_raw[:10]
                 if not created:
                     continue
                 pid, plabel, slabel = _stage_info(p.get("hs_pipeline_stage"))
