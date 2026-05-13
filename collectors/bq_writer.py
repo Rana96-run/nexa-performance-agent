@@ -832,11 +832,12 @@ hubspot_id_adset AS (
   WHERE lead_ad_group_id IS NOT NULL
   GROUP BY 1, 2, 3
 ),
--- Strategy D: TikTok campaign-ID fallback — uses lead_campaign_id_sync which HubSpot's
--- native TikTok integration populates on every lead. Fires when both name match (C-A/B)
--- AND adset-ID match (C-C) miss. Joins at campaign grain — if multiple adsets share a
--- campaign, each gets the campaign-level leads as a graceful degradation (better than 0).
-hubspot_tiktok_cam AS (
+-- Strategy D: Campaign-ID fallback — uses lead_campaign_id_sync which HubSpot's
+-- native TikTok + Meta integrations populate on every lead. Fires when both name
+-- match (A/B) AND adset-ID match (C) miss. Joins at campaign grain — if multiple
+-- adsets share a campaign, each gets the campaign-level leads (graceful degradation).
+-- Confirmed: TikTok + Meta numeric IDs match campaigns_daily.campaign_id exactly.
+hubspot_id_cam AS (
   SELECT
     date,
     lead_campaign_id_sync                AS campaign_id,
@@ -942,12 +943,12 @@ LEFT JOIN hubspot_id_adset h_id
   AND p.date = h_id.date
   AND p.channel = h_id.channel
   AND p.platform_adset_id = h_id.adset_id
--- Strategy D: TikTok campaign-ID fallback — fires when both name AND adset-ID miss
-LEFT JOIN hubspot_tiktok_cam h_cam
+-- Strategy D: Campaign-ID fallback (TikTok + Meta) — fires when both name AND adset-ID miss
+LEFT JOIN hubspot_id_cam h_cam
   ON h.leads IS NULL
   AND h_id.leads IS NULL
   AND p.date = h_cam.date
-  AND p.channel = 'tiktok'
+  AND p.channel IN ('tiktok', 'meta')
   AND p.platform_campaign_id = h_cam.campaign_id
 LEFT JOIN utmproxy u
   ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
