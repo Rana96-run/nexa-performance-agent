@@ -274,6 +274,17 @@ def create_budget(client, customer_id: str, name: str, daily_usd: float) -> str:
 
 def create_pmax_campaign(client, customer_id: str, name: str,
                          budget_resource: str, tracking_template: str) -> str:
+    """Create a PMax campaign with all required defaults baked in:
+      - Bidding:                  Maximize Conversions
+      - Geo:                      Saudi Arabia only (added post-create)
+      - Language:                 Arabic only (added post-create)
+      - Display network:          DISABLED via opt-outs
+      - Conversion goal:          Qualified Lead (added post-create)
+      - Custom URL parameters:    _campaign=<name>, _assetgroup=<set later
+                                  per asset group> — required for the
+                                  {_campaign} / {_assetgroup} placeholders
+                                  in the tracking template to resolve.
+    """
     csvc = client.get_service("CampaignService")
     op   = client.get_type("CampaignOperation")
     c    = op.create
@@ -282,7 +293,7 @@ def create_pmax_campaign(client, customer_id: str, name: str,
     c.advertising_channel_type   = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
     c.campaign_budget            = budget_resource
     c.tracking_url_template      = tracking_template
-    # Bidding strategy — proto-plus assignment (avoids CopyFrom incompatibility).
+    # Bidding strategy — Maximize Conversions (per Qoyod paid media role).
     # PMax allows only MAXIMIZE_CONVERSIONS or MAXIMIZE_CONVERSION_VALUE.
     c.maximize_conversions = client.get_type("MaximizeConversions")
     # Required since 2024: EU political advertising disclosure
@@ -294,12 +305,102 @@ def create_pmax_campaign(client, customer_id: str, name: str,
     try:
         c.brand_guidelines_enabled = False
     except (AttributeError, Exception):
-        # Field name may differ in some API versions; ignore gracefully
         pass
-    # PMax requires url_expansion_opt_out=False to use Google's URL expansion;
-    # leave default unless we know better.
+
+    # ── Custom URL parameters for tracking template ───────────────────────────
+    # The template references {_campaign} and {_assetgroup}. Without these
+    # custom params being set, the rendered URL has empty utm_campaign /
+    # utm_audience values, breaking HubSpot attribution.
+    # _campaign is constant per campaign; _assetgroup is set at asset-group level.
+    cp_campaign = c.url_custom_parameters.add()
+    cp_campaign.key   = "campaign"     # referenced in URL as {_campaign}
+    cp_campaign.value = name
+
     r = csvc.mutate_campaigns(customer_id=customer_id, operations=[op])
-    return r.results[0].resource_name
+    camp_rn = r.results[0].resource_name
+
+    # ── Post-create: geo target (Saudi Arabia), language (Arabic),
+    #               display-network opt-out, conversion goal (Qualified Lead).
+    _apply_pmax_targeting_and_goals(client, customer_id, camp_rn)
+    return camp_rn
+
+
+# ── Saudi Arabia: Google geo target constant ID 2682
+SAUDI_ARABIA_GEO_ID = "2682"
+# ── Arabic: Google language constant ID 1019
+ARABIC_LANG_ID = "1019"
+
+
+def _apply_pmax_targeting_and_goals(client, customer_id: str, campaign_rn: str):
+    """Attach geo (Saudi Arabia), language (Arabic), disable display network,
+    and bind the Qualified Lead conversion goal."""
+    ga_svc = client.get_service("GoogleAdsService")
+    ops = []
+
+    # Geo: Saudi Arabia only
+    geo_op = client.get_type("MutateOperation")
+    geo = geo_op.campaign_criterion_operation.create
+    geo.campaign = campaign_rn
+    geo.location.geo_target_constant = (
+        f"geoTargetConstants/{SAUDI_ARABIA_GEO_ID}"
+    )
+    ops.append(geo_op)
+
+    # Language: Arabic only
+    lang_op = client.get_type("MutateOperation")
+    lang = lang_op.campaign_criterion_operation.create
+    lang.campaign = campaign_rn
+    lang.language.language_constant = f"languageConstants/{ARABIC_LANG_ID}"
+    ops.append(lang_op)
+
+    ga_svc.mutate(customer_id=customer_id, mutate_operations=ops)
+
+    # Conversion goal: Qualified Lead (campaign-level override)
+    # The conversion action named exactly "Qualified Lead" must exist in
+    # the account. We bind it as the sole campaign conversion goal so PMax
+    # optimizes on SQLs, not raw leads.
+    _bind_conversion_goal(client, customer_id, campaign_rn,
+                          conversion_action_name="Qualified Lead")
+
+
+def _bind_conversion_goal(client, customer_id: str, campaign_rn: str,
+                          conversion_action_name: str):
+    """Find the conversion action by name and set it as the campaign's
+    primary conversion goal (overriding account defaults)."""
+    ga_svc = client.get_service("GoogleAdsService")
+    # Look up the conversion action by name
+    q = (
+        f"SELECT conversion_action.resource_name, conversion_action.category, "
+        f"conversion_action.name "
+        f"FROM conversion_action "
+        f"WHERE conversion_action.name = '{conversion_action_name}' "
+        f"AND conversion_action.status = 'ENABLED'"
+    )
+    rows = list(ga_svc.search(customer_id=customer_id, query=q))
+    if not rows:
+        print(f"  [conversion] Action '{conversion_action_name}' not found — skipping goal binding")
+        return
+    action_rn = rows[0].conversion_action.resource_name
+    category = rows[0].conversion_action.category  # e.g. LEAD
+
+    # Override the campaign's conversion goal: bias the matching category +
+    # set primary=True for the named action only.
+    csvc = client.get_service("CampaignConversionGoalService")
+    op = client.get_type("CampaignConversionGoalOperation")
+    g = op.update
+    g.resource_name = (
+        f"customers/{customer_id}/campaignConversionGoals/"
+        f"{campaign_rn.split('/')[-1]}~{int(category)}~PRIMARY"
+    )
+    g.biddable = True
+    op.update_mask.paths.append("biddable")
+    try:
+        csvc.mutate_campaign_conversion_goals(
+            customer_id=customer_id, operations=[op]
+        )
+        print(f"  [conversion] Bound '{conversion_action_name}' as Qualified Lead goal")
+    except Exception as e:
+        print(f"  [conversion] WARNING: could not bind goal: {e}")
 
 
 def create_asset_group_with_assets(client, customer_id: str,
@@ -325,6 +426,11 @@ def create_asset_group_with_assets(client, customer_id: str,
     ag_mop = client.get_type("MutateOperation")
     ag     = ag_mop.asset_group_operation.create
     ag.resource_name = temp_ag_rn
+    # Custom URL parameter so {_assetgroup} resolves in the tracking template
+    # (referenced as utm_audience=&{_assetgroup} in _tracking_template).
+    cp_ag = ag.url_custom_parameters.add()
+    cp_ag.key   = "assetgroup"   # referenced in URL as {_assetgroup}
+    cp_ag.value = name
     ag.name          = name
     ag.campaign      = campaign_resource
     ag.final_urls.append(final_url)
