@@ -475,11 +475,25 @@ def _list_ads(token: str, ad_account_id: str,
             if ad_updated < updated_since:
                 continue
         sq_id = ad.get("ad_squad_id", "")
+        snap_type = (ad.get("type") or "").upper()
+        if snap_type == "SNAP_AD":
+            ctype = "video"    # Snap's standard full-screen vertical video
+        elif snap_type == "COLLECTION":
+            ctype = "collection"
+        elif snap_type == "STORY":
+            ctype = "story"
+        elif snap_type in ("APP_INSTALL", "WEB_VIEW", "DEEP_LINK"):
+            ctype = "image"    # typically static tile creative
+        elif snap_type:
+            ctype = "other"
+        else:
+            ctype = None
         out[ad["id"]] = {
-            "name":        ad.get("name", ""),
-            "adsquad_id":  sq_id,
-            "campaign_id": adsquads.get(sq_id, {}).get("campaign_id", ""),
-            "status":      ad.get("status", ""),
+            "name":          ad.get("name", ""),
+            "adsquad_id":    sq_id,
+            "campaign_id":   adsquads.get(sq_id, {}).get("campaign_id", ""),
+            "status":        ad.get("status", ""),
+            "creative_type": ctype,
         }
     return out
 
@@ -628,6 +642,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                     "leads":         0,
                     "conversions":   float(conversions_total),
                     "currency":      "USD",
+                    "creative_type": ad_meta.get("creative_type"),
                     "updated_at":    now,
                 })
                 acct_count += 1

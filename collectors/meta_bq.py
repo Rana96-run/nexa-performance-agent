@@ -159,6 +159,52 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False):
                        key_fields=["date", "channel", "adset_id"])
 
 
+# ── Creative type lookup ──────────────────────────────────────────────────────
+
+def _creative_type_lookup(account_id: str) -> dict[str, str]:
+    """Return {ad_id: creative_type} for every ad in the account.
+
+    Uses the Ads API (not Insights) to fetch creative object_type once per
+    account per run, then the insights loop populates creative_type per row
+    with a simple dict lookup — zero extra API calls at row level.
+
+    Mapping (from Meta effective_object_story_type / object_type):
+      VIDEO / *VIDEO*          → video
+      CAROUSEL / *MULTI_SHARE* → carousel
+      *COLLECTION*             → collection
+      *PHOTO* / LINK / IMAGE   → image
+      else                     → other
+    """
+    from facebook_business.adobjects.ad import Ad
+    types: dict[str, str] = {}
+    try:
+        ads = AdAccount(account_id).get_ads(
+            fields=["id", "creative{object_type,effective_object_story_type}"]
+        )
+        for ad in ads:
+            creative = ad.get("creative") or {}
+            raw = (
+                creative.get("effective_object_story_type")
+                or creative.get("object_type")
+                or ""
+            ).upper()
+            if "VIDEO" in raw:
+                ctype = "video"
+            elif "CAROUSEL" in raw or "MULTI_SHARE" in raw:
+                ctype = "carousel"
+            elif "COLLECTION" in raw:
+                ctype = "collection"
+            elif "PHOTO" in raw or "IMAGE" in raw or raw == "LINK":
+                ctype = "image"
+            else:
+                ctype = "other"
+            types[str(ad["id"])] = ctype
+        print(f"[meta]   creative types fetched for {account_id}: {len(types)} ads")
+    except Exception as e:
+        print(f"[meta]   creative type lookup failed for {account_id}: {e}")
+    return types
+
+
 # ── Ad level → ads_daily ─────────────────────────────────────────────────────
 
 def collect_ads_and_write(days: int = None, incremental: bool = False):
@@ -173,6 +219,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
     for account_id in accounts:
         account    = AdAccount(account_id)
         native_cur = _native_currency(account_id)
+        creative_types = _creative_type_lookup(account_id)
         count_before = len(rows)
         try:
             for ins in account.get_insights(params={
@@ -210,6 +257,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                     "conversions":   float(conversions),
                     "frequency":     round(float(ins.get("frequency", 0) or 0), 4),
                     "currency":      "USD",
+                    "creative_type": creative_types.get(str(ins.get("ad_id", ""))),
                     "updated_at":    now,
                 })
         except Exception as e:

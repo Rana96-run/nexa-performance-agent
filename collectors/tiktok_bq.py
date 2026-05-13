@@ -159,10 +159,22 @@ def _list_ads(advertiser_id: str) -> dict[str, dict]:
             break
         items = data.get("data", {}).get("list", [])
         for item in items:
+            fmt = (item.get("ad_format") or "").upper()
+            if "VIDEO" in fmt or "SPARK" in fmt:
+                ctype = "video"
+            elif "COLLECTION" in fmt:
+                ctype = "collection"
+            elif "IMAGE" in fmt or "CATALOG" in fmt:
+                ctype = "image"
+            elif fmt:
+                ctype = "other"
+            else:
+                ctype = None
             out[str(item.get("ad_id", ""))] = {
-                "adgroup_id":  str(item.get("adgroup_id", "")),
-                "campaign_id": str(item.get("campaign_id", "")),
-                "name":        item.get("ad_name", ""),
+                "adgroup_id":    str(item.get("adgroup_id", "")),
+                "campaign_id":   str(item.get("campaign_id", "")),
+                "name":          item.get("ad_name", ""),
+                "creative_type": ctype,
             }
         if len(items) < 1000:
             break
@@ -361,6 +373,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "leads":         int(metrics.get("conversion", 0) or 0),
                 "conversions":   float(metrics.get("conversion", 0) or 0),
                 "currency":      "USD",
+                "creative_type": meta.get("creative_type"),
                 "updated_at":    now,
             })
         print(f"[tiktok-bq] ads account {account_id}: {len(report_rows)} stat rows")

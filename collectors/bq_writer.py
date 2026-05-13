@@ -132,6 +132,7 @@ ADS_DAILY_SCHEMA = [
     bigquery.SchemaField("final_url",     "STRING"),   # destination LP URL (Google Ads only for now)
     bigquery.SchemaField("updated_at",    "TIMESTAMP"),
     bigquery.SchemaField("cpl",           "FLOAT64"),   # spend / leads (USD); already in live table — added here for explicit-schema validation
+    bigquery.SchemaField("creative_type", "STRING"),    # image | video | carousel | collection | story | other (None for Google/Microsoft)
 ]
 
 KEYWORDS_DAILY_SCHEMA = [
