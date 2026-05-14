@@ -3,6 +3,10 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
+> **Status as of 2026-05-15:** Agent fully operational on Railway Pro (Marketing Workspace).
+> All collectors live, health check green, dashboard rendering real data, nightly
+> scheduler running at 08:00 Riyadh. Next open work: P3 nice-to-haves below.
+
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 
 Built on top of Option B from 2026-05-14:
