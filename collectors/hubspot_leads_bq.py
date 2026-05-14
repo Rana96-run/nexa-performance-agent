@@ -91,9 +91,9 @@ PROPERTIES = [
     "leads_disqualification_reason__sub_reasons",
     "leads_disqualification_reason__ops_qflavour",
     "disqualification_reason_bookkeeping",
-    # GA4 client ID — passed as hidden field on all landing page forms.
-    # Enables exact session-to-lead join via GA4 user_pseudo_id = ga4_client_id.
-    "ga4_client_id",
+    # GA4 client ID — calculated property on Lead Module synced from Contact.ga4_client_id.
+    # Enables exact session-to-lead join via GA4 user_pseudo_id = lead_ga4_client_id.
+    "lead_ga4_client_id",
 ]
 
 # One-time fetch: map pipeline_id -> label, stage_id -> (pipeline_id, stage_label)
@@ -438,6 +438,7 @@ def _ensure_individual_table_exists():
             pass
 
 
+
 def _get_cursor() -> datetime:
     """
     Read the high-water mark from hubspot_leads_individual.
@@ -558,7 +559,7 @@ def _row_from_lead(lead: dict) -> dict | None:
         "lead_ad_id_sync":        (p.get("lead_ad_id_sync")        or "").strip() or None,
         "top_disq_reason":     disq_reason,
         "top_disq_sub_reason": disq_sub,
-        "ga4_client_id":       (p.get("ga4_client_id") or "").strip() or None,
+        "ga4_client_id":       (p.get("lead_ga4_client_id") or "").strip() or None,
         "updated_at":          datetime.now(timezone.utc).isoformat(),
     }
 
