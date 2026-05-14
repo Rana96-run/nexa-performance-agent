@@ -744,6 +744,7 @@ def _sub_campaign_views():
         V_LP_GA4_FUNNEL_DAILY_SQL,
         V_LP_COMBINED_WEEKLY_SQL,
         V_WEBSITE_FUNNEL_DAILY_SQL,
+        V_SESSION_LEAD_MATCH_SQL,
     )
     return [
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
@@ -751,12 +752,14 @@ def _sub_campaign_views():
         ("v_lp_performance_weekly", V_LP_PERFORMANCE_WEEKLY_SQL),
         ("v_lp_weekly_summary",     V_LP_WEEKLY_SUMMARY_SQL),
         ("v_signup_funnel_weekly",  V_SIGNUP_FUNNEL_WEEKLY_SQL),
-        # GA4 base views (v_lp_combined_weekly depends on v_lp_ga4_daily)
+        # GA4 base views
         ("v_lp_ga4_daily",          V_LP_GA4_DAILY_SQL),
         ("v_lp_ga4_funnel_daily",   V_LP_GA4_FUNNEL_DAILY_SQL),
-        # Combined views — must come after their dependencies
+        # Combined views
         ("v_lp_combined_weekly",    V_LP_COMBINED_WEEKLY_SQL),
         ("v_website_funnel_daily",  V_WEBSITE_FUNNEL_DAILY_SQL),
+        # Exact session-to-lead match via ga4_client_id
+        ("v_session_lead_match",    V_SESSION_LEAD_MATCH_SQL),
     ]
 
 

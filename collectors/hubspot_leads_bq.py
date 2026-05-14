@@ -61,6 +61,19 @@ PROPERTIES = [
     "lead_campaign_id_sync",  # campaign ID (TikTok numeric, Meta numeric, Snap UUID)
     "lead_adgroup_id_sync",   # adset ID    (exact adset-level match)
     "lead_ad_id_sync",        # ad ID       (exact ad-level match)
+    # Google ads click identifier — used to resolve campaign_id via Google Ads
+    # `click_view` API when the URL didn't carry a campaign_id param.
+    # Lead Module name is `lead_google_ad_click_id` (auto-syncs from Contact's
+    # hs_google_click_id via HubSpot calculated property).
+    "lead_google_ad_click_id",
+    # Microsoft has no equivalent lead-module property today; if we need
+    # msclkid attribution we'd pull from the associated Contact.
+    # Conversion source page URL — the actual landing page the lead converted
+    # FROM (not the form-submission page). Captures hsa_cam / utm_* params
+    # that landed on the marketing landing page even if the form was on
+    # app.qoyod.com. Created as calculated property on Lead Module 2026-05-14.
+    "lead_cta_source_sync",
+    "lead_cta_source_url",
     # Fallback chain — see analysers/channel_inference.py.
     # The two *_traffic_source enums hold high-level source type
     # (PAID_SEARCH / PAID_SOCIAL / ORGANIC_SEARCH / ...).
@@ -78,6 +91,9 @@ PROPERTIES = [
     "leads_disqualification_reason__sub_reasons",
     "leads_disqualification_reason__ops_qflavour",
     "disqualification_reason_bookkeeping",
+    # GA4 client ID — passed as hidden field on all landing page forms.
+    # Enables exact session-to-lead join via GA4 user_pseudo_id = ga4_client_id.
+    "ga4_client_id",
 ]
 
 # One-time fetch: map pipeline_id -> label, stage_id -> (pipeline_id, stage_label)
@@ -334,6 +350,12 @@ def _ensure_table_exists():
         bigquery.SchemaField("lead_campaign_id_sync", "STRING"),
         bigquery.SchemaField("lead_adgroup_id_sync",  "STRING"),
         bigquery.SchemaField("lead_ad_id_sync",       "STRING"),
+        # Google ad click ID (gclid) — used to resolve campaign_id via
+        # gclid_attribution table (Google Ads click_view lookup).
+        bigquery.SchemaField("lead_google_ad_click_id", "STRING"),
+        # Conversion source page (the landing page, not the form page)
+        bigquery.SchemaField("lead_cta_source_sync", "STRING"),
+        bigquery.SchemaField("lead_cta_source_url",  "STRING"),
         bigquery.SchemaField("leads_total", "INT64"),
         bigquery.SchemaField("leads_qualified", "INT64"),
         bigquery.SchemaField("leads_disqualified", "INT64"),
@@ -348,7 +370,9 @@ def _ensure_table_exists():
     client.create_table(table, exists_ok=True)
     # ALTER existing table to add new columns if they don't exist yet.
     # create_table(exists_ok=True) won't update schema of an already-created table.
-    for col in ("lead_campaign_id_sync", "lead_adgroup_id_sync", "lead_ad_id_sync"):
+    for col in ("lead_campaign_id_sync", "lead_adgroup_id_sync", "lead_ad_id_sync",
+                "lead_google_ad_click_id", "lead_cta_source_sync", "lead_cta_source_url",
+                "ga4_client_id"):
         try:
             client.query(
                 f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
@@ -383,10 +407,14 @@ _INDIVIDUAL_SCHEMA = [
     _bq.SchemaField("lead_utm_term",        "STRING"),
     # Platform IDs — stable fallback when UTM names change (TikTok, Meta)
     _bq.SchemaField("lead_campaign_id_sync",  "STRING"),
-    _bq.SchemaField("lead_adgroup_id_sync",  "STRING"),
-    _bq.SchemaField("lead_ad_id_sync",       "STRING"),
+    _bq.SchemaField("lead_adgroup_id_sync",   "STRING"),
+    _bq.SchemaField("lead_ad_id_sync",        "STRING"),
+    _bq.SchemaField("lead_google_ad_click_id","STRING"),
+    _bq.SchemaField("lead_cta_source_sync",   "STRING"),
+    _bq.SchemaField("lead_cta_source_url",    "STRING"),
     _bq.SchemaField("top_disq_reason",      "STRING"),
     _bq.SchemaField("top_disq_sub_reason",  "STRING"),
+    _bq.SchemaField("ga4_client_id",        "STRING"),
     _bq.SchemaField("updated_at",           "TIMESTAMP"),
 ]
 
@@ -400,6 +428,14 @@ def _ensure_individual_table_exists():
     table.time_partitioning = _bq.TimePartitioning(field="hs_createdate")
     table.clustering_fields = ["qoyod_source", "pipeline"]
     client.create_table(table, exists_ok=True)
+    # Add new columns to existing tables (create_table won't update schema)
+    for col in ("ga4_client_id",):
+        try:
+            client.query(
+                f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
+            ).result()
+        except Exception:
+            pass
 
 
 def _get_cursor() -> datetime:
@@ -515,10 +551,14 @@ def _row_from_lead(lead: dict) -> dict | None:
         "lead_utm_term":       (p.get("lead_utm_term") or "").strip() or None,
         # Platform IDs — stable fallback when names change
         "lead_campaign_id_sync":  (p.get("lead_campaign_id_sync")  or "").strip() or None,
+        "lead_google_ad_click_id":(p.get("lead_google_ad_click_id") or "").strip() or None,
+        "lead_cta_source_sync":   (p.get("lead_cta_source_sync")    or "").strip() or None,
+        "lead_cta_source_url":    (p.get("lead_cta_source_url")     or "").strip() or None,
         "lead_adgroup_id_sync":   (p.get("lead_adgroup_id_sync")   or "").strip() or None,
         "lead_ad_id_sync":        (p.get("lead_ad_id_sync")        or "").strip() or None,
         "top_disq_reason":     disq_reason,
         "top_disq_sub_reason": disq_sub,
+        "ga4_client_id":       (p.get("ga4_client_id") or "").strip() or None,
         "updated_at":          datetime.now(timezone.utc).isoformat(),
     }
 
@@ -596,6 +636,9 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
                 "campaign_id_sync": getattr(row, "lead_campaign_id_sync", None),
                 "adgroup_id_sync":  getattr(row, "lead_adgroup_id_sync",  None),
                 "ad_id_sync":       getattr(row, "lead_ad_id_sync",       None),
+                "gclid":            getattr(row, "lead_google_ad_click_id", None),
+                "cta_source":       getattr(row, "lead_cta_source_sync",   None),
+                "cta_source_url":   getattr(row, "lead_cta_source_url",    None),
             }
         else:
             ids = bucket_ids[key]
@@ -605,6 +648,12 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
                 ids["adgroup_id_sync"]  = getattr(row, "lead_adgroup_id_sync",  None)
             if not ids["ad_id_sync"]:
                 ids["ad_id_sync"]       = getattr(row, "lead_ad_id_sync",       None)
+            if not ids.get("gclid"):
+                ids["gclid"]            = getattr(row, "lead_google_ad_click_id", None)
+            if not ids.get("cta_source"):
+                ids["cta_source"]       = getattr(row, "lead_cta_source_sync", None)
+            if not ids.get("cta_source_url"):
+                ids["cta_source_url"]   = getattr(row, "lead_cta_source_url",  None)
 
     now = datetime.now(timezone.utc).isoformat()
     daily_rows = []
@@ -627,6 +676,9 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
             "lead_campaign_id_sync":  ids.get("campaign_id_sync"),
             "lead_adgroup_id_sync":   ids.get("adgroup_id_sync"),
             "lead_ad_id_sync":        ids.get("ad_id_sync"),
+            "lead_google_ad_click_id": ids.get("gclid"),
+            "lead_cta_source_sync":   ids.get("cta_source"),
+            "lead_cta_source_url":    ids.get("cta_source_url"),
             "leads_total":         b["total"],
             "leads_qualified":     b["qualified"],
             "leads_disqualified":  b["disqualified"],

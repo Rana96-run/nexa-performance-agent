@@ -1633,6 +1633,106 @@ GROUP BY 1, 2, 3, 4, 5
 """
 
 
+V_SESSION_LEAD_MATCH_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_session_lead_match` AS
+-- Exact session-to-lead join via ga4_client_id = GA4 user_pseudo_id.
+-- One row per HubSpot lead that has a matched GA4 session.
+-- Grain: one row per hs_object_id (lead).
+-- Use this to answer: which sessions actually converted, what page they landed on,
+-- were they engaged, how long between session and lead creation.
+WITH hs AS (
+  SELECT
+    hs_object_id,
+    hs_createdate,
+    pipeline,
+    stage,
+    is_qualified,
+    is_disqualified,
+    is_open,
+    qoyod_source,
+    lead_utm_campaign,
+    lead_utm_source,
+    lead_utm_medium,
+    lead_utm_content,
+    ga4_client_id
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_individual`
+  WHERE ga4_client_id IS NOT NULL
+),
+ga4_sessions AS (
+  -- Session-level data: landing page, source, engagement
+  SELECT
+    user_pseudo_id,
+    PARSE_DATE('%Y%m%d', event_date)                                               AS session_date,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id,
+    COALESCE(collected_traffic_source.manual_source,  traffic_source.source,  '(direct)') AS source,
+    COALESCE(collected_traffic_source.manual_medium,  traffic_source.medium,  '(none)')   AS medium,
+    COALESCE(collected_traffic_source.manual_campaign_name, traffic_source.name)           AS campaign,
+    collected_traffic_source.manual_content                                                AS utm_content
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'session_start'
+),
+ga4_landings AS (
+  SELECT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id,
+    REGEXP_REPLACE(
+      REGEXP_EXTRACT(
+        (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location'),
+        r'(https?://[^?#]+)'
+      ), r'/$', ''
+    )                                                                               AS lp_page
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'page_view'
+    AND (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'entrances') = 1
+),
+ga4_engaged AS (
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'user_engagement'
+),
+-- Pick the session closest to (but before or on) the lead createdate
+-- In case a user had multiple sessions, we want the converting one
+matched AS (
+  SELECT
+    h.hs_object_id,
+    h.hs_createdate,
+    h.pipeline,
+    h.stage,
+    h.is_qualified,
+    h.is_disqualified,
+    h.is_open,
+    h.qoyod_source,
+    h.lead_utm_campaign,
+    h.lead_utm_source,
+    h.lead_utm_medium,
+    h.lead_utm_content,
+    s.session_date,
+    s.session_id,
+    s.source                                                         AS ga4_source,
+    s.medium                                                         AS ga4_medium,
+    s.campaign                                                       AS ga4_campaign,
+    s.utm_content                                                    AS ga4_utm_content,
+    l.lp_page,
+    REGEXP_EXTRACT(l.lp_page, r'https?://([^/?]+)')                 AS subdomain,
+    IF(e.session_id IS NOT NULL, TRUE, FALSE)                       AS was_engaged,
+    DATE_DIFF(h.hs_createdate, s.session_date, DAY)                 AS days_session_to_lead,
+    ROW_NUMBER() OVER (
+      PARTITION BY h.hs_object_id
+      ORDER BY ABS(DATE_DIFF(h.hs_createdate, s.session_date, DAY)) ASC
+    )                                                                AS rn
+  FROM hs h
+  JOIN ga4_sessions s ON h.ga4_client_id = s.user_pseudo_id
+    AND s.session_date <= h.hs_createdate
+  LEFT JOIN ga4_landings l USING (user_pseudo_id, session_id)
+  LEFT JOIN ga4_engaged  e USING (user_pseudo_id, session_id)
+)
+SELECT * EXCEPT(rn)
+FROM matched
+WHERE rn = 1
+"""
+
 V_LP_COMBINED_WEEKLY_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_combined_weekly` AS
 -- LP performance: spend + HubSpot (source of truth) joined with GA4 behavior.
