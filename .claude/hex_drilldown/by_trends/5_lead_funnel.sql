@@ -25,6 +25,7 @@ deals AS (
       WHEN 'Microsoft Ads' THEN 'microsoft_ads'
       WHEN 'LinkedIn Ads'  THEN 'linkedin'
     END AS channel,
+    SUM(deals_won) AS deals_won,
     SUM(IF(pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours'),
            deals_won, 0)) AS new_biz_deals_won
   FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`
@@ -38,8 +39,14 @@ SELECT
   l.qualified,
   l.disqualified,
   ROUND(SAFE_DIVIDE(l.qualified, NULLIF(l.qualified + l.disqualified, 0)) * 100, 1) AS qual_rate_pct,
-  ROUND(SAFE_DIVIDE(d.new_biz_deals_won, NULLIF(l.qualified, 0)) * 100, 1)          AS won_per_qualified_pct,
-  ROUND(SAFE_DIVIDE(d.new_biz_deals_won, NULLIF(l.leads, 0)) * 100, 1)              AS lead_to_won_pct
+  -- All-pipeline conversion
+  d.deals_won                                                                       AS deals_won,
+  ROUND(SAFE_DIVIDE(d.deals_won,         NULLIF(l.qualified, 0)) * 100, 1)          AS won_per_qualified_pct,
+  ROUND(SAFE_DIVIDE(d.deals_won,         NULLIF(l.leads, 0))     * 100, 1)          AS lead_to_won_pct,
+  -- New business conversion
+  d.new_biz_deals_won                                                               AS new_biz_deals_won,
+  ROUND(SAFE_DIVIDE(d.new_biz_deals_won, NULLIF(l.qualified, 0)) * 100, 1)          AS new_biz_won_per_qualified_pct,
+  ROUND(SAFE_DIVIDE(d.new_biz_deals_won, NULLIF(l.leads, 0))     * 100, 1)          AS new_biz_lead_to_won_pct
 FROM leads l
 LEFT JOIN deals d USING (channel)
 ORDER BY l.leads DESC

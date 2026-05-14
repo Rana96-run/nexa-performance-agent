@@ -39,6 +39,14 @@ agg AS (
     SUM(d.hs_leads)               AS leads,
     SUM(d.hs_qualified)           AS qualified,
     SUM(d.hs_disqualified)        AS disqualified,
+    -- All-pipeline deal metrics
+    SUM(d.deals_won)              AS deals_won,
+    SUM(d.deals_lost)             AS deals_lost,
+    SUM(d.deals_open)             AS deals_open,
+    SUM(d.amount_total)           AS amount_total,
+    SUM(d.revenue_won)            AS revenue_won,
+    SUM(d.amount_lost)            AS amount_lost,
+    SUM(d.pipeline_open)          AS amount_open,
     -- New business: Sales Pipeline + Bookkeeping + Qflavours — full parallel set
     SUM(d.new_biz_deals_won)      AS new_biz_deals_won,
     SUM(d.new_biz_deals_lost)     AS new_biz_deals_lost,
@@ -67,6 +75,15 @@ SELECT
   -- Lead quality ratios (denom = qualified+disqualified, excludes open)
   ROUND(SAFE_DIVIDE(qualified,    NULLIF(qualified + disqualified, 0)) * 100, 1)          AS qual_rate_pct,
   ROUND(SAFE_DIVIDE(disqualified, NULLIF(qualified + disqualified, 0)) * 100, 1)          AS disq_rate_pct,
+  -- Deal counts (all pipelines)
+  COALESCE(deals_won,  0)                                                                 AS deals_won,
+  COALESCE(deals_lost, 0)                                                                 AS deals_lost,
+  COALESCE(deals_open, 0)                                                                 AS deals_open,
+  -- Deal amounts (all pipelines)
+  ROUND(COALESCE(amount_total, 0), 2)                                                     AS total_deal_amount,
+  ROUND(COALESCE(revenue_won,  0), 2)                                                     AS closed_won_amount,
+  ROUND(COALESCE(amount_lost,  0), 2)                                                     AS closed_lost_amount,
+  ROUND(COALESCE(amount_open,  0), 2)                                                     AS open_deal_amount,
   -- New business metrics (Sales Pipeline + Bookkeeping + Qflavours only) — full parallel set
   COALESCE(new_biz_deals_won,   0)                                                        AS new_biz_deals_won,
   COALESCE(new_biz_deals_lost,  0)                                                        AS new_biz_deals_lost,
@@ -76,6 +93,8 @@ SELECT
   ROUND(COALESCE(new_biz_amount_lost,  0), 2)                                             AS new_biz_amount_lost,
   ROUND(COALESCE(new_biz_amount_open,  0), 2)                                             AS new_biz_amount_open,
   ROUND(COALESCE(new_biz_amount_total, 0), 2)                                             AS new_biz_amount_total,
+  -- ROAS — two flavors side-by-side
+  ROUND(SAFE_DIVIDE(revenue_won,         NULLIF(spend, 0)), 2)                            AS roas,
   ROUND(SAFE_DIVIDE(new_biz_revenue_won, NULLIF(spend, 0)), 2)                            AS new_biz_roas
 FROM agg
 ORDER BY sort_order

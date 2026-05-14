@@ -22,6 +22,7 @@ deals_per_channel AS (
       WHEN 'Microsoft Ads' THEN 'microsoft_ads'
       WHEN 'LinkedIn Ads'  THEN 'linkedin'
     END AS channel,
+    SUM(amount_won) AS revenue_won,
     SUM(IF(pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours'),
            amount_won, 0)) AS new_biz_revenue_won
   FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`
@@ -40,16 +41,20 @@ leads_per_channel AS (
 ),
 totals AS (
   SELECT (SELECT SUM(spend)               FROM spend_per_channel)  AS total_spend,
-         (SELECT SUM(new_biz_revenue_won) FROM deals_per_channel)  AS total_revenue
+         (SELECT SUM(revenue_won)         FROM deals_per_channel)  AS total_revenue_all,
+         (SELECT SUM(new_biz_revenue_won) FROM deals_per_channel)  AS total_revenue_new_biz
 )
 SELECT
   s.channel,
-  ROUND(s.spend, 2)                                                   AS spend,
-  COALESCE(l.leads, 0)                                                AS leads,
-  ROUND(SAFE_DIVIDE(s.spend,               t.total_spend)   * 100, 1) AS spend_share_pct,
-  ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, t.total_revenue) * 100, 1) AS revenue_share_pct,
-  COALESCE(ROUND(d.new_biz_revenue_won, 2), 0)                        AS new_biz_revenue_won,
-  ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(s.spend, 0)), 2)    AS new_biz_roas
+  ROUND(s.spend, 2)                                                       AS spend,
+  COALESCE(l.leads, 0)                                                    AS leads,
+  ROUND(SAFE_DIVIDE(s.spend,               t.total_spend)       * 100, 1) AS spend_share_pct,
+  ROUND(SAFE_DIVIDE(d.revenue_won,         t.total_revenue_all) * 100, 1) AS revenue_share_pct,
+  ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, t.total_revenue_new_biz) * 100, 1) AS new_biz_revenue_share_pct,
+  COALESCE(ROUND(d.revenue_won, 2), 0)                                    AS revenue_won,
+  COALESCE(ROUND(d.new_biz_revenue_won, 2), 0)                            AS new_biz_revenue_won,
+  ROUND(SAFE_DIVIDE(d.revenue_won,         NULLIF(s.spend, 0)), 2)        AS roas,
+  ROUND(SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(s.spend, 0)), 2)        AS new_biz_roas
 FROM spend_per_channel s
 CROSS JOIN totals t
 LEFT JOIN deals_per_channel d ON s.channel = d.channel

@@ -59,6 +59,15 @@ deals_raw AS (
       WHEN 'Microsoft Ads' THEN 'microsoft_ads'
       WHEN 'LinkedIn Ads'  THEN 'linkedin'
     END AS channel,
+    -- All-pipeline deal metrics
+    SUM(d.deals_won)    AS deals_won,
+    SUM(d.deals_lost)   AS deals_lost,
+    SUM(d.deals_open)   AS deals_open,
+    SUM(d.deals_total)  AS deals_total,
+    SUM(d.amount_won)   AS revenue_won,
+    SUM(d.amount_lost)  AS amount_lost,
+    SUM(d.amount_open)  AS amount_open,
+    SUM(d.amount_total) AS amount_total,
     -- New business: Sales Pipeline + Bookkeeping + Qflavours — full parallel set
     SUM(IF(d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours'),
            d.deals_won,   0)) AS new_biz_deals_won,
@@ -90,6 +99,14 @@ agg AS (
     COALESCE(l.leads, 0)        AS leads,
     COALESCE(l.qualified, 0)    AS sqls,
     COALESCE(l.disqualified, 0) AS disq_leads,
+    COALESCE(d.deals_won,    0) AS deals_won,
+    COALESCE(d.deals_lost,   0) AS deals_lost,
+    COALESCE(d.deals_open,   0) AS deals_open,
+    COALESCE(d.deals_total,  0) AS deals_total,
+    COALESCE(d.revenue_won,  0) AS revenue_won,
+    COALESCE(d.amount_lost,  0) AS amount_lost,
+    COALESCE(d.amount_open,  0) AS amount_open,
+    COALESCE(d.amount_total, 0) AS amount_total,
     COALESCE(d.new_biz_deals_won,   0) AS new_biz_deals_won,
     COALESCE(d.new_biz_deals_lost,  0) AS new_biz_deals_lost,
     COALESCE(d.new_biz_deals_open,  0) AS new_biz_deals_open,
@@ -102,6 +119,7 @@ agg AS (
     SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)) AS cpql,
     SAFE_DIVIDE(l.qualified,    NULLIF(l.qualified + l.disqualified, 0)) * 100 AS qual_rate_pct,
     SAFE_DIVIDE(l.disqualified, NULLIF(l.qualified + l.disqualified, 0)) * 100 AS disq_rate_pct,
+    SAFE_DIVIDE(d.revenue_won,         NULLIF(s.spend, 0)) AS roas,
     SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(s.spend, 0)) AS new_biz_roas
   FROM spend_raw s
   LEFT JOIN leads_raw l USING (period, channel)
@@ -126,6 +144,18 @@ pivot AS (
     MAX(IF(period='previous', qual_rate_pct,NULL)) AS qual_rate_pct_prev,
     MAX(IF(period='current',  disq_rate_pct,NULL)) AS disq_rate_pct,
     MAX(IF(period='previous', disq_rate_pct,NULL)) AS disq_rate_pct_prev,
+    MAX(IF(period='current',  deals_won,    NULL)) AS deals_won,
+    MAX(IF(period='current',  deals_lost,   NULL)) AS deals_lost,
+    MAX(IF(period='current',  deals_open,   NULL)) AS deals_open,
+    MAX(IF(period='current',  deals_total,  NULL)) AS deals_total,
+    MAX(IF(period='current',  revenue_won,  NULL)) AS revenue_won,
+    MAX(IF(period='previous', revenue_won,  NULL)) AS revenue_won_prev,
+    MAX(IF(period='current',  amount_lost,  NULL)) AS amount_lost,
+    MAX(IF(period='current',  amount_open,  NULL)) AS amount_open,
+    MAX(IF(period='current',  amount_total, NULL)) AS amount_total,
+    MAX(IF(period='previous', amount_total, NULL)) AS amount_total_prev,
+    MAX(IF(period='current',  roas,         NULL)) AS roas,
+    MAX(IF(period='previous', roas,         NULL)) AS roas_prev,
     MAX(IF(period='current',  new_biz_deals_won,    NULL)) AS new_biz_deals_won,
     MAX(IF(period='current',  new_biz_deals_lost,   NULL)) AS new_biz_deals_lost,
     MAX(IF(period='current',  new_biz_deals_open,   NULL)) AS new_biz_deals_open,
@@ -156,6 +186,19 @@ SELECT
   ROUND(SAFE_DIVIDE(cpl - cpl_prev,                     NULLIF(cpl_prev, 0)) * 100, 1)             AS cpl_change_pct,
   ROUND(cpql, 2)                                                                                   AS cpql,
   ROUND(SAFE_DIVIDE(cpql - cpql_prev,                   NULLIF(cpql_prev, 0)) * 100, 1)            AS cpql_change_pct,
+  -- Deal counts (all pipelines)
+  deals_won,
+  deals_lost,
+  deals_open,
+  deals_total,
+  -- Deal amounts (all pipelines)
+  ROUND(amount_total, 2)                                                                           AS amount_total,
+  ROUND(SAFE_DIVIDE(amount_total - amount_total_prev,   NULLIF(amount_total_prev, 0)) * 100, 1)    AS amount_total_change_pct,
+  ROUND(revenue_won, 2)                                                                            AS revenue_won,
+  ROUND(SAFE_DIVIDE(revenue_won  - revenue_won_prev,    NULLIF(revenue_won_prev,  0)) * 100, 1)    AS revenue_won_change_pct,
+  ROUND(amount_lost, 2)                                                                            AS amount_lost,
+  ROUND(amount_open, 2)                                                                            AS amount_open,
+  -- New business
   new_biz_deals_won,
   new_biz_deals_lost,
   new_biz_deals_open,
@@ -164,6 +207,9 @@ SELECT
   ROUND(new_biz_amount_lost,  2)                                                                   AS new_biz_amount_lost,
   ROUND(new_biz_amount_open,  2)                                                                   AS new_biz_amount_open,
   ROUND(new_biz_amount_total, 2)                                                                   AS new_biz_amount_total,
+  -- ROAS — two flavors side-by-side
+  ROUND(roas, 2)                                                                                   AS roas,
+  ROUND(SAFE_DIVIDE(roas - roas_prev,                   NULLIF(roas_prev, 0)) * 100, 1)            AS roas_change_pct,
   ROUND(new_biz_roas, 2)                                                                           AS new_biz_roas,
   ROUND(SAFE_DIVIDE(new_biz_roas - new_biz_roas_prev,   NULLIF(new_biz_roas_prev, 0)) * 100, 1)    AS new_biz_roas_change_pct
 FROM pivot

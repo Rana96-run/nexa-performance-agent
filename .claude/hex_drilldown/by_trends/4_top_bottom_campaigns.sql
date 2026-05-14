@@ -16,6 +16,13 @@ WITH base AS (
 deals AS (
   SELECT
     deal_utm_campaign  AS campaign_name,
+    -- All-pipeline
+    SUM(deals_won)   AS deals_won,
+    SUM(deals_lost)  AS deals_lost,
+    SUM(deals_open)  AS deals_open,
+    SUM(amount_won)  AS revenue_won,
+    SUM(amount_lost) AS amount_lost,
+    SUM(amount_open) AS amount_open,
     -- New business — full parallel set
     SUM(IF(pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours'),
            amount_won, 0))  AS new_biz_revenue_won,
@@ -40,6 +47,14 @@ joined AS (
     b.channel,
     b.campaign_name,
     ROUND(b.spend, 2)                              AS spend,
+    -- All-pipeline
+    COALESCE(d.deals_won,  0)                      AS deals_won,
+    COALESCE(d.deals_lost, 0)                      AS deals_lost,
+    COALESCE(d.deals_open, 0)                      AS deals_open,
+    ROUND(COALESCE(d.revenue_won, 0), 2)           AS revenue_won,
+    ROUND(COALESCE(d.amount_lost, 0), 2)           AS amount_lost,
+    ROUND(COALESCE(d.amount_open, 0), 2)           AS amount_open,
+    ROUND(SAFE_DIVIDE(d.revenue_won, NULLIF(b.spend, 0)), 2) AS roas,
     -- New business — full parallel set
     COALESCE(d.new_biz_deals_won,  0)              AS new_biz_deals_won,
     COALESCE(d.new_biz_deals_lost, 0)              AS new_biz_deals_lost,
@@ -62,6 +77,13 @@ SELECT
   campaign_name,
   channel,
   spend,
+  deals_won,
+  deals_lost,
+  deals_open,
+  revenue_won,
+  amount_lost,
+  amount_open,
+  roas,
   new_biz_deals_won,
   new_biz_deals_lost,
   new_biz_deals_open,

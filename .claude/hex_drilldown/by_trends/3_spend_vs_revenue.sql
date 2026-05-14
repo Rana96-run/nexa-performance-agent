@@ -34,9 +34,12 @@ deals AS (
 SELECT
   d.date,
   ROUND(COALESCE(s.daily_spend, 0),            2) AS spend,
-  -- Won amounts
+  -- All-pipeline amounts
+  ROUND(COALESCE(de.daily_revenue, 0),         2) AS revenue_won,
+  ROUND(COALESCE(de.daily_lost,    0),         2) AS amount_lost,
+  ROUND(COALESCE(de.daily_open,    0),         2) AS amount_open,
+  -- New business amounts
   ROUND(COALESCE(de.daily_new_biz_revenue, 0), 2) AS new_biz_revenue_won,
-  -- Lost + open amounts (parallel set)
   ROUND(COALESCE(de.daily_new_biz_lost, 0), 2)    AS new_biz_amount_lost,
   ROUND(COALESCE(de.daily_new_biz_open, 0), 2)    AS new_biz_amount_open,
   -- 7-day rolling averages

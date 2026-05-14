@@ -37,6 +37,7 @@ deals AS (
       WHEN 'Microsoft Ads' THEN 'microsoft_ads'
       WHEN 'LinkedIn Ads'  THEN 'linkedin'
     END AS channel,
+    SUM(d.deals_won) AS deals_won,
     SUM(IF(d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours'),
            d.deals_won, 0)) AS new_biz_deals_won
   FROM periods p
@@ -48,7 +49,9 @@ deals AS (
 agg AS (
   SELECT
     s.period, s.channel, s.spend,
+    COALESCE(d.deals_won,         0) AS deals_won,
     COALESCE(d.new_biz_deals_won, 0) AS new_biz_deals_won,
+    SAFE_DIVIDE(s.spend, NULLIF(d.deals_won,         0)) AS cac,
     SAFE_DIVIDE(s.spend, NULLIF(d.new_biz_deals_won, 0)) AS new_biz_cac
   FROM spend s
   LEFT JOIN deals d USING (period, channel)
@@ -57,7 +60,10 @@ pivot AS (
   SELECT channel,
     MAX(IF(period='current',  spend,             NULL)) AS spend,
     MAX(IF(period='previous', spend,             NULL)) AS spend_prev,
+    MAX(IF(period='current',  deals_won,         NULL)) AS deals_won,
     MAX(IF(period='current',  new_biz_deals_won, NULL)) AS new_biz_deals_won,
+    MAX(IF(period='current',  cac,               NULL)) AS cac,
+    MAX(IF(period='previous', cac,               NULL)) AS cac_prev,
     MAX(IF(period='current',  new_biz_cac,       NULL)) AS new_biz_cac,
     MAX(IF(period='previous', new_biz_cac,       NULL)) AS new_biz_cac_prev
   FROM agg GROUP BY channel
@@ -65,11 +71,15 @@ pivot AS (
 SELECT
   channel,
   CAST(ROUND(spend, 2)             AS FLOAT64) AS spend,
+  deals_won,
   new_biz_deals_won,
+  CAST(ROUND(cac, 2)               AS FLOAT64) AS cac,
+  CAST(ROUND(cac_prev, 2)          AS FLOAT64) AS cac_prev,
+  CAST(ROUND(SAFE_DIVIDE(cac - cac_prev, NULLIF(cac_prev, 0)) * 100, 1) AS FLOAT64) AS cac_change_pct,
   CAST(ROUND(new_biz_cac, 2)       AS FLOAT64) AS new_biz_cac,
   CAST(ROUND(new_biz_cac_prev, 2)  AS FLOAT64) AS new_biz_cac_prev,
   CAST(ROUND(SAFE_DIVIDE(new_biz_cac - new_biz_cac_prev, NULLIF(new_biz_cac_prev, 0)) * 100, 1) AS FLOAT64) AS new_biz_cac_change_pct
 FROM pivot
 -- Hide channels without active spend in the period.
-WHERE new_biz_deals_won > 0 AND COALESCE(spend, 0) > 0
+WHERE (deals_won > 0 OR new_biz_deals_won > 0) AND COALESCE(spend, 0) > 0
 ORDER BY new_biz_cac ASC NULLS LAST
