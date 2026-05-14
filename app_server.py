@@ -5,7 +5,8 @@ Single process entry point for Railway deployment.
 
 Runs Flask (reports + webhooks) and all background threads in one dyno:
   Thread 1 — operational_scheduler  (agent cadences: daily/weekly/monthly)
-  Thread 2 — reporting_scheduler    (BQ data refresh every 6h)
+  Thread 2 — reporting_scheduler    (BQ data refresh — runs inline from
+                                     operational_scheduler at 08:00 + 20:00 Riyadh)
   Thread 3 — slack_listener         (responds to @Nexa mentions)
 
 Flask is served by gunicorn (via this module's `application` callable) when
@@ -65,9 +66,11 @@ def _start_background_threads():
         from slack_listener import run
         run()
 
-    # Note: reporting-scheduler thread removed.  BQ refresh now runs once,
-    # inline, immediately before the daily report is generated (see
-    # operational_scheduler._nightly).
+    # Note: reporting-scheduler thread removed. BQ refresh runs inline from
+    # the operational_scheduler at:
+    #   - 05:00 UTC / 08:00 Riyadh — via _nightly() (full nightly + BQ refresh)
+    #   - 17:00 UTC / 20:00 Riyadh — second BQ refresh only (no nightly cadence)
+    # Updated 2026-05-15 from once-a-day to twice-a-day to halve attribution lag.
     for name, fn, delay in [
         ("operational-scheduler", _op, 30),
         ("slack-listener", _slack, 15),

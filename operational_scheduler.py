@@ -483,6 +483,11 @@ def _run_health_check():
 
 def run():
     schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
+    # Second BQ refresh 12h later — picks up workflow re-classifications and
+    # late-arriving leads from the day. Doesn't run the full _nightly cadence,
+    # just refreshes BQ data so dashboards reflect current state.
+    # Added 2026-05-15 to halve attribution lag (was 24h, now 12h).
+    schedule.every().day.at("17:00").do(_refresh_bigquery)  # 20:00 Riyadh = 17:00 UTC
     # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
     # On-demand outside those hours via POST /api/run-health-check
     for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
@@ -491,7 +496,8 @@ def run():
     print("=" * 52)
     print("  Qoyod Operational Scheduler — LIVE")
     print("=" * 52)
-    print("  Daily    08:00 Riyadh (05:00 UTC)")
+    print("  Daily    08:00 Riyadh (05:00 UTC)  — full nightly + BQ refresh")
+    print("  BQ      20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month")
     print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
