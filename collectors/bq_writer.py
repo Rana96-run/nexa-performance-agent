@@ -1461,6 +1461,78 @@ LEFT JOIN hs_campaign h_camp
   AND LOWER(TRIM(a.campaign_name)) = h_camp.campaign_key
 """
 
+GA4_DATASET = "analytics_517912363"
+
+V_LP_GA4_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_ga4_daily` AS
+-- Landing page performance from GA4 — daily grain.
+-- Source: GA4 BigQuery export (analytics_517912363, me-central1).
+-- Grain: date × lp_page × source × medium × campaign × utm_content.
+-- Bounce rate = sessions where session_engaged = 0 (< 10s or single non-engaged interaction).
+-- Conversion = session that fired a generate_lead event (signup/registration).
+WITH landing AS (
+  -- One row per session, anchored to the entrance page_view (entrances = 1).
+  -- Source/medium/campaign extracted from UTM event_params on that same hit.
+  SELECT
+    PARSE_DATE('%Y%m%d', event_date)                                           AS date,
+    user_pseudo_id,
+    (SELECT value.int_value
+     FROM UNNEST(event_params) WHERE key = 'ga_session_id')                    AS session_id,
+    REGEXP_REPLACE(
+      REGEXP_EXTRACT(
+        (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location'),
+        r'(https?://[^?#]+)'
+      ), r'/$', ''
+    )                                                                           AS lp_page,
+    COALESCE(
+      (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'source'),
+      '(direct)'
+    )                                                                           AS source,
+    COALESCE(
+      (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'medium'),
+      '(none)'
+    )                                                                           AS medium,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'campaign')  AS campaign,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'content')   AS utm_content,
+    -- session_engaged: 1 = engaged session (not a bounce); stored as string in GA4 export
+    COALESCE(
+      SAFE_CAST(
+        (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'session_engaged')
+        AS INT64),
+      (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'session_engaged'),
+      0
+    )                                                                           AS session_engaged
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'page_view'
+    AND (SELECT value.int_value
+         FROM UNNEST(event_params) WHERE key = 'entrances') = 1
+),
+conversions AS (
+  -- Sessions that fired generate_lead (= completed signup / registration)
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'generate_lead'
+)
+SELECT
+  l.date,
+  l.lp_page,
+  l.source,
+  l.medium,
+  l.campaign,
+  l.utm_content,
+  COUNT(*)                                                                      AS sessions,
+  SUM(l.session_engaged)                                                        AS engaged_sessions,
+  ROUND((1 - SAFE_DIVIDE(SUM(l.session_engaged), COUNT(*))) * 100, 1)         AS bounce_rate_pct,
+  ROUND(SAFE_DIVIDE(SUM(l.session_engaged), COUNT(*)) * 100, 1)               AS engagement_rate_pct,
+  COUNT(c.session_id)                                                           AS conversions,
+  ROUND(SAFE_DIVIDE(COUNT(c.session_id), COUNT(*)) * 100, 2)                  AS conversion_rate_pct
+FROM landing l
+LEFT JOIN conversions c USING (user_pseudo_id, session_id)
+GROUP BY 1, 2, 3, 4, 5, 6
+"""
+
 
 def create_views():
     client = get_client()
