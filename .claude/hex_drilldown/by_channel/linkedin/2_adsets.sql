@@ -1,21 +1,22 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- HEX CELL — Ads drill-down, leaf level (Microsoft Ads)
--- Variables: channel, selected_campaign (optional), selected_adset (optional),
---            start_date, end_date
--- Row output: utm_content
+-- HEX CELL — Ad Sets / Ad Groups drill-down (LinkedIn Ads)
+-- Variables: channel (slug), selected_campaign (optional), start_date, end_date
+-- Row-click output: selected_adset (column: adset_name)
 --
--- Source: v_ad_performance (materialized). spend from ads_daily; leads from
--- utm_paid_attribution_daily; deals from hubspot_deals_daily (createdate
--- attributed after rebuild). All amounts USD.
--- Note: ad_name = utm_content; many Google RSAs have NULL utm_content → blank
--- rows expected.
+-- Source: v_adset_performance (materialized) — spend/impressions/clicks from
+-- adsets_daily, leads from utm_paid_attribution_daily, deals from
+-- hubspot_deals_daily (createdate-attributed after rebuild).
+-- All amounts are USD.
 --
--- Subquery wrap: avoids "Aggregations of aggregations" error caused by alias
--- `spend` shadowing the source column when used in HAVING/ORDER BY.
+-- Why the subquery wrap: aggregating `spend` and aliasing it AS `spend` shadows
+-- the underlying column. A HAVING/ORDER-BY clause then sees `spend` as the
+-- alias (an aggregation) and wrapping it in SUM/comparison can trigger
+-- "Aggregations of aggregations are not allowed". Wrapping in a subquery
+-- makes `spend` a plain column in the outer query.
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT * FROM (
   SELECT
-    utm_content                                                                           AS ad_name,
+    utm_audience                                                                          AS adset_name,
     ROUND(SUM(spend), 2)                                                                  AS spend,
     SUM(impressions)                                                                      AS impressions,
     SUM(clicks)                                                                           AS clicks,
@@ -37,22 +38,14 @@ SELECT * FROM (
     ROUND(SUM(new_biz_amount_lost),  2)                                                   AS new_biz_amount_lost,
     ROUND(SUM(new_biz_amount_open),  2)                                                   AS new_biz_amount_open,
     ROUND(SUM(new_biz_amount_total), 2)                                                   AS new_biz_amount_total,
-    ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)                AS new_biz_roas,
-    -- Creative type: NULL for Microsoft Ads (no ad-level creative type in the API)
-    MAX(creative_type)                                                                    AS creative_type,
-    -- Status: ACTIVE | PAUSED (NULL for channels where not collected)
-    MAX(status)                                                                           AS status,
-    MAX(data_source)                                                                      AS spend_source
-  FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
-  WHERE channel = 'microsoft_ads'
+    ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)                AS new_biz_roas
+  FROM `angular-axle-492812-q4.qoyod_marketing.v_adset_performance`
+  WHERE channel = 'linkedin'
     AND date BETWEEN {{ start_date }} AND {{ end_date }}
     {% if effective_campaign %}
     AND LOWER(TRIM(utm_campaign)) = LOWER(TRIM({{ effective_campaign }}))
     {% endif %}
-    {% if selected_adset %}
-    AND LOWER(TRIM(utm_audience)) = LOWER(TRIM({{ selected_adset }}))
-    {% endif %}
-  GROUP BY utm_content
+  GROUP BY utm_audience
 ) sub
 WHERE spend > 0
-ORDER BY spend DESC NULLS LAST
+ORDER BY spend DESC

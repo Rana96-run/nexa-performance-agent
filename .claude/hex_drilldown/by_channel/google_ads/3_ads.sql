@@ -28,15 +28,6 @@ SELECT * FROM (
     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2)                    AS cpql,
     ROUND(SAFE_DIVIDE(SUM(leads_qualified),    NULLIF(SUM(leads_qualified) + SUM(leads_disqualified), 0)) * 100, 1) AS qual_rate_pct,
     ROUND(SAFE_DIVIDE(SUM(leads_disqualified), NULLIF(SUM(leads_qualified) + SUM(leads_disqualified), 0)) * 100, 1) AS disq_rate_pct,
-    -- Deal counts (all pipelines)
-    SUM(deals_won)                                                                        AS deals_won,
-    SUM(deals_lost)                                                                       AS deals_lost,
-    SUM(deals_open)                                                                       AS deals_open,
-    -- Deal amounts (all pipelines)
-    ROUND(SUM(revenue_won + amount_lost + amount_open), 2)                                AS total_deal_amount,
-    ROUND(SUM(revenue_won), 2)                                                            AS closed_won_amount,
-    ROUND(SUM(amount_lost), 2)                                                            AS closed_lost_amount,
-    ROUND(SUM(amount_open), 2)                                                            AS open_deal_amount,
     -- New business (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
     SUM(new_biz_deals_won)                                                                AS new_biz_deals_won,
     SUM(new_biz_deals_lost)                                                               AS new_biz_deals_lost,
@@ -46,8 +37,6 @@ SELECT * FROM (
     ROUND(SUM(new_biz_amount_lost),  2)                                                   AS new_biz_amount_lost,
     ROUND(SUM(new_biz_amount_open),  2)                                                   AS new_biz_amount_open,
     ROUND(SUM(new_biz_amount_total), 2)                                                   AS new_biz_amount_total,
-    -- ROAS — two flavors side-by-side
-    ROUND(SAFE_DIVIDE(SUM(revenue_won),         NULLIF(SUM(spend), 0)), 2)                AS roas,
     ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)                AS new_biz_roas,
     -- Creative type: NULL for Google Ads (no ad-level creative type in the API)
     MAX(creative_type)                                                                    AS creative_type,
