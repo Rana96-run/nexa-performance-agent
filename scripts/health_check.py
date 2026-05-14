@@ -229,7 +229,15 @@ def check_linkedin() -> tuple[bool, str]:
 
 
 def check_data_freshness() -> tuple[bool, str]:
-    """Check how stale the key BQ tables are. Fails if any source is >2 days behind."""
+    """Check how stale the key BQ tables are.
+
+    Threshold: 3 days (matches check_freshness.STALE_THRESHOLD_DAYS).
+    Collector runs at 08:00 Riyadh pulling yesterday's data, so before that
+    window data is legitimately 2 days behind — flagging at >1 is a false positive.
+    Known-paused channels (linkedin) are excluded from the failure report.
+    """
+    STALE_DAYS = 3
+    KNOWN_PAUSED = {"linkedin"}
     try:
         from collectors.bq_writer import get_client, PROJECT_ID, DATASET as DATASET_ID
         bq     = get_client()
@@ -248,12 +256,16 @@ def check_data_freshness() -> tuple[bool, str]:
         """
         rows   = list(bq.query(sql).result())
         stale  = [(r.tbl, r.channel, str(r.last_date))
-                  for r in rows if r.last_date and (today - r.last_date).days > 1]
+                  for r in rows
+                  if r.last_date
+                  and (today - r.last_date).days >= STALE_DAYS
+                  and r.channel not in KNOWN_PAUSED]
         if stale:
             parts = [f"{ch}({tbl})={d}" for tbl, ch, d in stale[:5]]
             return False, f"Stale data: {', '.join(parts)}"
         sources = {r.channel for r in rows}
-        return True, f"All fresh ({len(sources)} sources, latest={max(str(r.last_date) for r in rows if r.last_date)})"
+        latest  = max((str(r.last_date) for r in rows if r.last_date), default="?")
+        return True, f"All fresh ({len(sources)} sources, latest={latest})"
     except Exception as e:
         return False, f"Freshness check: {e}"
 
