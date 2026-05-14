@@ -290,6 +290,15 @@ def activity_dashboard():
 
     days = min(max(int(request.args.get("days", 90)), 7), 365)
 
+    # Full-page cache — 5 min TTL. Skipped when ?nocache=1 for debugging.
+    _page_cache_key = f"page:{days}"
+    if not request.args.get("nocache"):
+        with _ACTIVITY_CACHE_LOCK:
+            entry = _ACTIVITY_CACHE.get(_page_cache_key)
+            if entry and (time.time() - entry["ts"]) < _ACTIVITY_CACHE_TTL:
+                print(f"[activity] cache hit ({days}d) — {round(time.time()-entry['ts'],0):.0f}s old", flush=True)
+                return Response(entry["html"], mimetype="text/html")
+
     try:
         from collectors.bq_writer import get_client
         bq = get_client()
@@ -1617,7 +1626,7 @@ def activity_dashboard():
         print(f"[activity] pending_approvals check failed (non-fatal): {e}")
 
     print(f"[activity] pre-render at {round(time.time()-_t0,1)}s", flush=True)
-    return render_template(
+    html = render_template(
         "activity.html",
         last_updated=now_str,
         date_label=date_label,
@@ -1637,6 +1646,12 @@ def activity_dashboard():
         pending_approvals=pending_approvals,
         today=today,
     )
+    print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
+    with _ACTIVITY_CACHE_LOCK:
+        _ACTIVITY_CACHE[_page_cache_key] = {"ts": time.time(), "html": html}
+        # Clean the raw-data cache entry — no longer needed separately
+        _ACTIVITY_CACHE.pop(days, None)
+    return html
 
 
 _REFRESH_STATUS: dict = {"running": False, "started_at": None,
