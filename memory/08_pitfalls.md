@@ -18,6 +18,41 @@ the fix, not just the symptom.
 `lead_utm_audience`. `v_adset_performance` Strategy B already joins on
 `lead_utm_audience` correctly. Date discovered: 2026-05-13.
 
+## ID property naming — different at every layer (DO NOT confuse)
+
+The platform ad-group level has 4+ different names across our stack. Whenever
+you write code or SQL touching IDs, match the name to the layer EXACTLY:
+
+| Layer                              | Property / column name        | Notes                                       |
+|------------------------------------|-------------------------------|---------------------------------------------|
+| HubSpot **Contact** (0-1)          | `ad_group_id`                 | underscore between "ad" and "group"         |
+| HubSpot **Contact** (0-1)          | `campaign_id`                 | populated by URL parameter capture (hsa_*)  |
+| HubSpot **Contact** (0-1)          | `ad_id`                       | custom property — needs explicit URL capture|
+| HubSpot **Lead Module** (0-136)    | `lead_adgroup_id_sync`        | "adgroup" as ONE word, NO underscore        |
+| HubSpot **Lead Module** (0-136)    | `lead_campaign_id_sync`       | calculated property — mirrors contact       |
+| HubSpot **Lead Module** (0-136)    | `lead_ad_id_sync`             | calculated property — mirrors contact       |
+| HubSpot **Deal** (0-3)             | `deal_adgroup_id_sync`        | "adgroup" as ONE word, NO underscore        |
+| HubSpot **Deal** (0-3)             | `deal_campaign_id_sync`       | calculated from contact                     |
+| HubSpot **Deal** (0-3)             | `deal_ad_id_sync`             | calculated from contact                     |
+| BigQuery `adsets_daily` table      | `adset_id`                    | Meta/TikTok/Snap term (Google = ad_group)   |
+| BigQuery `ads_daily` table         | `ad_id`                       | universal                                   |
+| BigQuery `campaigns_daily` table   | `campaign_id`                 | universal                                   |
+| BigQuery `v_adset_performance` view| `adset_id`                    | exposed for dashboards (= adgroup_id sync)  |
+| BigQuery `v_ad_performance` view   | `ad_id`, `adset_id`, `campaign_id` | exposed for dashboards               |
+
+Critical mappings when joining:
+- HubSpot **Contact** `ad_group_id` ≡ HubSpot **Lead** `lead_adgroup_id_sync` ≡ BQ `adset_id`
+  (calculated property syncs contact → lead automatically; same ID value)
+- HubSpot **Contact** `campaign_id`  ≡ HubSpot **Lead** `lead_campaign_id_sync` ≡ BQ `campaign_id`
+- HubSpot **Contact** `ad_id`        ≡ HubSpot **Lead** `lead_ad_id_sync`       ≡ BQ `ad_id`
+
+The collector and view code already uses these consistently. The trap is when
+WRITING new queries against HubSpot's Search API — `ad_group_id` (Contact)
+vs `lead_adgroup_id_sync` (Lead Module) IS different and HubSpot's API
+returns 400 if you use the wrong one on the wrong object.
+
+Date discovered: 2026-05-14.
+
 ## Deals sync — parallel runs duplicate the table
 
 - **Symptom:** `hubspot_deals_daily` ends up with 1.5–2x more rows than HubSpot
