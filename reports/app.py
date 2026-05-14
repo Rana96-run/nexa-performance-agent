@@ -21,6 +21,9 @@ Deploy on Railway (single dyno). Railway runs the agent — Flask serves /activi
 from __future__ import annotations
 
 import os
+import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from flask import Flask, jsonify, redirect, render_template, request, Response
@@ -33,6 +36,11 @@ app.register_blueprint(hubspot_bp)
 # ─── Static report pages ──────────────────────────────────────────────────────
 
 _START_TIME = datetime.utcnow()
+
+# 5-minute BQ result cache — keyed by (days,) so different ?days= params cache separately
+_ACTIVITY_CACHE: dict[int, dict] = {}
+_ACTIVITY_CACHE_TTL = 300  # seconds
+_ACTIVITY_CACHE_LOCK = threading.Lock()
 
 
 def _uptime_str() -> str:
@@ -352,29 +360,190 @@ def activity_dashboard():
         "data_quality_autoheal":                       "Optimizations",
     }
 
-    # ── 1. Heatmap data (from view, parameterised by days) ─────────────────────
-    heatmap_sql = f"""
-        SELECT day, category, SUM(count) AS count
-        FROM {T}.v_agent_activity_dashboard
-        WHERE day >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days + 1} DAY)
-        GROUP BY day, category
-    """
-    heatmap_raw: dict[str, dict[str, int]] = {}
-    try:
-        for row in bq.query(heatmap_sql).result():
-            heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
-    except Exception as e:
-        if "Not found" in str(e) and "v_agent_activity_dashboard" in str(e):
-            # View hasn't been created yet — trigger it silently and continue
+    # ── BQ queries — all 6 run in parallel, results cached 5 min ─────────────
+    _cache_key = days
+    _cached = None
+    with _ACTIVITY_CACHE_LOCK:
+        entry = _ACTIVITY_CACHE.get(_cache_key)
+        if entry and (time.time() - entry["ts"]) < _ACTIVITY_CACHE_TTL:
+            _cached = entry["data"]
+
+    if _cached:
+        heatmap_raw  = _cached["heatmap_raw"]
+        detail_rows  = _cached["detail_rows"]
+        infra_rows   = _cached["infra_rows"]
+        channel_rows = _cached["channel_rows"]
+        _kpi_rows    = _cached["kpi_rows"]
+        _last_rows   = _cached["last_rows"]
+    else:
+        heatmap_sql = f"""
+            SELECT day, category, SUM(count) AS count
+            FROM {T}.v_agent_activity_dashboard
+            WHERE day >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days + 1} DAY)
+            GROUP BY day, category
+        """
+        detail_sql = f"""
+            SELECT
+              DATE(ts, 'Asia/Riyadh')                          AS day,
+              action, role, channel, campaign_name, status,
+              COALESCE(rows_affected, 1)                        AS cnt,
+              JSON_VALUE(details, '$.title')                    AS asana_title,
+              JSON_VALUE(details, '$.task_action')              AS asana_task_action,
+              JSON_VALUE(details, '$.asset_level')              AS asana_asset_level,
+              JSON_VALUE(details, '$.project_key')              AS asana_project_key,
+              JSON_VALUE(details, '$.new_budget_usd')           AS new_budget,
+              JSON_VALUE(details, '$.budget_usd')               AS create_budget,
+              JSON_VALUE(details, '$.candidate_count')          AS candidate_count,
+              JSON_EXTRACT_STRING_ARRAY(details, '$.keywords')  AS kw_list,
+              JSON_EXTRACT_STRING_ARRAY(details, '$.terms')     AS terms_list,
+              JSON_VALUE(details, '$.scale')                    AS dig_scale,
+              JSON_VALUE(details, '$.pause')                    AS dig_pause,
+              JSON_VALUE(details, '$.review')                   AS dig_review
+            FROM {T}.agent_activity_log
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+              AND status NOT IN ('failed', 'skipped')
+              AND action IN (
+                'campaign_created','campaign_paused','campaign_scaled','ads_paused',
+                'user_created_campaign',
+                'launch','keyword_candidates_queued_for_weekly_review','positive_keywords_added',
+                'keywords_paused','keywords_deleted',
+                'negative_keywords_added','negative_keywords_removed',
+                'ads_enabled',
+                'asana_task_created','asana_tasks_created',
+                'posted_slack_digest','slack_summary_posted','post_weekly_summary',
+                'nightly_audit_complete',
+                'posted_approvals_digest','approval_requested',
+                'action_approved_via_slack','action_rejected_via_slack',
+                'create_audit_tasks',
+                'optimize_task_created','drilldown_task_created',
+                'scale_task_created','pause_task_created','junk_leads_task_created',
+                'cadence_daily_complete','cadence_nightly_complete',
+                'cadence_weekly_complete','cadence_monthly_complete'
+              )
+            ORDER BY ts DESC
+            LIMIT 2000
+        """
+        infra_sql = f"""
+            SELECT
+              DATE(ts, 'Asia/Riyadh') AS day,
+              action,
+              COALESCE(rows_affected, 1) AS cnt
+            FROM {T}.agent_activity_log
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+              AND status NOT IN ('failed','skipped')
+              AND (action LIKE 'collect_%' OR action IN (
+                   'refresh_hex_notebooks','refresh_complete','refresh_views'))
+            ORDER BY ts DESC
+            LIMIT 300
+        """
+        chan_sql = f"""
+            SELECT
+              REGEXP_REPLACE(action, r'^collect_', '')               AS channel,
+              MAX(DATE(ts, 'Asia/Riyadh'))                           AS latest_date,
+              DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),
+                        MAX(DATE(ts, 'Asia/Riyadh')), DAY) <= 2      AS active
+            FROM {T}.agent_activity_log
+            WHERE action LIKE 'collect_%'
+              AND status = 'success'
+              AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+            GROUP BY channel
+            ORDER BY latest_date DESC
+        """
+        kpi_sql = f"""
+            WITH latest AS (
+                SELECT MAX(date) AS d FROM {T}.paid_channel_daily
+            ),
+            yest AS (
+                SELECT l.d AS data_date, SUM(p.spend) AS spend,
+                       SUM(p.leads_total) AS leads, SUM(p.qualified) AS sqls
+                FROM {T}.paid_channel_daily p, latest l
+                WHERE p.date = l.d GROUP BY l.d
+            ),
+            week_avg AS (
+                SELECT ROUND(AVG(spend),2) AS spend_avg, ROUND(AVG(leads),2) AS leads_avg,
+                       ROUND(AVG(sqls),2) AS sqls_avg
+                FROM (
+                    SELECT date, SUM(spend) AS spend,
+                           SUM(leads_total) AS leads, SUM(qualified) AS sqls
+                    FROM {T}.paid_channel_daily
+                    WHERE date BETWEEN
+                          DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 8 DAY)
+                      AND DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 1 DAY)
+                    GROUP BY date
+                )
+            ),
+            by_channel AS (
+                SELECT p.channel,
+                       ROUND(SUM(p.spend),2) AS spend, SUM(p.leads_total) AS leads,
+                       SUM(p.qualified) AS sqls,
+                       ROUND(SAFE_DIVIDE(SUM(p.spend),NULLIF(SUM(p.qualified),0)),2) AS cpql
+                FROM {T}.paid_channel_daily p, latest l
+                WHERE p.date = l.d AND p.spend > 0 GROUP BY p.channel
+            )
+            SELECT y.data_date, y.spend, y.leads, y.sqls,
+                   ROUND(SAFE_DIVIDE(y.spend,NULLIF(y.sqls,0)),2) AS cpql,
+                   w.spend_avg, w.leads_avg, w.sqls_avg,
+                   ARRAY_AGG(STRUCT(c.channel,c.spend,c.leads,c.sqls,c.cpql)
+                             ORDER BY COALESCE(c.cpql,99999) ASC LIMIT 5) AS top_channels
+            FROM yest y, week_avg w, by_channel c
+            GROUP BY y.data_date, y.spend, y.leads, y.sqls, w.spend_avg, w.leads_avg, w.sqls_avg
+        """
+        last_sql = f"""
+            SELECT role, action, channel, ts,
+                   TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), ts, MINUTE) AS mins_ago
+            FROM {T}.agent_activity_log ORDER BY ts DESC LIMIT 1
+        """
+
+        def _run(sql):
+            return list(bq.query(sql).result())
+
+        def _run_heatmap():
             try:
-                from collectors.views import refresh_all_views
-                refresh_all_views()
-                for row in bq.query(heatmap_sql).result():
-                    heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
-            except Exception:
-                pass  # heatmap will be empty; all other sections still render
-        else:
-            raise
+                return _run(heatmap_sql)
+            except Exception as e:
+                if "Not found" in str(e) and "v_agent_activity_dashboard" in str(e):
+                    try:
+                        from collectors.views import refresh_all_views
+                        refresh_all_views()
+                        return _run(heatmap_sql)
+                    except Exception:
+                        return []
+                raise
+
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            f_heatmap = ex.submit(_run_heatmap)
+            f_detail  = ex.submit(_run, detail_sql)
+            f_infra   = ex.submit(_run, infra_sql)
+            f_chan    = ex.submit(_run, chan_sql)
+            f_kpi     = ex.submit(_run, kpi_sql)
+            f_last    = ex.submit(_run, last_sql)
+
+        heatmap_rows_raw = f_heatmap.result()
+        detail_rows      = f_detail.result()
+        infra_rows       = f_infra.result()
+        _kpi_rows        = f_kpi.result()
+        _last_rows       = f_last.result()
+        try:
+            channel_rows = f_chan.result()
+        except Exception:
+            channel_rows = []
+
+        heatmap_raw: dict[str, dict[str, int]] = {}
+        for row in heatmap_rows_raw:
+            heatmap_raw.setdefault(str(row.category), {})[str(row.day)] = int(row.count)
+
+        with _ACTIVITY_CACHE_LOCK:
+            _ACTIVITY_CACHE[_cache_key] = {
+                "ts": time.time(),
+                "data": {
+                    "heatmap_raw":  heatmap_raw,
+                    "detail_rows":  detail_rows,
+                    "infra_rows":   infra_rows,
+                    "channel_rows": channel_rows,
+                    "kpi_rows":     _kpi_rows,
+                    "last_rows":    _last_rows,
+                },
+            }
 
     CATEGORIES = [
         "Campaigns Created", "Campaigns Paused", "Campaigns Scaled",
@@ -405,93 +574,6 @@ def activity_dashboard():
         ]
         total = sum(data.get(str(d), 0) for d in all_dates)
         heatmap_rows.append((cat, cells, total))
-
-    # ── 2. All detail rows (90d, relevant actions only) ───────────────────────
-    detail_sql = f"""
-        SELECT
-          DATE(ts, 'Asia/Riyadh')                          AS day,
-          action, role, channel, campaign_name, status,
-          COALESCE(rows_affected, 1)                        AS cnt,
-          JSON_VALUE(details, '$.title')                    AS asana_title,
-          JSON_VALUE(details, '$.task_action')              AS asana_task_action,
-          JSON_VALUE(details, '$.asset_level')              AS asana_asset_level,
-          JSON_VALUE(details, '$.project_key')              AS asana_project_key,
-          JSON_VALUE(details, '$.new_budget_usd')           AS new_budget,
-          JSON_VALUE(details, '$.budget_usd')               AS create_budget,
-          JSON_VALUE(details, '$.candidate_count')          AS candidate_count,
-          JSON_EXTRACT_STRING_ARRAY(details, '$.keywords')  AS kw_list,
-          JSON_EXTRACT_STRING_ARRAY(details, '$.terms')     AS terms_list,
-          JSON_VALUE(details, '$.scale')                    AS dig_scale,
-          JSON_VALUE(details, '$.pause')                    AS dig_pause,
-          JSON_VALUE(details, '$.review')                   AS dig_review
-        FROM {T}.agent_activity_log
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-          AND status NOT IN ('failed', 'skipped')
-          AND action IN (
-            -- Campaign actions
-            'campaign_created','campaign_paused','campaign_scaled','ads_paused',
-            'user_created_campaign',
-            -- Keyword actions
-            'launch','keyword_candidates_queued_for_weekly_review','positive_keywords_added',
-            'keywords_paused','keywords_deleted',
-            'negative_keywords_added','negative_keywords_removed',
-            'ads_enabled',
-            -- Asana
-            'asana_task_created','asana_tasks_created',
-            -- Slack
-            'posted_slack_digest','slack_summary_posted','post_weekly_summary',
-            'nightly_audit_complete',
-            -- Approvals
-            'posted_approvals_digest','approval_requested',
-            'action_approved_via_slack','action_rejected_via_slack',
-            -- Audits & optimizations
-            'create_audit_tasks',
-            'optimize_task_created','drilldown_task_created',
-            'scale_task_created','pause_task_created','junk_leads_task_created',
-            -- Cadence completions (these fire after each daily/nightly Slack round)
-            'cadence_daily_complete','cadence_nightly_complete',
-            'cadence_weekly_complete','cadence_monthly_complete'
-          )
-        ORDER BY ts DESC
-        LIMIT 2000
-    """
-    detail_rows = list(bq.query(detail_sql).result())
-
-    # ── 3. BQ collections & refreshes ─────────────────────────────────────────
-    infra_sql = f"""
-        SELECT
-          DATE(ts, 'Asia/Riyadh') AS day,
-          action,
-          COALESCE(rows_affected, 1) AS cnt
-        FROM {T}.agent_activity_log
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-          AND status NOT IN ('failed','skipped')
-          AND (action LIKE 'collect_%' OR action IN (
-               'refresh_hex_notebooks','refresh_complete','refresh_views'))
-        ORDER BY ts DESC
-        LIMIT 300
-    """
-    infra_rows = list(bq.query(infra_sql).result())
-
-    # ── 4. Linked channels — from collector activity (covers all APIs incl. organic/CRM) ──
-    chan_sql = f"""
-        SELECT
-          REGEXP_REPLACE(action, r'^collect_', '')               AS channel,
-          MAX(DATE(ts, 'Asia/Riyadh'))                           AS latest_date,
-          DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),
-                    MAX(DATE(ts, 'Asia/Riyadh')), DAY) <= 2      AS active
-        FROM {T}.agent_activity_log
-        WHERE action LIKE 'collect_%'
-          AND status = 'success'
-          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
-        GROUP BY channel
-        ORDER BY latest_date DESC
-    """
-    channel_rows = []
-    try:
-        channel_rows = list(bq.query(chan_sql).result())
-    except Exception:
-        pass
 
     # ── Helper: count rows by action set, filtered to window ──────────────────
     cutoff_30 = today - timedelta(days=30)
@@ -1424,61 +1506,14 @@ def activity_dashboard():
     except Exception as e:
         print(f"[activity] hygiene query failed (non-fatal): {e}")
 
-    # ── Today's KPI bar ───────────────────────────────────────────────────────
+    # ── Today's KPI bar (uses pre-fetched _kpi_rows from parallel batch) ────────
     today_kpis: dict = {}
     try:
-        kpi_sql = f"""
-            WITH latest AS (
-                SELECT MAX(date) AS d FROM {T}.paid_channel_daily
-            ),
-            yest AS (
-                SELECT
-                    l.d                  AS data_date,
-                    SUM(p.spend)         AS spend,
-                    SUM(p.leads_total)   AS leads,
-                    SUM(p.qualified)     AS sqls
-                FROM {T}.paid_channel_daily p, latest l
-                WHERE p.date = l.d
-                GROUP BY l.d
-            ),
-            week_avg AS (
-                SELECT
-                    ROUND(AVG(spend), 2)  AS spend_avg,
-                    ROUND(AVG(leads), 2)  AS leads_avg,
-                    ROUND(AVG(sqls),  2)  AS sqls_avg
-                FROM (
-                    SELECT date,
-                           SUM(spend)       AS spend,
-                           SUM(leads_total) AS leads,
-                           SUM(qualified)   AS sqls
-                    FROM {T}.paid_channel_daily
-                    WHERE date BETWEEN
-                          DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 8 DAY) AND
-                          DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 1 DAY)
-                    GROUP BY date
-                )
-            ),
-            by_channel AS (
-                SELECT
-                    p.channel,
-                    ROUND(SUM(p.spend), 2)                                           AS spend,
-                    SUM(p.leads_total)                                               AS leads,
-                    SUM(p.qualified)                                                 AS sqls,
-                    ROUND(SAFE_DIVIDE(SUM(p.spend), NULLIF(SUM(p.qualified),0)), 2) AS cpql
-                FROM {T}.paid_channel_daily p, latest l
-                WHERE p.date = l.d AND p.spend > 0
-                GROUP BY p.channel
-            )
-            SELECT
-                y.data_date, y.spend, y.leads, y.sqls,
-                ROUND(SAFE_DIVIDE(y.spend, NULLIF(y.sqls, 0)), 2) AS cpql,
-                w.spend_avg, w.leads_avg, w.sqls_avg,
-                ARRAY_AGG(STRUCT(c.channel, c.spend, c.leads, c.sqls, c.cpql)
-                          ORDER BY COALESCE(c.cpql, 99999) ASC LIMIT 5) AS top_channels
-            FROM yest y, week_avg w, by_channel c
-            GROUP BY y.data_date, y.spend, y.leads, y.sqls, w.spend_avg, w.leads_avg, w.sqls_avg
-        """
-        for row in bq.query(kpi_sql).result():
+        def _delta(val, avg):
+            if avg == 0: return None
+            pct = round((val - avg) / avg * 100)
+            return {"pct": pct, "up": pct >= 0}
+        for row in _kpi_rows:
             spend  = float(row.spend  or 0)
             leads  = int(row.leads    or 0)
             sqls   = int(row.sqls     or 0)
@@ -1486,10 +1521,6 @@ def activity_dashboard():
             s_avg  = float(row.spend_avg  or 0)
             l_avg  = float(row.leads_avg  or 0)
             sq_avg = float(row.sqls_avg   or 0)
-            def _delta(val, avg):
-                if avg == 0: return None
-                pct = round((val - avg) / avg * 100)
-                return {"pct": pct, "up": pct >= 0}
             channels = []
             for c in (row.top_channels or []):
                 channels.append({
@@ -1499,42 +1530,32 @@ def activity_dashboard():
                     "sqls":    int(c["sqls"]  or 0),
                     "cpql":    round(float(c["cpql"] or 0), 0) if c["cpql"] else None,
                 })
-            data_date  = row.data_date
-            days_ago   = (today - data_date).days if data_date else 1
+            data_date   = row.data_date
+            days_ago    = (today - data_date).days if data_date else 1
             date_suffix = "yesterday" if days_ago == 1 else f"{days_ago}d ago"
-            today_kpis = {
-                "spend":      round(spend, 0),
-                "leads":      leads,
-                "sqls":       sqls,
-                "cpql":       round(cpql, 0) if cpql else None,
-                "d_spend":    _delta(spend, s_avg),
-                "d_leads":    _delta(leads, l_avg),
-                "d_sqls":     _delta(sqls, sq_avg),
-                "channels":   channels,
-                "date_label": str(data_date) if data_date else "—",
+            today_kpis  = {
+                "spend":       round(spend, 0),
+                "leads":       leads,
+                "sqls":        sqls,
+                "cpql":        round(cpql, 0) if cpql else None,
+                "d_spend":     _delta(spend, s_avg),
+                "d_leads":     _delta(leads, l_avg),
+                "d_sqls":      _delta(sqls, sq_avg),
+                "channels":    channels,
+                "date_label":  str(data_date) if data_date else "—",
                 "date_suffix": date_suffix,
             }
     except Exception as e:
-        print(f"[activity] today_kpis query failed (non-fatal): {e}")
+        print(f"[activity] today_kpis failed (non-fatal): {e}")
 
-    # ── Agent status + next run ───────────────────────────────────────────────
+    # ── Agent status + next run (uses pre-fetched _last_rows) ────────────────
     agent_status: dict = {}
     try:
-        last_sql = f"""
-            SELECT role, action, channel, ts,
-                   TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), ts, MINUTE) AS mins_ago
-            FROM {T}.agent_activity_log
-            ORDER BY ts DESC
-            LIMIT 1
-        """
-        for row in bq.query(last_sql).result():
+        for row in _last_rows:
             mins = int(row.mins_ago or 0)
-            if mins < 60:
-                age = f"{mins}m ago"
-            elif mins < 1440:
-                age = f"{mins // 60}h {mins % 60}m ago"
-            else:
-                age = f"{mins // 1440}d ago"
+            if mins < 60:       age = f"{mins}m ago"
+            elif mins < 1440:   age = f"{mins // 60}h {mins % 60}m ago"
+            else:               age = f"{mins // 1440}d ago"
             agent_status["last_action"] = {
                 "role":    row.role or "—",
                 "action":  (row.action or "").replace("_", " ").title(),
@@ -1542,8 +1563,6 @@ def activity_dashboard():
                 "age":     age,
                 "mins_ago": mins,
             }
-        # Next 08:00 Riyadh
-        from datetime import date as _date
         now_riyadh = datetime.now(riyadh)
         next_run   = now_riyadh.replace(hour=8, minute=0, second=0, microsecond=0)
         if now_riyadh >= next_run:
@@ -1554,7 +1573,7 @@ def activity_dashboard():
         agent_status["next_in"]   = f"{total_min // 60}h {total_min % 60}m" if total_min >= 60 else f"{total_min}m"
         agent_status["uptime"]    = _uptime_str()
     except Exception as e:
-        print(f"[activity] agent_status query failed (non-fatal): {e}")
+        print(f"[activity] agent_status failed (non-fatal): {e}")
 
     # ── Pending approvals ─────────────────────────────────────────────────────
     pending_approvals: list = []
