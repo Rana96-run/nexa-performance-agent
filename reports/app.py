@@ -1872,6 +1872,44 @@ def dashboard_short():
 @app.route("/")
 @app.route("/paid-performance/latest")
 @app.route("/paid-performance/<report_date>")
+@app.route("/api/freshness")
+def api_freshness():
+    """Live BQ data freshness — always bypasses HTML cache. Used by the activity
+    dashboard to show a real-time staleness indicator without re-rendering the page."""
+    from flask import jsonify
+    try:
+        _bq  = get_client()
+        P, D = PROJECT_ID, DATASET
+        rows = list(_bq.query(f"""
+            SELECT channel, MAX(date) AS last_date,
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_ago
+            FROM `{P}.{D}`.campaigns_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            GROUP BY channel
+            UNION ALL
+            SELECT 'hubspot_leads', MAX(date),
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+            FROM `{P}.{D}`.hubspot_leads_module_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            ORDER BY channel
+        """).result())
+        channels = [
+            {"channel": r.channel,
+             "last_date": str(r.last_date or "—"),
+             "days_ago": int(r.days_ago or 0),
+             "ok": r.days_ago is not None and r.days_ago <= 1}
+            for r in rows
+        ]
+        stale = [c for c in channels if not c["ok"]]
+        return jsonify({
+            "ok": len(stale) == 0,
+            "stale_count": len(stale),
+            "channels": channels,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/reports/latest")
 @app.route("/reports/<report_date>")
 def dashboard_redirect(**kwargs):

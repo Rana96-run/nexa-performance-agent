@@ -504,6 +504,35 @@ def _run_health_check():
         traceback.print_exc()
 
 
+def _catchup_if_stale():
+    """On container start, check if paid_channel_daily is stale (nightly missed due to redeploy).
+    If data is > 1 day behind AND it's past 06:00 UTC (nightly window safely past), run a BQ
+    refresh in the background — data only, no Slack/Asana actions."""
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+    # Don't catch up if we're still before the nightly window — it hasn't fired yet
+    if now_utc.hour < 6:
+        print("[ops-scheduler] Startup: before nightly window — skipping catch-up check")
+        return
+    try:
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+        bq = get_client()
+        rows = list(bq.query(
+            f"SELECT DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_behind"
+            f" FROM `{PROJECT_ID}.{DATASET}`.paid_channel_daily"
+        ).result())
+        days_behind = int(rows[0]["days_behind"] or 0) if rows else 0
+        if days_behind <= 1:
+            print(f"[ops-scheduler] Startup: data fresh (days_behind={days_behind}) — no catch-up needed")
+            return
+        print(f"[ops-scheduler] Startup: paid_channel_daily is {days_behind} day(s) behind"
+              " — running catch-up BQ refresh in background")
+        import threading
+        threading.Thread(target=_refresh_bigquery, name="startup-catchup", daemon=True).start()
+    except Exception as e:
+        print(f"[ops-scheduler] Startup catch-up check failed (non-fatal): {e}")
+
+
 def run():
     schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
     # Second BQ refresh 12h later — picks up workflow re-classifications and
@@ -534,6 +563,10 @@ def run():
         hc_main(post_slack=False)  # console-only on startup
     except Exception as e:
         print(f"[ops-scheduler] Startup health check error: {e}")
+
+    # Catch-up: if a redeploy happened during the 05:00 UTC nightly window,
+    # the data refresh was killed mid-run. Fix it silently on next startup.
+    _catchup_if_stale()
 
     while True:
         schedule.run_pending()

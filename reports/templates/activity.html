@@ -348,6 +348,11 @@ a:hover{text-decoration:underline}
   </div>
   {% endif %}
 
+  <!-- ── Live data-staleness banner (fetched fresh on every load, bypasses HTML cache) ── -->
+  <div id="freshness-banner" style="display:none;padding:8px 16px;border-radius:6px;
+       margin-bottom:12px;font-size:13px;font-weight:600;background:#2d1b1b;
+       border:1px solid #f85149;color:#f85149"></div>
+
   <!-- ── Yesterday's KPI Bar ── -->
   {% if today_kpis %}
   <div class="kpi-bar">
@@ -2166,6 +2171,26 @@ function runAsanaBackfill() {
     .then(function() { stat.textContent = 'Running in background — reload in ~60s to see results'; })
     .catch(function() { stat.style.color='#f85149'; stat.textContent='Request failed'; });
 }
+
+// ── Live freshness check — bypasses the 5-min HTML page cache ───────────────
+(function() {
+  fetch('/api/freshness')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) return; // all channels fresh — banner stays hidden
+      var stale = (data.channels || []).filter(function(c) { return !c.ok; });
+      if (!stale.length) return;
+      var worst = stale.reduce(function(a, b) { return b.days_ago > a.days_ago ? b : a; });
+      var names = stale.map(function(c) { return c.channel + ' (' + c.last_date + ')'; }).join(', ');
+      var banner = document.getElementById('freshness-banner');
+      if (banner) {
+        banner.textContent = '⚠ Data is ' + worst.days_ago + ' day(s) behind. Stale: ' + names
+          + ' — nightly refresh may have been missed. Reload after a few minutes.';
+        banner.style.display = 'block';
+      }
+    })
+    .catch(function() {}); // silent — never break the page
+})();
 </script>
 </body>
 </html>
