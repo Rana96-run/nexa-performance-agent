@@ -592,9 +592,10 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   thread → N duplicate nightly runs. Always: `gunicorn app_server:app --workers 1 --threads 4`.
 - **Activity log CSV is ephemeral.** `logs/activity_log.csv` was wiped on every redeploy. All activity
   logging writes directly to BQ `agent_activity_log` via `log_activity_async()`. No CSV intermediary.
-- **Canonical domain is `nexa-performance-agent.up.railway.app`.** The old domain
-  `nexa-web-production-c859.up.railway.app` is retired. Any hardcoded URL in scheduled tasks or
-  SKILL.md files must use the canonical domain — stale URLs return 404.
+- **Canonical domain is `nexa-web-production-6a6b.up.railway.app`.** Confirmed 2026-05-15 via
+  `railway variables` — the `ACTIVITY_DASHBOARD_URL` env var inside the service itself points to
+  this domain. `nexa-performance-agent.up.railway.app` is NOT provisioned (returns Railway 404).
+  `nexa-web-production-c859.up.railway.app` is the deleted personal-project domain. Use `6a6b`.
 
 ## Slack
 
