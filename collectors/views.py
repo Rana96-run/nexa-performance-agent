@@ -741,6 +741,7 @@ def _sub_campaign_views():
         V_LP_WEEKLY_SUMMARY_SQL,
         V_SIGNUP_FUNNEL_WEEKLY_SQL,
         V_LP_GA4_DAILY_SQL,
+        V_LP_GA4_FUNNEL_DAILY_SQL,
     )
     return [
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
@@ -749,8 +750,9 @@ def _sub_campaign_views():
         ("v_lp_weekly_summary",     V_LP_WEEKLY_SUMMARY_SQL),
         # Signup funnel — ad-level attribution for www.qoyod.com campaigns
         ("v_signup_funnel_weekly",  V_SIGNUP_FUNNEL_WEEKLY_SQL),
-        # GA4 landing page performance — bounce rate, engagement, conversions by source
+        # GA4 views — page-level performance + full channel funnel
         ("v_lp_ga4_daily",          V_LP_GA4_DAILY_SQL),
+        ("v_lp_ga4_funnel_daily",   V_LP_GA4_FUNNEL_DAILY_SQL),
     ]
 
 

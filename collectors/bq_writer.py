@@ -1466,49 +1466,48 @@ GA4_DATASET = "analytics_517912363"
 V_LP_GA4_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_ga4_daily` AS
 -- Landing page performance from GA4 — daily grain.
--- Source: GA4 BigQuery export (analytics_517912363, me-central1).
+-- Source: GA4 BigQuery export ({GA4_DATASET}, me-central1).
 -- Grain: date × lp_page × source × medium × campaign × utm_content.
--- Bounce rate = sessions where session_engaged = 0 (< 10s or single non-engaged interaction).
--- Conversion = session that fired a generate_lead event (signup/registration).
-WITH landing AS (
-  -- One row per session, anchored to the entrance page_view (entrances = 1).
-  -- Source/medium/campaign extracted from UTM event_params on that same hit.
+-- Attribution: collected_traffic_source (session-level UTM), not event_params on page_view.
+-- Engagement: sessions with a user_engagement event = GA4's own engaged session definition.
+-- Conversion: session that fired generate_lead (form submission / signup).
+WITH sessions AS (
+  -- Session-level source attribution from collected_traffic_source (most accurate)
   SELECT
-    PARSE_DATE('%Y%m%d', event_date)                                           AS date,
+    PARSE_DATE('%Y%m%d', event_date)                                               AS date,
     user_pseudo_id,
-    (SELECT value.int_value
-     FROM UNNEST(event_params) WHERE key = 'ga_session_id')                    AS session_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id,
+    COALESCE(collected_traffic_source.manual_source,  traffic_source.source,  '(direct)') AS source,
+    COALESCE(collected_traffic_source.manual_medium,  traffic_source.medium,  '(none)')   AS medium,
+    COALESCE(collected_traffic_source.manual_campaign_name, traffic_source.name)           AS campaign,
+    collected_traffic_source.manual_content                                                AS utm_content
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'session_start'
+),
+landings AS (
+  -- Entrance page_view — one row per session, anchored to the first page seen
+  SELECT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id,
     REGEXP_REPLACE(
       REGEXP_EXTRACT(
         (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location'),
         r'(https?://[^?#]+)'
       ), r'/$', ''
-    )                                                                           AS lp_page,
-    COALESCE(
-      (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'source'),
-      '(direct)'
-    )                                                                           AS source,
-    COALESCE(
-      (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'medium'),
-      '(none)'
-    )                                                                           AS medium,
-    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'campaign')  AS campaign,
-    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'content')   AS utm_content,
-    -- session_engaged: 1 = engaged session (not a bounce); stored as string in GA4 export
-    COALESCE(
-      SAFE_CAST(
-        (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'session_engaged')
-        AS INT64),
-      (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'session_engaged'),
-      0
-    )                                                                           AS session_engaged
+    )                                                                               AS lp_page
   FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
   WHERE event_name = 'page_view'
-    AND (SELECT value.int_value
-         FROM UNNEST(event_params) WHERE key = 'entrances') = 1
+    AND (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'entrances') = 1
+),
+engaged AS (
+  -- Sessions with a user_engagement event = GA4's engaged session (>10s or 2+ pages or conversion)
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'user_engagement'
 ),
 conversions AS (
-  -- Sessions that fired generate_lead (= completed signup / registration)
   SELECT DISTINCT
     user_pseudo_id,
     (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
@@ -1516,21 +1515,114 @@ conversions AS (
   WHERE event_name = 'generate_lead'
 )
 SELECT
-  l.date,
+  s.date,
   l.lp_page,
-  l.source,
-  l.medium,
-  l.campaign,
-  l.utm_content,
-  COUNT(*)                                                                      AS sessions,
-  SUM(l.session_engaged)                                                        AS engaged_sessions,
-  ROUND((1 - SAFE_DIVIDE(SUM(l.session_engaged), COUNT(*))) * 100, 1)         AS bounce_rate_pct,
-  ROUND(SAFE_DIVIDE(SUM(l.session_engaged), COUNT(*)) * 100, 1)               AS engagement_rate_pct,
-  COUNT(c.session_id)                                                           AS conversions,
-  ROUND(SAFE_DIVIDE(COUNT(c.session_id), COUNT(*)) * 100, 2)                  AS conversion_rate_pct
-FROM landing l
-LEFT JOIN conversions c USING (user_pseudo_id, session_id)
+  s.source,
+  s.medium,
+  s.campaign,
+  s.utm_content,
+  COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING)))           AS sessions,
+  COUNT(DISTINCT CONCAT(e.user_pseudo_id, CAST(e.session_id AS STRING)))           AS engaged_sessions,
+  ROUND((1 - SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(e.user_pseudo_id, CAST(e.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING))))) * 100, 1) AS bounce_rate_pct,
+  ROUND(SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(e.user_pseudo_id, CAST(e.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING)))) * 100, 1)  AS engagement_rate_pct,
+  COUNT(DISTINCT CONCAT(c.user_pseudo_id, CAST(c.session_id AS STRING)))           AS conversions,
+  ROUND(SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(c.user_pseudo_id, CAST(c.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING)))) * 100, 2)  AS conversion_rate_pct
+FROM sessions s
+INNER JOIN landings l USING (user_pseudo_id, session_id)
+LEFT JOIN  engaged   e USING (user_pseudo_id, session_id)
+LEFT JOIN  conversions c USING (user_pseudo_id, session_id)
 GROUP BY 1, 2, 3, 4, 5, 6
+"""
+
+V_LP_GA4_FUNNEL_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_ga4_funnel_daily` AS
+-- Full GA4 funnel by source/medium/campaign — daily grain.
+-- Funnel: sessions → landings → engaged → signup_page_visit → lead (generate_lead).
+-- Attribution: collected_traffic_source on session_start.
+-- Use this for cross-channel funnel comparison; join to v_lp_ga4_daily for page-level drilldown.
+WITH sessions AS (
+  SELECT
+    PARSE_DATE('%Y%m%d', event_date)                                               AS date,
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id,
+    COALESCE(collected_traffic_source.manual_source,  traffic_source.source,  '(direct)') AS source,
+    COALESCE(collected_traffic_source.manual_medium,  traffic_source.medium,  '(none)')   AS medium,
+    COALESCE(collected_traffic_source.manual_campaign_name, traffic_source.name)           AS campaign,
+    collected_traffic_source.manual_content                                                AS utm_content
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'session_start'
+),
+landings AS (
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'page_view'
+    AND (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'entrances') = 1
+),
+engaged AS (
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'user_engagement'
+),
+signup_visits AS (
+  -- Sessions that viewed a signup or free-trial page (post-landing intent signal)
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'page_view'
+    AND (
+      (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location') LIKE '%/signup%'
+      OR (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location') LIKE '%free_trial%'
+    )
+),
+conversions AS (
+  SELECT DISTINCT
+    user_pseudo_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS session_id
+  FROM `{PROJECT_ID}.{GA4_DATASET}.events_*`
+  WHERE event_name = 'generate_lead'
+)
+SELECT
+  s.date,
+  s.source,
+  s.medium,
+  s.campaign,
+  s.utm_content,
+  -- Funnel steps
+  COUNT(DISTINCT CONCAT(s.user_pseudo_id,  CAST(s.session_id  AS STRING))) AS sessions,
+  COUNT(DISTINCT CONCAT(l.user_pseudo_id,  CAST(l.session_id  AS STRING))) AS sessions_with_landing,
+  COUNT(DISTINCT CONCAT(e.user_pseudo_id,  CAST(e.session_id  AS STRING))) AS engaged_sessions,
+  COUNT(DISTINCT CONCAT(sv.user_pseudo_id, CAST(sv.session_id AS STRING))) AS signup_page_visits,
+  COUNT(DISTINCT CONCAT(c.user_pseudo_id,  CAST(c.session_id  AS STRING))) AS leads,
+  -- Rates (all relative to sessions)
+  ROUND(SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(e.user_pseudo_id, CAST(e.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING)))) * 100, 1)  AS engagement_rate_pct,
+  ROUND((1 - SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(e.user_pseudo_id, CAST(e.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING))))) * 100, 1) AS bounce_rate_pct,
+  ROUND(SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(sv.user_pseudo_id, CAST(sv.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id,  CAST(s.session_id  AS STRING)))) * 100, 2) AS signup_page_rate_pct,
+  ROUND(SAFE_DIVIDE(
+    COUNT(DISTINCT CONCAT(c.user_pseudo_id, CAST(c.session_id AS STRING))),
+    COUNT(DISTINCT CONCAT(s.user_pseudo_id, CAST(s.session_id AS STRING)))) * 100, 2)  AS lead_cvr_pct
+FROM sessions s
+LEFT JOIN landings    l  USING (user_pseudo_id, session_id)
+LEFT JOIN engaged     e  USING (user_pseudo_id, session_id)
+LEFT JOIN signup_visits sv USING (user_pseudo_id, session_id)
+LEFT JOIN conversions c  USING (user_pseudo_id, session_id)
+GROUP BY 1, 2, 3, 4, 5
 """
 
 
