@@ -361,6 +361,7 @@ def activity_dashboard():
     }
 
     # ── BQ queries — all 6 run in parallel, results cached 5 min ─────────────
+    _t0 = time.time()
     _cache_key = days
     _cached = None
     with _ACTIVITY_CACHE_LOCK:
@@ -527,6 +528,8 @@ def activity_dashboard():
             channel_rows = f_chan.result()
         except Exception:
             channel_rows = []
+
+        print(f"[activity] parallel BQ done in {round(time.time()-_t0,1)}s", flush=True)
 
         heatmap_raw: dict[str, dict[str, int]] = {}
         for row in heatmap_rows_raw:
@@ -1613,6 +1616,7 @@ def activity_dashboard():
     except Exception as e:
         print(f"[activity] pending_approvals check failed (non-fatal): {e}")
 
+    print(f"[activity] pre-render at {round(time.time()-_t0,1)}s", flush=True)
     return render_template(
         "activity.html",
         last_updated=now_str,
