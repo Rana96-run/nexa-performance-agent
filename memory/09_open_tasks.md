@@ -89,14 +89,14 @@ Campaign IDs (customer 5753494964):
   Google/Microsoft: NULL (no creative type at ad grain).
   Values: image | video | carousel | collection | story | other
 
-## P2 — LinkedIn campaign cloning (DONE 2026-05-13)
+## P2 — LinkedIn campaign cloning (DONE 2026-05-15)
 
 - [x] `list_campaign_creatives(campaign_id)` — lists all creatives in an ad set
 - [x] `clone_campaign_creatives(source, target)` — copies reference URN + lead gen form
 - [x] `create_full_campaign(..., clone_from_campaign_id=...)` — optional clone param
 - [x] `scripts/linkedin_oauth.py` — added `rw_organization_admin` scope
-- [ ] **Re-mint LinkedIn token** — run `python scripts/linkedin_oauth.py` to get
-  token with new scope before using clone_campaign_creatives()
+- [x] **LinkedIn token re-minted** — verified active with `rw_organization_admin`,
+  expires 2026-07-19. `clone_campaign_creatives()` now functional.
 
 ## P3 — Nice-to-have
 
