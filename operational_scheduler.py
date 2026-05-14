@@ -320,6 +320,17 @@ def _nightly():
     # 1. Refresh BigQuery once so the dashboard + report read fresh data.
     _refresh_bigquery()
 
+    # 1a. Daily reconciliation: BQ vs HubSpot — catch silent data drift.
+    # Logs result to BQ activity. Posts Slack alert to #health channel if
+    # total or per-channel delta exceeds threshold (5% / 10%).
+    # Non-fatal — never breaks the nightly pipeline.
+    try:
+        from analysers.daily_reconciliation import reconcile_daily
+        reconcile_daily(post_slack=True)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] daily reconciliation failed (non-fatal): {e}")
+
     # 1b. Re-index Drive so role prompts pick up newly shared files.
     _refresh_drive_index()
 
