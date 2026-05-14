@@ -90,6 +90,18 @@ def _refresh_bigquery():
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] BQ refresh failed: {e}")
 
+    # gclid_attribution daily refresh — rolling 30-day window of Google Ads
+    # click_view data. Without this the table goes stale and Google ID
+    # attribution degrades from 77% → 0% over 30 days.
+    # Added 2026-05-15.
+    try:
+        from collectors import gclid_clickview
+        rows = gclid_clickview.collect_clickview(days=30)
+        print(f"[ops-scheduler] gclid_attribution refreshed: {rows} rows")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] gclid_clickview refresh failed (non-fatal): {e}")
+
     # Freshness audit: catch silent collector failures (collector ran but
     # fetched zero rows). Distinguishes platform-paused (legitimate, e.g.
     # Microsoft/LinkedIn currently dark) from collector-broken (real bug).

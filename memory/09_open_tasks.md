@@ -3,6 +3,37 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
+## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
+
+Built on top of Option B from 2026-05-14:
+
+- **`gclid_attribution` BQ table** — daily refresh from Google Ads `click_view` API
+  for Auto Cloud (5753494964) + Qoyod New (1513020554) sub-accounts. 30-day rolling
+  window. Resolves any gclid to campaign/ad_group/ad. Google ID attribution
+  1% → 77%.
+- **`v_lead_attribution` view** — 4-strategy unified attribution (A_sync, B_gclid,
+  C_url_param, D_name). Diagnostic for ad-hoc queries. Not wired into Hex
+  dashboards yet — they use Strategy A + D via existing breakdown views.
+- **HubSpot workflow re-enrollment + goal** — `Digital Marketing: Populating
+  Qoyod Sources` workflow now re-enrolls on `hs_google_click_id` and
+  `hs_facebook_click_id` property changes. Goal locks paid attribution from
+  being overwritten. Captures ~90 phantom-paid leads/month.
+- **Google + Microsoft Final URL Suffix** — saved at account level, applies
+  to all campaigns (overrides included). Adds `campaign_id`/`ad_group_id`/`ad_id`
+  to every ad-click URL. HubSpot's URL parameter capture writes them to contact.
+- **BQ refresh schedule: 24h → 12h** — second refresh at 20:00 Riyadh in addition
+  to the 08:00 Riyadh nightly. Halves attribution-lag for workflow reclassifications.
+- **`collectors/gclid_clickview.py` scheduled daily** — runs after `_refresh_bigquery()`
+  in `_nightly()`. Without this, the table goes stale and gclid attribution
+  degrades to 0% over 30 days.
+- **`ATTRIBUTION_EVOLUTION.md`** in `.claude/hex_drilldown/` — markdown doc
+  for Hex stakeholder context.
+
+Reconciliation status (settled days, last 7d):
+- Deals: BQ 643 vs HubSpot 637 = +0.9% delta ✓
+- Leads paid: BQ 1174 vs HubSpot 1211 = -3.1% delta (dominated by today's mirror lag)
+- Day-by-day for completed days: ±15 oscillation (sync timing), within ~1% target
+
 ## P1 — Option B ID-first attribution rebuild (DONE — 2026-05-14)
 
 `paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance` now
