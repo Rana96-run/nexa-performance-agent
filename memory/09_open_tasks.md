@@ -130,6 +130,20 @@ Campaign IDs (customer 5753494964):
   auth in browser, catches callback on :8080, writes `YT_REFRESH_TOKEN` +
   `YT_CHANNEL_ID` to `.env`. Run with `railway run python scripts/youtube_oauth.py`.
   Not yet executed (browser step requires local approval).
+- [x] **Dashboard load time: 20s → ~2s** — root cause was 14 BQ queries running
+  sequentially after a parallel batch that was supposed to replace them. The parallel
+  block pre-fetched all 14 results but 7 downstream blocks re-defined the same SQL
+  and re-ran `bq.query().result()` sequentially, overwriting the parallel results.
+  Removed all 7 duplicate sequential blocks (-352 lines). Cold load now runs one
+  14-way `ThreadPoolExecutor` batch (~2s) with no follow-on queries. Full-page HTML
+  cache (5-min TTL) serves warm loads in <100ms. Commits: `5024c55`, `34af5fb`.
+- [x] **Railway canonical domain corrected** — `nexa-performance-agent.up.railway.app`
+  was never provisioned (returns Railway 404). Confirmed via `railway variables` that
+  the live URL is `https://nexa-web-production-6a6b.up.railway.app`. Updated
+  `08_pitfalls.md` and user memory. Commit: `c280ac9`.
+- [x] **Nightly BQ refresh manually triggered** — nightly at 05:00 UTC May 15
+  was missed (service deploy window overlap). Ran `reporting_scheduler once` locally
+  to pull May 14 data into `paid_channel_daily`. Dashboard now shows May 14 data.
 
 ## Done this session (2026-05-13)
 
