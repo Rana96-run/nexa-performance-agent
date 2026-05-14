@@ -503,9 +503,215 @@ def activity_dashboard():
                    TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), ts, MINUTE) AS mins_ago
             FROM {T}.agent_activity_log ORDER BY ts DESC LIMIT 1
         """
+        user_sql = f"""
+            SELECT DATE(ts,'Asia/Riyadh') AS day, action, role,
+                   JSON_VALUE(details,'$.title') AS task_title,
+                   JSON_VALUE(details,'$.project_key') AS project_key,
+                   JSON_VALUE(details,'$.gid') AS gid,
+                   JSON_VALUE(details,'$.completed_at') AS completed_at,
+                   campaign_name, channel, COALESCE(rows_affected,1) AS cnt
+            FROM {T}.agent_activity_log
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+              AND (action IN UNNEST(['user_completed_task','user_created_task',
+                   'user_executed_scale','user_executed_pause','user_added_negative',
+                   'user_reviewed_recommendation']) OR role = 'user')
+              AND status NOT IN ('failed','skipped')
+            ORDER BY ts DESC LIMIT 200
+        """
+        intel_sql = f"""
+            SELECT DATE(ts,'Asia/Riyadh') AS day, action, role, channel, campaign_name,
+                   COALESCE(rows_affected,1) AS cnt,
+                   JSON_VALUE(details,'$.model') AS model,
+                   JSON_VALUE(details,'$.issue_type') AS issue_type,
+                   CAST(JSON_VALUE(details,'$.cost_usd') AS FLOAT64) AS cost_usd,
+                   CAST(JSON_VALUE(details,'$.tokens_in') AS INT64) AS tokens_in,
+                   CAST(JSON_VALUE(details,'$.tokens_out') AS INT64) AS tokens_out
+            FROM {T}.agent_activity_log
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+              AND status NOT IN ('failed','skipped')
+              AND action IN ('llm_role_ran','detect_spikes','slack_listener_reply',
+                             'data_quality_autoheal','weekly_autofix')
+            ORDER BY ts DESC LIMIT 300
+        """
+        _ASANA_WINDOW = 365
+        _ts_base_sql = f"""
+            WITH all_tasks AS (
+              SELECT JSON_VALUE(details,'$.gid') AS gid,
+                     JSON_VALUE(details,'$.title') AS title,
+                     JSON_VALUE(details,'$.project_key') AS project_key,
+                     JSON_VALUE(details,'$.asset_level') AS asset_level,
+                     DATE(ts,'Asia/Riyadh') AS created_day, ts
+              FROM {T}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action = 'asana_task_created'
+              UNION ALL
+              SELECT JSON_VALUE(details,'$.asana_gid') AS gid,
+                     CONCAT(CASE action
+                       WHEN 'scale_task_created'      THEN 'Scale: '
+                       WHEN 'pause_task_created'      THEN 'Pause: '
+                       WHEN 'junk_leads_task_created' THEN 'Junk Leads: '
+                       WHEN 'optimize_task_created'   THEN 'Optimize: '
+                       WHEN 'drilldown_task_created'  THEN 'Review: '
+                       ELSE '' END, COALESCE(campaign_name, action)) AS title,
+                     'optimization' AS project_key, 'campaign' AS asset_level,
+                     DATE(ts,'Asia/Riyadh') AS created_day, ts
+              FROM {T}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+                AND action IN ('scale_task_created','pause_task_created',
+                               'junk_leads_task_created','optimize_task_created','drilldown_task_created')
+            ),
+            created AS (
+              SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY COALESCE(gid, CAST(ts AS STRING)) ORDER BY ts ASC
+              ) AS rn FROM all_tasks
+            )
+        """
+        ts_sql = _ts_base_sql + f"""
+            , status AS (
+              SELECT gid, completed, completed_at, assignee_name, due_on,
+                     ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
+              FROM {T}.asana_task_status
+            )
+            SELECT c.gid, c.title, c.project_key, c.asset_level, c.created_day,
+                   COALESCE(s.completed,FALSE) AS completed, s.completed_at,
+                   s.assignee_name, s.due_on
+            FROM created c LEFT JOIN status s ON s.gid=c.gid AND s.rn=1
+            WHERE c.rn=1 ORDER BY c.created_day DESC LIMIT 500
+        """
+        ts_sql_fb = _ts_base_sql + """
+            SELECT c.gid, c.title, c.project_key, c.asset_level, c.created_day,
+                   FALSE AS completed, NULL AS completed_at,
+                   NULL AS assignee_name, NULL AS due_on
+            FROM created c WHERE c.rn=1 ORDER BY c.created_day DESC LIMIT 500
+        """
+        exec_sql = f"""
+            SELECT DATE(ts,'Asia/Riyadh') AS action_date, action, channel, campaign_name,
+                   COALESCE(rows_affected,1) AS cnt,
+                   JSON_VALUE(details,'$.old_status') AS old_status,
+                   JSON_VALUE(details,'$.new_budget') AS new_budget,
+                   JSON_VALUE(details,'$.direction') AS direction
+            FROM {T}.agent_activity_log
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
+              AND action IN ('campaign_paused','campaign_scaled','positive_keywords_added',
+                             'keywords_paused','keywords_deleted','negative_keywords_added',
+                             'negative_keywords_removed','ads_paused','ads_enabled',
+                             'user_paused_campaign','user_enabled_campaign',
+                             'user_changed_budget','user_changed_status',
+                             'action_approved_via_slack','action_rejected_via_slack')
+              AND status NOT IN ('failed','skipped')
+            ORDER BY ts DESC LIMIT 300
+        """
+        fu_sql = f"""
+            WITH actions AS (
+              SELECT DATE(ts,'Asia/Riyadh') AS action_date, action, 'executed' AS action_type,
+                     channel, campaign_name,
+                     CAST(JSON_VALUE(details,'$.new_budget_usd') AS FLOAT64) AS target_budget
+              FROM {T}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+                AND action IN ('campaign_paused','campaign_scaled','campaign_created','ads_paused')
+                AND campaign_name IS NOT NULL
+              UNION ALL
+              SELECT DATE(ts,'Asia/Riyadh') AS action_date,
+                     CASE action WHEN 'pause_task_created' THEN 'campaign_paused'
+                       WHEN 'scale_task_created' THEN 'campaign_scaled'
+                       WHEN 'junk_leads_task_created' THEN 'ads_paused'
+                       WHEN 'optimize_task_created' THEN 'campaign_scaled'
+                       ELSE action END AS action,
+                     'recommended' AS action_type, channel, campaign_name,
+                     CAST(JSON_VALUE(details,'$.new_budget_usd') AS FLOAT64) AS target_budget
+              FROM {T}.agent_activity_log
+              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+                AND action IN ('pause_task_created','scale_task_created',
+                               'junk_leads_task_created','optimize_task_created')
+                AND campaign_name IS NOT NULL
+            ),
+            perf AS (
+              SELECT a.action, a.action_type, a.action_date, a.channel, a.campaign_name,
+                     a.target_budget,
+                     ROUND(AVG(CASE WHEN c.date > a.action_date THEN c.spend END),2) AS avg_spend_after,
+                     ROUND(AVG(CASE WHEN c.date BETWEEN DATE_SUB(a.action_date,INTERVAL 7 DAY)
+                                    AND a.action_date THEN c.spend END),2) AS avg_spend_before,
+                     MAX(CASE WHEN c.date > a.action_date THEN c.status END) AS latest_status,
+                     COUNT(CASE WHEN c.date > a.action_date AND c.spend > 0 THEN 1 END) AS active_days_after
+              FROM actions a LEFT JOIN {T}.campaigns_daily c USING (campaign_name)
+              GROUP BY 1,2,3,4,5,6
+            )
+            SELECT *,
+              CASE
+                WHEN action_type='recommended' THEN 'Pending approval'
+                WHEN action='campaign_paused' AND active_days_after>0 THEN 'Re-enabled'
+                WHEN action='campaign_paused' AND active_days_after=0 THEN 'Confirmed paused'
+                WHEN action='campaign_scaled' AND avg_spend_after>avg_spend_before THEN 'Spend increased'
+                WHEN action='campaign_scaled' AND avg_spend_after IS NULL THEN 'No data yet'
+                WHEN action='campaign_scaled' THEN 'Spend unchanged'
+                WHEN action='campaign_created' AND active_days_after>0 THEN 'Running'
+                WHEN action='campaign_created' THEN 'Not spending'
+                ELSE 'Paused'
+              END AS outcome
+            FROM perf ORDER BY action_date DESC LIMIT 120
+        """
+        new_ads_sql = f"""
+            SELECT MIN(date) AS first_seen, channel, campaign_name, ad_name,
+                   ROUND(SUM(spend),2) AS total_spend, SUM(impressions) AS impressions
+            FROM {T}.ads_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            GROUP BY channel, campaign_name, ad_name
+            HAVING MIN(date) >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
+               AND SUM(spend) > 0
+            ORDER BY first_seen DESC LIMIT 60
+        """
+        hc_sql = f"""
+            WITH ranked AS (
+              SELECT channel AS name, status, ts,
+                     JSON_VALUE(details,'$.msg') AS msg,
+                     JSON_VALUE(details,'$.run_id') AS run_id,
+                     JSON_VALUE(details,'$.category') AS category,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY JSON_VALUE(details,'$.run_id'), channel ORDER BY ts DESC
+                     ) AS rn
+              FROM {T}.agent_activity_log
+              WHERE action='health_check'
+                AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+            ),
+            latest_run AS (
+              SELECT run_id, MAX(ts) AS run_ts FROM ranked WHERE rn=1
+              GROUP BY run_id ORDER BY run_ts DESC LIMIT 1
+            )
+            SELECT r.name, r.status, r.msg, r.run_id, r.category, lr.run_ts
+            FROM ranked r JOIN latest_run lr ON r.run_id=lr.run_id
+            WHERE r.rn=1 ORDER BY r.category, r.name
+        """
+        fresh_sql = f"""
+            SELECT channel, MAX(date) AS last_date,
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_ago
+            FROM {T}.campaigns_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            GROUP BY channel
+            UNION ALL
+            SELECT 'hubspot_leads' AS channel, MAX(date),
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+            FROM {T}.hubspot_leads_module_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+            ORDER BY channel
+        """
 
         def _run(sql):
             return list(bq.query(sql).result())
+
+        def _run_safe(sql):
+            try:
+                return list(bq.query(sql).result())
+            except Exception:
+                return []
+
+        def _run_ts():
+            try:
+                return list(bq.query(ts_sql).result())
+            except Exception:
+                try:
+                    return list(bq.query(ts_sql_fb).result())
+                except Exception:
+                    return []
 
         def _run_heatmap():
             try:
@@ -520,23 +726,36 @@ def activity_dashboard():
                         return []
                 raise
 
-        with ThreadPoolExecutor(max_workers=6) as ex:
-            f_heatmap = ex.submit(_run_heatmap)
-            f_detail  = ex.submit(_run, detail_sql)
-            f_infra   = ex.submit(_run, infra_sql)
-            f_chan    = ex.submit(_run, chan_sql)
-            f_kpi     = ex.submit(_run, kpi_sql)
-            f_last    = ex.submit(_run, last_sql)
+        with ThreadPoolExecutor(max_workers=14) as ex:
+            f_heatmap  = ex.submit(_run_heatmap)
+            f_detail   = ex.submit(_run, detail_sql)
+            f_infra    = ex.submit(_run, infra_sql)
+            f_chan     = ex.submit(_run_safe, chan_sql)
+            f_kpi      = ex.submit(_run, kpi_sql)
+            f_last     = ex.submit(_run, last_sql)
+            f_user     = ex.submit(_run_safe, user_sql)
+            f_intel    = ex.submit(_run_safe, intel_sql)
+            f_ts       = ex.submit(_run_ts)
+            f_exec     = ex.submit(_run_safe, exec_sql)
+            f_fu       = ex.submit(_run_safe, fu_sql)
+            f_new_ads  = ex.submit(_run_safe, new_ads_sql)
+            f_hc       = ex.submit(_run_safe, hc_sql)
+            f_fresh    = ex.submit(_run_safe, fresh_sql)
 
         heatmap_rows_raw = f_heatmap.result()
         detail_rows      = f_detail.result()
         infra_rows       = f_infra.result()
+        channel_rows     = f_chan.result()
         _kpi_rows        = f_kpi.result()
         _last_rows       = f_last.result()
-        try:
-            channel_rows = f_chan.result()
-        except Exception:
-            channel_rows = []
+        user_rows        = f_user.result()
+        intel_rows       = f_intel.result()
+        task_status_rows = f_ts.result()
+        executed_rows    = f_exec.result()
+        followup_rows    = f_fu.result()
+        new_ads_rows_raw = f_new_ads.result()
+        hc_rows          = f_hc.result()
+        fresh_rows       = f_fresh.result()
 
         print(f"[activity] parallel BQ done in {round(time.time()-_t0,1)}s", flush=True)
 
@@ -828,34 +1047,6 @@ def activity_dashboard():
         "user_paused_campaign", "user_enabled_campaign", "user_changed_budget",
         "user_changed_status", "user_paused_ad", "user_enabled_ad",
     }
-    user_sql = f"""
-        SELECT
-          DATE(ts, 'Asia/Riyadh')             AS day,
-          action,
-          role,
-          JSON_VALUE(details, '$.title')      AS task_title,
-          JSON_VALUE(details, '$.project_key') AS project_key,
-          JSON_VALUE(details, '$.gid')         AS gid,
-          JSON_VALUE(details, '$.completed_at') AS completed_at,
-          campaign_name,
-          channel,
-          COALESCE(rows_affected, 1)           AS cnt
-        FROM {T}.agent_activity_log
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-          AND (action IN UNNEST([
-            'user_completed_task','user_created_task','user_executed_scale',
-            'user_executed_pause','user_added_negative','user_reviewed_recommendation'
-          ]) OR role = 'user')
-          AND status NOT IN ('failed','skipped')
-        ORDER BY ts DESC
-        LIMIT 200
-    """
-    user_rows = []
-    try:
-        user_rows = list(bq.query(user_sql).result())
-    except Exception as e:
-        print(f"[activity] user_actions query failed (non-fatal): {e}")
-
     ua_c30 = sum(r.cnt for r in user_rows if r.day >= cutoff_30)
     ua_c7  = sum(r.cnt for r in user_rows if r.day >= cutoff_7)
 
@@ -890,35 +1081,6 @@ def activity_dashboard():
     }
 
     # ── Intelligence / ops actions (LLM, spikes, bot replies, data quality) ──
-    intel_sql = f"""
-        SELECT
-          DATE(ts, 'Asia/Riyadh')              AS day,
-          action,
-          role,
-          channel,
-          campaign_name,
-          COALESCE(rows_affected, 1)            AS cnt,
-          JSON_VALUE(details, '$.model')        AS model,
-          JSON_VALUE(details, '$.issue_type')   AS issue_type,
-          CAST(JSON_VALUE(details, '$.cost_usd') AS FLOAT64) AS cost_usd,
-          CAST(JSON_VALUE(details, '$.tokens_in') AS INT64)  AS tokens_in,
-          CAST(JSON_VALUE(details, '$.tokens_out') AS INT64) AS tokens_out
-        FROM {T}.agent_activity_log
-        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-          AND status NOT IN ('failed','skipped')
-          AND action IN (
-            'llm_role_ran','detect_spikes','slack_listener_reply',
-            'data_quality_autoheal','weekly_autofix'
-          )
-        ORDER BY ts DESC
-        LIMIT 300
-    """
-    intel_rows = []
-    try:
-        intel_rows = list(bq.query(intel_sql).result())
-    except Exception as e:
-        print(f"[activity] intel query failed (non-fatal): {e}")
-
     def _icounts(action):
         c30 = sum(r.cnt for r in intel_rows if r.action == action and r.day >= cutoff_30)
         c7  = sum(r.cnt for r in intel_rows if r.action == action and r.day >= cutoff_7)
@@ -1072,101 +1234,6 @@ def activity_dashboard():
     }
 
     # ── 5. Asana task completion status ───────────────────────────────────────
-    # Always use 365-day window so ALL agent-created tasks appear regardless of
-    # the selected date tab.  The GID partition key falls back to the row's
-    # microsecond timestamp for tasks logged without a GID — this prevents
-    # the null-partition collapse that previously reduced 100+ tasks to 1.
-    task_status_rows = []
-    _ASANA_WINDOW = 365
-    # Pull ALL task-creation events.
-    # executors/asana.py logs 'asana_task_created' with details.gid + details.title + details.project_key
-    # campaign_health_tasks.py logs scale/pause/optimize/drilldown_task_created with details.asana_gid + campaign_name
-    _ts_base_sql = f"""
-        WITH all_tasks AS (
-          -- executors/asana.py: full details
-          SELECT
-            JSON_VALUE(details, '$.gid')         AS gid,
-            JSON_VALUE(details, '$.title')        AS title,
-            JSON_VALUE(details, '$.project_key')  AS project_key,
-            JSON_VALUE(details, '$.asset_level')  AS asset_level,
-            DATE(ts, 'Asia/Riyadh')               AS created_day,
-            ts
-          FROM {T}.agent_activity_log
-          WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
-            AND action = 'asana_task_created'
-
-          UNION ALL
-
-          -- campaign_health_tasks.py: uses asana_gid field, title from campaign_name
-          SELECT
-            JSON_VALUE(details, '$.asana_gid')    AS gid,
-            CONCAT(
-              CASE action
-                WHEN 'scale_task_created'      THEN 'Scale: '
-                WHEN 'pause_task_created'      THEN 'Pause: '
-                WHEN 'junk_leads_task_created' THEN 'Junk Leads: '
-                WHEN 'optimize_task_created'   THEN 'Optimize: '
-                WHEN 'drilldown_task_created'  THEN 'Review: '
-                ELSE ''
-              END,
-              COALESCE(campaign_name, action)
-            )                                     AS title,
-            'optimization'                        AS project_key,
-            'campaign'                            AS asset_level,
-            DATE(ts, 'Asia/Riyadh')               AS created_day,
-            ts
-          FROM {T}.agent_activity_log
-          WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
-            AND action IN (
-              'scale_task_created', 'pause_task_created', 'junk_leads_task_created',
-              'optimize_task_created', 'drilldown_task_created'
-            )
-        ),
-        created AS (
-          SELECT *,
-            ROW_NUMBER() OVER (
-              PARTITION BY COALESCE(gid, CAST(ts AS STRING))
-              ORDER BY ts ASC  -- oldest record wins: preserves original creation date, not backfill stamp
-            ) AS rn
-          FROM all_tasks
-        )
-    """
-    try:
-        ts_sql = _ts_base_sql + f"""
-        , status AS (
-          SELECT gid, completed, completed_at, assignee_name, due_on,
-                 ROW_NUMBER() OVER (PARTITION BY gid ORDER BY synced_at DESC) AS rn
-          FROM {T}.asana_task_status
-        )
-        SELECT
-          c.gid, c.title, c.project_key, c.asset_level, c.created_day,
-          COALESCE(s.completed, FALSE)  AS completed,
-          s.completed_at, s.assignee_name, s.due_on
-        FROM created c
-        LEFT JOIN status s ON s.gid = c.gid AND s.rn = 1
-        WHERE c.rn = 1
-        ORDER BY c.created_day DESC
-        LIMIT 500
-        """
-        task_status_rows = list(bq.query(ts_sql).result())
-    except Exception as e:
-        # asana_task_status doesn't exist yet — show tasks with no completion data
-        print(f"[activity] asana ts_sql FAILED (falling back to no-completion): {e}")
-        try:
-            ts_sql_fb = _ts_base_sql + """
-            SELECT
-              c.gid, c.title, c.project_key, c.asset_level, c.created_day,
-              FALSE AS completed, NULL AS completed_at,
-              NULL  AS assignee_name, NULL AS due_on
-            FROM created c
-            WHERE c.rn = 1
-            ORDER BY c.created_day DESC
-            LIMIT 500
-            """
-            task_status_rows = list(bq.query(ts_sql_fb).result())
-        except Exception as e2:
-            print(f"[activity] asana task query failed (non-fatal): {e2}")
-
     # Exclude non-work-item projects from dashboard display.
     _EXCLUDE_PK = {"campaigns_hub", "seasonal"}
     task_status_rows = [r for r in task_status_rows if r.project_key not in _EXCLUDE_PK]
@@ -1194,41 +1261,7 @@ def activity_dashboard():
         metrics["asana_tasks"]   = m_asana_tasks
         totals["asana_tasks"]    = _ts_c30
 
-    # ── 5b. Executed actions: pauses / scales / keyword actions the team ran ──
-    # These are "completed" in the sense that the action was actually executed
-    # (not just recommended). Include them alongside Asana task completion.
-    executed_rows = []
-    try:
-        exec_sql = f"""
-            SELECT
-              DATE(ts, 'Asia/Riyadh')              AS action_date,
-              action,
-              channel,
-              campaign_name,
-              COALESCE(rows_affected, 1)            AS cnt,
-              JSON_VALUE(details, '$.old_status')   AS old_status,
-              JSON_VALUE(details, '$.new_budget')   AS new_budget,
-              JSON_VALUE(details, '$.direction')    AS direction
-            FROM {T}.agent_activity_log
-            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {_ASANA_WINDOW} DAY)
-              AND action IN (
-                'campaign_paused', 'campaign_scaled',
-                'positive_keywords_added',
-                'keywords_paused', 'keywords_deleted',
-                'negative_keywords_added', 'negative_keywords_removed',
-                'ads_paused', 'ads_enabled',
-                'user_paused_campaign', 'user_enabled_campaign',
-                'user_changed_budget', 'user_changed_status',
-                'action_approved_via_slack', 'action_rejected_via_slack'
-              )
-              AND status NOT IN ('failed','skipped')
-            ORDER BY ts DESC
-            LIMIT 300
-        """
-        executed_rows = list(bq.query(exec_sql).result())
-    except Exception as e:
-        print(f"[activity] executed_actions query failed (non-fatal): {e}")
-
+    # ── 5b. Executed actions ──────────────────────────────────────────────────
     completed_tasks = [r for r in task_status_rows if r.completed]
     open_tasks      = [r for r in task_status_rows if not r.completed]
 
@@ -1330,111 +1363,12 @@ def activity_dashboard():
             row["asana_status"] = "—"
 
     # ── 6. Channel follow-up: outcome of agent actions ─────────────────────────
-    # Two parts: (a) executed actions joined to campaigns_daily for performance data,
-    #            (b) recommended actions (Asana tasks) shown as "Pending approval"
-    followup_rows = []
-    try:
-        fu_sql = f"""
-            WITH actions AS (
-              -- Executed: agent or user actually mutated the campaign
-              SELECT
-                DATE(ts, 'Asia/Riyadh')                         AS action_date,
-                action,
-                'executed'                                       AS action_type,
-                channel,
-                campaign_name,
-                CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
-              FROM {T}.agent_activity_log
-              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-                AND action IN ('campaign_paused','campaign_scaled','campaign_created','ads_paused')
-                AND campaign_name IS NOT NULL
-
-              UNION ALL
-
-              -- Recommended: Asana tasks created for team approval
-              SELECT
-                DATE(ts, 'Asia/Riyadh')                         AS action_date,
-                CASE action
-                  WHEN 'pause_task_created'      THEN 'campaign_paused'
-                  WHEN 'scale_task_created'      THEN 'campaign_scaled'
-                  WHEN 'junk_leads_task_created' THEN 'ads_paused'
-                  WHEN 'optimize_task_created'   THEN 'campaign_scaled'
-                  ELSE action
-                END                                              AS action,
-                'recommended'                                    AS action_type,
-                channel,
-                campaign_name,
-                CAST(JSON_VALUE(details, '$.new_budget_usd') AS FLOAT64) AS target_budget
-              FROM {T}.agent_activity_log
-              WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
-                AND action IN ('pause_task_created','scale_task_created',
-                               'junk_leads_task_created','optimize_task_created')
-                AND campaign_name IS NOT NULL
-            ),
-            perf AS (
-              SELECT
-                a.action,
-                a.action_type,
-                a.action_date,
-                a.channel,
-                a.campaign_name,
-                a.target_budget,
-                ROUND(AVG(CASE WHEN c.date > a.action_date THEN c.spend END), 2)  AS avg_spend_after,
-                ROUND(AVG(CASE WHEN c.date BETWEEN DATE_SUB(a.action_date, INTERVAL 7 DAY)
-                                           AND a.action_date THEN c.spend END), 2) AS avg_spend_before,
-                MAX(CASE WHEN c.date > a.action_date THEN c.status END)            AS latest_status,
-                COUNT(CASE WHEN c.date > a.action_date AND c.spend > 0 THEN 1 END) AS active_days_after
-              FROM actions a
-              LEFT JOIN `{T}.campaigns_daily` c USING (campaign_name)
-              GROUP BY 1,2,3,4,5,6
-            )
-            SELECT *,
-              CASE
-                WHEN action_type = 'recommended'                                   THEN 'Pending approval'
-                WHEN action = 'campaign_paused' AND active_days_after > 0          THEN 'Re-enabled'
-                WHEN action = 'campaign_paused' AND active_days_after = 0          THEN 'Confirmed paused'
-                WHEN action = 'campaign_scaled' AND avg_spend_after > avg_spend_before THEN 'Spend increased'
-                WHEN action = 'campaign_scaled' AND avg_spend_after IS NULL        THEN 'No data yet'
-                WHEN action = 'campaign_scaled'                                    THEN 'Spend unchanged'
-                WHEN action = 'campaign_created' AND active_days_after > 0         THEN 'Running'
-                WHEN action = 'campaign_created'                                   THEN 'Not spending'
-                ELSE 'Paused'
-              END AS outcome
-            FROM perf
-            ORDER BY action_date DESC
-            LIMIT 120
-        """
-        followup_rows = list(bq.query(fu_sql).result())
-    except Exception as e:
-        print(f"[activity] follow-up query failed (non-fatal): {e}")
-
-    # New ads in platform (first seen recently — not from agent campaign creation)
-    new_ads_rows = []
-    try:
-        new_ads_sql = f"""
-            SELECT
-              MIN(date)        AS first_seen,
-              channel,
-              campaign_name,
-              ad_name,
-              ROUND(SUM(spend), 2) AS total_spend,
-              SUM(impressions)     AS impressions
-            FROM {T}.ads_daily
-            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
-            GROUP BY channel, campaign_name, ad_name
-            HAVING MIN(date) >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
-               AND SUM(spend) > 0
-            ORDER BY first_seen DESC
-            LIMIT 60
-        """
-        new_ads_rows = [
-            {"first_seen": str(r.first_seen), "channel": r.channel or "—",
-             "campaign_name": r.campaign_name or "—", "ad_name": r.ad_name or "—",
-             "total_spend": r.total_spend or 0, "impressions": r.impressions or 0}
-            for r in bq.query(new_ads_sql).result()
-        ]
-    except Exception as e:
-        print(f"[activity] new_ads query failed (non-fatal): {e}")
+    new_ads_rows = [
+        {"first_seen": str(r.first_seen), "channel": r.channel or "—",
+         "campaign_name": r.campaign_name or "—", "ad_name": r.ad_name or "—",
+         "total_spend": r.total_spend or 0, "impressions": r.impressions or 0}
+        for r in new_ads_rows_raw
+    ]
 
     followup = {
         "campaign_actions": [
@@ -1452,39 +1386,6 @@ def activity_dashboard():
     # ── 7. Health check — last run from BQ ────────────────────────────────────
     hygiene = {"run_id": None, "run_ts": None, "checks": [], "freshness": []}
     try:
-        hc_sql = f"""
-            WITH ranked AS (
-              SELECT
-                channel                                  AS name,
-                status,
-                ts,
-                JSON_VALUE(details, '$.msg')             AS msg,
-                JSON_VALUE(details, '$.run_id')          AS run_id,
-                JSON_VALUE(details, '$.category')        AS category,
-                ROW_NUMBER() OVER (
-                  PARTITION BY JSON_VALUE(details, '$.run_id'), channel
-                  ORDER BY ts DESC
-                ) AS rn
-              FROM {T}.agent_activity_log
-              WHERE action = 'health_check'
-                AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
-            ),
-            latest_run AS (
-              SELECT run_id, MAX(ts) AS run_ts
-              FROM ranked
-              WHERE rn = 1
-              GROUP BY run_id
-              ORDER BY run_ts DESC
-              LIMIT 1
-            )
-            SELECT r.name, r.status, r.msg, r.run_id, r.category,
-                   lr.run_ts
-            FROM ranked r
-            JOIN latest_run lr ON r.run_id = lr.run_id
-            WHERE r.rn = 1
-            ORDER BY r.category, r.name
-        """
-        hc_rows = list(bq.query(hc_sql).result())
         if hc_rows:
             hygiene["run_id"] = hc_rows[0].run_id
             hygiene["run_ts"] = hc_rows[0].run_ts.strftime("%Y-%m-%d %H:%M AST") \
@@ -1494,26 +1395,11 @@ def activity_dashboard():
                  "msg": r.msg or "", "category": r.category or "Other"}
                 for r in hc_rows
             ]
-
-        # Table freshness
-        fresh_sql = f"""
-            SELECT channel, MAX(date) AS last_date,
-                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_ago
-            FROM {T}.campaigns_daily
-            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
-            GROUP BY channel
-            UNION ALL
-            SELECT 'hubspot_leads' AS channel, MAX(date),
-                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
-            FROM {T}.hubspot_leads_module_daily
-            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
-            ORDER BY channel
-        """
         hygiene["freshness"] = [
             {"channel": r.channel, "last_date": str(r.last_date or "—"),
              "days_ago": int(r.days_ago or 0),
              "ok": r.days_ago is not None and r.days_ago <= 1}
-            for r in bq.query(fresh_sql).result()
+            for r in fresh_rows
         ]
     except Exception as e:
         print(f"[activity] hygiene query failed (non-fatal): {e}")
