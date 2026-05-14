@@ -1633,6 +1633,170 @@ GROUP BY 1, 2, 3, 4, 5
 """
 
 
+V_LP_COMBINED_WEEKLY_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_lp_combined_weekly` AS
+-- LP performance: spend + HubSpot (source of truth) joined with GA4 behavior.
+-- Grain: week_start × lp_page × lp_domain × lp_type × campaign_name.
+-- GA4 is aggregated to weekly to match the spend/HubSpot grain.
+WITH ga4_weekly AS (
+  SELECT
+    DATE_TRUNC(date, WEEK(MONDAY))                                    AS week_start,
+    lp_page,
+    LOWER(TRIM(campaign))                                             AS campaign_key,
+    SUM(sessions)                                                     AS sessions,
+    SUM(engaged_sessions)                                             AS engaged_sessions,
+    ROUND(SAFE_DIVIDE(SUM(engaged_sessions), SUM(sessions)) * 100, 1) AS engagement_rate_pct,
+    ROUND((1 - SAFE_DIVIDE(SUM(engaged_sessions), SUM(sessions))) * 100, 1) AS bounce_rate_pct,
+    SUM(conversions)                                                  AS ga4_leads,
+    ROUND(SAFE_DIVIDE(SUM(conversions), SUM(sessions)) * 100, 2)     AS ga4_cvr_pct
+  FROM `{PROJECT_ID}.{DATASET}.v_lp_ga4_daily`
+  GROUP BY 1, 2, 3
+)
+SELECT
+  l.week_start,
+  l.lp_page,
+  l.lp_domain,
+  l.lp_type,
+  l.campaign_name,
+  -- Spend + HubSpot (source of truth for leads)
+  l.spend,
+  l.impressions,
+  l.clicks,
+  l.hs_leads,
+  l.hs_qualified  AS hs_sqls,
+  l.hs_disqualified,
+  l.cpl,
+  l.cpql,
+  -- GA4 behavior metrics
+  g.sessions,
+  g.engaged_sessions,
+  g.engagement_rate_pct,
+  g.bounce_rate_pct,
+  g.ga4_leads,
+  g.ga4_cvr_pct
+FROM `{PROJECT_ID}.{DATASET}.v_lp_performance_weekly` l
+LEFT JOIN ga4_weekly g
+  ON  l.week_start              = g.week_start
+  AND LOWER(TRIM(l.lp_page))    = LOWER(TRIM(g.lp_page))
+  AND LOWER(TRIM(l.campaign_name)) = g.campaign_key
+"""
+
+V_WEBSITE_FUNNEL_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_website_funnel_daily` AS
+-- Full website funnel — daily grain. Supports scorecard at any level:
+--   whole site: no filter
+--   subdomain:  WHERE subdomain = 'lp.qoyod.com'
+--   single page: WHERE lp_page = 'https://lp.qoyod.com/accounting'
+-- Grain: date × lp_page × subdomain × source × medium × campaign × utm_content.
+-- GA4 metrics from v_lp_ga4_daily (sessions, engaged, bounce, ga4_leads, cvr).
+-- HubSpot leads: proportional by campaign×page spend share, then further split
+--   by session share across source/medium — so SUM(hs_leads) is correct at ANY grain.
+WITH ga4 AS (
+  SELECT
+    date,
+    lp_page,
+    REGEXP_EXTRACT(lp_page, r'https?://([^/?]+)')                   AS subdomain,
+    source,
+    medium,
+    campaign,
+    utm_content,
+    sessions,
+    engaged_sessions,
+    bounce_rate_pct,
+    engagement_rate_pct,
+    conversions                                                      AS ga4_leads,
+    conversion_rate_pct                                              AS ga4_cvr_pct
+  FROM `{PROJECT_ID}.{DATASET}.v_lp_ga4_daily`
+),
+-- Total sessions per date × lp_page × campaign — used to split HS by source share
+ga4_campaign_totals AS (
+  SELECT
+    date,
+    LOWER(TRIM(lp_page))     AS lp_page_key,
+    LOWER(TRIM(campaign))    AS campaign_key,
+    SUM(sessions)            AS total_sessions
+  FROM ga4
+  GROUP BY 1, 2, 3
+),
+-- HubSpot proportional to page via spend share (same logic as v_lp_performance_weekly)
+page_daily_spend AS (
+  SELECT
+    date,
+    REGEXP_REPLACE(
+      REGEXP_EXTRACT(LOWER(final_url), r'(https?://[^?#]+)'), r'/$', ''
+    )                        AS lp_page,
+    LOWER(TRIM(campaign_name)) AS campaign_key,
+    SUM(spend)               AS page_spend
+  FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+  WHERE final_url IS NOT NULL AND spend > 0
+  GROUP BY 1, 2, 3
+),
+campaign_daily_spend AS (
+  SELECT date, campaign_key, SUM(page_spend) AS total_spend
+  FROM page_daily_spend
+  GROUP BY 1, 2
+),
+hs_daily AS (
+  SELECT
+    date,
+    LOWER(TRIM(lead_utm_campaign))  AS campaign_key,
+    SUM(leads_total)                AS hs_leads,
+    SUM(leads_qualified)            AS hs_sqls,
+    SUM(leads_disqualified)         AS hs_disqualified
+  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+  GROUP BY 1, 2
+),
+-- HS leads proportioned: campaign → page (by spend share)
+hs_page_daily AS (
+  SELECT
+    p.date,
+    p.lp_page,
+    p.campaign_key,
+    COALESCE(h.hs_leads, 0)       * SAFE_DIVIDE(p.page_spend, c.total_spend) AS hs_leads_raw,
+    COALESCE(h.hs_sqls, 0)        * SAFE_DIVIDE(p.page_spend, c.total_spend) AS hs_sqls_raw,
+    COALESCE(h.hs_disqualified,0) * SAFE_DIVIDE(p.page_spend, c.total_spend) AS hs_disq_raw
+  FROM page_daily_spend p
+  LEFT JOIN campaign_daily_spend c USING (date, campaign_key)
+  LEFT JOIN hs_daily             h USING (date, campaign_key)
+)
+SELECT
+  g.date,
+  g.lp_page,
+  g.subdomain,
+  g.source,
+  g.medium,
+  g.campaign,
+  g.utm_content,
+  -- GA4 funnel
+  g.sessions,
+  g.engaged_sessions,
+  g.bounce_rate_pct,
+  g.engagement_rate_pct,
+  g.ga4_leads,
+  g.ga4_cvr_pct,
+  -- HubSpot: campaign×page total further split by this source's session share
+  -- SUM(hs_leads) is correct at every aggregation level (no double-counting)
+  ROUND(COALESCE(h.hs_leads_raw, 0)
+    * SAFE_DIVIDE(g.sessions, t.total_sessions))                    AS hs_leads,
+  ROUND(COALESCE(h.hs_sqls_raw, 0)
+    * SAFE_DIVIDE(g.sessions, t.total_sessions))                    AS hs_sqls,
+  ROUND(COALESCE(h.hs_disq_raw, 0)
+    * SAFE_DIVIDE(g.sessions, t.total_sessions))                    AS hs_disqualified,
+  ROUND(SAFE_DIVIDE(
+    COALESCE(h.hs_leads_raw, 0) * SAFE_DIVIDE(g.sessions, t.total_sessions),
+    NULLIF(g.sessions, 0)) * 100, 2)                               AS hs_cvr_pct
+FROM ga4 g
+LEFT JOIN ga4_campaign_totals t
+  ON  g.date                    = t.date
+  AND LOWER(TRIM(g.lp_page))    = t.lp_page_key
+  AND LOWER(TRIM(g.campaign))   = t.campaign_key
+LEFT JOIN hs_page_daily h
+  ON  g.date                    = h.date
+  AND LOWER(TRIM(g.lp_page))    = LOWER(TRIM(h.lp_page))
+  AND LOWER(TRIM(g.campaign))   = h.campaign_key
+"""
+
+
 def create_views():
     client = get_client()
     for sql, name in [

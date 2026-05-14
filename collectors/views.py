@@ -742,17 +742,21 @@ def _sub_campaign_views():
         V_SIGNUP_FUNNEL_WEEKLY_SQL,
         V_LP_GA4_DAILY_SQL,
         V_LP_GA4_FUNNEL_DAILY_SQL,
+        V_LP_COMBINED_WEEKLY_SQL,
+        V_WEBSITE_FUNNEL_DAILY_SQL,
     )
     return [
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
-        # LP A/B test views — v_lp_weekly_summary depends on v_lp_performance_weekly
+        # LP views — dependency order matters: weekly before summary
         ("v_lp_performance_weekly", V_LP_PERFORMANCE_WEEKLY_SQL),
         ("v_lp_weekly_summary",     V_LP_WEEKLY_SUMMARY_SQL),
-        # Signup funnel — ad-level attribution for www.qoyod.com campaigns
         ("v_signup_funnel_weekly",  V_SIGNUP_FUNNEL_WEEKLY_SQL),
-        # GA4 views — page-level performance + full channel funnel
+        # GA4 base views (v_lp_combined_weekly depends on v_lp_ga4_daily)
         ("v_lp_ga4_daily",          V_LP_GA4_DAILY_SQL),
         ("v_lp_ga4_funnel_daily",   V_LP_GA4_FUNNEL_DAILY_SQL),
+        # Combined views — must come after their dependencies
+        ("v_lp_combined_weekly",    V_LP_COMBINED_WEEKLY_SQL),
+        ("v_website_funnel_daily",  V_WEBSITE_FUNNEL_DAILY_SQL),
     ]
 
 
