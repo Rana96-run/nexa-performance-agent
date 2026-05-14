@@ -447,6 +447,25 @@ IG insights:
   `0-136`). CPQL = spend / qualified leads. Never compute CPQL from
   contact-stage data.
 
+## BQ column names (verified 2026-05-15)
+
+- **`paid_channel_daily`**: columns are `leads_total` (not `leads`) and `qualified`
+  (not `sqls`). Writing `leads` or `sqls` in SQL returns "Did you mean roas?".
+- **`agent_activity_log`**: timestamp column is `ts` (not `created_at`).
+- **`ARRAY_AGG ORDER BY … NULLS LAST` unsupported in BQ.** Replace with
+  `ORDER BY COALESCE(nullable_col, 99999) ASC`.
+- **`health_check.py` freshness threshold must be ≥ 3 days** (not > 1). Before
+  08:00 Riyadh the nightly collector hasn't run so data is legitimately 2 days
+  old. Threshold < 3 produces a nightly false-positive.
+
+## Railway — single canonical project
+
+- **Live project:** `nexa-performance-agent` in **Marketing Workspace** (Pro),
+  ID `57f124d0-e254-4420-89f7-75baab4e6126`, service `85ed1a2a`.
+- Personal-account project (`1b3ee05a`) **deleted** as of 2026-05-15.
+- Always verify with `railway status` before deploying — must show
+  `nexa-performance-agent / production / nexa-web`.
+
 ## Landing page A/B test
 
 - **Test start date: 2026-05-04.** HubSpot LP (`campaigns.qoyod.com`) has been live ~1 year. WordPress LP (`lp.qoyod.com`) launched for testing starting this date.

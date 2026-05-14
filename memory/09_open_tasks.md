@@ -107,6 +107,26 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-05-15)
+
+- [x] **Activity dashboard KPI bar fixed** — `paid_channel_daily` columns are
+  `leads_total` (not `leads`) and `qualified` (not `sqls`). `agent_activity_log`
+  timestamp is `ts` (not `created_at`). `ARRAY_AGG ORDER BY NULLS LAST` unsupported
+  in BQ — use `COALESCE(cpql, 99999)`. KPI query now uses `WITH latest AS (SELECT
+  MAX(date)...)` instead of hardcoded `INTERVAL 1 DAY` so it always shows the
+  latest available date. Committed: `a369c5b`.
+- [x] **Health check freshness threshold fixed** — `health_check.py` was flagging
+  stale at `> 1 day`, causing a nightly false positive (before 08:00 Riyadh data is
+  legitimately 2 days old). Aligned to `check_freshness.STALE_THRESHOLD_DAYS = 3`.
+  LinkedIn (`KNOWN_PAUSED`) excluded from failure report. Committed: `1f71867`.
+- [x] **Railway Pro project confirmed + documented** — live project is
+  `nexa-performance-agent` in Marketing Workspace (`57f124d0`). Personal account
+  project (`1b3ee05a`) deleted. Documented in memory + `feedback_deploy_workflow.md`.
+- [x] **YouTube OAuth script built** — `scripts/youtube_oauth.py` opens Google
+  auth in browser, catches callback on :8080, writes `YT_REFRESH_TOKEN` +
+  `YT_CHANNEL_ID` to `.env`. Run with `railway run python scripts/youtube_oauth.py`.
+  Not yet executed (browser step requires local approval).
+
 ## Done this session (2026-05-13)
 
 - [x] **Railway dual-project fix** — found two `nexa-performance-agent` projects (trial + pro)
