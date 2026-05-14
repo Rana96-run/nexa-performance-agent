@@ -1428,13 +1428,18 @@ def activity_dashboard():
     today_kpis: dict = {}
     try:
         kpi_sql = f"""
-            WITH yest AS (
+            WITH latest AS (
+                SELECT MAX(date) AS d FROM {T}.paid_channel_daily
+            ),
+            yest AS (
                 SELECT
-                    SUM(spend)  AS spend,
-                    SUM(leads)  AS leads,
-                    SUM(sqls)   AS sqls
-                FROM {T}.paid_channel_daily
-                WHERE date = DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+                    l.d                  AS data_date,
+                    SUM(p.spend)         AS spend,
+                    SUM(p.leads_total)   AS leads,
+                    SUM(p.qualified)     AS sqls
+                FROM {T}.paid_channel_daily p, latest l
+                WHERE p.date = l.d
+                GROUP BY l.d
             ),
             week_avg AS (
                 SELECT
@@ -1442,35 +1447,36 @@ def activity_dashboard():
                     ROUND(AVG(leads), 2)  AS leads_avg,
                     ROUND(AVG(sqls),  2)  AS sqls_avg
                 FROM (
-                    SELECT date, SUM(spend) AS spend, SUM(leads) AS leads, SUM(sqls) AS sqls
+                    SELECT date,
+                           SUM(spend)       AS spend,
+                           SUM(leads_total) AS leads,
+                           SUM(qualified)   AS sqls
                     FROM {T}.paid_channel_daily
                     WHERE date BETWEEN
-                          DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 8 DAY) AND
-                          DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 DAY)
+                          DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 8 DAY) AND
+                          DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 1 DAY)
                     GROUP BY date
                 )
             ),
             by_channel AS (
                 SELECT
-                    channel,
-                    ROUND(SUM(spend), 2)  AS spend,
-                    SUM(leads)            AS leads,
-                    SUM(sqls)             AS sqls,
-                    ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(sqls),0)), 2) AS cpql
-                FROM {T}.paid_channel_daily
-                WHERE date = DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-                  AND spend > 0
-                GROUP BY channel
-                ORDER BY cpql ASC NULLS LAST
+                    p.channel,
+                    ROUND(SUM(p.spend), 2)                                           AS spend,
+                    SUM(p.leads_total)                                               AS leads,
+                    SUM(p.qualified)                                                 AS sqls,
+                    ROUND(SAFE_DIVIDE(SUM(p.spend), NULLIF(SUM(p.qualified),0)), 2) AS cpql
+                FROM {T}.paid_channel_daily p, latest l
+                WHERE p.date = l.d AND p.spend > 0
+                GROUP BY p.channel
             )
             SELECT
-                y.spend, y.leads, y.sqls,
+                y.data_date, y.spend, y.leads, y.sqls,
                 ROUND(SAFE_DIVIDE(y.spend, NULLIF(y.sqls, 0)), 2) AS cpql,
                 w.spend_avg, w.leads_avg, w.sqls_avg,
                 ARRAY_AGG(STRUCT(c.channel, c.spend, c.leads, c.sqls, c.cpql)
-                          ORDER BY c.cpql ASC NULLS LAST LIMIT 5) AS top_channels
+                          ORDER BY COALESCE(c.cpql, 99999) ASC LIMIT 5) AS top_channels
             FROM yest y, week_avg w, by_channel c
-            GROUP BY y.spend, y.leads, y.sqls, w.spend_avg, w.leads_avg, w.sqls_avg
+            GROUP BY y.data_date, y.spend, y.leads, y.sqls, w.spend_avg, w.leads_avg, w.sqls_avg
         """
         for row in bq.query(kpi_sql).result():
             spend  = float(row.spend  or 0)
@@ -1493,16 +1499,20 @@ def activity_dashboard():
                     "sqls":    int(c["sqls"]  or 0),
                     "cpql":    round(float(c["cpql"] or 0), 0) if c["cpql"] else None,
                 })
+            data_date  = row.data_date
+            days_ago   = (today - data_date).days if data_date else 1
+            date_suffix = "yesterday" if days_ago == 1 else f"{days_ago}d ago"
             today_kpis = {
-                "spend":    round(spend, 0),
-                "leads":    leads,
-                "sqls":     sqls,
-                "cpql":     round(cpql, 0) if cpql else None,
-                "d_spend":  _delta(spend, s_avg),
-                "d_leads":  _delta(leads, l_avg),
-                "d_sqls":   _delta(sqls, sq_avg),
-                "channels": channels,
-                "date_label": (today - timedelta(days=1)).strftime("%a %b %-d"),
+                "spend":      round(spend, 0),
+                "leads":      leads,
+                "sqls":       sqls,
+                "cpql":       round(cpql, 0) if cpql else None,
+                "d_spend":    _delta(spend, s_avg),
+                "d_leads":    _delta(leads, l_avg),
+                "d_sqls":     _delta(sqls, sq_avg),
+                "channels":   channels,
+                "date_label": str(data_date) if data_date else "—",
+                "date_suffix": date_suffix,
             }
     except Exception as e:
         print(f"[activity] today_kpis query failed (non-fatal): {e}")
@@ -1511,10 +1521,10 @@ def activity_dashboard():
     agent_status: dict = {}
     try:
         last_sql = f"""
-            SELECT role, action, channel, created_at,
-                   TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), created_at, MINUTE) AS mins_ago
+            SELECT role, action, channel, ts,
+                   TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), ts, MINUTE) AS mins_ago
             FROM {T}.agent_activity_log
-            ORDER BY created_at DESC
+            ORDER BY ts DESC
             LIMIT 1
         """
         for row in bq.query(last_sql).result():

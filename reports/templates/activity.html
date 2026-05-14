@@ -352,7 +352,7 @@ a:hover{text-decoration:underline}
   {% if today_kpis %}
   <div class="kpi-bar">
     <div class="kpi-cell" style="position:relative">
-      <div class="kpi-cell-label">Spend Yesterday</div>
+      <div class="kpi-cell-label">Spend · {{ today_kpis.date_label }}</div>
       <div class="kpi-cell-num">${{ "{:,.0f}".format(today_kpis.spend) }}</div>
       {% if today_kpis.d_spend %}
       <div class="kpi-cell-delta {% if today_kpis.d_spend.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
@@ -386,7 +386,7 @@ a:hover{text-decoration:underline}
       {% endif %}
     </div>
     <div class="kpi-cell">
-      <div class="kpi-cell-label">Leads Yesterday</div>
+      <div class="kpi-cell-label">Leads · {{ today_kpis.date_label }}</div>
       <div class="kpi-cell-num">{{ today_kpis.leads }}</div>
       {% if today_kpis.d_leads %}
       <div class="kpi-cell-delta {% if today_kpis.d_leads.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
@@ -396,7 +396,7 @@ a:hover{text-decoration:underline}
       <div class="kpi-date">HubSpot lead module</div>
     </div>
     <div class="kpi-cell">
-      <div class="kpi-cell-label">SQLs Yesterday</div>
+      <div class="kpi-cell-label">SQLs · {{ today_kpis.date_label }}</div>
       <div class="kpi-cell-num">{{ today_kpis.sqls }}</div>
       {% if today_kpis.d_sqls %}
       <div class="kpi-cell-delta {% if today_kpis.d_sqls.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
