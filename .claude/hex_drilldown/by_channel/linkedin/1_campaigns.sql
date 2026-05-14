@@ -9,7 +9,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT
   campaign_id,
-  campaign_name,
+  MAX(campaign_name) AS campaign_name,
   ROUND(SUM(spend), 2)                                                                  AS spend,
   SUM(impressions)                                                                      AS impressions,
   SUM(clicks)                                                                           AS clicks,
@@ -38,5 +38,5 @@ WHERE channel = 'linkedin'
   {% if campaign_filter %}
   AND LOWER(TRIM(campaign_name)) = LOWER(TRIM({{ campaign_filter }}))
   {% endif %}
-GROUP BY campaign_id, campaign_name
+GROUP BY campaign_id
 ORDER BY spend DESC

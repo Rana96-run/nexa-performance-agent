@@ -16,7 +16,7 @@
 SELECT * FROM (
   SELECT
     ad_id,
-    utm_content                                                                           AS ad_name,
+    MAX(utm_content)                                                                           AS ad_name,
     ROUND(SUM(spend), 2)                                                                  AS spend,
     SUM(impressions)                                                                      AS impressions,
     SUM(clicks)                                                                           AS clicks,
@@ -56,7 +56,7 @@ SELECT * FROM (
     {% if selected_adset %}
     AND LOWER(TRIM(utm_audience)) = LOWER(TRIM({{ selected_adset }}))
     {% endif %}
-  GROUP BY ad_id, utm_content
+  GROUP BY ad_id
 ) sub
 WHERE spend > 0
 ORDER BY spend DESC NULLS LAST

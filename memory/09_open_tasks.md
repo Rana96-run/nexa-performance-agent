@@ -33,10 +33,7 @@ The 3 views now expose `campaign_id` (new column on `paid_channel_campaign_daily
 
 ## P0 — Unblocks everything else
 
-- [ ] **Run YouTube OAuth** — `python scripts/youtube_oauth.py`. Writes
-  `YT_REFRESH_TOKEN` + `YT_CHANNEL_ID` to `.env` (slots empty today).
-- [ ] **Get Funnel.io read API token** — ask Amar for workspace API token
-  + account_id + project_id. Fill `FUNNEL_API_TOKEN/ACCOUNT_ID/PROJECT_ID`.
+(YouTube + Funnel.io removed 2026-05-14 per user direction — not in scope.)
 
 ## P1 — PMax sector campaigns (DONE — 2026-05-13)
 
@@ -69,12 +66,6 @@ Campaign IDs (customer 5753494964):
 - [x] `scripts/linkedin_oauth.py` — added `rw_organization_admin` scope
 - [ ] **Re-mint LinkedIn token** — run `python scripts/linkedin_oauth.py` to get
   token with new scope before using clone_campaign_creatives()
-
-## P1 — Funnel.io (blocked on token)
-
-- [ ] Ask Amar: workspace API token + account_id + project_id
-- [ ] Once token lands: baseline snapshot, dim/metric list, reconcile vs BQ
-- [ ] Map `channel_unified` → our `CHANNEL_MAP` in `collectors/views.py`
 
 ## P3 — Nice-to-have
 
