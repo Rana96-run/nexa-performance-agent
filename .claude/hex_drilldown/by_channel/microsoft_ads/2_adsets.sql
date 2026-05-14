@@ -16,6 +16,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT * FROM (
   SELECT
+    adset_id,
     utm_audience                                                                          AS adset_name,
     ROUND(SUM(spend), 2)                                                                  AS spend,
     SUM(impressions)                                                                      AS impressions,
@@ -45,7 +46,7 @@ SELECT * FROM (
     {% if effective_campaign %}
     AND LOWER(TRIM(utm_campaign)) = LOWER(TRIM({{ effective_campaign }}))
     {% endif %}
-  GROUP BY utm_audience
+  GROUP BY adset_id, utm_audience
 ) sub
 WHERE spend > 0
 ORDER BY spend DESC

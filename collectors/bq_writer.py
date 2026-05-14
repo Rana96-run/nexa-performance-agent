@@ -917,6 +917,8 @@ SELECT
   END                                      AS channel_name,
   COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
   COALESCE(p.utm_audience, h.utm_audience)  AS utm_audience,
+  p.platform_campaign_id                    AS campaign_id,
+  p.platform_adset_id                       AS adset_id,
   COALESCE(p.spend, u.spend, 0)             AS spend,
   COALESCE(p.impressions, 0)                AS impressions,
   COALESCE(p.clicks, 0)                     AS clicks,
@@ -983,8 +985,10 @@ WITH platform AS (
     -- utm_content column holds the resolved _adname custom-param value.
     -- Fall back to ad_name for channels without custom params.
     COALESCE(utm_content, ad_name) AS utm_content,
-    -- IDs kept for Strategy-C/D ID-based lead fallback
-    ANY_VALUE(ad_id)      AS platform_ad_id,
+    -- IDs kept for Strategy-C/D ID-based lead fallback AND exposed as
+    -- output columns so dashboards can show platform IDs alongside names.
+    ANY_VALUE(ad_id)       AS platform_ad_id,
+    ANY_VALUE(adset_id)    AS platform_adset_id,
     ANY_VALUE(campaign_id) AS platform_campaign_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
     -- creative_type + status: one value per ad; MAX picks the non-null value across days
@@ -1095,6 +1099,9 @@ SELECT
   COALESCE(p.campaign_name, h.utm_campaign)  AS utm_campaign,
   COALESCE(p.adset_name, h.utm_audience)     AS utm_audience,
   COALESCE(p.utm_content, h.utm_content)     AS utm_content,
+  p.platform_campaign_id                     AS campaign_id,
+  p.platform_adset_id                        AS adset_id,
+  p.platform_ad_id                           AS ad_id,
   -- spend: only use real platform data. utm_proxy spend is proportionally
   -- allocated from campaign level and is NOT accurate at ad grain — show NULL
   -- so CPL/CPQL don't display fabricated numbers.
