@@ -429,7 +429,9 @@ def _ensure_individual_table_exists():
     table.clustering_fields = ["qoyod_source", "pipeline"]
     client.create_table(table, exists_ok=True)
     # Add new columns to existing tables (create_table won't update schema)
-    for col in ("ga4_client_id",):
+    for col in ("ga4_client_id",
+                "lead_cta_source_sync",
+                "lead_cta_source_url"):
         try:
             client.query(
                 f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
