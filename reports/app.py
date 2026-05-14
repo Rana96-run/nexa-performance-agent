@@ -34,6 +34,17 @@ app.register_blueprint(hubspot_bp)
 
 _START_TIME = datetime.utcnow()
 
+
+def _uptime_str() -> str:
+    s = int((datetime.utcnow() - _START_TIME).total_seconds())
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m     = s // 60
+    if d:   return f"{d}d {h}h {m}m"
+    if h:   return f"{h}h {m}m"
+    return f"{m}m"
+
+
 @app.route("/health")
 def health():
     uptime_s = int((datetime.utcnow() - _START_TIME).total_seconds())
@@ -1413,6 +1424,166 @@ def activity_dashboard():
     except Exception as e:
         print(f"[activity] hygiene query failed (non-fatal): {e}")
 
+    # ── Today's KPI bar ───────────────────────────────────────────────────────
+    today_kpis: dict = {}
+    try:
+        kpi_sql = f"""
+            WITH yest AS (
+                SELECT
+                    SUM(spend)  AS spend,
+                    SUM(leads)  AS leads,
+                    SUM(sqls)   AS sqls
+                FROM {T}.paid_channel_daily
+                WHERE date = DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+            ),
+            week_avg AS (
+                SELECT
+                    ROUND(AVG(spend), 2)  AS spend_avg,
+                    ROUND(AVG(leads), 2)  AS leads_avg,
+                    ROUND(AVG(sqls),  2)  AS sqls_avg
+                FROM (
+                    SELECT date, SUM(spend) AS spend, SUM(leads) AS leads, SUM(sqls) AS sqls
+                    FROM {T}.paid_channel_daily
+                    WHERE date BETWEEN
+                          DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 8 DAY) AND
+                          DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 DAY)
+                    GROUP BY date
+                )
+            ),
+            by_channel AS (
+                SELECT
+                    channel,
+                    ROUND(SUM(spend), 2)  AS spend,
+                    SUM(leads)            AS leads,
+                    SUM(sqls)             AS sqls,
+                    ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(sqls),0)), 2) AS cpql
+                FROM {T}.paid_channel_daily
+                WHERE date = DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+                  AND spend > 0
+                GROUP BY channel
+                ORDER BY cpql ASC NULLS LAST
+            )
+            SELECT
+                y.spend, y.leads, y.sqls,
+                ROUND(SAFE_DIVIDE(y.spend, NULLIF(y.sqls, 0)), 2) AS cpql,
+                w.spend_avg, w.leads_avg, w.sqls_avg,
+                ARRAY_AGG(STRUCT(c.channel, c.spend, c.leads, c.sqls, c.cpql)
+                          ORDER BY c.cpql ASC NULLS LAST LIMIT 5) AS top_channels
+            FROM yest y, week_avg w, by_channel c
+            GROUP BY y.spend, y.leads, y.sqls, w.spend_avg, w.leads_avg, w.sqls_avg
+        """
+        for row in bq.query(kpi_sql).result():
+            spend  = float(row.spend  or 0)
+            leads  = int(row.leads    or 0)
+            sqls   = int(row.sqls     or 0)
+            cpql   = float(row.cpql   or 0)
+            s_avg  = float(row.spend_avg  or 0)
+            l_avg  = float(row.leads_avg  or 0)
+            sq_avg = float(row.sqls_avg   or 0)
+            def _delta(val, avg):
+                if avg == 0: return None
+                pct = round((val - avg) / avg * 100)
+                return {"pct": pct, "up": pct >= 0}
+            channels = []
+            for c in (row.top_channels or []):
+                channels.append({
+                    "channel": c["channel"],
+                    "spend":   round(float(c["spend"] or 0), 0),
+                    "leads":   int(c["leads"] or 0),
+                    "sqls":    int(c["sqls"]  or 0),
+                    "cpql":    round(float(c["cpql"] or 0), 0) if c["cpql"] else None,
+                })
+            today_kpis = {
+                "spend":    round(spend, 0),
+                "leads":    leads,
+                "sqls":     sqls,
+                "cpql":     round(cpql, 0) if cpql else None,
+                "d_spend":  _delta(spend, s_avg),
+                "d_leads":  _delta(leads, l_avg),
+                "d_sqls":   _delta(sqls, sq_avg),
+                "channels": channels,
+                "date_label": (today - timedelta(days=1)).strftime("%a %b %-d"),
+            }
+    except Exception as e:
+        print(f"[activity] today_kpis query failed (non-fatal): {e}")
+
+    # ── Agent status + next run ───────────────────────────────────────────────
+    agent_status: dict = {}
+    try:
+        last_sql = f"""
+            SELECT role, action, channel, created_at,
+                   TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), created_at, MINUTE) AS mins_ago
+            FROM {T}.agent_activity_log
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        for row in bq.query(last_sql).result():
+            mins = int(row.mins_ago or 0)
+            if mins < 60:
+                age = f"{mins}m ago"
+            elif mins < 1440:
+                age = f"{mins // 60}h {mins % 60}m ago"
+            else:
+                age = f"{mins // 1440}d ago"
+            agent_status["last_action"] = {
+                "role":    row.role or "—",
+                "action":  (row.action or "").replace("_", " ").title(),
+                "channel": row.channel or "",
+                "age":     age,
+                "mins_ago": mins,
+            }
+        # Next 08:00 Riyadh
+        from datetime import date as _date
+        now_riyadh = datetime.now(riyadh)
+        next_run   = now_riyadh.replace(hour=8, minute=0, second=0, microsecond=0)
+        if now_riyadh >= next_run:
+            next_run += timedelta(days=1)
+        diff      = next_run - now_riyadh
+        total_min = int(diff.total_seconds() // 60)
+        agent_status["next_run"]  = next_run.strftime("%H:%M Riyadh")
+        agent_status["next_in"]   = f"{total_min // 60}h {total_min % 60}m" if total_min >= 60 else f"{total_min}m"
+        agent_status["uptime"]    = _uptime_str()
+    except Exception as e:
+        print(f"[activity] agent_status query failed (non-fatal): {e}")
+
+    # ── Pending approvals ─────────────────────────────────────────────────────
+    pending_approvals: list = []
+    try:
+        from notifications.slack import _load_pending
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
+        pending_raw = _load_pending()
+        if pending_raw and SLACK_BOT_TOKEN:
+            import slack_sdk
+            sl = slack_sdk.WebClient(token=SLACK_BOT_TOKEN)
+            for ts, meta in list(pending_raw.items()):
+                try:
+                    r = sl.reactions_get(channel=SLACK_CHANNEL_APPROVAL, timestamp=ts)
+                    rxns = {rx["name"] for rx in (r.get("message", {}).get("reactions") or [])}
+                    # Bot pre-adds both reactions — only resolved if a human added one
+                    # Check reaction count: if count>1 a human reacted
+                    resolved = False
+                    for rx in (r.get("message", {}).get("reactions") or []):
+                        if rx["name"] in ("white_check_mark", "x") and rx.get("count", 0) > 1:
+                            resolved = True
+                            break
+                    if not resolved:
+                        posted = meta.get("posted_at", "")
+                        findings = meta.get("findings", [])
+                        label = f"{len(findings)} action(s)" if findings else (
+                            meta.get("action", "").replace("_", " ").title() or "batch action"
+                        )
+                        pending_approvals.append({
+                            "ts":    ts,
+                            "label": label,
+                            "posted_at": posted[:16].replace("T", " ") if posted else "—",
+                            "channel_id": SLACK_CHANNEL_APPROVAL,
+                            "findings": findings[:6],
+                        })
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[activity] pending_approvals check failed (non-fatal): {e}")
+
     return render_template(
         "activity.html",
         last_updated=now_str,
@@ -1428,6 +1599,10 @@ def activity_dashboard():
         followup=followup,
         hygiene=hygiene,
         hc_running=_HC_STATUS.get("running", False),
+        today_kpis=today_kpis,
+        agent_status=agent_status,
+        pending_approvals=pending_approvals,
+        today=today,
     )
 
 

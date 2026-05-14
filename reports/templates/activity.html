@@ -163,6 +163,70 @@ a:hover{text-decoration:underline}
 .flow-content{padding:0 0 20px;flex:1}
 .flow-label{font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:3px}
 .flow-desc{font-size:12px;color:#8b949e;line-height:1.4}
+
+/* ── Pending approvals banner ── */
+.approvals-banner{background:#1c1600;border:1px solid #9e6a03;border-radius:8px;
+                   padding:14px 18px;margin-bottom:16px;display:flex;
+                   align-items:flex-start;gap:14px}
+.approvals-banner-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.approvals-banner-body{flex:1;min-width:0}
+.approvals-banner-title{font-size:13px;font-weight:600;color:#e3b341;margin-bottom:6px}
+.approvals-banner-items{display:flex;flex-direction:column;gap:4px}
+.approvals-banner-item{font-size:12px;color:#c9d1d9;display:flex;align-items:center;gap:8px}
+.approvals-banner-item .ab-dot{width:5px;height:5px;border-radius:50%;background:#9e6a03;flex-shrink:0}
+.approvals-banner-cta{flex-shrink:0;align-self:center}
+.approvals-banner-cta a{display:inline-flex;align-items:center;gap:4px;
+                          background:#9e6a03;color:#fff;border-radius:6px;
+                          padding:6px 14px;font-size:12px;font-weight:600;
+                          text-decoration:none;transition:background .15s}
+.approvals-banner-cta a:hover{background:#b07812;text-decoration:none}
+
+/* ── Agent status bar ── */
+.agent-bar{display:flex;align-items:center;gap:0;background:#161b22;
+            border:1px solid #30363d;border-radius:8px;margin-bottom:16px;
+            overflow:hidden;flex-wrap:wrap}
+.ab-cell{display:flex;align-items:center;gap:8px;padding:10px 18px;
+          border-right:1px solid #21262d;flex-shrink:0}
+.ab-cell:last-child{border-right:none;flex:1}
+.ab-cell-label{font-size:10px;color:#484f58;text-transform:uppercase;
+                letter-spacing:.05em;margin-bottom:1px}
+.ab-cell-val{font-size:13px;font-weight:600;color:#e6edf3}
+.ab-cell-sub{font-size:11px;color:#8b949e}
+.ab-dot-live{width:7px;height:7px;border-radius:50%;background:#39d353;
+              box-shadow:0 0 6px #39d353;flex-shrink:0;animation:pulse 2s infinite}
+.ab-dot-idle{width:7px;height:7px;border-radius:50%;background:#484f58;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── KPI bar ── */
+.kpi-bar{display:flex;gap:0;background:#161b22;border:1px solid #30363d;
+          border-radius:8px;margin-bottom:20px;overflow:hidden;flex-wrap:wrap}
+.kpi-cell{flex:1;min-width:130px;padding:14px 20px;border-right:1px solid #21262d;
+           position:relative;cursor:default;transition:background .15s}
+.kpi-cell:last-child{border-right:none}
+.kpi-cell:hover{background:#1c2128}
+.kpi-cell-label{font-size:10px;color:#484f58;text-transform:uppercase;
+                  letter-spacing:.05em;margin-bottom:4px}
+.kpi-cell-num{font-size:26px;font-weight:700;color:#e6edf3;line-height:1}
+.kpi-cell-delta{font-size:11px;margin-top:4px}
+.kpi-delta-up{color:#39d353}
+.kpi-delta-down{color:#f85149}
+.kpi-date{font-size:10px;color:#484f58;margin-top:2px}
+.kpi-channels{position:absolute;bottom:100%;left:0;z-index:50;background:#1f2937;
+               border:1px solid #374151;border-radius:8px;min-width:340px;
+               padding:12px;display:none;box-shadow:0 8px 24px #00000066}
+.kpi-cell:hover .kpi-channels{display:block}
+.kpi-ch-row{display:flex;align-items:center;justify-content:space-between;
+             padding:4px 0;border-bottom:1px solid #374151;font-size:11px;color:#c9d1d9}
+.kpi-ch-row:last-child{border-bottom:none}
+.kpi-ch-name{font-weight:600;min-width:80px}
+.kpi-ch-nums{display:flex;gap:16px;color:#8b949e}
+.kpi-ch-nums span{min-width:50px;text-align:right}
+.kpi-ch-cpql{color:#e3b341;font-weight:600}
+
+/* ── Countdown chip ── */
+.countdown-chip{display:inline-flex;align-items:center;gap:5px;
+                 background:#161b22;border:1px solid #30363d;border-radius:12px;
+                 padding:3px 10px;font-size:11px;color:#8b949e}
 </style>
 </head>
 <body>
@@ -196,6 +260,41 @@ a:hover{text-decoration:underline}
 <!-- ── Main content ── -->
 <main class="main">
 
+  <!-- ── Pending Approvals Banner ── -->
+  {% if pending_approvals %}
+  <div class="approvals-banner">
+    <div class="approvals-banner-icon">⚡</div>
+    <div class="approvals-banner-body">
+      <div class="approvals-banner-title">
+        {{ pending_approvals|length }} approval{% if pending_approvals|length != 1 %}s{% endif %} waiting in #approvals — react ✅ to execute or ❌ to skip
+      </div>
+      <div class="approvals-banner-items">
+        {% for ap in pending_approvals %}
+        <div class="approvals-banner-item">
+          <div class="ab-dot"></div>
+          <span>
+            <strong>{{ ap.label }}</strong>
+            {% if ap.findings %}
+              —
+              {% for f in ap.findings[:3] %}
+                <span style="color:#8b949e">{{ f.action|title }} {{ f.channel }}</span>{% if not loop.last %}, {% endif %}
+              {% endfor %}
+              {% if ap.findings|length > 3 %}<span style="color:#484f58"> +{{ ap.findings|length - 3 }} more</span>{% endif %}
+            {% endif %}
+          </span>
+          <span style="color:#484f58;font-size:11px">posted {{ ap.posted_at }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="approvals-banner-cta">
+      <a href="https://slack.com/app_redirect?channel={{ pending_approvals[0].channel_id }}" target="_blank">
+        Open in Slack ↗
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Header -->
   <div class="page-header">
     <div class="page-title">
@@ -209,6 +308,118 @@ a:hover{text-decoration:underline}
       <a href="?days=365" {% if days == 365 %}class="active"{% endif %}>1yr</a>
     </nav>
   </div>
+
+  <!-- ── Agent Status Bar ── -->
+  {% if agent_status %}
+  <div class="agent-bar">
+    <div class="ab-cell" style="min-width:140px">
+      <div {% if agent_status.last_action and agent_status.last_action.mins_ago < 120 %}class="ab-dot-live"{% else %}class="ab-dot-idle"{% endif %}></div>
+      <div>
+        <div class="ab-cell-label">Status</div>
+        <div class="ab-cell-val">{% if agent_status.last_action and agent_status.last_action.mins_ago < 120 %}Active{% else %}Idle{% endif %}</div>
+      </div>
+    </div>
+    {% if agent_status.last_action %}
+    <div class="ab-cell" style="flex:2;min-width:200px">
+      <div>
+        <div class="ab-cell-label">Last Action</div>
+        <div class="ab-cell-val" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">
+          {{ agent_status.last_action.action }}
+          {% if agent_status.last_action.channel %}<span style="color:#8b949e;font-weight:400"> · {{ agent_status.last_action.channel }}</span>{% endif %}
+        </div>
+        <div class="ab-cell-sub">{{ agent_status.last_action.age }}</div>
+      </div>
+    </div>
+    {% endif %}
+    <div class="ab-cell">
+      <div>
+        <div class="ab-cell-label">Next Scheduled Run</div>
+        <div class="ab-cell-val">{{ agent_status.next_run }}</div>
+        <div class="ab-cell-sub">in {{ agent_status.next_in }}</div>
+      </div>
+    </div>
+    <div class="ab-cell">
+      <div>
+        <div class="ab-cell-label">Uptime</div>
+        <div class="ab-cell-val">{{ agent_status.uptime }}</div>
+        <div class="ab-cell-sub">this deployment</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Yesterday's KPI Bar ── -->
+  {% if today_kpis %}
+  <div class="kpi-bar">
+    <div class="kpi-cell" style="position:relative">
+      <div class="kpi-cell-label">Spend Yesterday</div>
+      <div class="kpi-cell-num">${{ "{:,.0f}".format(today_kpis.spend) }}</div>
+      {% if today_kpis.d_spend %}
+      <div class="kpi-cell-delta {% if today_kpis.d_spend.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
+        {% if today_kpis.d_spend.up %}▲{% else %}▼{% endif %} {{ today_kpis.d_spend.pct|abs }}% vs 7d avg
+      </div>
+      {% endif %}
+      <div class="kpi-date">{{ today_kpis.date_label }}</div>
+      {% if today_kpis.channels %}
+      <div class="kpi-channels">
+        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By Channel</div>
+        <div style="display:flex;justify-content:flex-end;gap:16px;font-size:10px;color:#484f58;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #374151">
+          <span style="min-width:50px;text-align:right">Spend</span>
+          <span style="min-width:40px;text-align:right">Leads</span>
+          <span style="min-width:40px;text-align:right">SQLs</span>
+          <span style="min-width:50px;text-align:right">CPQL</span>
+        </div>
+        {% for c in today_kpis.channels %}
+        <div class="kpi-ch-row">
+          <span class="kpi-ch-name">
+            <span class="tag {{ c.channel|lower }}" style="font-size:10px;padding:1px 6px">{{ c.channel }}</span>
+          </span>
+          <div class="kpi-ch-nums">
+            <span>${{ "{:,.0f}".format(c.spend) }}</span>
+            <span>{{ c.leads }}</span>
+            <span>{{ c.sqls }}</span>
+            <span class="kpi-ch-cpql">{% if c.cpql %}${{ c.cpql }}{% else %}—{% endif %}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-cell-label">Leads Yesterday</div>
+      <div class="kpi-cell-num">{{ today_kpis.leads }}</div>
+      {% if today_kpis.d_leads %}
+      <div class="kpi-cell-delta {% if today_kpis.d_leads.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
+        {% if today_kpis.d_leads.up %}▲{% else %}▼{% endif %} {{ today_kpis.d_leads.pct|abs }}% vs 7d avg
+      </div>
+      {% endif %}
+      <div class="kpi-date">HubSpot lead module</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-cell-label">SQLs Yesterday</div>
+      <div class="kpi-cell-num">{{ today_kpis.sqls }}</div>
+      {% if today_kpis.d_sqls %}
+      <div class="kpi-cell-delta {% if today_kpis.d_sqls.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
+        {% if today_kpis.d_sqls.up %}▲{% else %}▼{% endif %} {{ today_kpis.d_sqls.pct|abs }}% vs 7d avg
+      </div>
+      {% endif %}
+      <div class="kpi-date">qualified leads</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-cell-label">CPQL Yesterday</div>
+      <div class="kpi-cell-num">{% if today_kpis.cpql %}${{ today_kpis.cpql }}{% else %}—{% endif %}</div>
+      <div class="kpi-date" style="margin-top:6px">
+        {% if today_kpis.cpql %}
+          {% if today_kpis.cpql < 60 %}<span style="color:#39d353;font-size:11px">● Scale zone</span>
+          {% elif today_kpis.cpql < 80 %}<span style="color:#3fb950;font-size:11px">● Acceptable</span>
+          {% elif today_kpis.cpql < 95 %}<span style="color:#e3b341;font-size:11px">● Warning</span>
+          {% else %}<span style="color:#f85149;font-size:11px">● Pause zone</span>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Stat strip -->
   <div class="stat-strip">
