@@ -341,6 +341,45 @@ def audit_campaign_health(
             note = (f"[HOLD — edited {days_since_edit}d ago, need ≥{MIN_DAYS_SINCE_EDIT}d] " + note)
             action = "monitor"  # downgrade; recheck once edit has had time to show results
 
+        # ── Alternatives considered ────────────────────────────────────────────
+        # For pause candidates: compute whether a budget reduction would bring
+        # CPQL into the acceptable range instead of a full pause.
+        # For scale candidates: validate the campaign has spending momentum.
+        alt_budget_cut_pct: int | None = None
+        alt_recommendation: str | None = None
+
+        if action == "pause" and r.sqls and r.sqls > 0 and r.cpql and r.spend:
+            # How much spend reduction would get CPQL to CPQL_ACCEPTABLE?
+            # Assumes same SQL count at lower spend (conservative).
+            target_spend  = CPQL_ACCEPTABLE * int(r.sqls)
+            cut_pct       = round((1 - target_spend / float(r.spend)) * 100)
+            if 10 <= cut_pct <= 55:
+                alt_budget_cut_pct = cut_pct
+                alt_recommendation = (
+                    f"Budget reduction of -{cut_pct}% (${float(r.spend):.0f} → "
+                    f"${target_spend:.0f} total over window) could bring CPQL to "
+                    f"~${CPQL_ACCEPTABLE} if SQL count holds. "
+                    f"Recommended: cut budget first, pause only if CPQL doesn't improve."
+                )
+            else:
+                alt_recommendation = (
+                    f"Budget cut alone won't fix this (would require >{55}% reduction). "
+                    f"Root cause is likely audience/creative quality. Full pause recommended."
+                )
+
+        if action == "scale":
+            # Flag if qual rate is solid — scale with confidence note
+            if qr >= QUAL_RATE_TARGET * 100:
+                alt_recommendation = (
+                    f"Qual rate {qr:.0f}% ≥ target — scale is well-supported. "
+                    f"+25% budget raise likely to compound qualified leads."
+                )
+            else:
+                alt_recommendation = (
+                    f"Qual rate {qr:.0f}% is below target ({QUAL_RATE_TARGET*100:.0f}%). "
+                    f"Scale cautiously — CPQL is good but lead quality may slip under more volume."
+                )
+
         # Qflavours note
         if is_qflavours and QFLAVOURS_PIPELINE_CHECK:
             note += " ⚠️ Verify Qflavours leads pipeline in HubSpot has data for this campaign."
@@ -368,10 +407,12 @@ def audit_campaign_health(
             "is_awareness":         False,
             "is_qflavours":         is_qflavours,
             "roas_override":        roas_override,
-            "needs_drilldown":      needs_drilldown,
+            "needs_drilldown":        needs_drilldown,
             "drilldown_channel_type": drilldown_channel_type,
-            "action":               action,
-            "note":                 note,
+            "action":                 action,
+            "note":                   note,
+            "alt_budget_cut_pct":     alt_budget_cut_pct,
+            "alt_recommendation":     alt_recommendation,
         })
 
     return findings

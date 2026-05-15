@@ -111,7 +111,19 @@ def post_nightly_approvals_digest(
             avg   = f.get("avg_spend")
             new_b = f.get("new_budget")
             budget = f"  ·  ${avg:.0f}→${new_b:.0f}/day" if avg and new_b else ""
-            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}{budget}")
+            # Spend-trend sanity flag (set by campaign_health_tasks)
+            trend = f.get("spend_trend")
+            if trend == "no_recent_spend":
+                trend_tag = "  ·  ⚠️ *no recent spend — verify active*"
+            elif trend == "declining":
+                recent = f.get("spend_trend_recent")
+                window = f.get("spend_trend_window")
+                trend_tag = f"  ·  ⚠️ *spend declining (${recent:.0f} vs ${window:.0f} avg)*" if recent and window else "  ·  ⚠️ *spend declining*"
+            elif trend == "accelerating":
+                trend_tag = "  ·  ✅ *accelerating*"
+            else:
+                trend_tag = ""
+            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}{budget}{trend_tag}")
         executable_findings.extend(scale_findings)
 
     if pause_findings:
@@ -119,7 +131,10 @@ def post_nightly_approvals_digest(
         for f in pause_findings:
             cpql = f"CPQL ${f['cpql']:.0f}" if f.get("cpql") else "CPQL N/A"
             qual = f"{f.get('qual_rate', 0):.0f}%"
-            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}  ·  qual {qual}")
+            # Alternative to full pause (set by campaign_health.py)
+            cut = f.get("alt_budget_cut_pct")
+            alt_tag = f"  ·  💡 *alt: cut -{cut}% budget first*" if cut else ""
+            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}  ·  qual {qual}{alt_tag}")
         executable_findings.extend(pause_findings)
 
     if review_findings:

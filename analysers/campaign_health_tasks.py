@@ -151,6 +151,58 @@ def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> st
 
 # ── Budget helpers ─────────────────────────────────────────────────────────────
 
+def _recent_spend_trend(channel: str, campaign_name: str, account_id: str,
+                        recent_days: int = 3,
+                        window_days: int = DAYS_FOR_PAUSE_DECISION) -> tuple[str | None, float | None, float | None]:
+    """
+    Compare last-3-day avg spend to the full window average.
+    Returns (trend_label, recent_avg, window_avg).
+
+    trend_label values:
+      "no_recent_spend"  — zero spend in last 3 days (campaign may be paused/exhausted)
+      "declining"        — recent avg < 60% of window avg
+      "stable"           — within ±30% of window avg
+      "accelerating"     — recent avg > 130% of window avg (budget ramping up)
+      None               — insufficient data
+    """
+    try:
+        client    = get_client()
+        today     = date.today()
+        since_win = (today - timedelta(days=window_days)).isoformat()
+        since_rec = (today - timedelta(days=recent_days)).isoformat()
+        sql = f"""
+            SELECT
+              AVG(CASE WHEN date >= '{since_rec}' THEN spend END) AS recent_avg,
+              AVG(CASE WHEN date >= '{since_win}' THEN spend END) AS window_avg
+            FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+            WHERE channel      = '{channel}'
+              AND campaign_name = '{campaign_name.replace("'", "''")}'
+              AND account_id    = '{account_id}'
+              AND date         >= '{since_win}'
+              AND spend         > 0
+        """
+        rows = list(client.query(sql).result())
+        if not rows or rows[0].window_avg is None:
+            return None, None, None
+        recent = float(rows[0].recent_avg or 0)
+        window = float(rows[0].window_avg or 0)
+        if window == 0:
+            return None, None, None
+        ratio = recent / window
+        if recent == 0:
+            label = "no_recent_spend"
+        elif ratio < 0.60:
+            label = "declining"
+        elif ratio > 1.30:
+            label = "accelerating"
+        else:
+            label = "stable"
+        return label, round(recent, 2), round(window, 2)
+    except Exception as e:
+        print(f"[health-tasks] spend trend error: {e}")
+        return None, None, None
+
+
 def _avg_daily_spend(channel: str, campaign_name: str, account_id: str,
                      days: int = DAYS_FOR_PAUSE_DECISION) -> float | None:
     """Approximate current daily budget from recent average daily spend in BQ."""
@@ -330,6 +382,41 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             f["avg_spend"]  = avg
             f["new_budget"] = round(avg * (1 + SCALE_PCT), 2) if avg else None
 
+            # ── Scale sanity check — spend trend last 3d vs window avg ───────
+            trend, recent_avg, window_avg = _recent_spend_trend(
+                f["channel"], f["campaign"], f["account_id"]
+            )
+            f["spend_trend"]      = trend
+            f["spend_trend_recent"] = recent_avg
+            f["spend_trend_window"] = window_avg
+
+            if trend == "no_recent_spend":
+                sanity_block = (
+                    "\n\n⚠️ **Scale sanity check — HOLD:** No spend recorded in the last 3 days. "
+                    "Campaign may be paused, budget-exhausted, or disapproved. "
+                    "**Confirm campaign is actively spending before raising budget.**"
+                )
+            elif trend == "declining":
+                sanity_block = (
+                    f"\n\n⚠️ **Scale sanity check — caution:** Spend declining "
+                    f"(${recent_avg:.0f}/day last 3d vs ${window_avg:.0f}/day avg). "
+                    f"Budget raise may not help if campaign is already delivery-limited. "
+                    f"Check platform for budget exhaustion, ad disapprovals, or audience saturation."
+                )
+            elif trend == "accelerating":
+                sanity_block = (
+                    f"\n\n✅ **Scale sanity check — strong:** Spend accelerating "
+                    f"(${recent_avg:.0f}/day last 3d vs ${window_avg:.0f}/day avg). "
+                    f"Good delivery momentum — +{SCALE_PCT*100:.0f}% budget raise will compound it."
+                )
+            else:
+                sanity_block = (
+                    f"\n\n✅ **Scale sanity check — stable:** Spend consistent "
+                    f"(${recent_avg:.0f}/day last 3d vs ${window_avg:.0f}/day avg). "
+                    f"Budget raise expected to increase delivery proportionally."
+                    if recent_avg is not None else ""
+                )
+
             if f.get("is_awareness"):
                 lost_bud = f.get("is_lost_budget")
                 awareness_note = (
@@ -340,6 +427,12 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 )
             else:
                 awareness_note = ""
+
+            # Alternatives note from analyser
+            alt_block = ""
+            if f.get("alt_recommendation"):
+                alt_block = f"\n\n💡 **Alternatives considered:** {f['alt_recommendation']}"
+
             date_range_str = f"{f['date_from']} to {f['date_to']}"
             body = (
                 f"## 📈 Scale Candidate — Awaiting Approval\n\n"
@@ -347,6 +440,8 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module | Eval = CPQL first\n\n"
                 + _campaign_card([f])
                 + awareness_note
+                + sanity_block
+                + alt_block
                 + f"\n\n✅ **Action required:** React with ✅ in #approvals to raise budget +{SCALE_PCT*100:.0f}%."
             )
             gid = create_task(
@@ -396,12 +491,29 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 title = f"PENDING APPROVAL: Pause — {f['campaign']} — CPQL critical ({f['date_from']} to {f['date_to']})"
                 reason = "Fix audience/creative/LP before reactivating."
                 junk_drill = ""
+            # Alternatives-considered block from analyser
+            alt_section = ""
+            if f.get("alt_budget_cut_pct") is not None:
+                cut = f["alt_budget_cut_pct"]
+                alt_section = (
+                    f"\n\n💡 **Alternatives considered before recommending pause:**\n"
+                    f"- **Option A (recommended first):** Cut budget -{cut}% and monitor for 7 days. "
+                    f"If CPQL improves to under ${f.get('cpql',0)*(1-cut/100):.0f}, keep running at lower spend.\n"
+                    f"- **Option B (this task):** Full pause. {reason} "
+                    f"Apply only if Option A doesn't move CPQL.\n"
+                )
+            elif f.get("alt_recommendation"):
+                alt_section = (
+                    f"\n\n💡 **Alternatives considered:** {f['alt_recommendation']}"
+                )
+
             body = (
                 f"## ⏸️ Pause Candidate — Awaiting Approval\n\n"
                 f"**Period:** {f['date_from']} to {f['date_to']}\n"
                 f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module | Eval = CPQL first\n\n"
                 + _campaign_card([f])
                 + f"\n\n⚠️ **Why pause:** {reason}"
+                + alt_section
                 + junk_drill
                 + "\n\n✅ **Action required:** React with ✅ in #approvals to pause this campaign."
             )
