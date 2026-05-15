@@ -3,6 +3,32 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## Activity dashboard: parallel BQ futures silently overwritten by sequential re-runs
+
+- **Symptom (2026-05-16):** `reports/app.py` had a `ThreadPoolExecutor(14)` block that
+  ran all 14 SQL queries in parallel, but cold-load latency was still 12–20s and
+  results were sometimes stale.
+- **Root cause:** Seven downstream code blocks (`user_sql`, `intel_sql`, `ts_sql`,
+  `exec_sql`, `fu_sql`, `new_ads_sql`, `hc_sql`/`fresh_sql`) redefined the same SQL
+  strings and re-ran `bq.query().result()` **sequentially after the parallel block**,
+  overwriting the fast parallel results with slow serial ones. The parallel block was
+  doing real work; it was just wasted.
+- **Fix:** Deleted all 7 duplicate sequential blocks (–352 lines). All 14 queries now
+  come exclusively from the `ThreadPoolExecutor` futures. Cold load: ~2s. Commit: `34af5fb`.
+- **Rule:** After adding a parallel executor, grep for any re-use of the same SQL
+  variable names or `bq.query()` calls below the executor block — they will silently
+  overwrite the parallel results.
+
+## Railway domain: nexa-web-production-6a6b, NOT nexa-performance-agent
+
+- **Symptom (2026-05-15):** Dashboard link returned Railway 404.
+- **Root cause:** Memory had `nexa-performance-agent.up.railway.app` which was the
+  trial personal-account project (deleted). The live Pro project auto-assigned domain
+  is `nexa-web-production-6a6b.up.railway.app`.
+- **Fix:** Run `railway variables` to read `ACTIVITY_DASHBOARD_URL` directly from the
+  live project — that is always the canonical URL. Commit: `c280ac9`.
+- **Rule:** Never hard-code Railway URLs in memory — always verify with `railway variables`.
+
 ## Multi-account collectors: pool rows before upsert (NEVER upsert per-account)
 
 **Symptom (2026-05-15):** Microsoft Ads account 188176729 appeared dormant since

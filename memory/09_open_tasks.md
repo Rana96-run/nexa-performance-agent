@@ -3,9 +3,10 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-05-15:** Agent fully operational on Railway Pro (Marketing Workspace).
+> **Status as of 2026-05-16:** Agent fully operational on Railway Pro (Marketing Workspace).
 > All collectors live, health check green, dashboard rendering real data, nightly
-> scheduler running at 08:00 Riyadh. Next open work: P3 nice-to-haves below.
+> scheduler running at 08:00 Riyadh. Activity dashboard shows 6-member team roster.
+> Recommendation engine now includes alternatives-considered + pre-execution sanity checks.
 
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 
@@ -110,6 +111,36 @@ Campaign IDs (customer 5753494964):
 - [ ] Snapchat organic (doubtful — no public page metrics API)
 
 ---
+
+## Done this session (2026-05-16)
+
+- [x] **Activity dashboard — 6-member agent team roster** — new "Agent Team" section
+  above the contribution heatmap. 6 cards in a responsive grid, each showing job title,
+  description, role identifier chips, 30d/7d action counts, and last action date.
+  Role → title mapping: `ops_scheduler` → Performance Marketing Manager,
+  `bq_refresh` → Data Engineer, `spike_detector`+`performance_audit` → Analyst & Insights
+  Specialist, `llm_cadence` → Strategist Specialist, `keyword_management` → Paid Media
+  Manager, `daily_digest`+`slack_approval` → Communication Specialist.
+  Zero extra BQ queries — computed by filtering already-fetched `detail_rows`,
+  `infra_rows`, `intel_rows` on the `role` column. Commit: `c16439d`.
+
+- [x] **Recommendation engine: alternatives-considered + pre-execution sanity** — 3 improvements:
+  1. `analysers/campaign_health.py`: every finding now carries `alt_budget_cut_pct` and
+     `alt_recommendation`. For pause candidates, computes whether a budget reduction (10–55%)
+     would bring CPQL to `CPQL_ACCEPTABLE` without a full pause. For scale, flags qual rate
+     confidence.
+  2. `analysers/campaign_health_tasks.py`: Asana task bodies enriched with:
+     - Scale tasks: `_recent_spend_trend()` (last-3d vs 14d avg) produces sanity block —
+       no_recent_spend / declining / stable / accelerating.
+     - Pause tasks: "Alternatives considered" section — Option A (budget cut %) vs Option B
+       (full pause) so approvers have reasoning before reacting in Slack.
+  3. `notifications/slack.py`: `post_nightly_approvals_digest` enriched one-liners —
+     scale shows spend-trend tag (⚠️ declining / ✅ accelerating), pause shows
+     💡 alt: cut -N% budget first when viable. Commit: `17e1b97`.
+
+- [x] **Temp debug scripts deleted** — `scripts/_check_*.py`, `scripts/_rebuild_views.py`,
+  `scripts/_probe_ms_*.py`, `scripts/_dump_ms_report.py` (9 files, all untracked).
+  Working tree clean.
 
 ## Done this session (2026-05-15)
 
