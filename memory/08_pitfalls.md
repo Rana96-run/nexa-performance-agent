@@ -3,6 +3,28 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## Multi-account collectors: pool rows before upsert (NEVER upsert per-account)
+
+**Symptom (2026-05-15):** Microsoft Ads account 188176729 appeared dormant since
+April 24 in BQ even though the API returned real spend for May 10-14. Yesterday's
+(May 14) spend of $981.54 was completely missing for that account.
+
+**Root cause:** `collectors/microsoft_ads_bq.py` looped `for acc in accs:` and
+called `upsert_rows(...)` once per account. `upsert_rows` derives its DELETE
+scope from `key_fields`. Since `key_fields=["date","channel","campaign_id"]`
+shares `channel='microsoft_ads'` across both accounts, account-2's
+DELETE-then-INSERT wiped account-1's rows for every overlapping (date, channel)
+partition before re-inserting only its own data.
+
+**Fix:** Pool rows from ALL accounts into a single `all_rows: list[dict] = []`,
+then call `upsert_rows()` ONCE at the end of the function. Applied to all 4
+functions: `collect_and_write`, `collect_adsets_and_write`,
+`collect_keywords_and_write`, `collect_ads_and_write`.
+
+**General rule:** Any collector that iterates over multiple accounts/sub-channels
+that share `key_fields` MUST aggregate rows across the iteration and upsert
+once. Per-iteration upserts on overlapping scopes cause silent data loss.
+
 ## UTM param → ad hierarchy level (must memorise)
 
 | Ad-platform level | HubSpot UTM property        |

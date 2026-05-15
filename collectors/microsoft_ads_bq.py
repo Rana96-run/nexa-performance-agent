@@ -236,7 +236,14 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
     else:
         start = date(end.year, 1, 1)
 
-    total = 0
+    # IMPORTANT — collect all accounts' rows into ONE buffer before upserting.
+    # upsert_rows() DELETE scope is (date, channel) — if we upsert each account
+    # separately, the second account's DELETE wipes the first account's rows
+    # for any shared date. Found 2026-05-15: account 188176729's spend was being
+    # erased every refresh by account 187231519's subsequent run.
+    all_rows: list[dict] = []
+    now = datetime.now(timezone.utc).isoformat()
+
     for acc in accs:
         act_id  = acc["account_id"]
         cust_id = acc["customer_id"]
@@ -257,7 +264,6 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
             continue
 
         csv_rows = _download_and_parse(download_url)
-        now = datetime.now(timezone.utc).isoformat()
         bq_rows = []
         for row in csv_rows:
             day  = (row.get("TimePeriod") or "")[:10]
@@ -293,9 +299,14 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
                 "updated_at":      now,
             })
         print(f"[ms-bq] campaigns parsed {len(bq_rows)} rows (account {act_id})")
-        total += upsert_rows("campaigns_daily", bq_rows,
-                             key_fields=["date", "channel", "campaign_id"])
-    return total
+        all_rows.extend(bq_rows)
+
+    if not all_rows:
+        return 0
+    # Single upsert with combined rows from all accounts. DELETE wipes the
+    # (date, channel) partition once — both accounts' rows then re-inserted.
+    return upsert_rows("campaigns_daily", all_rows,
+                       key_fields=["date", "channel", "campaign_id"])
 
 
 # ── Ad Group level → adsets_daily ────────────────────────────────────────────
@@ -321,7 +332,10 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     else:
         start = date(end.year, 1, 1)
 
-    total = 0
+    # Multi-account aggregation — same bug as collect_and_write (see comments
+    # there). Pool all accounts' rows then upsert once.
+    all_rows: list[dict] = []
+    now = datetime.now(timezone.utc).isoformat()
     for acc in accs:
         act_id  = acc["account_id"]
         cust_id = acc["customer_id"]
@@ -354,7 +368,6 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
             continue
 
         csv_rows = _download_and_parse(download_url)
-        now = datetime.now(timezone.utc).isoformat()
         bq_rows = []
         for row in csv_rows:
             day = (row.get("TimePeriod") or "")[:10]
@@ -417,9 +430,12 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 "updated_at":    now,
             })
         print(f"[ms-bq] adgroups parsed {len(bq_rows)} rows (account {act_id})")
-        total += upsert_rows("adsets_daily", bq_rows,
-                             key_fields=["date", "channel", "adset_id"])
-    return total
+        all_rows.extend(bq_rows)
+
+    if not all_rows:
+        return 0
+    return upsert_rows("adsets_daily", all_rows,
+                       key_fields=["date", "channel", "adset_id"])
 
 
 # ── Keyword level → keywords_daily ───────────────────────────────────────────
@@ -445,7 +461,9 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
     else:
         start = date(end.year, 1, 1)
 
-    total = 0
+    # Multi-account aggregation — same bug as collect_and_write.
+    all_rows: list[dict] = []
+    now = datetime.now(timezone.utc).isoformat()
     for acc in accs:
         act_id  = acc["account_id"]
         cust_id = acc["customer_id"]
@@ -478,7 +496,6 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
             continue
 
         csv_rows = _download_and_parse(download_url)
-        now = datetime.now(timezone.utc).isoformat()
         bq_rows = []
         for row in csv_rows:
             day = (row.get("TimePeriod") or "")[:10]
@@ -519,9 +536,12 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
                 "updated_at":    now,
             })
         print(f"[ms-bq] keywords parsed {len(bq_rows)} rows (account {act_id})")
-        total += upsert_rows("keywords_daily", bq_rows,
-                             key_fields=["date", "channel", "adgroup_id", "keyword_id"])
-    return total
+        all_rows.extend(bq_rows)
+
+    if not all_rows:
+        return 0
+    return upsert_rows("keywords_daily", all_rows,
+                       key_fields=["date", "channel", "adgroup_id", "keyword_id"])
 
 
 # ── Ad level → ads_daily ───────────────────────────────────────────────────────
@@ -553,7 +573,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     else:
         start = date(end.year, 1, 1)
 
-    total = 0
+    all_rows: list[dict] = []
     for acc in accs:
         act_id  = acc["account_id"]
         cust_id = acc["customer_id"]
@@ -661,9 +681,12 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "updated_at":    now,
             })
         print(f"[ms-bq] ads parsed {len(bq_rows)} rows (account {act_id})")
-        total += upsert_rows("ads_daily", bq_rows,
-                             key_fields=["date", "channel", "ad_id"])
-    return total
+        all_rows.extend(bq_rows)
+
+    if not all_rows:
+        return 0
+    return upsert_rows("ads_daily", all_rows,
+                       key_fields=["date", "channel", "ad_id"])
 
 
 if __name__ == "__main__":
