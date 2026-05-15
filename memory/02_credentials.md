@@ -12,7 +12,7 @@ keys here BEFORE coding so we never chase "is it connected?" again.
 | Snapchat | ✅ connected (2 accts) | n/a | refresh token (perpetual) | Only `conversion_sign_ups` pulled; `conversion_lead` / `total_conversions` invalid |
 | HubSpot | ✅ read-only | ✅ read-only | Private app token (perpetual) | NEVER write to HubSpot |
 | TikTok | ✅ connected (2 accts) | n/a | access_token perpetual | Both Qoyod 2024 (`7304642840767021057`) and Qoyod 2025 (`7565475813811093521`) authorized via app `7635928165407260689`. Token does NOT expire. No refresh flow needed. Re-run `scripts/tiktok_oauth.py` only if app secret rotates. **TZ note: 2025 acct is Asia/Kuwait — should be Asia/Riyadh for consistency.** |
-| Microsoft Ads | ✅ connected (work acct) | n/a | refresh token (perpetual) | Account `188176729` (G1206XJR), Customer `254476670`, User `228801512` (Super Admin role 41). Auth via `@qoyod.com` work account on `/common/` endpoint AFTER admin ran `New-MgServicePrincipal -AppId d42ffc93-c136-491d-b4fd-6f18168c68fd`. Token works against REST Reporting API at `https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit`. |
+| Microsoft Ads | ✅ connected (2 accts, always-on) | n/a | refresh token (perpetual) | **Both accounts run on every collector cycle, same as Google/Meta/Snap/TikTok.** Primary: account `188176729` (G1206XJR), Customer `254476670`, confidential client via `MS_REFRESH_TOKEN` (auth on `/common/` endpoint). Secondary: account `MS_ACCOUNT_ID_2=187231519`, Customer `MS_CUSTOMER_ID_2`, public client (device_code) via `MS_REFRESH_TOKEN_2` (`public_client=True`). Collector iterates BOTH via `_accounts()` in `collectors/microsoft_ads_bq.py` and pools rows into a single upsert per grain (campaigns/adsets/keywords/ads) — never per-account (see `08_pitfalls.md` multi-account upsert trap). REST Reporting API at `https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit`. |
 | LinkedIn organic | ⏳ OAuth app set, tokens re-minted needed | — | **60 days** | `LI_CLIENT_ID/SECRET` set; `LI_ACCESS_TOKEN/ORG_URN/AD_ACCOUNT_URN` currently empty — rerun `scripts/linkedin_oauth.py` then `linkedin_refresh.py` |
 | LinkedIn Ads | ⏳ same as organic | n/a | 60 days | Auto-refresh helper `scripts/linkedin_refresh.py` now exists |
 | YouTube | n/a | ⏳ app scaffold, OAuth pending | refresh token (perpetual) | Env slots empty — run `scripts/youtube_oauth.py` to fill |
@@ -79,9 +79,13 @@ YT_CHANNEL_ID=
 # Microsoft Ads (app registered; still needs OAuth for refresh token)
 MS_DEVELOPER_TOKEN=<set>
 MS_CLIENT_ID / MS_CLIENT_SECRET / MS_TENANT_ID / MS_OBJECT_ID=<set>
-MS_ACCOUNT_ID=G1206XJR
+MS_ACCOUNT_ID=188176729            # primary (work acct, confidential client)
+MS_CUSTOMER_ID=254476670
+MS_REFRESH_TOKEN=<set>              # /common/ endpoint, public_client=False
+MS_ACCOUNT_ID_2=187231519           # secondary (personal acct, public client)
+MS_CUSTOMER_ID_2=<set>
+MS_REFRESH_TOKEN_2=<set>            # device_code, public_client=True
 MS_REDIRECT_URI=http://localhost:8080/ms-ads/callback
-# MS_REFRESH_TOKEN, MS_CUSTOMER_ID — filled after OAuth
 
 # TikTok (account IDs + pixels present; access token pending app approval)
 TIKTOK_AD_ACCOUNT_2024=7304642840767021057
