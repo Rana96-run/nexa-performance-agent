@@ -227,6 +227,28 @@ a:hover{text-decoration:underline}
 .countdown-chip{display:inline-flex;align-items:center;gap:5px;
                  background:#161b22;border:1px solid #30363d;border-radius:12px;
                  padding:3px 10px;font-size:11px;color:#8b949e}
+
+/* ── Agent team roster ── */
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));
+            gap:12px;margin-bottom:24px}
+.team-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
+            padding:16px 18px;position:relative;overflow:hidden}
+.team-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+                    background:var(--tc)}
+.team-card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.team-emoji{font-size:22px;flex-shrink:0;line-height:1;margin-top:1px}
+.team-title{font-size:13px;font-weight:600;color:#e6edf3;line-height:1.3}
+.team-desc{font-size:11px;color:#8b949e;line-height:1.45;margin-bottom:10px}
+.team-roles{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.team-role-tag{font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;
+                padding:2px 7px;font-family:"SFMono-Regular",Consolas,monospace}
+.team-stats{display:flex;gap:18px;margin-bottom:10px}
+.team-stat-num{font-size:22px;font-weight:700;color:#e6edf3;line-height:1}
+.team-stat-lbl{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:.05em;
+                margin-top:2px}
+.team-last{font-size:11px;color:#484f58;padding-top:8px;border-top:1px solid #21262d;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team-last strong{color:#8b949e;font-weight:500}
 </style>
 </head>
 <body>
@@ -445,6 +467,46 @@ a:hover{text-decoration:underline}
       <div class="stat-label">Active Days (30d)</div>
     </div>
   </div>
+
+  <!-- ── Agent Team Roster ── -->
+  {% if team_roster %}
+  <div class="section-head">Agent Team</div>
+  <div class="team-grid">
+    {% for member in team_roster %}
+    <div class="team-card" style="--tc:{{ member.color }}">
+      <div class="team-card-top">
+        <div class="team-emoji">{{ member.emoji }}</div>
+        <div>
+          <div class="team-title">{{ member.title }}</div>
+        </div>
+      </div>
+      <div class="team-desc">{{ member.desc }}</div>
+      <div class="team-roles">
+        {% for r in member.roles %}
+        <span class="team-role-tag">{{ r }}</span>
+        {% endfor %}
+      </div>
+      <div class="team-stats">
+        <div>
+          <div class="team-stat-num">{{ member.actions_30d }}</div>
+          <div class="team-stat-lbl">actions 30d</div>
+        </div>
+        <div>
+          <div class="team-stat-num">{{ member.actions_7d }}</div>
+          <div class="team-stat-lbl">actions 7d</div>
+        </div>
+      </div>
+      <div class="team-last">
+        {% if member.last_day %}
+          <strong>Last:</strong> {{ member.last_action }} &nbsp;·&nbsp; {{ member.last_day }}
+        {% else %}
+          <span style="color:#484f58">No activity in window</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <!-- ── Heatmap ── -->
   <div class="section-head">Contribution Heatmap — {{ date_label }}</div>

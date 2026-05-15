@@ -1511,6 +1511,80 @@ def activity_dashboard():
     except Exception as e:
         print(f"[activity] pending_approvals check failed (non-fatal): {e}")
 
+    # ── Agent Team Roster ─────────────────────────────────────────────────────
+    _TEAM_DEFS = [
+        {
+            "title": "Performance Marketing Manager",
+            "desc":  "Oversees all team operations, monitors outcomes, and drives continuous performance improvement",
+            "emoji": "🎯",
+            "color": "#7c3aed",
+            "roles": {"ops_scheduler"},
+        },
+        {
+            "title": "Data Engineer",
+            "desc":  "Collects raw data from all ad platforms and maintains BigQuery data pipelines",
+            "emoji": "⚙️",
+            "color": "#0891b2",
+            "roles": {"bq_refresh"},
+        },
+        {
+            "title": "Analyst & Insights Specialist",
+            "desc":  "Detects performance anomalies, audits campaigns, and surfaces actionable data insights",
+            "emoji": "📊",
+            "color": "#059669",
+            "roles": {"spike_detector", "performance_audit"},
+        },
+        {
+            "title": "Strategist Specialist",
+            "desc":  "Runs LLM-powered strategic analysis, generates recommendations, and responds to intelligence queries",
+            "emoji": "🧠",
+            "color": "#d97706",
+            "roles": {"llm_cadence"},
+        },
+        {
+            "title": "Paid Media Manager",
+            "desc":  "Manages paid search and paid social — campaigns, keywords, bids, and ad performance",
+            "emoji": "💰",
+            "color": "#dc2626",
+            "roles": {"keyword_management"},
+        },
+        {
+            "title": "Communication Specialist",
+            "desc":  "Produces daily digests, Slack reports, Asana tasks, and manages approval workflows",
+            "emoji": "💬",
+            "color": "#2563eb",
+            "roles": {"daily_digest", "slack_approval"},
+        },
+    ]
+    # Flatten all row sources into (action, role, cnt, day) tuples
+    _team_flat = []
+    for r in detail_rows:
+        _team_flat.append((str(r.action or ""), str(r.role or ""), int(r.cnt or 1), r.day))
+    for r in infra_rows:
+        _team_flat.append((str(r.action or ""), str(r.role or ""), int(r.cnt or 1), r.day))
+    for r in intel_rows:
+        _team_flat.append((str(r.action or ""), str(r.role or ""), int(r.cnt or 1), r.day))
+
+    team_roster = []
+    for _m in _TEAM_DEFS:
+        _mroles = _m["roles"]
+        _matched = [(act, cnt, day) for act, role, cnt, day in _team_flat if role in _mroles]
+        _c30 = sum(cnt for _, cnt, day in _matched if day and day >= cutoff_30)
+        _c7  = sum(cnt for _, cnt, day in _matched if day and day >= cutoff_7)
+        _last_day = max((day for _, _, day in _matched if day), default=None)
+        _last_act = next((act for act, _, day in _matched if day == _last_day), None) if _last_day else None
+        team_roster.append({
+            "title":       _m["title"],
+            "desc":        _m["desc"],
+            "emoji":       _m["emoji"],
+            "color":       _m["color"],
+            "roles":       sorted(_mroles),
+            "actions_30d": _c30,
+            "actions_7d":  _c7,
+            "last_day":    str(_last_day) if _last_day else None,
+            "last_action": (_last_act or "").replace("_", " ").title() if _last_act else "—",
+        })
+
     print(f"[activity] pre-render at {round(time.time()-_t0,1)}s", flush=True)
     html = render_template(
         "activity.html",
@@ -1530,6 +1604,7 @@ def activity_dashboard():
         today_kpis=today_kpis,
         agent_status=agent_status,
         pending_approvals=pending_approvals,
+        team_roster=team_roster,
         today=today,
     )
     print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
