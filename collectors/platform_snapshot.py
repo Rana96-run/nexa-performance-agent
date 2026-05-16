@@ -126,12 +126,12 @@ def _meta_campaigns() -> list[dict]:
 def _snap_campaigns() -> list[dict]:
     rows = []
     try:
-        from collectors.snap_bq import _refresh_access_token, _list_campaigns, SNAP_AD_ACCOUNT_IDS
+        from collectors.snap_bq import _refresh_access_token, _list_campaigns, _ad_accounts
         from collectors.currency import to_usd
         token = _refresh_access_token()
-        for acct_id in SNAP_AD_ACCOUNT_IDS:
+        for acct_id in _ad_accounts():
             try:
-                for c in _list_campaigns(token, acct_id):
+                for c in _list_campaigns(token, acct_id).values():
                     budget_micro = c.get("daily_budget_micro") or c.get("lifetime_budget_micro") or 0
                     budget_usd   = to_usd(budget_micro / 1_000_000, "USD")
                     rows.append({
@@ -366,9 +366,9 @@ def take_snapshot() -> int:
         autodetect=False,
         schema=[
             bqlib.SchemaField("snapped_at",     "TIMESTAMP", mode="REQUIRED"),
-            bqlib.SchemaField("channel",         "STRING"),
+            bqlib.SchemaField("channel",         "STRING",    mode="REQUIRED"),
             bqlib.SchemaField("account_id",      "STRING"),
-            bqlib.SchemaField("campaign_id",     "STRING"),
+            bqlib.SchemaField("campaign_id",     "STRING",    mode="REQUIRED"),
             bqlib.SchemaField("campaign_name",   "STRING"),
             bqlib.SchemaField("status",          "STRING"),
             bqlib.SchemaField("budget_raw",      "FLOAT64"),

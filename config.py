@@ -52,8 +52,7 @@ ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1211
 ASANA_PROJECTS = {
     "daily_activity": os.getenv("ASANA_PROJECT_DAILY_ACTIVITY") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY") or "1213280681364571",  # Daily Activity portfolio (confirmed 2026-05-11)
     "optimization":   os.getenv("ASANA_PROJECT_OPTIMIZATION")   or os.getenv("ASANA_PORTFOLIO_OPTIMIZATION")   or "1213239417965392",  # Optimization portfolio (confirmed 2026-05-11)
-    "campaigns_hub":  os.getenv("ASANA_PROJECT_CAMPAIGNS_HUB")  or "1212809922478291",  # Paid Growth Command (2.0 Q1_26 Scale)
-    "seasonal":       os.getenv("ASANA_PROJECT_SEASONAL")       or os.getenv("ASANA_PORTFOLIO_SEASONAL"),
+"seasonal":       os.getenv("ASANA_PROJECT_SEASONAL")       or os.getenv("ASANA_PORTFOLIO_SEASONAL"),
 }
 
 # Microsoft Ads

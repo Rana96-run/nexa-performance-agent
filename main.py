@@ -60,8 +60,7 @@ CADENCE_DAYS = {
 PROJECT_KEY_MAP = {
     "Daily Activity":            "daily_activity",
     "Optimization":              "optimization",
-    "Campaigns Performance Hub": "campaigns_hub",
-    "Seasonal Campaigns":        "seasonal",
+"Seasonal Campaigns":        "seasonal",
 }
 
 CADENCE_EMOJI = {

@@ -54,7 +54,7 @@ def _asana_client():
     return asana.ApiClient(cfg)
 
 
-_EXCLUDED_PROJECTS = {"campaigns_hub", "seasonal"}  # not active work-item projects
+_EXCLUDED_PROJECTS = {"seasonal"}  # not active work-item projects
 
 def _all_projects() -> dict[str, str]:
     """Return every Asana project the agent creates tasks in.
