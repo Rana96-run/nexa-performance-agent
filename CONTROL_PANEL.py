@@ -175,7 +175,11 @@ def run_agent_inline(task: str):
     from dotenv import load_dotenv
     load_dotenv()
     import anthropic, os
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        print("LLM disabled — ANTHROPIC_API_KEY not set.")
+        return
+    client = anthropic.Anthropic(api_key=key)
 
     from config import (
         CPL_WARNING, CPQL_WARNING, QUAL_RATE_TARGET, ROAS_TARGET,
@@ -246,7 +250,11 @@ Output ONLY the JSON array. No preamble.
         from dotenv import load_dotenv
         import anthropic, os, re
         load_dotenv()
-        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        _key = os.getenv("ANTHROPIC_API_KEY")
+        if not _key:
+            print("LLM disabled — ANTHROPIC_API_KEY not set.")
+            return
+        client = anthropic.Anthropic(api_key=_key)
         msg    = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=4000,

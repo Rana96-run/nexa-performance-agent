@@ -40,7 +40,7 @@ MIRO_BOARD_ID      = os.getenv("MIRO_BOARD_ID")
 ASANA_TOKEN        = os.getenv("ASANA_ACCESS_TOKEN")
 
 slack  = WebClient(token=SLACK_BOT_TOKEN)
-claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 # Both channels monitored for @mentions
 # NOTIFY  = summaries, alerts, reminders
@@ -157,6 +157,8 @@ Format replies for Slack (*bold*, bullet points). Never make up data — state i
 
 
 def _ask_claude(user_msg: str) -> str:
+    if not claude:
+        return "LLM replies are disabled (no ANTHROPIC_API_KEY configured)."
     from executors.cost_tracking import call_anthropic_tracked
     msg = call_anthropic_tracked(
         claude,

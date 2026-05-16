@@ -20,6 +20,9 @@ def run_role(role: str, trigger: str, data: dict) -> dict:
     role='llm_cadence', action='llm_role_ran'. Tracking is silent on failure
     so the role still returns its decision even if logging breaks.
     """
+    if not ANTHROPIC_API_KEY:
+        print(f"[manager] skipping role={role} — ANTHROPIC_API_KEY not set")
+        return {}
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     system_prompt = load_prompt(role)
 
