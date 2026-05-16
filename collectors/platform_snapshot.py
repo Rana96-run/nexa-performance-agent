@@ -126,9 +126,9 @@ def _meta_campaigns() -> list[dict]:
 def _snap_campaigns() -> list[dict]:
     rows = []
     try:
-        from collectors.snap_bq import _get_token, _list_campaigns, SNAP_AD_ACCOUNT_IDS
+        from collectors.snap_bq import _refresh_access_token, _list_campaigns, SNAP_AD_ACCOUNT_IDS
         from collectors.currency import to_usd
-        token = _get_token()
+        token = _refresh_access_token()
         for acct_id in SNAP_AD_ACCOUNT_IDS:
             try:
                 for c in _list_campaigns(token, acct_id):
@@ -365,7 +365,7 @@ def take_snapshot() -> int:
         write_disposition=bqlib.WriteDisposition.WRITE_APPEND,
         autodetect=False,
         schema=[
-            bqlib.SchemaField("snapped_at",     "TIMESTAMP"),
+            bqlib.SchemaField("snapped_at",     "TIMESTAMP", mode="REQUIRED"),
             bqlib.SchemaField("channel",         "STRING"),
             bqlib.SchemaField("account_id",      "STRING"),
             bqlib.SchemaField("campaign_id",     "STRING"),
