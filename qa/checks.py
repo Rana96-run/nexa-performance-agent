@@ -122,25 +122,82 @@ def check_dedupe(table: str, key_fields: list[str]) -> QACheckResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. BQ ↔ HubSpot reconciliation — 7-day lead count drift
+# 4. BQ ↔ HubSpot reconciliation — paid leads, 7-day window
 # ─────────────────────────────────────────────────────────────────────────────
+# IMPORTANT: reconciles against `paid_channel_daily.leads_total` (NOT the raw
+# `hubspot_leads_module_daily`). The team's reporting only cares about leads
+# attributed to a paid campaign — leads with null/organic utm_campaign are
+# excluded by definition because the view inner-joins to campaigns_daily.
+# Discovered 2026-05-17: raw lead_module=137 vs paid=74 yesterday; only 74
+# is the reportable number.
 def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
-    """Pass if BQ vs HubSpot last-7-day lead totals agree within `drift_threshold`."""
+    """Pass if BQ paid_channel_daily vs HubSpot live paid-lead counts agree within drift_threshold over last 7 days."""
     def _q():
-        from analysers.daily_reconciliation import reconcile_daily
-        return reconcile_daily(post_slack=False, return_result=True)
+        c, p, d = _bq()
+        # BQ side: paid leads from the blessed reporting view, last 7 settled days
+        sql = f"""
+        SELECT SUM(leads_total) AS bq_paid_leads
+        FROM `{p}.{d}.paid_channel_daily`
+        WHERE date BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+                       AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+        """
+        bq_paid = list(c.query(sql).result())[0].bq_paid_leads or 0
+
+        # HubSpot side: live API count of Lead Module records whose lead_utm_campaign
+        # matches a paid campaign that actually ran spend in the same window.
+        # We use the BQ list of known paid campaign names as the filter.
+        camp_sql = f"""
+        SELECT DISTINCT LOWER(campaign_name) AS cname
+        FROM `{p}.{d}.campaigns_daily`
+        WHERE date BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+                       AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+          AND spend > 0
+        """
+        known_paid = {r.cname for r in c.query(camp_sql).result()}
+
+        import os, requests
+        from datetime import datetime, timezone, timedelta as td
+        riyadh = timezone(td(hours=3))
+        end_local = datetime.now(riyadh).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_local = end_local - td(days=7)
+        url = "https://api.hubapi.com/crm/v3/objects/0-136/search"
+        hdr = {"Authorization": f"Bearer {os.environ['HUBSPOT_ACCESS_TOKEN']}",
+               "Content-Type": "application/json"}
+        hs_paid = 0; after = 0
+        while True:
+            body = {
+                "filterGroups": [{
+                    "filters": [
+                        {"propertyName": "hs_createdate", "operator": "GTE",
+                         "value": int(start_local.timestamp() * 1000)},
+                        {"propertyName": "hs_createdate", "operator": "LT",
+                         "value": int(end_local.timestamp() * 1000)},
+                    ]}],
+                "properties": ["lead_utm_campaign"],
+                "limit": 100, "after": after,
+            }
+            r = requests.post(url, headers=hdr, json=body, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            for obj in data.get("results", []):
+                cname = (obj.get("properties", {}).get("lead_utm_campaign") or "").lower()
+                if cname in known_paid:
+                    hs_paid += 1
+            paging = data.get("paging", {}).get("next", {}).get("after")
+            if not paging: break
+            after = paging
+            if hs_paid > 5000: break
+        return {"bq_total": int(bq_paid), "hs_total": int(hs_paid)}
 
     try:
         result = _cached("recon", _q)
-        if not result:
-            return QACheckResult(name="bq_hubspot_reconcile", passed=True, severity="warn",
-                                 detail="reconciler returned no data — non-fatal")
-        bq, hs, drift = result.get("bq_total", 0), result.get("hs_total", 0), result.get("drift", 0)
+        bq = result["bq_total"]; hs = result["hs_total"]
+        drift = (bq - hs) / hs if hs else 0
         return QACheckResult(
             name="bq_hubspot_reconcile",
             passed=abs(drift) <= drift_threshold,
             severity="block",
-            detail=f"bq={bq} hs={hs} drift={drift:+.2%}",
+            detail=f"paid leads — bq={bq} hs={hs} drift={drift:+.2%}",
             metrics={"bq_total": bq, "hs_total": hs, "drift": drift},
         )
     except Exception as e:
