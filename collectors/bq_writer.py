@@ -71,6 +71,12 @@ CAMPAIGNS_DAILY_SCHEMA = [
     bigquery.SchemaField("currency", "STRING"),                        # always "USD" — collectors convert before writing
     bigquery.SchemaField("spend_native", "FLOAT64"),                   # spend in the platform's native currency
     bigquery.SchemaField("currency_native", "STRING"),                 # e.g. "SAR", "USD"
+    # Impression Share metrics — Search + PMax campaigns only; null for
+    # social / video / display channels that don't report IS.
+    bigquery.SchemaField("impression_share",     "FLOAT64"),           # 0..1, fraction of eligible impressions captured
+    bigquery.SchemaField("top_impression_share", "FLOAT64"),           # 0..1, fraction of top-of-page impressions captured
+    bigquery.SchemaField("lost_is_budget",       "FLOAT64"),           # 0..1, IS lost due to budget
+    bigquery.SchemaField("lost_is_rank",         "FLOAT64"),           # 0..1, IS lost due to ad rank / quality
     bigquery.SchemaField("updated_at", "TIMESTAMP"),
 ]
 

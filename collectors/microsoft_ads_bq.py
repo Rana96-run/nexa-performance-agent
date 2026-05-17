@@ -158,6 +158,10 @@ def _submit_report(access_token: str, start: date, end: date,
             "CampaignId", "CampaignName",
             "CampaignStatus", "Impressions", "Clicks", "Spend",
             "Conversions", "CostPerConversion", "Ctr",
+            "ImpressionSharePercent",
+            "TopImpressionSharePercent",
+            "ImpressionLostToBudgetPercent",
+            "ImpressionLostToRankAggPercent",
         ],
         account_id=account_id,
         customer_id=customer_id,
@@ -278,6 +282,16 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
             cpl_native   = _f(row.get("CostPerConversion"))
             cpl_usd      = to_usd(cpl_native, native_cur) if cpl_native > 0 else None
             ctr          = _f(row.get("Ctr")) / 100
+            # Bing reports IS columns as 0..100 percentages with empty string
+            # ("--") for non-Search campaigns. Convert to 0..1; None if unset.
+            def _is_pct(val):
+                s = str(val or "").replace("%", "").strip()
+                if not s or s == "--":
+                    return None
+                try:
+                    return float(s) / 100.0
+                except ValueError:
+                    return None
             bq_rows.append({
                 "date":            day,
                 "channel":         "microsoft_ads",
@@ -296,6 +310,10 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
                 "currency":        "USD",
                 "spend_native":    round(spend_native, 2),
                 "currency_native": native_cur,
+                "impression_share":     _is_pct(row.get("ImpressionSharePercent")),
+                "top_impression_share": _is_pct(row.get("TopImpressionSharePercent")),
+                "lost_is_budget":       _is_pct(row.get("ImpressionLostToBudgetPercent")),
+                "lost_is_rank":         _is_pct(row.get("ImpressionLostToRankAggPercent")),
                 "updated_at":      now,
             })
         print(f"[ms-bq] campaigns parsed {len(bq_rows)} rows (account {act_id})")

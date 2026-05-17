@@ -129,6 +129,10 @@ def collect_and_write(days: int = None, incremental: bool = False):
             metrics.clicks,
             metrics.impressions,
             metrics.ctr,
+            metrics.search_impression_share,
+            metrics.search_top_impression_share,
+            metrics.search_budget_lost_impression_share,
+            metrics.search_rank_lost_impression_share,
             segments.date
         FROM campaign
         WHERE segments.date BETWEEN '{start}' AND '{end}'
@@ -146,6 +150,14 @@ def collect_and_write(days: int = None, incremental: bool = False):
                 native_cur   = normalize_currency(r.customer.currency_code)
                 spend        = to_usd(spend_native, native_cur)
                 conv         = r.metrics.conversions
+                # Google Ads returns IS metrics in 0..1 range; some campaign
+                # types (Display, Demand Gen) report -1 / 0 to mean "n/a".
+                def _is(v):
+                    try:
+                        v = float(v)
+                        return v if 0.0 <= v <= 1.0 else None
+                    except (TypeError, ValueError):
+                        return None
                 rows.append({
                     "date":            str(r.segments.date),
                     "channel":         "google_ads",
@@ -164,6 +176,10 @@ def collect_and_write(days: int = None, incremental: bool = False):
                     "currency":        "USD",
                     "spend_native":    round(spend_native, 2),
                     "currency_native": native_cur,
+                    "impression_share":     _is(r.metrics.search_impression_share),
+                    "top_impression_share": _is(r.metrics.search_top_impression_share),
+                    "lost_is_budget":       _is(r.metrics.search_budget_lost_impression_share),
+                    "lost_is_rank":         _is(r.metrics.search_rank_lost_impression_share),
                     "updated_at":      now,
                 })
                 count += 1
