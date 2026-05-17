@@ -210,10 +210,13 @@ def create_campaign(
     bsvc    = client.get_service("CampaignBudgetService")
     csvc    = client.get_service("CampaignService")
 
-    # 1. Create budget
+    # 1. Create budget — append timestamp to avoid DUPLICATE_NAME collisions
+    # from failed retries that leave orphan budgets behind.
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     bop  = client.get_type("CampaignBudgetOperation")
     bgt  = bop.create
-    bgt.name           = f"{name}_budget"
+    bgt.name           = f"{name}_budget_{ts}"
     bgt.amount_micros  = _usd_to_micros(daily_budget_usd)
     bgt.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
     br   = bsvc.mutate_campaign_budgets(customer_id=customer_id, operations=[bop])
@@ -228,19 +231,36 @@ def create_campaign(
         client.enums.AdvertisingChannelTypeEnum, advertising_channel)
     campaign.campaign_budget  = budget_rn
 
-    # Bidding — only the four approved strategies
+    # EU DSA compliance — Google Ads API v17+ requires explicit declaration
+    # of whether the campaign contains EU political advertising. For Saudi
+    # B2B SaaS, the answer is always "does not contain".
+    try:
+        campaign.contains_eu_political_advertising = (
+            client.enums.EuPoliticalAdvertisingStatusEnum
+            .DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+        )
+    except AttributeError:
+        # Older SDK versions — field doesn't exist yet
+        pass
+
+    # Bidding — only the four approved strategies.
+    # TARGET_CPA cannot be set inline on standard campaign create (Google v17+
+    # change). Use MaximizeConversions with target_cpa_micros as the optimisation
+    # goal — that's the new canonical way to set a CPA target.
+    # NOTE: proto-plus messages don't support .CopyFrom(); set fields directly.
     if bidding_strategy == "TARGET_CPA":
         if not target_cpa_usd:
             raise ValueError("TARGET_CPA requires target_cpa_usd")
-        campaign.target_cpa.target_cpa_micros = _usd_to_micros(target_cpa_usd)
+        campaign.maximize_conversions.target_cpa_micros = _usd_to_micros(target_cpa_usd)
     elif bidding_strategy == "MAXIMIZE_CONVERSIONS":
-        campaign.maximize_conversions.CopyFrom(client.get_type("MaximizeConversions"))
+        # Touch the field to instantiate the sub-message (proto-plus pattern)
+        campaign.maximize_conversions.target_cpa_micros = 0
     elif bidding_strategy == "TARGET_ROAS":
         if not target_roas:
             raise ValueError("TARGET_ROAS requires target_roas (e.g. 2.0 = 200%)")
-        campaign.target_roas.target_roas = target_roas
+        campaign.maximize_conversion_value.target_roas = target_roas
     elif bidding_strategy == "MAXIMIZE_CONVERSION_VALUE":
-        campaign.maximize_conversion_value.CopyFrom(client.get_type("MaximizeConversionValue"))
+        campaign.maximize_conversion_value.target_roas = 0
     else:
         raise ValueError(f"bidding_strategy must be one of {_VALID_BIDDING}")
 
