@@ -35,6 +35,88 @@ from config import (
 )
 
 
+def _campaigns_with_ad_pause_candidates(days: int = 14) -> dict[str, list[dict]]:
+    """Return {campaign_id: [{ad_id, ad_name, reason, spend, cpl, days_active}, ...]}
+    for every campaign that has at least one ad meeting AD-level pause criteria.
+
+    Pause precedence rule (CLAUDE.md, confirmed 2026-05-17):
+      A campaign-level pause is FORBIDDEN as long as any ad inside it qualifies
+      for an ad-level pause. First pause the bad ads; re-evaluate next cycle.
+
+    Rules (mirrors scripts/bulk_ads.py):
+      - zero_conv: spend > $70, 7+ days, 0 platform conversions
+      - high_cpl:  CPL > $50,  10+ days
+      - junk_lead: 10+ days, hs_leads ≥ 5, disq_rate ≥ 60%
+    """
+    from config import (
+        AD_CPL_PAUSE,                 # $50 — high-CPL ad threshold
+    )
+    ZERO_CONV_SPEND = 70.0
+    ZERO_CONV_DAYS  = 7
+    HIGH_CPL_DAYS   = 10
+    JUNK_LEAD_DAYS  = 10
+    JUNK_LEAD_MIN   = 5
+    JUNK_LEAD_RATE  = 0.60
+
+    client = get_client()
+    sql = f"""
+    WITH ad_perf AS (
+      SELECT campaign_id, channel, ad_id,
+             ANY_VALUE(ad_name)    AS ad_name,
+             SUM(spend)            AS total_spend,
+             SUM(conversions)      AS total_conv,
+             COUNT(DISTINCT date)  AS days_active
+      FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+      WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days} DAY)
+        AND status IN ('ENABLED', 'ACTIVE')           -- only enabled ads count as candidates
+      GROUP BY campaign_id, channel, ad_id            -- one row per ad
+    ),
+    hs AS (
+      SELECT LOWER(lead_utm_content) AS ad_key,
+             SUM(leads_total)        AS hs_leads,
+             SUM(leads_disqualified) AS hs_disq
+      FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+      WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days} DAY)
+        AND lead_utm_content IS NOT NULL
+      GROUP BY 1
+    )
+    SELECT a.campaign_id, a.channel, a.ad_id, a.ad_name,
+           a.total_spend, a.total_conv, a.days_active,
+           COALESCE(hs.hs_leads, 0) AS hs_leads,
+           COALESCE(hs.hs_disq,  0) AS hs_disq,
+           SAFE_DIVIDE(hs.hs_disq, NULLIF(hs.hs_leads, 0))   AS disq_rate,
+           SAFE_DIVIDE(a.total_spend, NULLIF(hs.hs_leads, 0)) AS cpl
+    FROM ad_perf a
+    LEFT JOIN hs ON LOWER(a.ad_name) = hs.ad_key
+    WHERE a.total_spend > 20                          -- skip dust
+    """
+    candidates: dict[str, list[dict]] = {}
+    for r in client.query(sql).result():
+        reasons = []
+        spend = float(r.total_spend or 0)
+        conv  = float(r.total_conv  or 0)
+        days_a = int(r.days_active or 0)
+        cpl   = float(r.cpl) if r.cpl is not None else None
+        dr    = float(r.disq_rate) if r.disq_rate is not None else None
+        if spend > ZERO_CONV_SPEND and days_a >= ZERO_CONV_DAYS and conv == 0:
+            reasons.append("zero_conv")
+        if cpl is not None and cpl > AD_CPL_PAUSE and days_a >= HIGH_CPL_DAYS:
+            reasons.append("high_cpl")
+        if (days_a >= JUNK_LEAD_DAYS and int(r.hs_leads or 0) >= JUNK_LEAD_MIN
+                and dr is not None and dr >= JUNK_LEAD_RATE):
+            reasons.append("junk_lead")
+        if reasons:
+            candidates.setdefault(str(r.campaign_id), []).append({
+                "ad_id":   str(r.ad_id),
+                "ad_name": r.ad_name,
+                "reasons": reasons,
+                "spend":   round(spend, 2),
+                "cpl":     round(cpl, 2) if cpl is not None else None,
+                "days":    days_a,
+            })
+    return candidates
+
+
 def _is_awareness(campaign_name: str) -> bool:
     """
     Returns True if the campaign is an awareness/traffic/reach campaign.
@@ -169,6 +251,14 @@ def audit_campaign_health(
             _is_cache[f["campaign"].lower()] = f
     except Exception as _e:
         print(f"[health] IS cache fetch skipped: {_e}")
+
+    # Pre-fetch ad-level pause candidates per campaign. Used below to block
+    # campaign-level pause when ad-level cleanup hasn't happened yet.
+    try:
+        _ad_candidates = _campaigns_with_ad_pause_candidates(days=days)
+    except Exception as _e:
+        print(f"[health] ad-pause-candidates query skipped: {_e}")
+        _ad_candidates = {}
 
     findings = []
     for r in rows:
@@ -364,6 +454,35 @@ def audit_campaign_health(
 
         if roas_override:
             note += f" (ROAS {roas:.2f} — revenue covering spend)"
+
+        # ── Pause-precedence guard ─────────────────────────────────────────────
+        # Confirmed rule (2026-05-17): campaign-level PAUSE is forbidden as long
+        # as any ad inside the campaign meets ad-level pause criteria. Pause the
+        # bad ads first; the campaign average usually recovers and the surviving
+        # creatives keep producing. This is the precedence the team enforces.
+        if action == "pause":
+            camp_id = str(getattr(r, "campaign_id", "") or "")
+            bad_ads = _ad_candidates.get(camp_id, [])
+            if bad_ads:
+                # Sort by reason severity (zero_conv worst) then spend desc.
+                bad_ads = sorted(
+                    bad_ads,
+                    key=lambda a: (
+                        0 if "zero_conv" in a["reasons"] else
+                        1 if "high_cpl"  in a["reasons"] else 2,
+                        -a["spend"],
+                    ),
+                )[:5]   # top 5 worst — enough context for the team
+                ad_list = "; ".join(
+                    f"{a['ad_name'][:40]} (${a['spend']:.0f} spend, "
+                    f"{'+'.join(a['reasons'])}, {a['days']}d)"
+                    for a in bad_ads
+                )
+                note = (f"[PAUSE BLOCKED — ad-level cleanup first] "
+                        f"Campaign hit pause zone but has {len(_ad_candidates[camp_id])} "
+                        f"ad(s) eligible for ad-level pause. Pause these first, "
+                        f"then re-evaluate: {ad_list}")
+                action = "drilldown"   # routes to ad-level review/pause path
 
         # Edit-age guard: if last edit < MIN_DAYS_SINCE_EDIT, too early to act
         if action in ("optimize", "pause") and days_since_edit < MIN_DAYS_SINCE_EDIT:

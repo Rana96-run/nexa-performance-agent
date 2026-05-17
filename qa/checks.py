@@ -285,6 +285,82 @@ def check_slack_format(text: str, channel: str) -> QACheckResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 6b. Pause-precedence — refuse campaign-pause tasks if ad-level candidates exist
+# ─────────────────────────────────────────────────────────────────────────────
+def check_pause_precedence(task: dict) -> QACheckResult:
+    """Block any campaign-level PAUSE Asana task when the same campaign still
+    has ad-level pause candidates not yet actioned. Rule confirmed 2026-05-17.
+
+    Heuristic: scan task name + notes for "[Recommendation | Pause]" + "campaign"
+    asset level, then extract the campaign name from the title (everything after
+    the prefix). If we can match it to a campaigns_daily row with ANY ad-level
+    pause candidate, block.
+    """
+    title = task.get("name") or ""
+    notes = task.get("notes") or task.get("html_notes") or ""
+    # Only fire on campaign-level PAUSE tasks
+    title_l = title.lower()
+    notes_l = notes.lower()
+    is_pause = "pause" in title_l or "asset level: campaign" in notes_l and "action: pause" in notes_l
+    is_campaign_level = "asset level: campaign" in notes_l or "asset_level: campaign" in notes_l
+    if not (is_pause and is_campaign_level):
+        return QACheckResult(name="pause_precedence", passed=True, severity="block",
+                             detail="not a campaign-pause task — skipped")
+
+    # Already-marked drilldown / pause-blocked notes pass through
+    if "pause blocked" in notes_l or "ad-level cleanup first" in notes_l:
+        return QACheckResult(name="pause_precedence", passed=True, severity="block",
+                             detail="task already routed through ad-level cleanup")
+
+    # Extract probable campaign name from title — e.g. "[Recommendation | Pause] Bing_Search_AR_Brand"
+    import re as _re
+    m = _re.search(r"\]\s*(.+)$", title)
+    campaign_name = (m.group(1) if m else title).strip()
+    if not campaign_name or len(campaign_name) < 3:
+        return QACheckResult(name="pause_precedence", passed=True, severity="warn",
+                             detail="could not extract campaign name from title")
+
+    try:
+        from analysers.campaign_health import _campaigns_with_ad_pause_candidates
+        all_cands = _cached("ad_pause_cands", lambda: _campaigns_with_ad_pause_candidates(days=14))
+    except Exception as e:
+        return QACheckResult(name="pause_precedence", passed=True, severity="warn",
+                             detail=f"could not query ad candidates: {e}")
+
+    # Match campaign name → campaign_id via campaigns_daily
+    c, p, d = _bq()
+    sql = f"""
+    SELECT DISTINCT campaign_id FROM `{p}.{d}.campaigns_daily`
+    WHERE LOWER(campaign_name) = @cname
+      AND date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+    LIMIT 5
+    """
+    from google.cloud import bigquery as _bq_lib
+    job = c.query(sql, job_config=_bq_lib.QueryJobConfig(
+        query_parameters=[_bq_lib.ScalarQueryParameter("cname", "STRING", campaign_name.lower())]
+    ))
+    matched_ids = [str(r.campaign_id) for r in job.result()]
+    blocking_ads = []
+    for cid in matched_ids:
+        blocking_ads.extend(all_cands.get(cid, []))
+
+    if blocking_ads:
+        ad_summary = "; ".join(f"{a['ad_name'][:30]} ({'+'.join(a['reasons'])})"
+                               for a in blocking_ads[:3])
+        return QACheckResult(
+            name="pause_precedence",
+            passed=False,
+            severity="block",
+            detail=(f"campaign '{campaign_name}' still has {len(blocking_ads)} "
+                    f"ad-level pause candidate(s): {ad_summary}"),
+            metrics={"campaign": campaign_name, "blocking_ads": len(blocking_ads)},
+        )
+
+    return QACheckResult(name="pause_precedence", passed=True, severity="block",
+                         detail=f"no blocking ad-level candidates in '{campaign_name}'")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 7. Asana footer compliance
 # ─────────────────────────────────────────────────────────────────────────────
 def check_asana_footer(task: dict) -> QACheckResult:

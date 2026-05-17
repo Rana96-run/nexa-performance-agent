@@ -128,8 +128,9 @@ class QAGate:
 
     def verify_asana(self, task: dict) -> list[QACheckResult]:
         return self._verify("asana", [
-            (checks.check_freshness,        (),       {}),
-            (checks.check_asana_footer,     (task,),  {}),
+            (checks.check_freshness,         (),       {}),
+            (checks.check_asana_footer,      (task,),  {}),
+            (checks.check_pause_precedence,  (task,),  {}),   # blocks campaign-pause if ad-level cleanup pending
             (checks.check_numeric_claims,
              (task.get("notes", "") or task.get("name", ""),), {}),
         ])
