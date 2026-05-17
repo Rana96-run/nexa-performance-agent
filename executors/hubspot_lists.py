@@ -152,6 +152,53 @@ def _prop_in_list(list_id: int) -> dict:
     }
 
 
+def _assoc_branch(*, object_type_id: str,
+                  association_type_id: int,
+                  property_filters: list[dict],
+                  association_category: str = "HUBSPOT_DEFINED") -> dict:
+    """HubSpot Lists v3 — filter contacts by their associated object's properties.
+
+    Use cases:
+        - Customer seeds: filter contacts whose associated Deal is in a given
+          pipeline + Closed Won stage. object_type_id='0-3', association_type_id=4
+        - SQL seeds: filter contacts whose associated Lead is in a given
+          pipeline + Qualified stage. object_type_id='0-136', association_type_id=579
+
+    Notes (discovered the hard way 2026-05-17):
+        - Root filterBranch MUST be OR; wrapping AND must contain this ASSOCIATION
+          branch inside its `filterBranches` array (not `filters`).
+        - `operator` field MUST be 'IN_LIST' — misleading name, doesn't mean
+          membership in a HubSpot list. It just means "associated objects match
+          the property filters below."
+        - The ASSOCIATION branch uses `filters` (a flat list of PROPERTY filters)
+          directly, NOT a nested AND branch.
+    """
+    return {
+        "filterBranchType":     "ASSOCIATION",
+        "filterBranchOperator": "AND",
+        "objectTypeId":         object_type_id,
+        "operator":             "IN_LIST",
+        "associationCategory":  association_category,
+        "associationTypeId":    association_type_id,
+        "filterBranches":       [],
+        "filters":              property_filters,
+    }
+
+
+def _wrap_root(branch: dict) -> dict:
+    """Root filterBranch must be OR > AND > [branch]. This wraps any branch."""
+    return {
+        "filterBranchType": "OR",
+        "filterBranches": [
+            {
+                "filterBranchType": "AND",
+                "filterBranches":   [branch],
+                "filters":          [],
+            }
+        ],
+    }
+
+
 # ─── The 5 standard segments ────────────────────────────────────────────────
 
 LOOKALIKE_SEED_NAME = "LIST_won_deals_lookalike_seed"
@@ -205,20 +252,9 @@ LCS_OPEN      = ["subscriber", "lead", "marketingqualifiedlead",
                  "salesqualifiedlead", "opportunity"]
 
 
-def _product_customer_filter(product: str) -> dict:
-    """All-time customer seed for one product. Date-window filter omitted
-    in v1 (HubSpot Lists v3 time syntax needs more work — see backlog).
-    Saudi customer base is small enough that all-time seeds work well
-    for Meta/Snap Lookalikes."""
-    return _and(
-        _prop_in("lifecyclestage", LCS_CUSTOMERS),
-        _prop_in("what_kind_of_service_are_you_interested_in",
-                 PRODUCT_SERVICE_MAP[product]),
-    )
-
-
-def _product_sql_filter(product: str) -> dict:
-    """All-time SQL seed for one product. Same date-window note as above."""
+def _product_sql_filter_legacy(product: str) -> dict:
+    """LEGACY (deprecated 2026-05-17) — used contact-level property which
+    is unfilled on 100% of customers. Kept only for reference."""
     return _and(
         _prop_in("lifecyclestage", LCS_SQLS),
         _prop_in("what_kind_of_service_are_you_interested_in",
@@ -234,36 +270,142 @@ def _open_leads_filter() -> dict:
     )
 
 
+# ── Product → Deal pipeline + Closed Won stage mapping (Customer seeds) ─────
+# Discovered 2026-05-17 by introspecting HubSpot pipelines API.
+
+DEAL_PRODUCT_MAP: dict[str, dict[str, list[str]]] = {
+    "Invoice": {
+        "pipelines":   ["default", "453612238"],   # Sales Pipeline + Direct Purchase
+        "won_stages":  ["closedwon", "696011984", "696011985"],
+    },
+    "Bookkeeping": {
+        "pipelines":   ["509382644", "815011043", "3099025633"],
+        "won_stages":  ["772726757", "1160293594", "4244565226"],
+    },
+    "Qflavours": {
+        "pipelines":   ["3464043709"],
+        "won_stages":  ["4739518652"],
+    },
+}
+
+# Product → Lead pipeline + Qualified/Connected stage mapping (SQL seeds)
+# The Lead object (objectTypeId 0-136) has its own pipelines. The user's
+# manual reference list "LIST_LAL_Seed_SQLs_Bookkeeping" (639 contacts) uses
+# Lead Pipeline "خدمة المحاسبة عن بعد" + stage "Qualified" — that's what
+# we replicate here.
+
+LEAD_PRODUCT_MAP: dict[str, dict[str, list[str]]] = {
+    "Invoice": {
+        # Default Lead pipeline covers Invoice/Accounting SQL flow
+        "pipelines":  ["lead-pipeline-id"],
+        "qualified":  ["qualified-stage-id", "connected-stage-id"],
+    },
+    "Bookkeeping": {
+        # "خدمة المحاسبة عن بعد" pipeline
+        "pipelines":  ["2004465911"],
+        "qualified":  ["2739057856"],   # Qualified only — no separate Connected
+    },
+    "Qflavours": {
+        "pipelines":  ["3463476418"],
+        "qualified":  ["4739501271", "4739501270"],  # Qualified + Connected
+    },
+}
+
+
+def _product_customer_filter(product: str) -> dict:
+    """Customer LAL seed for one product. Filters contacts whose associated
+    Deal is in the product's pipeline(s) and Closed Won. Matches the working
+    manual reference list (LIST_LAL_Seed_Customers_Bookkeeping = ~673)."""
+    cfg = DEAL_PRODUCT_MAP[product]
+    return _assoc_branch(
+        object_type_id="0-3",
+        association_type_id=4,    # contact → deal (HUBSPOT_DEFINED)
+        property_filters=[
+            {
+                "filterType": "PROPERTY",
+                "property":   "pipeline",
+                "operation": {
+                    "operationType": "ENUMERATION",
+                    "operator":      "IS_ANY_OF",
+                    "values":        cfg["pipelines"],
+                },
+            },
+            {
+                "filterType": "PROPERTY",
+                "property":   "dealstage",
+                "operation": {
+                    "operationType": "ENUMERATION",
+                    "operator":      "IS_ANY_OF",
+                    "values":        cfg["won_stages"],
+                },
+            },
+        ],
+    )
+
+
+def _product_sql_filter(product: str) -> dict:
+    """SQL LAL seed for one product. Filters contacts whose associated Lead
+    is in the product's Lead pipeline + at Qualified/Connected stage. Matches
+    the working manual reference list (LIST_LAL_Seed_SQLs_Bookkeeping = ~639).
+    """
+    cfg = LEAD_PRODUCT_MAP[product]
+    return _assoc_branch(
+        object_type_id="0-136",
+        association_type_id=579,    # contact → lead (Primary Contact)
+        property_filters=[
+            {
+                "filterType": "PROPERTY",
+                "property":   "hs_pipeline",
+                "operation": {
+                    "operationType": "ENUMERATION",
+                    "operator":      "IS_ANY_OF",
+                    "values":        cfg["pipelines"],
+                },
+            },
+            {
+                "filterType": "PROPERTY",
+                "property":   "hs_pipeline_stage",
+                "operation": {
+                    "operationType": "ENUMERATION",
+                    "operator":      "IS_ANY_OF",
+                    "values":        cfg["qualified"],
+                },
+            },
+        ],
+    )
+
+
 def create_product_segmented_seeds() -> dict[str, Optional[dict]]:
-    """Create the 9 product-segmented lists in one go. Idempotent —
-    re-running returns existing lists where they already exist."""
+    """Create the 9 product-segmented lists. Customer seeds use Deal-association
+    filter; SQL seeds use Lead-association filter. Idempotent — re-running
+    returns existing lists where they already exist."""
     out: dict[str, Optional[dict]] = {}
 
-    # Customer LAL seeds — one per product (all-time)
-    for product in PRODUCT_SERVICE_MAP:
-        name = f"LIST_LAL_Seed_Customers_{product}"
-        out[name] = create_list(name, _or(_product_customer_filter(product)),
+    # Customer LAL seeds — one per product, via associated Deal pipeline+won
+    for product in DEAL_PRODUCT_MAP:
+        name = f"[Nexa Agent] LAL Seed - Customers {product}"
+        out[name] = create_list(name, _wrap_root(_product_customer_filter(product)),
                                 dynamic=True)
 
-    # SQL LAL seeds — one per product (all-time)
-    for product in PRODUCT_SERVICE_MAP:
-        name = f"LIST_LAL_Seed_SQLs_{product}"
-        out[name] = create_list(name, _or(_product_sql_filter(product)),
+    # SQL LAL seeds — one per product, via associated Lead pipeline+qualified
+    for product in LEAD_PRODUCT_MAP:
+        name = f"[Nexa Agent] LAL Seed - SQLs {product}"
+        out[name] = create_list(name, _wrap_root(_product_sql_filter(product)),
                                 dynamic=True)
 
-    # Exclusions
-    out["LIST_Exclude_All_Customers"] = create_list(
-        "LIST_Exclude_All_Customers",
+    # Exclusions (contact-level — simple filters, no association needed)
+    out["[Nexa Agent] Exclude - All Customers"] = create_list(
+        "[Nexa Agent] Exclude - All Customers",
         _or(_and(_prop_in("lifecyclestage", LCS_CUSTOMERS))),
         dynamic=True,
     )
-    out["LIST_Exclude_Open_Leads"] = create_list(
-        "LIST_Exclude_Open_Leads",
+    out["[Nexa Agent] Exclude - Open Leads"] = create_list(
+        "[Nexa Agent] Exclude - Open Leads",
         _or(_open_leads_filter()),
         dynamic=True,
     )
-    out["LIST_Exclude_Qoyod_Employees"] = create_list(
-        "LIST_Exclude_Qoyod_Employees",
+    out["[Nexa Agent] Exclude - Qoyod Employees"] = create_list(
+        "[Nexa Agent] Exclude - Qoyod Employees",
         _or(_and(_prop_string_eq("hs_email_domain", "qoyod.com"))),
         dynamic=True,
     )
