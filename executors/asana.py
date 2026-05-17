@@ -349,6 +349,18 @@ def create_task(
                     {"project": project_id, "section": section_gid}
                 ]
 
+    # QA gate — hard-block if footer is malformed or numeric claims orphan.
+    # Auto-retries once on transient BQ staleness, then raises QAGateError.
+    try:
+        from qa.gate import gate, QAGateError
+        try:
+            gate.verify_asana(task_data)
+        except QAGateError as e:
+            print(f"[asana] QA gate BLOCKED task creation: {e}")
+            return None
+    except ImportError:
+        pass  # qa module not present — degrade gracefully
+
     try:
         task = tasks_api.create_task({"data": task_data}, {})
         gid  = task["gid"]

@@ -9,7 +9,41 @@ from slack_sdk.errors import SlackApiError
 from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, SLACK_CHANNEL_NOTIFY, SLACK_CHANNEL_APPROVAL
 
 
-client = WebClient(token=SLACK_BOT_TOKEN)
+_raw_client = WebClient(token=SLACK_BOT_TOKEN)
+
+
+# ── QA gate wrapper around chat_postMessage ───────────────────────────────────
+# Every Slack post in this codebase goes through this `client` symbol. Wrapping
+# chat_postMessage forces every outbound message through the QA gate. The gate
+# auto-retries once on transient failures and hard-blocks on persistent ones.
+# Disable for tests: QA_GATE_DISABLED=1
+class _GatedSlackClient:
+    """Proxy that delegates everything to the real WebClient except
+    chat_postMessage, which is gated by QA verification."""
+
+    def __init__(self, raw):
+        self._raw = raw
+
+    def __getattr__(self, name):
+        return getattr(self._raw, name)
+
+    def chat_postMessage(self, **kwargs):
+        try:
+            from qa.gate import gate
+            text = kwargs.get("text") or ""
+            # If blocks are provided, also extract text from them for verification
+            for blk in (kwargs.get("blocks") or []):
+                if isinstance(blk, dict):
+                    inner = blk.get("text", {})
+                    if isinstance(inner, dict):
+                        text += "\n" + (inner.get("text") or "")
+            gate.verify_slack(text=text, channel=kwargs.get("channel", ""))
+        except ImportError:
+            pass  # gate module not available — degrade gracefully
+        return self._raw.chat_postMessage(**kwargs)
+
+
+client = _GatedSlackClient(_raw_client)
 
 # ── Pending approval store ────────────────────────────────────────────────────
 # Persists ts → metadata so the events endpoint can look up what to execute.

@@ -1384,7 +1384,19 @@ def activity_dashboard():
     }
 
     # ── 7. Health check — last run from BQ ────────────────────────────────────
-    hygiene = {"run_id": None, "run_ts": None, "checks": [], "freshness": []}
+    hygiene = {"run_id": None, "run_ts": None, "checks": [], "freshness": [],
+               "qa_status": "green", "qa_failures": []}
+    # QA gate — read-only dashboard status: green / yellow / red
+    try:
+        from qa.gate import gate
+        qa_status, qa_results = gate.dashboard_status()
+        hygiene["qa_status"] = qa_status
+        hygiene["qa_failures"] = [
+            {"name": r.name, "severity": r.severity, "detail": r.detail}
+            for r in qa_results if not r.passed
+        ]
+    except Exception as e:
+        print(f"[activity] qa status check failed (non-fatal): {e}")
     try:
         if hc_rows:
             hygiene["run_id"] = hc_rows[0].run_id

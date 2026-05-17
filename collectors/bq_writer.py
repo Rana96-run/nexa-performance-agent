@@ -184,6 +184,17 @@ ACTIVITY_LOG_SCHEMA = [
     bigquery.SchemaField("bq_bytes_scanned", "INT64"),    # bytes processed by BQ queries
 ]
 
+QA_GATE_EVENTS_SCHEMA = [
+    bigquery.SchemaField("event_id",     "STRING",  mode="REQUIRED"),
+    bigquery.SchemaField("ts",           "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("surface",      "STRING",  mode="REQUIRED"),  # slack | asana | bq | dashboard
+    bigquery.SchemaField("passed",       "BOOL",    mode="REQUIRED"),
+    bigquery.SchemaField("check_name",   "STRING",  mode="REQUIRED"),
+    bigquery.SchemaField("check_passed", "BOOL",    mode="REQUIRED"),
+    bigquery.SchemaField("severity",     "STRING"),
+    bigquery.SchemaField("detail",       "STRING"),
+]
+
 TABLES = {
     "campaigns_daily":     CAMPAIGNS_DAILY_SCHEMA,
     "adsets_daily":        ADSETS_DAILY_SCHEMA,
@@ -191,6 +202,7 @@ TABLES = {
     "keywords_daily":      KEYWORDS_DAILY_SCHEMA,
     "hubspot_leads_daily": HUBSPOT_LEADS_DAILY_SCHEMA,
     "agent_activity_log":  ACTIVITY_LOG_SCHEMA,
+    "qa_gate_events":      QA_GATE_EVENTS_SCHEMA,
 }
 
 
@@ -203,6 +215,7 @@ TABLE_CLUSTERS = {
     "keywords_daily":      ["channel", "campaign_id", "adgroup_id"],
     "hubspot_leads_daily":  ["qoyod_source"],
     "agent_activity_log":  ["role", "status"],
+    "qa_gate_events":      ["surface", "check_name"],
 }
 
 
@@ -219,7 +232,7 @@ def ensure_dataset_and_tables():
         raise
 
     # Tables that partition on TIMESTAMP field "ts" instead of DATE "date"
-    _TS_PARTITIONED = {"agent_activity_log"}
+    _TS_PARTITIONED = {"agent_activity_log", "qa_gate_events"}
 
     for table_name, schema in TABLES.items():
         table_id = f"{PROJECT_ID}.{DATASET}.{table_name}"
@@ -359,6 +372,20 @@ def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
     if not rows:
         print(f"[SKIP] {table_name}: all rows dropped by validator.")
         return 0
+
+    # QA gate — sanity-check the batch (internal dupes, multi-account presence)
+    # before any DELETE fires. Auto-retry-then-block per qa/gate.py policy.
+    # Skipped for the gate's own logging table to avoid recursion.
+    if table_name != "qa_gate_events":
+        try:
+            from qa.gate import gate, QAGateError
+            try:
+                gate.verify_bq_write(table_name, rows, key_fields)
+            except QAGateError as e:
+                print(f"[bq] QA gate BLOCKED upsert to {table_name}: {e}")
+                raise
+        except ImportError:
+            pass  # qa module not present — degrade gracefully
 
     client = get_client()
     table_id = f"{PROJECT_ID}.{DATASET}.{table_name}"
