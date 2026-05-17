@@ -3,6 +3,32 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## Pause precedence — ad-level pauses ALWAYS run before campaign-pause
+
+- **Rule (confirmed 2026-05-17):** A campaign hitting the pause threshold
+  (CPL > $50 / CPQL > 3× warning for 7+ days) is NEVER auto-paused at the
+  campaign level if it has any ads meeting ad-level pause criteria. The
+  bad ads get paused first; the campaign average usually recovers.
+- **Ad-level pause rules** (mirrored in `scripts/bulk_ads.py` AND
+  `analysers/campaign_health.py::_campaigns_with_ad_pause_candidates`):
+  - `zero_conv`: spend > $70, 7+ days, 0 platform conversions
+  - `high_cpl`:  CPL > $50, 10+ days (`AD_CPL_PAUSE` in config.py)
+  - `junk_lead`: 10+ days, hs_leads ≥ 5, disq_rate ≥ 60%
+- **Enforcement (defense in depth):**
+  1. `campaign_health.py` pre-fetches ad-level candidates per campaign
+     before the action loop. If action would be "pause" AND candidates
+     exist for that campaign_id, action is downgraded to "drilldown" with
+     the top 5 worst ads listed in the note.
+  2. `qa/checks.py::check_pause_precedence` (wired into `verify_asana`)
+     blocks any "[... | Pause]" + `asset level: campaign` Asana task whose
+     campaign still has ad-level pause candidates not yet actioned. The
+     drilldown marker `[PAUSE BLOCKED — ad-level cleanup first]` exempts
+     legitimate drilldown tasks.
+- **Why both layers:** even if a future analyser/human bypasses the
+  analyser's downgrade and submits a campaign-pause task directly, the gate
+  blocks it at the Asana surface. Single source of truth for ad-level
+  criteria is `_campaigns_with_ad_pause_candidates()`.
+
 ## Activity dashboard: parallel BQ futures silently overwritten by sequential re-runs
 
 - **Symptom (2026-05-16):** `reports/app.py` had a `ThreadPoolExecutor(14)` block that
