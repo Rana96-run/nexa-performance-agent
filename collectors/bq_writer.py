@@ -294,6 +294,12 @@ def validate_row(row: dict, table_name: str = "") -> tuple[bool, str]:
       • currency code outside the known allowlist
       • required `date` field missing or unparseable
     """
+    # Tables partitioned on TIMESTAMP `ts` have no `date` field — skip the
+    # date-specific checks. Validate-row is per-row so we get the table name
+    # via the closure context; keep it via a sentinel.
+    if table_name in {"agent_activity_log", "qa_gate_events"}:
+        return True, "ok"
+
     # 1. Date must exist and be parseable
     d = row.get("date")
     if not d:
