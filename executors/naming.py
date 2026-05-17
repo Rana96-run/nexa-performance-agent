@@ -62,15 +62,39 @@ def _normalize_product(segment: str) -> str:
 
 _VALID_AUDIENCES = {"Interests", "Lookalike", "Retargeting", "Broad"}
 
-# "Prospecting" by itself is not a valid audience label.
-# Valid prospecting audiences are Interests or Lookalike.
-_PROSPECTING_INVALID = "Prospecting"
+# Common spellings + typos in production campaign names that should normalise
+# to one of the four canonical audience tokens. Updated 2026-05-17 after
+# auditing existing campaign names — production reality uses 6-7 token names
+# with audience tokens that don't always live at position 4.
+_AUDIENCE_ALIASES = {
+    # canonical → itself (lowercased for lookup)
+    "interests":   "Interests",
+    "interest":    "Interests",     # singular — production uses both
+    "intersts":    "Interests",     # typo seen in live data
+    "lookalike":   "Lookalike",
+    "lookalikes":  "Lookalike",
+    "lal":         "Lookalike",
+    "retargeting": "Retargeting",
+    "rtg":         "Retargeting",
+    "broad":       "Broad",
+}
+
+
+def _find_audience_token(parts: list[str]) -> tuple[int | None, str | None]:
+    """Scan parts for a token that matches a valid audience (or alias).
+    Returns (index, canonical_audience) or (None, None) if not found."""
+    for i, p in enumerate(parts):
+        canonical = _AUDIENCE_ALIASES.get(p.lower())
+        if canonical:
+            return i, canonical
+    return None, None
 
 
 def _validate_audience(audience: str, parts: list[str]) -> str:
     """
-    Validate and normalise the audience segment.
-    Raises ValueError with an instructive message on violation.
+    Validate and normalise an audience segment that's already been identified
+    (caller has determined which token is the audience). Raises ValueError
+    with an instructive message on violation.
     """
     if audience.lower() == "prospecting":
         raise ValueError(
@@ -79,22 +103,24 @@ def _validate_audience(audience: str, parts: list[str]) -> str:
             f"or 'Retargeting' for retargeting campaigns. "
             f"Got name parts: {parts}"
         )
+    # Normalise via aliases (handles 'Interest', 'Intersts', etc.)
+    canonical = _AUDIENCE_ALIASES.get(audience.lower(), audience)
     # Retargeting campaigns must not contain the word Prospecting anywhere
-    if audience.lower() == "retargeting":
+    if canonical.lower() == "retargeting":
         for p in parts:
             if p.lower() == "prospecting":
                 raise ValueError(
                     f"Retargeting campaigns must not contain 'Prospecting' in the name. "
                     f"Got name parts: {parts}"
                 )
-    # Reject any audience not in the approved set
-    if audience not in _VALID_AUDIENCES:
+    if canonical not in _VALID_AUDIENCES:
         raise ValueError(
             f"'{audience}' is not a valid audience. "
-            f"Must be one of: {sorted(_VALID_AUDIENCES)}. "
+            f"Must be one of: {sorted(_VALID_AUDIENCES)} "
+            f"(aliases: {sorted(set(_AUDIENCE_ALIASES.keys()) - {a.lower() for a in _VALID_AUDIENCES})}). "
             f"Got name parts: {parts}"
         )
-    return audience
+    return canonical
 
 
 # ── Core builder ──────────────────────────────────────────────────────────────
@@ -130,20 +156,46 @@ def build_name(
 def prefixed(channel_prefix: str, name: str) -> str:
     """
     Ensure name starts with '{channel_prefix}_'. Idempotent.
-    Also normalises product aliases inside the name.
+    Also normalises product aliases + audience tokens inside the name.
 
-    If the name already has 5 underscore-separated parts and starts with
-    the correct channel prefix, we normalise the product segment and
-    validate the audience segment in-place.
+    Production campaign names use a variable token count (5-9 tokens),
+    e.g. `Meta_LeadGen_Bookkeeping_Prospecting_Intersts_MaxmizeLeads_Instantform`.
+    This validator scans for the audience token *anywhere* in the name
+    and normalises it (canonicalising aliases / typos like `Intersts` → `Interests`).
+
+    If no audience token is found, the name is left as-is — we don't reject
+    legacy/variant names from being prefixed. To enforce strict 5-token
+    structure on a fresh build, use `build_name()` instead.
     """
     prefix = f"{channel_prefix}_"
     if not name.startswith(prefix):
         name = prefix + name
 
     parts = name.split("_")
-    # Normalise product (index 3) and validate audience (index 4) when present
-    if len(parts) >= 4:
-        parts[3] = _normalize_product(parts[3])
-    if len(parts) >= 5:
-        parts[4] = _validate_audience(parts[4], parts)
+
+    # Normalise product (typically index 3 in 5-token form, but may be elsewhere
+    # for 6-7 token variants). Apply normalisation to all interior tokens that
+    # match a product alias.
+    for i in range(2, min(len(parts), 5)):  # search positions 2..4
+        normalised = _normalize_product(parts[i])
+        if normalised != parts[i]:
+            parts[i] = normalised
+            break  # only normalise the first product hit
+
+    # Find the audience token anywhere in the name and normalise/validate it.
+    idx, canonical = _find_audience_token(parts)
+    if idx is not None:
+        parts[idx] = _validate_audience(canonical, parts)
+    else:
+        # No valid audience token found — that's fine for legacy names UNLESS
+        # the name contains 'Prospecting'. Prospecting must always be paired
+        # with an explicit audience (Interests / Lookalike) per CLAUDE.md.
+        if any(p.lower() == "prospecting" for p in parts):
+            raise ValueError(
+                f"'Prospecting' is present but no audience token (Interests / "
+                f"Lookalike / Retargeting / Broad) was found in the name. "
+                f"Per CLAUDE.md, Prospecting must be paired with an explicit "
+                f"audience. Got name parts: {parts}"
+            )
+
     return "_".join(parts)
