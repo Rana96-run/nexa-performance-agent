@@ -3,31 +3,55 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
-## Pause precedence — ad-level pauses ALWAYS run before campaign-pause
+## Pause precedence — channel-dependent surgical cleanup runs before campaign-pause
 
 - **Rule (confirmed 2026-05-17):** A campaign hitting the pause threshold
   (CPL > $50 / CPQL > 3× warning for 7+ days) is NEVER auto-paused at the
-  campaign level if it has any ads meeting ad-level pause criteria. The
-  bad ads get paused first; the campaign average usually recovers.
-- **Ad-level pause rules** (mirrored in `scripts/bulk_ads.py` AND
-  `analysers/campaign_health.py::_campaigns_with_ad_pause_candidates`):
+  campaign level until surgical cleanup has happened first. The surgical
+  surface is CHANNEL-DEPENDENT:
+  - **Social** (meta, snapchat, tiktok): pause bad ADS first. The ad IS
+    the targeting decision; one bad creative can poison the average.
+  - **Search** (google_ads, microsoft_ads): pause bad KEYWORDS first AND
+    review the landing page. The keyword IS the targeting decision; ad-
+    level pause on search channels is the WRONG first step. LP issues
+    (broken form, slow load, intent mismatch) masquerade as ad/keyword
+    problems and require manual verification.
+- **Ad-level pause rules — SOCIAL ONLY** (mirrored in `scripts/bulk_ads.py`
+  AND `analysers/campaign_health.py::_campaigns_with_ad_pause_candidates`).
+  Helper hard-filters to `channel IN ('meta', 'snapchat', 'tiktok')`:
   - `zero_conv`: spend > $70, 7+ days, 0 platform conversions
   - `high_cpl`:  CPL > $50, 10+ days (`AD_CPL_PAUSE` in config.py)
   - `junk_lead`: 10+ days, hs_leads ≥ 5, disq_rate ≥ 60%
+- **Keyword-level pause rules — SEARCH ONLY** (mirrored in
+  `executors/keyword_policy.py` AND
+  `analysers/campaign_health.py::_campaigns_with_keyword_pause_candidates`).
+  Helper hard-filters to `channel IN ('google_ads', 'microsoft_ads')`:
+  - `zero_conv`: spend > $35, 14+ days, 0 conversions
+  - `high_cpl`:  CPL > $80, 14+ days, 1+ conversions
+- **LP review (mandatory on search before campaign-pause):** For any search
+  campaign hitting pause-zone, the team manually visits the destination LP
+  to verify load speed, form submission, and keyword-intent alignment. The
+  QA gate enforces this — campaign-pause on a search channel is blocked
+  even with no flagged keywords, mandating LP review.
 - **Enforcement (defense in depth):**
-  1. `campaign_health.py` pre-fetches ad-level candidates per campaign
-     before the action loop. If action would be "pause" AND candidates
-     exist for that campaign_id, action is downgraded to "drilldown" with
-     the top 5 worst ads listed in the note.
+  1. `campaign_health.py` pre-fetches BOTH ad-level + keyword-level
+     candidates per campaign before the action loop. When action would be
+     "pause", it routes by channel:
+     - Social → check ad candidates → downgrade to "drilldown" with top 5
+       worst ads listed
+     - Search → check keyword candidates → downgrade to "drilldown" with
+       top 5 worst keywords + LP review instructions (even if no keywords
+       flagged, LP review is mandatory)
   2. `qa/checks.py::check_pause_precedence` (wired into `verify_asana`)
-     blocks any "[... | Pause]" + `asset level: campaign` Asana task whose
-     campaign still has ad-level pause candidates not yet actioned. The
-     drilldown marker `[PAUSE BLOCKED — ad-level cleanup first]` exempts
-     legitimate drilldown tasks.
+     is channel-aware: looks up the campaign's channel from BQ, then
+     checks the right candidate type. Blocks any unauthorized campaign-
+     pause Asana task. Search-channel tasks are blocked even with no
+     flagged keywords because LP review can't be detected automatically.
 - **Why both layers:** even if a future analyser/human bypasses the
-  analyser's downgrade and submits a campaign-pause task directly, the gate
-  blocks it at the Asana surface. Single source of truth for ad-level
-  criteria is `_campaigns_with_ad_pause_candidates()`.
+  analyser's downgrade and submits a campaign-pause task directly, the
+  gate blocks it at the Asana surface. Single source of truth lives in
+  `_campaigns_with_ad_pause_candidates()` (social) and
+  `_campaigns_with_keyword_pause_candidates()` (search).
 
 ## Activity dashboard: parallel BQ futures silently overwritten by sequential re-runs
 

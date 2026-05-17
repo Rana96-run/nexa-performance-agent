@@ -35,13 +35,26 @@ from config import (
 )
 
 
+# Search channels use keyword-based optimization (the keyword IS the targeting).
+# Pausing an ad in a search campaign when the issue is a bad keyword or broken
+# LP is the wrong surgery. Ad-level precedence ONLY applies to social.
+SOCIAL_PAUSE_CHANNELS = {"meta", "snapchat", "tiktok"}
+SEARCH_PAUSE_CHANNELS = {"google_ads", "microsoft_ads"}
+
+
 def _campaigns_with_ad_pause_candidates(days: int = 14) -> dict[str, list[dict]]:
     """Return {campaign_id: [{ad_id, ad_name, reason, spend, cpl, days_active}, ...]}
-    for every campaign that has at least one ad meeting AD-level pause criteria.
+    for every SOCIAL-channel campaign that has at least one ad meeting AD-level
+    pause criteria.
 
     Pause precedence rule (CLAUDE.md, confirmed 2026-05-17):
       A campaign-level pause is FORBIDDEN as long as any ad inside it qualifies
       for an ad-level pause. First pause the bad ads; re-evaluate next cycle.
+
+    Channel routing (corrected 2026-05-17):
+      - Social (meta, snapchat, tiktok): ad-level pauses run first.
+      - Search (google_ads, microsoft_ads): keywords + landing page are the
+        first investigation surface, NOT ads. See _campaigns_with_keyword_pause_candidates.
 
     Rules (mirrors scripts/bulk_ads.py):
       - zero_conv: spend > $70, 7+ days, 0 platform conversions
@@ -69,6 +82,7 @@ def _campaigns_with_ad_pause_candidates(days: int = 14) -> dict[str, list[dict]]
       FROM `{PROJECT_ID}.{DATASET}.ads_daily`
       WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days} DAY)
         AND status IN ('ENABLED', 'ACTIVE')           -- only enabled ads count as candidates
+        AND channel IN ('meta', 'snapchat', 'tiktok') -- SOCIAL only; search uses keywords
       GROUP BY campaign_id, channel, ad_id            -- one row per ad
     ),
     hs AS (
@@ -113,6 +127,72 @@ def _campaigns_with_ad_pause_candidates(days: int = 14) -> dict[str, list[dict]]
                 "spend":   round(spend, 2),
                 "cpl":     round(cpl, 2) if cpl is not None else None,
                 "days":    days_a,
+            })
+    return candidates
+
+
+def _campaigns_with_keyword_pause_candidates(days: int = 14) -> dict[str, list[dict]]:
+    """Return {campaign_id: [{keyword, ad_group, reason, spend, cpl, days_active}, ...]}
+    for SEARCH-channel campaigns (google_ads + microsoft_ads) that have at
+    least one keyword meeting keyword-level pause criteria.
+
+    Pause precedence for search (corrected 2026-05-17):
+      Keywords are the targeting surface for search; campaign-pause is forbidden
+      while any keyword qualifies for keyword-level pause AND any ad's landing
+      page hasn't been reviewed. The keyword audit handles surgical cleanup;
+      this helper just flags presence so campaign-pause is blocked.
+
+    Rules (mirrors executors/keyword_policy.py + scripts/audit.py keywords):
+      - zero_conv:  spend > $35, 14+ days, 0 conversions
+      - high_cpl:   CPL > $80, 14+ days, 1+ conversions
+      - never delete a converting keyword (this helper only flags pause-worthy)
+    """
+    client = get_client()
+    sql = f"""
+    WITH kw_perf AS (
+      SELECT campaign_id, channel, adgroup_id, keyword_id,
+             ANY_VALUE(keyword_text)  AS keyword_text,
+             ANY_VALUE(adgroup_name)  AS adgroup_name,
+             SUM(spend)               AS total_spend,
+             SUM(conversions)         AS total_conv,
+             COUNT(DISTINCT date)     AS days_active
+      FROM `{PROJECT_ID}.{DATASET}.keywords_daily`
+      WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL {days} DAY)
+        AND status IN ('ENABLED', 'ACTIVE')
+        AND channel IN ('google_ads', 'microsoft_ads')
+      GROUP BY campaign_id, channel, adgroup_id, keyword_id
+    )
+    SELECT campaign_id, channel, keyword_text AS keyword,
+           adgroup_name, keyword_id,
+           total_spend, total_conv, days_active,
+           SAFE_DIVIDE(total_spend, NULLIF(total_conv, 0)) AS cpl
+    FROM kw_perf
+    WHERE total_spend > 5
+    """
+    candidates: dict[str, list[dict]] = {}
+    try:
+        rows = list(client.query(sql).result())
+    except Exception as e:
+        print(f"[health] keyword candidates query failed: {e}")
+        return {}
+    for r in rows:
+        reasons = []
+        spend  = float(r.total_spend or 0)
+        conv   = float(r.total_conv or 0)
+        days_a = int(r.days_active or 0)
+        cpl    = float(r.cpl) if r.cpl is not None else None
+        if spend > 35 and days_a >= 14 and conv == 0:
+            reasons.append("zero_conv")
+        if cpl is not None and cpl > 80 and days_a >= 14 and conv >= 1:
+            reasons.append("high_cpl")
+        if reasons:
+            candidates.setdefault(str(r.campaign_id), []).append({
+                "keyword":   r.keyword,
+                "adgroup":   r.adgroup_name,
+                "reasons":   reasons,
+                "spend":     round(spend, 2),
+                "cpl":       round(cpl, 2) if cpl is not None else None,
+                "days":      days_a,
             })
     return candidates
 
@@ -252,13 +332,20 @@ def audit_campaign_health(
     except Exception as _e:
         print(f"[health] IS cache fetch skipped: {_e}")
 
-    # Pre-fetch ad-level pause candidates per campaign. Used below to block
-    # campaign-level pause when ad-level cleanup hasn't happened yet.
+    # Pre-fetch pause-precedence candidates per campaign. Used below to block
+    # campaign-level pause when surgical cleanup hasn't happened yet.
+    # - Social channels → ad-level candidates (the ad IS the targeting)
+    # - Search channels → keyword-level candidates (the keyword IS the targeting)
     try:
         _ad_candidates = _campaigns_with_ad_pause_candidates(days=days)
     except Exception as _e:
         print(f"[health] ad-pause-candidates query skipped: {_e}")
         _ad_candidates = {}
+    try:
+        _kw_candidates = _campaigns_with_keyword_pause_candidates(days=days)
+    except Exception as _e:
+        print(f"[health] keyword-pause-candidates query skipped: {_e}")
+        _kw_candidates = {}
 
     findings = []
     for r in rows:
@@ -457,32 +544,65 @@ def audit_campaign_health(
 
         # ── Pause-precedence guard ─────────────────────────────────────────────
         # Confirmed rule (2026-05-17): campaign-level PAUSE is forbidden as long
-        # as any ad inside the campaign meets ad-level pause criteria. Pause the
-        # bad ads first; the campaign average usually recovers and the surviving
-        # creatives keep producing. This is the precedence the team enforces.
+        # as surgical cleanup hasn't happened first. The surgical surface is
+        # CHANNEL-DEPENDENT:
+        #   - Social (meta, snapchat, tiktok): pause bad ADS first
+        #   - Search (google_ads, microsoft_ads): pause bad KEYWORDS + review LP
         if action == "pause":
             camp_id = str(getattr(r, "campaign_id", "") or "")
-            bad_ads = _ad_candidates.get(camp_id, [])
-            if bad_ads:
-                # Sort by reason severity (zero_conv worst) then spend desc.
-                bad_ads = sorted(
-                    bad_ads,
-                    key=lambda a: (
-                        0 if "zero_conv" in a["reasons"] else
-                        1 if "high_cpl"  in a["reasons"] else 2,
-                        -a["spend"],
-                    ),
-                )[:5]   # top 5 worst — enough context for the team
-                ad_list = "; ".join(
-                    f"{a['ad_name'][:40]} (${a['spend']:.0f} spend, "
-                    f"{'+'.join(a['reasons'])}, {a['days']}d)"
-                    for a in bad_ads
-                )
-                note = (f"[PAUSE BLOCKED — ad-level cleanup first] "
-                        f"Campaign hit pause zone but has {len(_ad_candidates[camp_id])} "
-                        f"ad(s) eligible for ad-level pause. Pause these first, "
-                        f"then re-evaluate: {ad_list}")
-                action = "drilldown"   # routes to ad-level review/pause path
+            channel = (getattr(r, "channel", "") or "").lower()
+
+            if channel in ("meta", "snapchat", "tiktok"):
+                bad_ads = _ad_candidates.get(camp_id, [])
+                if bad_ads:
+                    bad_ads = sorted(
+                        bad_ads,
+                        key=lambda a: (
+                            0 if "zero_conv" in a["reasons"] else
+                            1 if "high_cpl"  in a["reasons"] else 2,
+                            -a["spend"],
+                        ),
+                    )[:5]
+                    ad_list = "; ".join(
+                        f"{a['ad_name'][:40]} (${a['spend']:.0f} spend, "
+                        f"{'+'.join(a['reasons'])}, {a['days']}d)"
+                        for a in bad_ads
+                    )
+                    note = (f"[PAUSE BLOCKED — ad-level cleanup first] "
+                            f"Campaign hit pause zone but has {len(_ad_candidates[camp_id])} "
+                            f"ad(s) eligible for ad-level pause. Pause these first, "
+                            f"then re-evaluate: {ad_list}")
+                    action = "drilldown"
+
+            elif channel in ("google_ads", "microsoft_ads"):
+                bad_kws = _kw_candidates.get(camp_id, [])
+                # Even with no flagged keywords, the LP review is mandatory before
+                # campaign-pause on search channels — block and route to drilldown.
+                if bad_kws:
+                    bad_kws = sorted(
+                        bad_kws,
+                        key=lambda k: (
+                            0 if "zero_conv" in k["reasons"] else 1,
+                            -k["spend"],
+                        ),
+                    )[:5]
+                    kw_list = "; ".join(
+                        f"{k['keyword'][:35]} in {k['adgroup'][:25]} "
+                        f"(${k['spend']:.0f}, {'+'.join(k['reasons'])}, {k['days']}d)"
+                        for k in bad_kws
+                    )
+                    note = (f"[PAUSE BLOCKED — keyword cleanup first] "
+                            f"Search campaign hit pause zone but has {len(_kw_candidates[camp_id])} "
+                            f"keyword(s) eligible for pause. Pause these AND review "
+                            f"the destination LP before campaign-pause: {kw_list}")
+                else:
+                    note = (f"[PAUSE BLOCKED — LP review required] "
+                            f"Search campaign hit pause zone with no keyword-level "
+                            f"candidates flagged. Before campaign-pause, manually "
+                            f"visit the destination landing page: confirm it loads, "
+                            f"form submits, message matches keyword intent. LP issue "
+                            f"≠ campaign issue.")
+                action = "drilldown"
 
         # Edit-age guard: if last edit < MIN_DAYS_SINCE_EDIT, too early to act
         if action in ("optimize", "pause") and days_since_edit < MIN_DAYS_SINCE_EDIT:

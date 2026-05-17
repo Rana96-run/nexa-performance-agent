@@ -320,17 +320,10 @@ def check_pause_precedence(task: dict) -> QACheckResult:
         return QACheckResult(name="pause_precedence", passed=True, severity="warn",
                              detail="could not extract campaign name from title")
 
-    try:
-        from analysers.campaign_health import _campaigns_with_ad_pause_candidates
-        all_cands = _cached("ad_pause_cands", lambda: _campaigns_with_ad_pause_candidates(days=14))
-    except Exception as e:
-        return QACheckResult(name="pause_precedence", passed=True, severity="warn",
-                             detail=f"could not query ad candidates: {e}")
-
-    # Match campaign name → campaign_id via campaigns_daily
+    # Match campaign name → (campaign_id, channel) via campaigns_daily
     c, p, d = _bq()
     sql = f"""
-    SELECT DISTINCT campaign_id FROM `{p}.{d}.campaigns_daily`
+    SELECT DISTINCT campaign_id, channel FROM `{p}.{d}.campaigns_daily`
     WHERE LOWER(campaign_name) = @cname
       AND date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
     LIMIT 5
@@ -339,25 +332,61 @@ def check_pause_precedence(task: dict) -> QACheckResult:
     job = c.query(sql, job_config=_bq_lib.QueryJobConfig(
         query_parameters=[_bq_lib.ScalarQueryParameter("cname", "STRING", campaign_name.lower())]
     ))
-    matched_ids = [str(r.campaign_id) for r in job.result()]
-    blocking_ads = []
-    for cid in matched_ids:
-        blocking_ads.extend(all_cands.get(cid, []))
+    matches = [(str(r.campaign_id), r.channel) for r in job.result()]
+    if not matches:
+        return QACheckResult(name="pause_precedence", passed=True, severity="warn",
+                             detail=f"could not find campaign '{campaign_name}' in BQ")
 
-    if blocking_ads:
-        ad_summary = "; ".join(f"{a['ad_name'][:30]} ({'+'.join(a['reasons'])})"
-                               for a in blocking_ads[:3])
-        return QACheckResult(
-            name="pause_precedence",
-            passed=False,
-            severity="block",
-            detail=(f"campaign '{campaign_name}' still has {len(blocking_ads)} "
-                    f"ad-level pause candidate(s): {ad_summary}"),
-            metrics={"campaign": campaign_name, "blocking_ads": len(blocking_ads)},
-        )
+    # Channel-aware: search → keyword candidates + LP review; social → ad candidates
+    is_search = any(ch in ("google_ads", "microsoft_ads") for _, ch in matches)
+    is_social = any(ch in ("meta", "snapchat", "tiktok")  for _, ch in matches)
+
+    blocking = []
+    try:
+        if is_search:
+            from analysers.campaign_health import _campaigns_with_keyword_pause_candidates
+            kw_cands = _cached("kw_pause_cands",
+                               lambda: _campaigns_with_keyword_pause_candidates(days=14))
+            for cid, _ in matches:
+                blocking.extend(kw_cands.get(cid, []))
+            if blocking:
+                summary = "; ".join(f"{k['keyword'][:25]} ({'+'.join(k['reasons'])})"
+                                    for k in blocking[:3])
+                return QACheckResult(
+                    name="pause_precedence", passed=False, severity="block",
+                    detail=(f"SEARCH campaign '{campaign_name}' has {len(blocking)} "
+                            f"keyword-pause candidate(s) — pause keywords + review LP first: {summary}"),
+                    metrics={"campaign": campaign_name, "blocking_keywords": len(blocking)},
+                )
+            # No flagged keywords still requires LP review for search channels
+            return QACheckResult(
+                name="pause_precedence", passed=False, severity="block",
+                detail=(f"SEARCH campaign '{campaign_name}': no keyword candidates flagged, "
+                        f"but LP review is mandatory before campaign-pause on search channels. "
+                        f"Visit the destination landing page first (load, form submit, intent match)."),
+                metrics={"campaign": campaign_name, "lp_review_required": True},
+            )
+        if is_social:
+            from analysers.campaign_health import _campaigns_with_ad_pause_candidates
+            ad_cands = _cached("ad_pause_cands",
+                               lambda: _campaigns_with_ad_pause_candidates(days=14))
+            for cid, _ in matches:
+                blocking.extend(ad_cands.get(cid, []))
+            if blocking:
+                summary = "; ".join(f"{a['ad_name'][:30]} ({'+'.join(a['reasons'])})"
+                                    for a in blocking[:3])
+                return QACheckResult(
+                    name="pause_precedence", passed=False, severity="block",
+                    detail=(f"SOCIAL campaign '{campaign_name}' has {len(blocking)} "
+                            f"ad-level pause candidate(s) — pause ads first: {summary}"),
+                    metrics={"campaign": campaign_name, "blocking_ads": len(blocking)},
+                )
+    except Exception as e:
+        return QACheckResult(name="pause_precedence", passed=True, severity="warn",
+                             detail=f"could not query candidates: {e}")
 
     return QACheckResult(name="pause_precedence", passed=True, severity="block",
-                         detail=f"no blocking ad-level candidates in '{campaign_name}'")
+                         detail=f"no blocking candidates in '{campaign_name}'")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
