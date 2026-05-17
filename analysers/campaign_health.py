@@ -83,13 +83,24 @@ def audit_campaign_health(
         ch_list = ", ".join(f"'{c}'" for c in channels)
         channel_filter = f"AND c.channel IN ({ch_list})"
 
+    # Lag-aware CPQL — exclude days where open_leads/leads_total > 30% from
+    # CPQL/qual_rate math so pause/scale decisions aren't made on SDR backlog.
+    # The 30% threshold matches config.LAG_OPEN_PCT_THRESHOLD; if you tune
+    # that constant, update the SQL literal below in hs.day_lag_ok too.
     sql = f"""
         WITH hs AS (
           SELECT
             date,
             lead_utm_campaign,
             SUM(leads_total)     AS leads,
-            SUM(leads_qualified) AS sqls
+            SUM(leads_qualified) AS sqls,
+            -- Day-level lag flag: TRUE when SDR backlog <= 30% of leads for
+            -- this (date, campaign). Pause/scale decisions use this to skip
+            -- days where SQL counts are still incomplete.
+            -- We pre-aggregate first so the SAFE_DIVIDE compares correct sums.
+            SAFE_DIVIDE(SUM(COALESCE(leads_open, 0)), NULLIF(SUM(leads_total), 0))
+                <= 0.30
+              OR SUM(leads_total) = 0          AS day_lag_ok
           FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
           GROUP BY date, lead_utm_campaign
         ),
@@ -111,8 +122,17 @@ def audit_campaign_health(
           SUM(hs.leads)                                                        AS hs_leads,
           SUM(hs.sqls)                                                         AS sqls,
           SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.leads), 0))                  AS cpl,
-          SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls),  0))                  AS cpql,
-          SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads), 0))                  AS qual_rate,
+          -- CPQL + qual_rate computed on lag-clean days only (excludes days
+          -- where SDR backlog > 30% of leads). Both spend and SQL counts in
+          -- the ratio are filtered identically so the rate is comparable.
+          SAFE_DIVIDE(
+            SUM(IF(hs.day_lag_ok, c.spend, 0)),
+            NULLIF(SUM(IF(hs.day_lag_ok, hs.sqls, 0)), 0)
+          )                                                                    AS cpql,
+          SAFE_DIVIDE(
+            SUM(IF(hs.day_lag_ok, hs.sqls,  0)),
+            NULLIF(SUM(IF(hs.day_lag_ok, hs.leads, 0)), 0)
+          )                                                                    AS qual_rate,
           MAX(d.revenue_won)                                                    AS revenue_won,
           SAFE_DIVIDE(MAX(d.revenue_won), NULLIF(SUM(c.spend), 0))             AS roas,
           MAX(c.updated_at)                                                     AS last_updated

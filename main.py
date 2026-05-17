@@ -388,9 +388,10 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
         from notifications.daily_summary import _headline_numbers, _peak_numbers_lines
         headline = _headline_numbers()
         if headline:
+            from analysers.lag_aware import format_cpql_with_lag
             h = headline["total"]
             cpl_str  = f"${h['cpl']:,}"  if h.get("cpl")  else "—"
-            cpql_str = f"${h['cpql']:,}" if h.get("cpql") else "—"
+            cpql_str = format_cpql_with_lag(h.get("cpql"), h.get("lag_excluded_days", 0))
             lines.append(
                 f"*7-day totals:*  "
                 f"Spend ${h['spend']:,}  ·  "

@@ -95,6 +95,12 @@ def _headline_numbers() -> Optional[dict]:
     except Exception:
         return None
     client = get_client()
+    # Lag-aware CPQL: exclude days where open_leads/leads_total > 30% (SDR
+    # backlog). Volume metrics (spend, leads) still use the full window;
+    # only CPQL math is suppressed on lag-affected days.
+    from analysers.lag_aware import lag_clean_filter_sql, lag_excluded_days_sql
+    LAG_OK = lag_clean_filter_sql(open_col="open_leads", leads_col="leads_total")
+    LAG_EXC = lag_excluded_days_sql(open_col="open_leads", leads_col="leads_total")
     q = f"""
       WITH base AS (
         SELECT *
@@ -105,20 +111,28 @@ def _headline_numbers() -> Optional[dict]:
       per_channel AS (
         SELECT channel,
           ROUND(SUM(spend), 0) AS spend,
-          SUM(leads)    AS leads,
-          SUM(qualified) AS qual,
-          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),     0) AS cpl,
-          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 0) AS cpql
+          SUM(leads_total) AS leads,
+          SUM(qualified)   AS qual,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 0) AS cpl,
+          ROUND(SAFE_DIVIDE(
+            SUM(IF({LAG_OK}, spend, 0)),
+            NULLIF(SUM(IF({LAG_OK}, qualified, 0)), 0)
+          ), 0) AS cpql,
+          {LAG_EXC} AS lag_excluded_days
         FROM base
         GROUP BY channel
       ),
       total AS (
         SELECT
-          ROUND(SUM(spend), 0)  AS spend,
-          SUM(leads)            AS leads,
-          SUM(qualified)        AS qual,
-          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads), 0)),     0) AS cpl,
-          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 0) AS cpql
+          ROUND(SUM(spend), 0)   AS spend,
+          SUM(leads_total)       AS leads,
+          SUM(qualified)         AS qual,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 0) AS cpl,
+          ROUND(SAFE_DIVIDE(
+            SUM(IF({LAG_OK}, spend, 0)),
+            NULLIF(SUM(IF({LAG_OK}, qualified, 0)), 0)
+          ), 0) AS cpql,
+          {LAG_EXC} AS lag_excluded_days
         FROM base
       )
       SELECT
@@ -142,6 +156,7 @@ def _headline_numbers() -> Optional[dict]:
                 "qual":  int(t.get("qual") or 0),
                 "cpl":   int(t.get("cpl"))  if t.get("cpl")  is not None else 0,
                 "cpql":  int(t.get("cpql")) if t.get("cpql") is not None else 0,
+                "lag_excluded_days": int(t.get("lag_excluded_days") or 0),
             },
             "channels": [
                 {
@@ -151,6 +166,7 @@ def _headline_numbers() -> Optional[dict]:
                     "qual":    int(c["qual"]  or 0),
                     "cpl":     int(c["cpl"])  if c["cpl"]  is not None else 0,
                     "cpql":    int(c["cpql"]) if c["cpql"] is not None else 0,
+                    "lag_excluded_days": int(c.get("lag_excluded_days") or 0),
                 }
                 for c in r["channels"]
             ],
@@ -241,21 +257,34 @@ def _peak_numbers_lines() -> list[str]:
     except Exception:
         return []
     try:
+        from analysers.lag_aware import lag_clean_filter_sql
+        # Filter applies to the HubSpot leads side, so column names are leads / open_
+        LAG_OK_HS  = lag_clean_filter_sql(open_col="hs.open_", leads_col="hs.leads")
+        # Count DISTINCT lag-affected calendar days (not campaign-day pairs)
+        # so the displayed "Nd excl" matches user intuition.
+        LAG_EXC_HS = (
+            f"COUNT(DISTINCT IF(SAFE_DIVIDE(COALESCE(hs.open_, 0), NULLIF(hs.leads, 0)) > 0.30, c.date, NULL))"
+        )
         client = get_client()
         rows = list(client.query(f"""
             WITH hs AS (
               SELECT date, lead_utm_campaign,
                      SUM(leads_total)     AS leads,
-                     SUM(leads_qualified) AS sqls
+                     SUM(leads_qualified) AS sqls,
+                     SUM(leads_open)      AS open_
               FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
               GROUP BY date, lead_utm_campaign
             )
             SELECT
-              COALESCE(m.display_name, c.channel)                            AS channel,
-              ROUND(SUM(c.spend), 0)                                         AS spend,
-              COALESCE(SUM(hs.leads), 0)                                     AS leads,
-              COALESCE(SUM(hs.sqls), 0)                                      AS sqls,
-              ROUND(SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)), 0)  AS cpql
+              COALESCE(m.display_name, c.channel)                                   AS channel,
+              ROUND(SUM(c.spend), 0)                                                AS spend,
+              COALESCE(SUM(hs.leads), 0)                                            AS leads,
+              COALESCE(SUM(hs.sqls), 0)                                             AS sqls,
+              ROUND(SAFE_DIVIDE(
+                SUM(IF({LAG_OK_HS}, c.spend, 0)),
+                NULLIF(SUM(IF({LAG_OK_HS}, hs.sqls, 0)), 0)
+              ), 0) AS cpql,
+              {LAG_EXC_HS} AS lag_excluded_days
             FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
             LEFT JOIN hs ON c.date = hs.date
                         AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
@@ -272,11 +301,14 @@ def _peak_numbers_lines() -> list[str]:
         return []
 
     # channel totals — no campaign names
+    from analysers.lag_aware import format_cpql_with_lag
     lines = []
     for r in rows:
         spend_s = f"${int(r.spend):,}"
         leads_s = str(int(r.leads)) if r.leads else "0"
-        cpql_s  = f"CPQL ${int(r.cpql)}" if r.cpql else "no SQLs"
+        cpql_val = int(r.cpql) if r.cpql else None
+        lag_d    = int(getattr(r, "lag_excluded_days", 0) or 0)
+        cpql_s   = "CPQL " + format_cpql_with_lag(cpql_val, lag_d) if (cpql_val or lag_d) else "no SQLs"
         lines.append(f"  *{r.channel}*  {spend_s}  ·  {leads_s} leads  ·  {cpql_s}")
     return lines
 

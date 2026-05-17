@@ -186,6 +186,13 @@ CPQL_ACCEPTABLE = 80.00   # ≤ this  -> acceptable
 CPQL_WARNING    = 95.00   # ≤ this  -> warning
 CPQL_PAUSE      = 100.00  # > this  -> pause candidate
 
+# Lag-aware CPQL reporting — see analysers/lag_aware.py.
+# Days where (open_leads / leads_total) exceeds this fraction are considered
+# "lag-affected" and excluded from CPQL math. Set on 2026-05-17 after May 15-16
+# CPQL of $2,801 / $1,373 turned out to be 90%+ open leads (SDR backlog), not
+# real performance crashes.
+LAG_OPEN_PCT_THRESHOLD = 0.30
+
 # Ad-level CPL/CPQL zones, USD
 # Slightly more lenient than campaign level — individual ads can spike before
 # the campaign average does. Used by bulk_ads.py and ad-level health checks.
