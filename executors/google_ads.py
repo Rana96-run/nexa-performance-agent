@@ -194,6 +194,15 @@ def create_campaign(
     Naming: Google_{Type}_{Language}_{Product}_{Audience}
     e.g. Google_Search_AR_Invoice_Broad
     """
+    # Launch-policy gate: 1 new campaign per channel per 7 days.
+    # Pass force=True or set FORCE_LAUNCH=1 to bypass (log justification!).
+    from executors.launch_policy import enforce_launch_policy, LaunchBlocked
+    try:
+        enforce_launch_policy("google_ads")
+    except LaunchBlocked as e:
+        print(f"[google_ads.create_campaign] BLOCKED: {e}")
+        return {"error": "launch_blocked", "message": str(e), "blocker": e.blocker}
+
     name = _prefixed(name)
     if customer_id is None:
         customer_id = best_customer(name)

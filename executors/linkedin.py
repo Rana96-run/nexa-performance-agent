@@ -153,6 +153,13 @@ def _build_utm_url(base_url: str, campaign_name: str,
 
 def create_campaign_group(name: str, status: str = "DRAFT") -> dict:
     """Create a Campaign (top level). Name: LinkedIn_{Product}."""
+    # Launch-policy gate: 1 new campaign per channel per 7 days.
+    from executors.launch_policy import enforce_launch_policy, LaunchBlocked
+    try:
+        enforce_launch_policy("linkedin")
+    except LaunchBlocked as e:
+        print(f"[li.create_campaign_group] BLOCKED: {e}")
+        return {"error": "launch_blocked", "message": str(e), "blocker": e.blocker}
     name = _prefixed(name)
     now_ms = int(time.time() * 1000)
     payload = {

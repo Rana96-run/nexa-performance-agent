@@ -191,6 +191,13 @@ def create_campaign(
             f"Only LEAD_GENERATION campaigns are supported. Got: {objective!r}. "
             "Qoyod's TikTok strategy is lead-gen only — adjust the objective."
         )
+    # Launch-policy gate: 1 new campaign per channel per 7 days.
+    from executors.launch_policy import enforce_launch_policy, LaunchBlocked
+    try:
+        enforce_launch_policy("tiktok")
+    except LaunchBlocked as e:
+        print(f"[tiktok.create_campaign] BLOCKED: {e}")
+        raise
     acct = advertiser_id or _DEFAULT_ACCOUNT
     name = _prefixed(name)
 

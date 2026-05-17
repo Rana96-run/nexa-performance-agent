@@ -193,6 +193,14 @@ def create_campaign(
     Follow naming convention: {Type}_{Language}_{Product}_{Variant}
     e.g. Meta_LeadGen_AR_Invoice_Retargeting
     """
+    # Launch-policy gate: 1 new campaign per channel per 7 days.
+    from executors.launch_policy import enforce_launch_policy, LaunchBlocked
+    try:
+        enforce_launch_policy("meta")
+    except LaunchBlocked as e:
+        print(f"[meta.create_campaign] BLOCKED: {e}")
+        return {"error": "launch_blocked", "message": str(e), "blocker": e.blocker}
+
     name = _prefixed(name)
     if account_id is None:
         account_id = best_account(name)
