@@ -138,6 +138,34 @@ def _run_spike_detector() -> list:
         return []
 
 
+def _run_spend_drift() -> dict:
+    """Nightly spend-drift detector — 3 rules:
+      1. Scaling-an-underperformer (14d CPQL > $140 AND WoW spend > +20%)
+      2. Silent-death (prior 30d > $500 AND last 7d < 5% of that)
+      3. Launch-wave (≥3 first-spend within 7d on same channel)
+
+    Returns the findings dict from analysers.spend_drift.run_all().
+    Read-only — does NOT auto-create tasks. Findings appear in stdout and
+    are printed into the nightly log so they can be folded into the
+    Slack daily summary by a downstream task creator (TODO: build the
+    spend_drift_tasks.py counterpart that turns findings into Asana posts).
+    """
+    try:
+        from analysers.spend_drift import run_all
+        findings = run_all()
+        total = sum(len(v) for v in findings.values())
+        print(f"[ops-scheduler] spend_drift: {total} total finding(s) — "
+              + ", ".join(f"{k}={len(v)}" for k, v in findings.items()))
+        for rule, items in findings.items():
+            for f in items:
+                print(f"[spend_drift/{rule}] {f}")
+        return findings
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] spend_drift error: {e}")
+        return {}
+
+
 def _run_weekly_keyword_autofix() -> dict:
     """
     Sunday-only: silently scan ENABLED keywords + active negatives, apply
@@ -340,6 +368,12 @@ def _nightly():
 
     # 3. Spike detector — returns list, folded into summary message.
     spikes = _run_spike_detector()
+
+    # 3a. Spend-drift detector — 3 nightly rules (scaling-underperformer,
+    #     silent-death, launch-wave). Read-only — produces findings that
+    #     show up in the operational log. To be wired into Slack
+    #     #approvals via a follow-up spend_drift_tasks.py module.
+    drift_findings = _run_spend_drift()
 
     # 3b. Per-channel performance audits, all under role=performance_audit:
     #   - Google Ads:        IS / QS / search terms / keyword auto-pause
