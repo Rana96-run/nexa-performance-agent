@@ -44,7 +44,14 @@ def _is_awareness(campaign_name: str) -> bool:
     return any(p in name_lower for p in AWARENESS_PATTERNS)
 
 
+# ── KPI primacy ──────────────────────────────────────────────────────────────
+# CPQL is the canonical pause/scale signal. CPL zone is consulted only as a
+# tie-breaker or supplemental context — never as the primary decision metric.
+# See config.py for the rationale (May 2026 incident: CPL gave a green light
+# while CPQL was alarming, team kept scaling).
+
 def _cpql_zone(val: float | None) -> str:
+    """PRIMARY pause/scale signal. Drives the decision tree below."""
     if val is None:        return "no_data"
     if val < CPQL_SCALE:   return "scale"
     if val <= CPQL_ACCEPTABLE: return "ok"
@@ -53,6 +60,8 @@ def _cpql_zone(val: float | None) -> str:
 
 
 def _cpl_zone(val: float | None) -> str:
+    """SECONDARY support signal — used only as tie-breaker. Do not pause/scale
+    on CPL alone."""
     if val is None:       return "no_data"
     if val < CPL_SCALE:   return "scale"
     if val <= CPL_ACCEPTABLE: return "ok"

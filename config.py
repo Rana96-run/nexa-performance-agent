@@ -173,18 +173,29 @@ USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 # ---------------------------------------------------------------------------
 # KPI thresholds — all in USD (per playbook in qoyod-manager-os.md)
 # ---------------------------------------------------------------------------
-# CPL (cost per lead) zones, USD — campaign level
+# *** CANONICAL pause/scale thresholds — campaign level ***
+#
+# CPQL is the PRIMARY KPI for all pause/scale decisions. CPL is secondary
+# support context only. Decision tree in analysers/campaign_health.py uses
+# CPQL zones first; CPL is consulted as a tie-breaker / supporting signal.
+#
+# Switched primacy on 2026-05-17 after the May 2026 incident: lp.qoyod.com/
+# accounting had $46 CPL (same as HubSpot LPs) so it looked fine on CPL, but
+# CPQL was $246. CPL gave a green light while CPQL was alarming — team kept
+# scaling because the dashboard led with CPL.
+
+# CPQL (cost per qualified lead) zones, USD — campaign level — PRIMARY KPI
+CPQL_SCALE      = 60.00   # < this  -> scale up
+CPQL_ACCEPTABLE = 80.00   # ≤ this  -> acceptable
+CPQL_WARNING    = 95.00   # ≤ this  -> warning
+CPQL_PAUSE      = 100.00  # > this  -> pause candidate
+
+# CPL (cost per lead) zones, USD — campaign level — SECONDARY support metric
 CPL_SCALE      = 25.00  # < this  -> scale up
 CPL_ACCEPTABLE = 35.00  # ≤ this  -> acceptable
 CPL_WARNING    = 40.00  # ≤ this  -> warning
 CPL_PAUSE      = 45.00  # > this  -> pause candidate
 # backwards-compat alias (some callers check CPL_PAUSE as the single trigger)
-
-# CPQL (cost per qualified lead) zones, USD — campaign level
-CPQL_SCALE      = 60.00   # < this  -> scale up
-CPQL_ACCEPTABLE = 80.00   # ≤ this  -> acceptable
-CPQL_WARNING    = 95.00   # ≤ this  -> warning
-CPQL_PAUSE      = 100.00  # > this  -> pause candidate
 
 # Lag-aware CPQL reporting — see analysers/lag_aware.py.
 # Days where (open_leads / leads_total) exceeds this fraction are considered
@@ -196,15 +207,19 @@ LAG_OPEN_PCT_THRESHOLD = 0.30
 # Ad-level CPL/CPQL zones, USD
 # Slightly more lenient than campaign level — individual ads can spike before
 # the campaign average does. Used by bulk_ads.py and ad-level health checks.
-AD_CPL_SCALE      = 30.00   # < this  -> scale up
-AD_CPL_ACCEPTABLE = 35.00   # ≤ this  -> acceptable
-AD_CPL_WARNING    = 50.00   # ≤ this  -> warning
-AD_CPL_PAUSE      = 50.00   # > this  -> pause candidate
+# Same primacy as campaign level: AD_CPQL_* is canonical; AD_CPL_* is secondary.
 
+# Ad-level CPQL zones — PRIMARY KPI
 AD_CPQL_SCALE      = 60.00  # < this  -> scale up
 AD_CPQL_ACCEPTABLE = 75.00  # ≤ this  -> acceptable
 AD_CPQL_WARNING    = 85.00  # ≤ this  -> warning
 AD_CPQL_PAUSE      = 90.00  # > this  -> pause candidate
+
+# Ad-level CPL zones — SECONDARY support metric
+AD_CPL_SCALE      = 30.00   # < this  -> scale up
+AD_CPL_ACCEPTABLE = 35.00   # ≤ this  -> acceptable
+AD_CPL_WARNING    = 50.00   # ≤ this  -> warning
+AD_CPL_PAUSE      = 50.00   # > this  -> pause candidate
 
 # Qualification / ROAS targets
 QUAL_RATE_TARGET = 0.30   # ≥ 30 %

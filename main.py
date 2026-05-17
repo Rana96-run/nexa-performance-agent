@@ -392,13 +392,15 @@ def _build_slack_summary(cadence: str, results: list, tasks: list, approvals: li
             h = headline["total"]
             cpl_str  = f"${h['cpl']:,}"  if h.get("cpl")  else "—"
             cpql_str = format_cpql_with_lag(h.get("cpql"), h.get("lag_excluded_days", 0))
+            # CPQL is the primary KPI (bold); CPL is secondary support context.
+            # Switched 2026-05-17 — see config.py CPQL_* zone comment.
             lines.append(
                 f"*7-day totals:*  "
                 f"Spend ${h['spend']:,}  ·  "
                 f"Leads {h['leads']}  ·  "
                 f"SQLs {h['qual']}  ·  "
-                f"CPL {cpl_str}  ·  "
-                f"CPQL {cpql_str}"
+                f"*CPQL {cpql_str}*  ·  "
+                f"CPL {cpl_str}"
             )
         peak_lines = _peak_numbers_lines()
         if peak_lines:
