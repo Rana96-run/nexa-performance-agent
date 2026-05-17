@@ -138,6 +138,60 @@ def _run_spike_detector() -> list:
         return []
 
 
+def _run_period_compare_weekly() -> dict:
+    """Last 7 days vs prior 7 days — auto-Apr-vs-May-style compare every day.
+    Flags CPQL/ROAS/QUAL regressions and launch waves."""
+    try:
+        from analysers.period_compare import compare_weekly, to_markdown
+        p = compare_weekly()
+        flags = ", ".join(p.flags) if p.flags else "none"
+        print(f"[ops-scheduler] period_compare(weekly): "
+              f"{p.period_a[0]}..{p.period_a[1]} vs {p.period_b[0]}..{p.period_b[1]}, "
+              f"flags=[{flags}]")
+        # Print full markdown narrative to stdout (Railway log)
+        print(to_markdown(p))
+        return {"label": p.label, "flags": p.flags}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] period_compare(weekly) error: {e}")
+        return {}
+
+
+def _run_period_compare_monthly() -> dict:
+    """Monthly: current month-to-date vs same days of previous month.
+    Runs on Mondays only — heavier query, weekly cadence is enough."""
+    try:
+        from analysers.period_compare import compare_monthly, to_markdown
+        p = compare_monthly()
+        flags = ", ".join(p.flags) if p.flags else "none"
+        print(f"[ops-scheduler] period_compare(monthly): "
+              f"{p.period_a[0]}..{p.period_a[1]} vs {p.period_b[0]}..{p.period_b[1]}, "
+              f"flags=[{flags}]")
+        print(to_markdown(p))
+        return {"label": p.label, "flags": p.flags}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] period_compare(monthly) error: {e}")
+        return {}
+
+
+def _run_forecaster() -> dict:
+    """Project end-of-month and end-of-next-month spend/leads/SQLs/CPQL/ROAS
+    based on trailing 14-day daily rate. Read-only."""
+    try:
+        from analysers.forecaster import forecast, to_markdown
+        f = forecast()
+        print(f"[ops-scheduler] forecaster: as of {f.today}, "
+              f"trend window {f.trend_window_days}d")
+        print(to_markdown(f))
+        return {"today": f.today,
+                "eom_spend": (f.end_of_month.projected or {}).get("spend") if f.end_of_month else None}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] forecaster error: {e}")
+        return {}
+
+
 def _run_spend_drift() -> dict:
     """Nightly spend-drift detector — 3 rules:
       1. Scaling-an-underperformer (14d CPQL > $140 AND WoW spend > +20%)
@@ -374,6 +428,16 @@ def _nightly():
     #     show up in the operational log. To be wired into Slack
     #     #approvals via a follow-up spend_drift_tasks.py module.
     drift_findings = _run_spend_drift()
+
+    # 3a-bis. Period-over-period auto-comparator + forecaster.
+    #         CLAUDE.md mandates: every nightly run includes a weekly compare
+    #         (last 7d vs prior 7d) and a forward-looking forecast. Monday
+    #         additionally runs the monthly compare. Read-only — findings
+    #         feed downstream digests.
+    _run_period_compare_weekly()
+    if date.today().weekday() == 0:   # Monday in Riyadh
+        _run_period_compare_monthly()
+    _run_forecaster()
 
     # 3b. Per-channel performance audits, all under role=performance_audit:
     #   - Google Ads:        IS / QS / search terms / keyword auto-pause

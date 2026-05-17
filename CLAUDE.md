@@ -50,6 +50,39 @@ Before posting to Slack or creating Asana tasks, always verify:
 
 A PreToolUse hook (`.claude/settings.json`) injects this checklist automatically before `slack_post_message` and `create_tasks`.
 
+## The intelligence loop — non-negotiable analysis discipline
+
+Every paid-media analysis (including the daily Slack summary, weekly digest,
+monthly review, and any ad-hoc "why did X happen?" question) follows the same
+8-step loop. No shortcuts. The agent gets smarter when each step is run.
+
+1. **OBSERVE** — pull live data from BQ. Never use yesterday's recollection.
+2. **COMPARE period-over-period** — ALWAYS contrast the current window with a
+   matched prior window. Default windows: last 7d vs prior 7d for daily/weekly;
+   month-to-date vs same days of previous month for monthly. Use
+   `analysers/period_compare.py` — never hand-roll this comparison again.
+3. **INVESTIGATE root cause** — when a flag fires (CPQL_REGRESSED, ROAS_REGRESSED,
+   QUAL_DROPPED, LAUNCH_WAVE), drill into the contributing factors: campaign mix,
+   audience changes, launch waves, silent deaths, LP routing, keyword/bid shifts.
+   State exactly what changed and why.
+4. **DECIDE with full setup** — every recommendation includes the complete
+   campaign/adset/creative/LP setup, not just "pause this" or "scale this." See
+   `scripts/_propose_duplicates.py` for the spec format.
+5. **EXECUTE only after approval** — the existing #approvals + ✅/❌ flow.
+6. **MONITOR post-action** — every executed action gets re-evaluated 7 and 14
+   days later. Did it work? Update the Asana task with the outcome.
+7. **LEARN** — record the outcome in `memory/14_learning_patterns.md`. Next
+   session reads it before recommending a similar action.
+8. **FORECAST** — every weekly/monthly cadence ends with a month-over-month
+   projection via `analysers/forecaster.py`. State expected end-of-month spend,
+   leads, SQLs, CPQL, ROAS — and the gap between status-quo and post-action paths.
+
+For any single user question of the form "why did X happen?", "what changed in
+Y?", or "how do we fix Z?" — the answer **must include** all of: a period
+comparison, a root-cause attribution, a fix-with-full-setup recommendation,
+and a forecast of the expected impact of the fix. A bullet-list answer without
+those four parts is incomplete and should be rewritten.
+
 ## Golden rules (non-negotiable)
 
 - **"Done" means verified, not attempted.** Never say "done", "fixed", or
