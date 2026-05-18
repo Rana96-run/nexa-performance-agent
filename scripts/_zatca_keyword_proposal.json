@@ -1,0 +1,171 @@
+{
+  "C1_ZATCAPhase2": {
+    "ar": [
+      {
+        "keyword": "الربط مع هيئة الزكاة والدخل المرحلة الثانية",
+        "avg_monthly": 480,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 0.666612,
+        "high_cpc_usd": 3.517045
+      },
+      {
+        "keyword": "الربط مع هيئة الزكاة والدخل",
+        "avg_monthly": 390,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 0.877262,
+        "high_cpc_usd": 4.571753
+      },
+      {
+        "keyword": "ربط الفاتورة الإلكترونية",
+        "avg_monthly": 260,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 0.878378,
+        "high_cpc_usd": 5.076619
+      },
+      {
+        "keyword": "برنامج الفاتورة",
+        "avg_monthly": 210,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 1.476257,
+        "high_cpc_usd": 8.236909
+      }
+    ],
+    "en": [
+      {
+        "keyword": "zatca",
+        "avg_monthly": 22200,
+        "competition": "LOW",
+        "low_cpc_usd": 0.918833,
+        "high_cpc_usd": 2.495612
+      },
+      {
+        "keyword": "fatoora portal",
+        "avg_monthly": 880,
+        "competition": "LOW",
+        "low_cpc_usd": 0.840319,
+        "high_cpc_usd": 4.532784
+      },
+      {
+        "keyword": "zatca e invoicing",
+        "avg_monthly": 260,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 1.620524,
+        "high_cpc_usd": 6.194468
+      },
+      {
+        "keyword": "zatca phase 2",
+        "avg_monthly": 110,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 0.928794,
+        "high_cpc_usd": 5.674159
+      },
+      {
+        "keyword": "e invoicing zatca",
+        "avg_monthly": 110,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 1.592977,
+        "high_cpc_usd": 6.252513
+      },
+      {
+        "keyword": "zatca phase 2 integration",
+        "avg_monthly": 90,
+        "competition": "LOW",
+        "low_cpc_usd": 0.718993,
+        "high_cpc_usd": 3.529756
+      },
+      {
+        "keyword": "zatca e invoicing phase 2",
+        "avg_monthly": 70,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 1.05394,
+        "high_cpc_usd": 5.795551
+      },
+      {
+        "keyword": "zatca invoice format",
+        "avg_monthly": 70,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 0.72,
+        "high_cpc_usd": 2.744284
+      },
+      {
+        "keyword": "zatca website",
+        "avg_monthly": 70,
+        "competition": "LOW",
+        "low_cpc_usd": 0.93,
+        "high_cpc_usd": 3.305462
+      },
+      {
+        "keyword": "zatca integration",
+        "avg_monthly": 50,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 1.383312,
+        "high_cpc_usd": 4.419163
+      },
+      {
+        "keyword": "zakat tax and customs authority zatca",
+        "avg_monthly": 50,
+        "competition": "LOW",
+        "low_cpc_usd": 0.87939,
+        "high_cpc_usd": 2.977201
+      },
+      {
+        "keyword": "zatca phase 2 requirements",
+        "avg_monthly": 30,
+        "competition": "LOW",
+        "low_cpc_usd": 0.0,
+        "high_cpc_usd": 0.0
+      },
+      {
+        "keyword": "zatca integration phase 2",
+        "avg_monthly": 30,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 0.79556,
+        "high_cpc_usd": 8.428657
+      },
+      {
+        "keyword": "fatoora platform",
+        "avg_monthly": 30,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 1.001651,
+        "high_cpc_usd": 5.565866
+      }
+    ]
+  },
+  "C2_ZATCAVendorShop": {
+    "ar": [
+      {
+        "keyword": "المحاسب الشامل أفضل برنامج محاسبة",
+        "avg_monthly": 8100,
+        "competition": "LOW",
+        "low_cpc_usd": 0.0,
+        "high_cpc_usd": 0.0
+      },
+      {
+        "keyword": "أفضل برنامج محاسبة",
+        "avg_monthly": 140,
+        "competition": "LOW",
+        "low_cpc_usd": 3.960509,
+        "high_cpc_usd": 15.0
+      },
+      {
+        "keyword": "افضل برامج المحاسبه",
+        "avg_monthly": 140,
+        "competition": "LOW",
+        "low_cpc_usd": 3.960509,
+        "high_cpc_usd": 15.0
+      },
+      {
+        "keyword": "أفضل برنامج محاسبة في السعودية",
+        "avg_monthly": 110,
+        "competition": "MEDIUM",
+        "low_cpc_usd": 3.399742,
+        "high_cpc_usd": 14.058124
+      }
+    ],
+    "en": []
+  },
+  "C3_ZATCACompetitor": {
+    "ar": [],
+    "en": []
+  }
+}
