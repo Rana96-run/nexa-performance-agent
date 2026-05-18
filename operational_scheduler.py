@@ -615,16 +615,26 @@ def _catchup_if_stale():
     try:
         from collectors.bq_writer import get_client, PROJECT_ID, DATASET
         bq = get_client()
-        rows = list(bq.query(
-            f"SELECT DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_behind"
-            f" FROM `{PROJECT_ID}.{DATASET}`.paid_channel_daily"
-        ).result())
-        days_behind = int(rows[0]["days_behind"] or 0) if rows else 0
-        if days_behind <= 1:
-            print(f"[ops-scheduler] Startup: data fresh (days_behind={days_behind}) — no catch-up needed")
+        # Check EACH source table independently — a join view masks per-table
+        # staleness (May 18 incident: campaigns_daily was current, but
+        # hubspot_leads_module_daily was 24h behind, and the view showed fresh).
+        sql = f"""
+        SELECT
+          (SELECT DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+           FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`) AS spend_behind,
+          (SELECT DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+           FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`) AS leads_behind,
+          (SELECT DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+           FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`) AS deals_behind
+        """
+        r = list(bq.query(sql).result())[0]
+        worst = max(int(r.spend_behind or 0), int(r.leads_behind or 0), int(r.deals_behind or 0))
+        if worst <= 1:
+            print(f"[ops-scheduler] Startup: all tables fresh "
+                  f"(spend={r.spend_behind}d, leads={r.leads_behind}d, deals={r.deals_behind}d)")
             return
-        print(f"[ops-scheduler] Startup: paid_channel_daily is {days_behind} day(s) behind"
-              " — running catch-up BQ refresh in background")
+        print(f"[ops-scheduler] Startup: stale data (spend={r.spend_behind}d, "
+              f"leads={r.leads_behind}d, deals={r.deals_behind}d) — running catch-up BQ refresh")
         import threading
         threading.Thread(target=_refresh_bigquery, name="startup-catchup", daemon=True).start()
     except Exception as e:

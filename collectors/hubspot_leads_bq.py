@@ -323,10 +323,16 @@ def collect_and_write(days: int = None, start_date: date = None,
 
     print(f"Processed {total_fetched} leads -> {len(rows)} daily buckets")
     _ensure_table_exists()
+    # Key MUST match the bucket grouping above (10 fields, not 8). The earlier
+    # 8-field key omitted lead_utm_source + lead_utm_medium, so any two buckets
+    # that differed only in those fields looked like duplicates to the QA gate
+    # and got their upsert blocked. The bucket key in line 301 is the source of
+    # truth. Aligned 2026-05-18.
     return upsert_rows("hubspot_leads_module_daily", rows,
                        key_fields=["date", "qoyod_source", "pipeline", "stage",
                                    "lead_utm_campaign", "lead_utm_audience",
-                                   "lead_utm_content", "lead_utm_term"])
+                                   "lead_utm_content", "lead_utm_source",
+                                   "lead_utm_medium", "lead_utm_term"])
 
 
 def _ensure_table_exists():
