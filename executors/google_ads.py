@@ -38,6 +38,20 @@ from config import GOOGLE_ADS_CONFIG, USD_SAR_PEG
 from executors.naming import prefixed as _naming_prefixed
 
 _DEFAULT_CID = GOOGLE_ADS_CONFIG["customer_id"]
+
+# Canonical UTM template — apply as campaign.final_url_suffix. Documented in
+# memory/utm_template.md. Custom params (_campaign, _adname, _adgroupname,
+# _adgroupid) MUST be set per-campaign via url_custom_parameters at creation.
+STANDARD_UTM_SUFFIX = (
+    "utm_source=Google&utm_medium=ppc"
+    "&utm_campaign={_campaign}"
+    "&utm_content={_adname}"
+    "&utm_audience={_adgroupname}"
+    "&campaign_id={campaignid}"
+    "&ad_group_id={_adgroupid}"
+    "&ad_id={creative}"
+    "&utm_term={keyword}"
+)
 _ALL_CIDS    = [c.replace("-", "") for c in
                 os.getenv("GOOGLE_ADS_CUSTOMER_IDS", _DEFAULT_CID).split(",")]
 
