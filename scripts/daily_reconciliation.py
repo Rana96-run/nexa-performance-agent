@@ -131,56 +131,23 @@ def _compute_drift(bq: dict[str, int], hs: dict[str, int],
     return rows
 
 
-def _format_slack_message(rows: list[dict], any_flagged: bool) -> str:
-    """Build the Slack message body."""
-    today_riyadh = (datetime.utcnow() + timedelta(hours=3)).strftime("%Y-%m-%d")
+def _post_ping(rows: list[dict], any_flagged: bool) -> bool:
+    """Send a one-line reminder ping. Detail lives in the dashboard.
+    Silent (no post) when nothing is flagged — we don't ping for ✅."""
     if not any_flagged:
-        return (
-            f":white_check_mark: *BQ ↔ HubSpot daily check — {today_riyadh}*\n"
-            f"Last 7 days reconciled. All within {DRIFT_PCT_THRESHOLD}% / "
-            f"{DRIFT_ABS_THRESHOLD} leads of HubSpot. Nothing to fix."
-        )
-    lines = [
-        f":rotating_light: *BQ ↔ HubSpot daily check — {today_riyadh}*",
-        f"Drift detected (>{DRIFT_PCT_THRESHOLD}% AND >{DRIFT_ABS_THRESHOLD} leads).",
-        "",
-        "```",
-        f"{'date':<12} {'BQ':>5} {'HS':>5} {'diff':>6} {'%':>6}",
-        "-" * 40,
-    ]
-    for r in rows:
-        marker = " ⚠️" if r["flagged"] else ""
-        lines.append(
-            f"{r['date']:<12} {r['bq']:>5} {r['hubspot']:>5} "
-            f"{r['diff']:>+6} {r['pct']:>5.1f}%{marker}"
-        )
-    lines.append("```")
-    lines.append("")
-    lines.append("Check: scheduler running? recent BQ syncs successful? views materialized?")
-    return "\n".join(lines)
-
-
-def _post_slack(message: str, channel: str | None = None) -> bool:
-    """Post a message to #approvals (or the configured channel). Returns
-    True on success."""
-    try:
-        from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
-    except Exception as e:
-        print(f"[slack] import failed: {e}")
         return False
-    if not SLACK_BOT_TOKEN:
-        print("[slack] SLACK_BOT_TOKEN not set — skipping post")
-        return False
-    target = channel or SLACK_CHANNEL_APPROVAL
-    try:
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=target, text=message, unfurl_links=False,
-        )
-        return True
-    except Exception as e:
-        print(f"[slack] post failed: {e}")
-        return False
+    from notifications.slack_ping import post_ping
+    from config import SLACK_CHANNEL_APPROVAL
+    # Identify the worst day for the headline — that's enough context for a ping
+    flagged = [r for r in rows if r["flagged"]]
+    worst = max(flagged, key=lambda r: abs(r["diff"]))
+    n = len(flagged)
+    days_word = "day" if n == 1 else "days"
+    headline = (
+        f"BQ↔HubSpot drift on {n} {days_word} (worst: {worst['date']} "
+        f"BQ {worst['bq']} vs HS {worst['hubspot']})"
+    )
+    return post_ping(channel=SLACK_CHANNEL_APPROVAL, status="warn", headline=headline)
 
 
 def run(days_back: int = 7, post_to_slack: bool = True) -> dict:
@@ -191,7 +158,11 @@ def run(days_back: int = 7, post_to_slack: bool = True) -> dict:
     if not token:
         raise RuntimeError("HUBSPOT_ACCESS_TOKEN not set")
 
-    end = (datetime.utcnow() + timedelta(hours=3)).date() - timedelta(days=1)  # yesterday Riyadh
+    # Exclude T-1 (yesterday) because the daily lead-module BQ sync runs once
+    # per day and may not have caught up by the time recon fires at 08:00. Using
+    # T-2 → T-8 compares ONLY settled days — no false positives from sync lag.
+    # Established 2026-05-18 after yesterday's -81.8% drift false alarm.
+    end = (datetime.utcnow() + timedelta(hours=3)).date() - timedelta(days=2)  # 2 days ago Riyadh
     start = end - timedelta(days=days_back - 1)
 
     client = get_client()
@@ -215,9 +186,8 @@ def run(days_back: int = 7, post_to_slack: bool = True) -> dict:
     print(f"Flagged days: {sum(1 for r in rows if r['flagged'])}")
 
     if post_to_slack:
-        msg = _format_slack_message(rows, any_flagged)
-        posted = _post_slack(msg)
-        print(f"\nSlack posted: {posted}")
+        posted = _post_ping(rows, any_flagged)
+        print(f"\nSlack ping posted: {posted}")
 
     # Log to agent_activity_log via the project's standard helper
     try:

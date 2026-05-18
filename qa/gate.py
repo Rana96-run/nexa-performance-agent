@@ -28,21 +28,20 @@ def _disabled() -> bool:
 
 
 def _alert_health(surface: str, failures: list[QACheckResult]):
-    """Post a one-line alert to Slack #health. Best-effort, never raises."""
+    """Post a one-line ping to Slack #health. Detail lives in qa_gate_events
+    BQ table + dashboard. Best-effort, never raises."""
     try:
-        from slack_sdk import WebClient
-        token = os.getenv("SLACK_BOT_TOKEN")
-        if not token:
-            return
-        WebClient(token=token).chat_postMessage(
-            channel=HEALTH_CHANNEL,
-            text=(
-                f":no_entry: *QA gate blocked {surface}*\n"
-                + "\n".join(f"• `{f.name}` — {f.detail}" for f in failures)
-            ),
+        from notifications.slack_ping import post_ping
+        # Headline = surface + first failed check name; everything else is in BQ
+        first = failures[0].name if failures else "unknown"
+        n = len(failures)
+        headline = (
+            f"QA gate blocked {surface} ({n} check failure{'s' if n != 1 else ''}, "
+            f"first: {first})"
         )
+        post_ping(channel=HEALTH_CHANNEL, status="alert", headline=headline)
     except Exception:
-        log.exception("qa.gate: failed to post health alert")
+        log.exception("qa.gate: failed to post health ping")
 
 
 def _log_event(surface: str, passed: bool, results: list[QACheckResult]):

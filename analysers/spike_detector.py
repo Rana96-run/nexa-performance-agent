@@ -325,17 +325,23 @@ def run() -> int:
         print(f"  {s}")
 
     try:
-        from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
+        from config import SLACK_CHANNEL_NOTIFY
         from notifications.quiet import is_quiet, quiet_log
-        blocks, text = _format_slack(spikes)
+        from notifications.slack_ping import post_ping
+        # 1-line ping; the full anomaly table lives on the dashboard
+        # Pick the biggest spike for the headline; everything else is on the dashboard
+        worst = max(spikes, key=lambda s: abs(s.get("pct", s.get("pp", 0))))
+        magnitude = abs(worst.get("pct", worst.get("pp", 0)))
+        unit = "%" if "pct" in worst else "pp"
+        headline = (
+            f"{len(spikes)} anomaly(ies) vs 7d baseline — biggest: "
+            f"{worst['channel']} {worst['metric']} {worst.get('direction','')} {magnitude:.0f}{unit}"
+        )
         if is_quiet():
-            quiet_log("spike-detector", SLACK_CHANNEL_NOTIFY, text)
+            quiet_log("spike-detector", SLACK_CHANNEL_NOTIFY, headline)
         else:
-            WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-                channel=SLACK_CHANNEL_NOTIFY, blocks=blocks, text=text
-            )
-            print(f"[spike-detector] Posted {len(spikes)} spike(s) to Slack")
+            post_ping(channel=SLACK_CHANNEL_NOTIFY, status="warn", headline=headline)
+            print(f"[spike-detector] Posted ping for {len(spikes)} spike(s)")
     except Exception as e:
         print(f"[spike-detector] Slack post failed: {e}")
 

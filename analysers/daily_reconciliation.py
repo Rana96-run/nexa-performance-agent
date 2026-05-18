@@ -32,9 +32,11 @@ CHANNEL_MIN_COUNT_FOR_ALERT = 20         # only alert per-channel if HubSpot > 2
 # Use today-7 to today-1 (exclude today to avoid mirror-lag false positives)
 def _riyadh_date_range(days_back: int = 7) -> tuple[str, str]:
     """Returns (start_date, end_date) as ISO strings in Riyadh time, both
-    inclusive. end_date = yesterday (excludes today)."""
+    inclusive. end_date = T-2 (2 days ago) — excludes yesterday because the
+    daily lead-module sync may not have caught up by 08:00 when recon runs.
+    Established 2026-05-18 after yesterday's -81.8% drift false alarm."""
     today_riyadh = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=3))).date()
-    end = today_riyadh - _dt.timedelta(days=1)
+    end = today_riyadh - _dt.timedelta(days=2)
     start = end - _dt.timedelta(days=days_back - 1)
     return start.isoformat(), end.isoformat()
 
@@ -207,16 +209,23 @@ def reconcile_daily(post_slack: bool = True) -> dict:
     except Exception as e:
         print(f"[reconcile] BQ log failed (non-fatal): {e}")
 
-    # ── Slack alert if anything tripped threshold ─────────────────────────
+    # ── Slack ping if anything tripped threshold ──────────────────────────
+    # 1-line ping only; full results live in BQ activity log + dashboard
     if has_alert and post_slack:
         try:
-            from slack_sdk import WebClient
-            from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_HEALTH
-            client = WebClient(token=SLACK_BOT_TOKEN)
-            client.chat_postMessage(channel=SLACK_CHANNEL_HEALTH,
-                                    text=_format_alert_message(results))
+            from notifications.slack_ping import post_ping
+            from config import SLACK_CHANNEL_HEALTH
+            bits = []
+            if abs(leads_total_pct) > TOTAL_DELTA_PCT_THRESHOLD:
+                bits.append(f"paid leads {leads_total_pct:+.1f}%")
+            if leads_channel_alerts:
+                bits.append(f"{len(leads_channel_alerts)} channel(s)")
+            if abs(deals_pct) > TOTAL_DELTA_PCT_THRESHOLD:
+                bits.append(f"sales deals {deals_pct:+.1f}%")
+            headline = f"BQ↔HubSpot drift ({results['window']}): {', '.join(bits)}"
+            post_ping(channel=SLACK_CHANNEL_HEALTH, status="warn", headline=headline)
         except Exception as e:
-            print(f"[reconcile] Slack alert failed (non-fatal): {e}")
+            print(f"[reconcile] Slack ping failed (non-fatal): {e}")
 
     print(f"[reconcile] leads: BQ={leads_total_bq} HS={leads_total_hs} Δ={leads_total_delta} ({leads_total_pct:+.1f}%)")
     print(f"[reconcile] deals_sales_pipeline: BQ={bq_sales_pipeline} HS={hs_sales_pipeline} Δ={deals_delta} ({deals_pct:+.1f}%)")
