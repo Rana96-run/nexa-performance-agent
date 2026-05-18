@@ -100,13 +100,6 @@ _PROJECTS_WITH_ESTIMATED_TIME = {
 }
 
 
-_PRIORITY_EMOJI = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}
-_ACTION_EMOJI   = {
-    "pause": "⏸️", "scale": "📈", "optimize": "🔧",
-    "fix": "🛠️", "launch": "🚀", "refresh": "🔄", "exclude": "🚫",
-}
-
-
 def _task_footer(channel: str, asset_level: str, action: str, task_type: str) -> str:
     """Structured metadata block appended to every task description."""
     from datetime import datetime, timedelta, timezone
@@ -114,8 +107,6 @@ def _task_footer(channel: str, asset_level: str, action: str, task_type: str) ->
     now_str     = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M Riyadh")
     due_str     = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
     priority    = _ACTION_PRIORITY.get((action or "").lower(), "Medium")
-    pri_emoji   = _PRIORITY_EMOJI.get(priority, "")
-    act_emoji   = _ACTION_EMOJI.get((action or "").lower(), "")
     ch_label    = ASANA_CHANNEL_LABELS.get(
                       (channel or "").lower().replace(" ", "_").replace("-", "_"),
                       channel or "—")
@@ -123,23 +114,64 @@ def _task_footer(channel: str, asset_level: str, action: str, task_type: str) ->
     assignee    = _assignee_name_for_channel(channel)
     return (
         f"\n\n---\n"
-        f"📋 **Task Details**\n\n"
+        f"**Task Details**\n\n"
         f"| Field | Value |\n"
         f"|---|---|\n"
-        f"| 📅 Created on | {now_str} |\n"
-        f"| 🤖 Created by | Nexa Performance Agent |\n"
-        f"| ⏰ Due | {due_str} |\n"
-        f"| ✅ Completed on | — |\n"
-        f"| {pri_emoji} Priority | {priority} |\n"
-        f"| 🏷️ Type | {task_type} |\n"
-        f"| 📣 Channel | {ch_label} |\n"
-        f"| 🎯 Asset level | {lvl_label} |\n"
-        f"| {act_emoji} Action | {(action or '—').title()} |\n"
-        f"| 👤 Assignee | {assignee} |"
+        f"| Created on | {now_str} |\n"
+        f"| Created by | Nexa Performance Agent |\n"
+        f"| Due | {due_str} |\n"
+        f"| Completed on | — |\n"
+        f"| Priority | {priority} |\n"
+        f"| Type | {task_type} |\n"
+        f"| Channel | {ch_label} |\n"
+        f"| Asset level | {lvl_label} |\n"
+        f"| Action | {(action or '—').title()} |\n"
+        f"| Assignee | {assignee} |"
     )
 
 # Cache section GIDs so we only look them up once per session
 _section_cache: dict[str, str] = {}   # "project_id:section_name" -> section_gid
+
+# Cache open tasks per project so we search Asana at most once per project per run
+_open_tasks_cache: dict[str, list[dict]] = {}   # project_id -> [{gid, name, due_on}]
+
+
+def _get_open_tasks(client, project_id: str) -> list[dict]:
+    """Fetch all open tasks for a project (cached within the current process run)."""
+    if project_id in _open_tasks_cache:
+        return _open_tasks_cache[project_id]
+    tasks_api = asana.TasksApi(client)
+    results: list[dict] = []
+    try:
+        for task in tasks_api.get_tasks({
+            "project": project_id,
+            "limit": 100,
+            "opt_fields": "gid,name,completed,due_on",
+        }):
+            if not task.get("completed"):
+                results.append({
+                    "gid":    task["gid"],
+                    "name":   task.get("name") or "",
+                    "due_on": task.get("due_on"),
+                })
+    except Exception as e:
+        print(f"[asana] open-task fetch failed for project {project_id}: {e}")
+    _open_tasks_cache[project_id] = results
+    return results
+
+
+def _find_open_task_by_campaign(client, project_id: str, campaign_name: str) -> tuple[str | None, str | None]:
+    """
+    Return (gid, due_on) of the first open task in project_id whose title
+    contains campaign_name (case-insensitive). Returns (None, None) if not found.
+    """
+    if not campaign_name:
+        return None, None
+    needle = campaign_name.lower()
+    for task in _get_open_tasks(client, project_id):
+        if needle in task["name"].lower():
+            return task["gid"], task["due_on"]
+    return None, None
 
 
 def get_client():
@@ -250,21 +282,26 @@ def _resolve_project_id(project_key: str, channel: str, task_type: str,
 # ---------------------------------------------------------------------------
 
 def create_task(
-    title:       str,
-    description: str,
-    project_key: str,
-    task_type:   str = "Recommendation",
-    channel:     str = "",           # e.g. "google_ads", "meta", "snapchat"
-    asset_level: str = "",           # campaign | adset | ad | audience | tracking | keyword
-    action:      str = "",           # pause | scale | refresh | launch | optimize | fix
+    title:         str,
+    description:   str,
+    project_key:   str,
+    task_type:     str = "Recommendation",
+    channel:       str = "",           # e.g. "google_ads", "meta", "snapchat"
+    asset_level:   str = "",           # campaign | adset | ad | audience | tracking | keyword
+    action:        str = "",           # pause | scale | refresh | launch | optimize | fix
+    campaign_name: str = "",           # if set, used for cross-day dedup against live Asana
 ) -> str | None:
     """
     Create an Asana task in the correct project and per-channel/per-asset-level section.
 
-    project_key: 'daily_activity' | 'optimization' | 'campaigns_hub' | 'seasonal'
-    channel:     used to route to "<Channel> — <AssetLevel>" section in Optimization
-    asset_level: campaign | adset | ad | audience | tracking | keyword
-    action:      action verb prepended to the title (Pause / Scale / Refresh / Fix)
+    project_key:   'daily_activity' | 'optimization' | 'campaigns_hub' | 'seasonal'
+    channel:       used to route to "<Channel> — <AssetLevel>" section in Optimization
+    asset_level:   campaign | adset | ad | audience | tracking | keyword
+    action:        action verb prepended to the title (Pause / Scale / Refresh / Fix)
+    campaign_name: when provided, the executor searches for any open (non-completed) task
+                   in the target project whose title contains this string. If found and
+                   the task is past-due, its due date is bumped to tomorrow. Either way
+                   the existing GID is returned without creating a duplicate.
 
     Returns the task GID (new or existing), or None on failure.
     """
@@ -275,7 +312,7 @@ def create_task(
     prefix = " | ".join(parts)
     full_title = f"[{prefix}] {title}"
 
-    # Deduplication guard
+    # Same-day deduplication guard (local ledger)
     if not task_is_new(full_title, project_key):
         existing = get_task_gid(full_title, project_key)
         print(f"[asana] skipped duplicate: {full_title[:60]!r} -> gid={existing}")
@@ -287,12 +324,29 @@ def create_task(
         print(f"[asana] could not resolve project for key={project_key!r} channel={channel!r}")
         return None
 
+    from datetime import date as _date_cls, datetime, timedelta, timezone
+    riyadh   = timezone(timedelta(hours=3))
+    due_date = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
+
     client    = get_client()
     tasks_api = asana.TasksApi(client)
 
-    from datetime import datetime, timedelta, timezone
-    riyadh   = timezone(timedelta(hours=3))
-    due_date = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
+    # Cross-day dedup: search live Asana for any open task containing campaign_name.
+    # This handles campaigns that stay unresolved across multiple nightly runs.
+    if campaign_name:
+        existing_gid, existing_due = _find_open_task_by_campaign(client, project_id, campaign_name)
+        if existing_gid:
+            today_iso = _date_cls.today().isoformat()
+            if existing_due and existing_due < today_iso:
+                try:
+                    tasks_api.update_task({"data": {"due_on": due_date}}, existing_gid, {})
+                    print(f"[asana] bumped due date gid={existing_gid}: {existing_due} -> {due_date}")
+                    _open_tasks_cache.pop(project_id, None)
+                except AsanaApiException as e:
+                    print(f"[asana] due-date update failed: {e}")
+            else:
+                print(f"[asana] skipped (open task exists, due={existing_due}): gid={existing_gid}")
+            return existing_gid
 
     # Append structured metadata footer to every description
     full_description = description + _task_footer(channel, asset_level, action, task_type)
