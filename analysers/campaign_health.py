@@ -250,33 +250,62 @@ def audit_campaign_health(
     today = date.today()
     since = (today - timedelta(days=days)).isoformat()
     channel_filter = ""
+    channel_filter_bare = ""   # no table alias, for use inside cd CTE
     if channels:
         ch_list = ", ".join(f"'{c}'" for c in channels)
-        channel_filter = f"AND c.channel IN ({ch_list})"
+        channel_filter      = f"AND c.channel IN ({ch_list})"
+        channel_filter_bare = f"AND channel IN ({ch_list})"
 
     # Lag-aware CPQL — exclude days where open_leads/leads_total > 30% from
     # CPQL/qual_rate math so pause/scale decisions aren't made on SDR backlog.
     # The 30% threshold matches config.LAG_OPEN_PCT_THRESHOLD; if you tune
     # that constant, update the SQL literal below in hs.day_lag_ok too.
     sql = f"""
-        WITH hs AS (
+        WITH cd AS (
+          -- Pre-aggregate campaigns_daily to exactly one row per (date, channel,
+          -- campaign_name). Guards against duplicate writes from the collector
+          -- (e.g. Snapchat, Bing) which produce fan-out when joined to HS.
+          SELECT
+            date,
+            channel,
+            campaign_name,
+            ANY_VALUE(account_id) AS account_id,
+            ANY_VALUE(status)     AS status,
+            SUM(spend)            AS spend,
+            MAX(updated_at)       AS updated_at
+          FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+          WHERE date >= '{since}'
+            {channel_filter_bare}
+          GROUP BY date, channel, campaign_name
+        ),
+        hs AS (
+          -- Include qoyod_source so the JOIN can match HS leads to the right
+          -- channel. Without this, a campaign name shared between Google and
+          -- Bing (e.g. "Search_AR_Brand_v2") would blend leads from both
+          -- channels into whichever cd row is evaluated.
           SELECT
             date,
             lead_utm_campaign,
+            -- Map qoyod_source → channel slug so we can join on channel too.
+            CASE qoyod_source
+              WHEN 'Google Ads'    THEN 'google_ads'
+              WHEN 'Meta Ads'      THEN 'meta'
+              WHEN 'Snapchat Ads'  THEN 'snapchat'
+              WHEN 'Tiktok Ads'    THEN 'tiktok'
+              WHEN 'Microsoft Ads' THEN 'microsoft_ads'
+              WHEN 'LinkedIn Ads'  THEN 'linkedin'
+              ELSE NULL
+            END                  AS hs_channel,
             SUM(leads_total)     AS leads,
             SUM(leads_qualified) AS sqls,
-            -- Day-level lag flag: TRUE when SDR backlog <= 30% of leads for
-            -- this (date, campaign). Pause/scale decisions use this to skip
-            -- days where SQL counts are still incomplete.
-            -- We pre-aggregate first so the SAFE_DIVIDE compares correct sums.
+            -- Day-level lag flag: TRUE when SDR backlog <= 30% of leads.
             SAFE_DIVIDE(SUM(COALESCE(leads_open, 0)), NULLIF(SUM(leads_total), 0))
                 <= 0.30
               OR SUM(leads_total) = 0          AS day_lag_ok
           FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-          GROUP BY date, lead_utm_campaign
+          GROUP BY date, lead_utm_campaign, qoyod_source
         ),
         deals AS (
-          -- Campaign-level revenue from won deals (for ROAS override check).
           SELECT
             deal_utm_campaign,
             SUM(amount_won) AS revenue_won
@@ -293,9 +322,6 @@ def audit_campaign_health(
           SUM(hs.leads)                                                        AS hs_leads,
           SUM(hs.sqls)                                                         AS sqls,
           SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.leads), 0))                  AS cpl,
-          -- CPQL + qual_rate computed on lag-clean days only (excludes days
-          -- where SDR backlog > 30% of leads). Both spend and SQL counts in
-          -- the ratio are filtered identically so the rate is comparable.
           SAFE_DIVIDE(
             SUM(IF(hs.day_lag_ok, c.spend, 0)),
             NULLIF(SUM(IF(hs.day_lag_ok, hs.sqls, 0)), 0)
@@ -307,14 +333,13 @@ def audit_campaign_health(
           MAX(d.revenue_won)                                                    AS revenue_won,
           SAFE_DIVIDE(MAX(d.revenue_won), NULLIF(SUM(c.spend), 0))             AS roas,
           MAX(c.updated_at)                                                     AS last_updated
-        FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
+        FROM cd c
         LEFT JOIN hs
           ON  c.date = hs.date
           AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+          AND (hs.hs_channel IS NULL OR hs.hs_channel = c.channel)
         LEFT JOIN deals d
           ON  LOWER(c.campaign_name) = LOWER(d.deal_utm_campaign)
-        WHERE c.date >= '{since}'
-          {channel_filter}
         GROUP BY c.channel, c.campaign_name
         HAVING SUM(c.spend) >= {min_spend}
         ORDER BY cpql ASC NULLS LAST

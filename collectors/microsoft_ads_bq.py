@@ -204,6 +204,12 @@ def _poll_report(access_token: str, request_id: str,
     return None
 
 
+def _bing_prefix(name: str) -> str:
+    """Ensure every Bing campaign name starts with 'Bing_' so it never
+    collides with same-named Google/Snap campaigns in campaigns_daily."""
+    return name if name.startswith("Bing_") else f"Bing_{name}"
+
+
 def _download_and_parse(url: str) -> list[dict]:
     """Download ZIP -> extract CSV -> parse rows."""
     r = requests.get(url, timeout=60)
