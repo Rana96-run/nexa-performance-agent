@@ -490,7 +490,7 @@ def audit_campaign_health(
                 note = (
                     f"CPQL ${r.cpql:.2f} + CPL ${r.cpl:.2f} above threshold for {days} days. "
                     f"Google Ads drill-down order: "
-                    f"1) Keywords — pause if: spend >$35 + 0 conv (14d), OR CPL >$80 + 1+ conv (14d). "
+                    f"1) Keywords — pause if: spend >$35 + 0 HubSpot leads (14d), OR CPL >$80 + 1+ HubSpot leads (14d). "
                     f"2) Ad Groups — if >=50% of keywords flagged, pause the group. "
                     f"3) Campaign — pause only if all ad groups are underperforming."
                 )
@@ -675,7 +675,7 @@ def audit_campaign_health(
 
         # Qflavours note
         if is_qflavours and QFLAVOURS_PIPELINE_CHECK:
-            note += " ⚠️ Verify Qflavours leads pipeline in HubSpot has data for this campaign."
+            note += " Verify Qflavours leads pipeline in HubSpot has data for this campaign."
 
         findings.append({
             "channel":        r.channel,

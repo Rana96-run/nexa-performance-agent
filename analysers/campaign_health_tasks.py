@@ -59,10 +59,10 @@ def _get_junk_keyword_detail(channel: str, campaign_name: str, days: int) -> str
         rows = list(client.query(sql).result())
         if not rows:
             return ""
-        lines = ["**📌 Keyword Breakdown (junk source):**\n"]
+        lines = ["Keyword Breakdown (junk source):\n"]
         for r in rows:
             qual  = r.qual_pct if r.qual_pct is not None else 0.0
-            flag  = "→ **PAUSE**" if qual < 20 else ""
+            flag  = "[PAUSE CANDIDATE]" if qual < 20 else ""
             lines.append(
                 f"- `{r.keyword}` | Ad Group: {r.ad_group or '—'} | "
                 f"Spend: ${r.spend:.0f} | Leads: {r.leads} | SQLs: {r.sqls} | "
@@ -102,10 +102,10 @@ def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> st
         if not rows:
             return ""
 
-        lines = ["**📌 Audience / Ad-Group Breakdown:**\n"]
+        lines = ["Audience / Ad-Group Breakdown:\n"]
         for i, r in enumerate(rows):
             qual = r.qual_pct if r.qual_pct is not None else 0.0
-            worst_flag = " ← **WORST**" if i == 0 else ""
+            worst_flag = " [WORST]" if i == 0 else ""
             lines.append(
                 f"- `{r.ad_group or '—'}` | "
                 f"Spend: ${r.spend:.0f} | Leads: {r.leads} | SQLs: {r.sqls} | "
@@ -142,7 +142,7 @@ def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> st
                 "and consider replacing with a Lookalike built from qualified leads."
             ).format(ag=worst.ad_group)
 
-        lines.append(f"\n**💡 Replacement suggestion:** {suggestion}")
+        lines.append(f"\nReplacement suggestion: {suggestion}")
         return "\n".join(lines) + "\n"
     except Exception as e:
         print(f"[health-tasks] audience detail error: {e}")
@@ -295,19 +295,19 @@ def _campaign_card(findings: list[dict], include_exec: bool = False) -> str:
         date_to   = f.get("date_to", "")
 
         flags = []
-        if f.get("junk_leads"):    flags.append("⚠️ JUNK LEADS")
-        if f.get("is_awareness"):  flags.append("📣 AWARENESS")
-        if f.get("roas_override"): flags.append("✅ ROAS OK")
-        if f.get("is_qflavours"):  flags.append("🔍 CHECK QFLAVOURS PIPELINE")
-        flag_line = f"\n\n🚩 **Flags:** {' | '.join(flags)}" if flags else ""
+        if f.get("junk_leads"):    flags.append("JUNK LEADS")
+        if f.get("is_awareness"):  flags.append("AWARENESS")
+        if f.get("roas_override"): flags.append("ROAS OK")
+        if f.get("is_qflavours"):  flags.append("CHECK QFLAVOURS PIPELINE")
+        flag_line = f"\n\nFlags: {' | '.join(flags)}" if flags else ""
 
         # HubSpot verification line so the reviewer can cross-check directly
         hs_verify = ""
         if date_from and date_to:
             hs_verify = (
-                f"\n\n🔍 **Verify in HubSpot:** Filter Lead module by "
-                f"`lead_utm_campaign = {f['campaign']}` "
-                f"and create date **{date_from} → {date_to}** to confirm these numbers."
+                f"\n\nVerify in HubSpot: Filter Lead module by "
+                f"lead_utm_campaign = {f['campaign']} "
+                f"and create date {date_from} to {date_to} to confirm these numbers."
             )
 
         header = f"**Campaign {i} of {len(findings)}**\n\n" if len(findings) > 1 else ""
@@ -315,19 +315,20 @@ def _campaign_card(findings: list[dict], include_exec: bool = False) -> str:
             f"{header}"
             f"| Metric | Value |\n"
             f"|---|---|\n"
-            f"| 📣 Channel | {f['channel'].replace('_', ' ').title()} |\n"
-            f"| 🏷️ Campaign | `{f['campaign']}` |\n"
-            f"| 💰 Spend | ${f['spend']:.0f} |\n"
-            f"| 👥 Total Leads | {f['hs_leads']} |\n"
-            f"| ✅ Qualified Leads | {f['sqls']} |\n"
-            f"| 📊 Qual Rate | {f['qual_rate']:.1f}% |\n"
-            f"| 💵 CPL | {cpl_s} |\n"
-            f"| 🎯 CPQL | {cpql_s} |\n"
-            f"| 📈 ROAS | {roas_s} |\n"
-            f"| ✏️ Last Edit | {edit_s} |"
+            f"| Channel | {f['channel'].replace('_', ' ').title()} |\n"
+            f"| Campaign | `{f['campaign']}` |\n"
+            f"| Period | {date_from} to {date_to} |\n"
+            f"| Spend | ${f['spend']:.0f} |\n"
+            f"| Total Leads | {f['hs_leads']} |\n"
+            f"| Qualified Leads (SQL) | {f['sqls']} |\n"
+            f"| Qual Rate | {f['qual_rate']:.1f}% |\n"
+            f"| CPL | {cpl_s} |\n"
+            f"| CPQL | {cpql_s} |\n"
+            f"| ROAS | {roas_s} |\n"
+            f"| Last Edit | {edit_s} |"
             + flag_line
             + hs_verify
-            + (f"\n\n📝 **{'Action taken' if include_exec else 'Analysis'}:** {note}" if note else "")
+            + (f"\n\n{'Action taken' if include_exec else 'Analysis'}: {note}" if note else "")
         )
         cards.append(card)
     return "\n\n---\n\n".join(cards) + "\n"
@@ -392,26 +393,26 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
 
             if trend == "no_recent_spend":
                 sanity_block = (
-                    "\n\n⚠️ **Scale sanity check — HOLD:** No spend recorded in the last 3 days. "
+                    "\n\nScale sanity check - HOLD: No spend recorded in the last 3 days. "
                     "Campaign may be paused, budget-exhausted, or disapproved. "
-                    "**Confirm campaign is actively spending before raising budget.**"
+                    "Confirm campaign is actively spending before raising budget."
                 )
             elif trend == "declining":
                 sanity_block = (
-                    f"\n\n⚠️ **Scale sanity check — caution:** Spend declining "
+                    f"\n\nScale sanity check - Caution: Spend declining "
                     f"(${recent_avg:.0f}/day last 3d vs ${window_avg:.0f}/day avg). "
                     f"Budget raise may not help if campaign is already delivery-limited. "
                     f"Check platform for budget exhaustion, ad disapprovals, or audience saturation."
                 )
             elif trend == "accelerating":
                 sanity_block = (
-                    f"\n\n✅ **Scale sanity check — strong:** Spend accelerating "
+                    f"\n\nScale sanity check - Strong: Spend accelerating "
                     f"(${recent_avg:.0f}/day last 3d vs ${window_avg:.0f}/day avg). "
                     f"Good delivery momentum — +{SCALE_PCT*100:.0f}% budget raise will compound it."
                 )
             else:
                 sanity_block = (
-                    f"\n\n✅ **Scale sanity check — stable:** Spend consistent "
+                    f"\n\nScale sanity check - Stable: Spend consistent "
                     f"(${recent_avg:.0f}/day last 3d vs ${window_avg:.0f}/day avg). "
                     f"Budget raise expected to increase delivery proportionally."
                     if recent_avg is not None else ""
@@ -420,10 +421,10 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             if f.get("is_awareness"):
                 lost_bud = f.get("is_lost_budget")
                 awareness_note = (
-                    f"\n⚠️ **Awareness campaign** — Lost IS (Budget) = {lost_bud*100:.0f}%. "
+                    f"\nAwareness campaign — Lost IS (Budget) = {lost_bud*100:.0f}%. "
                     f"Budget is the bottleneck; raising it will capture more impressions.\n"
                     if lost_bud is not None else
-                    "\n⚠️ **Awareness campaign** — confirm IS metrics in platform before raising budget.\n"
+                    "\nAwareness campaign — confirm IS metrics in platform before raising budget.\n"
                 )
             else:
                 awareness_note = ""
@@ -431,18 +432,17 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             # Alternatives note from analyser
             alt_block = ""
             if f.get("alt_recommendation"):
-                alt_block = f"\n\n💡 **Alternatives considered:** {f['alt_recommendation']}"
+                alt_block = f"\n\nAlternatives considered: {f['alt_recommendation']}"
 
             date_range_str = f"{f['date_from']} to {f['date_to']}"
             body = (
-                f"## 📈 Scale Candidate — Awaiting Approval\n\n"
-                f"**Period:** {date_range_str}\n"
-                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module | Eval = CPQL first\n\n"
+                f"## Scale Candidate — Awaiting Approval\n\n"
+                f"**Data sources:** Spend = {f['channel'].replace('_',' ').title()} platform | Leads & SQLs = HubSpot Lead Module | Evaluation = CPQL first\n\n"
                 + _campaign_card([f])
                 + awareness_note
                 + sanity_block
                 + alt_block
-                + f"\n\n✅ **Action required:** React with ✅ in #approvals to raise budget +{SCALE_PCT*100:.0f}%."
+                + f"\n\nAction required: React with checkmark in #approvals to raise budget +{SCALE_PCT*100:.0f}%."
             )
             gid = create_task(
                 title=f"PENDING APPROVAL: Scale — {f['campaign']} +{SCALE_PCT*100:.0f}% ({date_range_str})",
@@ -496,26 +496,25 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
             if f.get("alt_budget_cut_pct") is not None:
                 cut = f["alt_budget_cut_pct"]
                 alt_section = (
-                    f"\n\n💡 **Alternatives considered before recommending pause:**\n"
-                    f"- **Option A (recommended first):** Cut budget -{cut}% and monitor for 7 days. "
+                    f"\n\nAlternatives considered before recommending pause:\n"
+                    f"- Option A (recommended first): Cut budget -{cut}% and monitor for 7 days. "
                     f"If CPQL improves to under ${f.get('cpql',0)*(1-cut/100):.0f}, keep running at lower spend.\n"
-                    f"- **Option B (this task):** Full pause. {reason} "
-                    f"Apply only if Option A doesn't move CPQL.\n"
+                    f"- Option B (this task): Full pause. {reason} "
+                    f"Apply only if Option A does not move CPQL.\n"
                 )
             elif f.get("alt_recommendation"):
                 alt_section = (
-                    f"\n\n💡 **Alternatives considered:** {f['alt_recommendation']}"
+                    f"\n\nAlternatives considered: {f['alt_recommendation']}"
                 )
 
             body = (
-                f"## ⏸️ Pause Candidate — Awaiting Approval\n\n"
-                f"**Period:** {f['date_from']} to {f['date_to']}\n"
-                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module | Eval = CPQL first\n\n"
+                f"## Pause Candidate — Awaiting Approval\n\n"
+                f"**Data sources:** Spend = {f['channel'].replace('_',' ').title()} platform | Leads & SQLs = HubSpot Lead Module | Evaluation = CPQL first\n\n"
                 + _campaign_card([f])
-                + f"\n\n⚠️ **Why pause:** {reason}"
+                + f"\n\nWhy pause: {reason}"
                 + alt_section
                 + junk_drill
-                + "\n\n✅ **Action required:** React with ✅ in #approvals to pause this campaign."
+                + "\n\nAction required: React with checkmark in #approvals to pause this campaign."
             )
             gid = create_task(
                 title=title,
@@ -584,14 +583,13 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 print(f"[health-tasks] creative analysis failed for {f['campaign']}: {e}")
 
             body = (
-                f"## 🔍 Drill-down Analysis Required\n\n"
-                f"**Period:** {date_range_str}\n"
-                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module\n\n"
+                f"## Drill-down Analysis Required\n\n"
+                f"**Data sources:** Spend = {channel.replace('_',' ').title()} platform | Leads & SQLs = HubSpot Lead Module\n\n"
                 f"CPQL >${DRILL_DOWN_CPQL} AND CPL >${DRILL_DOWN_CPL} for {days} days. "
                 f"Do NOT pause at campaign level yet.\n\n"
                 + hierarchy + "\n"
                 + _campaign_card([f])
-                + ("\n\n**Ad / Keyword detail:**\n" + drill_table if drill_table.strip() else "")
+                + ("\n\n**Ad / Keyword detail (Campaign > Ad Set > Ad):**\n" + drill_table if drill_table.strip() else "")
                 + (f"\n{creative_section}" if creative_section else "")
             )
             gid = create_task(
@@ -661,10 +659,9 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 task_title = f"{channel.replace('_',' ').title()} — CPQL investigation: {f['campaign']} ({date_range_str})"
 
             body = (
-                f"## 🔧 Optimize — Investigation Required\n\n"
-                f"**Period:** {date_range_str}\n"
-                f"**Data sources:** Spend = channel | Leads = HubSpot Lead Module\n"
-                f"⚠️ Actions only applied to campaigns last edited ≥7 days ago.\n\n"
+                f"## Optimize — Investigation Required\n\n"
+                f"**Data sources:** Spend = {channel.replace('_',' ').title()} platform | Leads & SQLs = HubSpot Lead Module\n"
+                f"Note: Actions only applied to campaigns last edited >=7 days ago.\n\n"
                 + section_title + "\n\n"
                 + _campaign_card([f])
                 + f"\n\n{investigation}"
