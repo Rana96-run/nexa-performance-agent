@@ -421,7 +421,191 @@ def check_asana_footer(task: dict) -> QACheckResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. BQ write sanity — incoming row batch passes basic integrity rules
+# 8. Table format compliance — every pipe table must be well-formed
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Table types produced by campaign_health_tasks.py + executors/asana.py:
+#
+#   CAMPAIGN CARD   header = "| Metric | Value |"  + |---|---| separator
+#                   11 required data rows (Channel → Last Edit)
+#
+#   FOOTER          header = "| Field | Value |"   + |---|---| separator
+#                   10 required data rows (Created on → Assignee)
+#
+#   DRILLDOWN       arbitrary columns              + |---|---| separator
+#                   consistent column count required; no empty cells
+#
+# All tables share three structural invariants:
+#   1. Every row starts and ends with |
+#   2. Column count is consistent across all rows in the same block
+#   3. No completely empty cells in data rows (| | or |  |)
+#   4. The separator row |---|---| appears at position 2 (index 1) only
+
+_SEP_RE = re.compile(r"^\|[-: |]+\|$")
+
+# Required label cells for each named table type.
+# We do partial-match (lower-in-lower) so "Qualified Leads (SQL)" matches "qualified leads".
+_CAMPAIGN_CARD_ROWS = [
+    "channel", "campaign", "period", "spend", "total leads",
+    "qualified leads", "qual rate", "cpl", "cpql", "roas", "last edit",
+]
+_FOOTER_ROWS = [
+    "created on", "created by", "due", "completed on",
+    "priority", "type", "channel", "asset level", "action", "assignee",
+]
+
+
+def _parse_table_blocks(text: str) -> list[list[str]]:
+    """Extract contiguous pipe-table rows from task description text."""
+    blocks: list[list[str]] = []
+    current: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("|"):
+            current.append(line)
+        else:
+            if current:
+                blocks.append(current)
+                current = []
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def _cell_labels(row: str) -> list[str]:
+    """Return stripped cell contents of a non-separator pipe row."""
+    parts = row.split("|")
+    return [p.strip() for p in parts[1:-1]]  # drop first/last empty string
+
+
+def check_table_format(task: dict) -> QACheckResult:
+    """Verify every markdown pipe table in the task description is well-formed.
+
+    Three structural rules apply to ALL tables:
+      1. Consistent column count across every row in the same block
+      2. Separator row (|---|---|) must be at position 2 (index 1) — not elsewhere
+      3. No completely empty cells in data rows
+
+    Two content rules apply to named table types (detected by their header row):
+      - Campaign card  (| Metric | Value |): all 11 required metric rows present
+      - Footer         (| Field  | Value |): all 10 required footer rows present
+
+    Drilldown / keyword tables are validated for structure only.
+    """
+    notes = task.get("notes") or task.get("html_notes") or ""
+    if not notes:
+        return QACheckResult(name="table_format", passed=True, severity="warn",
+                             detail="no notes content — skipped")
+
+    blocks = _parse_table_blocks(notes)
+    if not blocks:
+        return QACheckResult(name="table_format", passed=True, severity="warn",
+                             detail="no pipe tables found — skipped")
+
+    issues: list[str] = []
+
+    for idx, rows in enumerate(blocks, 1):
+        tag = f"Table {idx}"
+        header_lower = rows[0].lower() if rows else ""
+
+        # Identify table type from header
+        is_campaign_card = ("metric" in header_lower and "value" in header_lower)
+        is_footer        = ("field"  in header_lower and "value" in header_lower)
+
+        # ── Structural checks (all table types) ───────────────────────────
+        col_counts: list[int] = []
+        for row_i, row in enumerate(rows):
+            is_sep = bool(_SEP_RE.match(row))
+
+            # 1. Separator must be at index 1 only
+            if is_sep and row_i != 1:
+                issues.append(
+                    f"{tag}: separator row at position {row_i + 1} "
+                    f"(expected position 2): {row[:50]!r}"
+                )
+
+            # 2. Column count for consistency check
+            cells = _cell_labels(row)
+            col_counts.append(len(cells))
+
+            # 3. No empty cells in data rows
+            if not is_sep:
+                empty = [i + 1 for i, c in enumerate(cells) if c == "" or c == "—" and len(cells) == 1]
+                # Only flag truly blank cells (not "—" which is intentional placeholder)
+                truly_blank = [i + 1 for i, c in enumerate(cells) if c == ""]
+                if truly_blank:
+                    issues.append(
+                        f"{tag} row {row_i + 1}: blank cell(s) at column(s) "
+                        f"{truly_blank}: {row[:60]!r}"
+                    )
+
+        # 4. Consistent column count
+        unique_counts = set(col_counts)
+        if len(unique_counts) > 1:
+            issues.append(
+                f"{tag}: inconsistent column counts across rows — "
+                f"found {sorted(unique_counts)}. "
+                f"A missing or extra | in one row breaks the table."
+            )
+
+        # 5. Separator must exist (all our tables require it for GFM rendering)
+        has_sep = any(_SEP_RE.match(r) for r in rows)
+        if not has_sep:
+            issues.append(
+                f"{tag}: no separator row (|---|---|) found. "
+                f"Table will not render as a table in Asana."
+            )
+
+        # ── Content checks — campaign card ────────────────────────────────
+        if is_campaign_card:
+            present_labels = {
+                _cell_labels(r)[0].lower()
+                for r in rows[2:]          # skip header + separator
+                if not _SEP_RE.match(r) and _cell_labels(r)
+            }
+            missing = [
+                req for req in _CAMPAIGN_CARD_ROWS
+                if not any(req in label for label in present_labels)
+            ]
+            if missing:
+                issues.append(
+                    f"{tag} (campaign card): missing required row(s): "
+                    + ", ".join(f"'{r}'" for r in missing)
+                )
+
+        # ── Content checks — footer ────────────────────────────────────────
+        if is_footer:
+            present_labels = {
+                _cell_labels(r)[0].lower()
+                for r in rows[2:]
+                if not _SEP_RE.match(r) and _cell_labels(r)
+            }
+            missing = [
+                req for req in _FOOTER_ROWS
+                if not any(req in label for label in present_labels)
+            ]
+            if missing:
+                issues.append(
+                    f"{tag} (footer): missing required row(s): "
+                    + ", ".join(f"'{r}'" for r in missing)
+                )
+
+    return QACheckResult(
+        name="table_format",
+        passed=not issues,
+        severity="block",
+        detail=(
+            "; ".join(issues)
+            if issues
+            else f"{len(blocks)} table(s) checked — all well-formed"
+        ),
+        metrics={"table_count": len(blocks), "issue_count": len(issues),
+                 "issues": issues[:5]},
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. BQ write sanity — incoming row batch passes basic integrity rules
 # ─────────────────────────────────────────────────────────────────────────────
 def check_bq_write(table: str, rows: list[dict], key_fields: list[str]) -> QACheckResult:
     """Pass if incoming rows have no internal duplicates and required keys are populated."""

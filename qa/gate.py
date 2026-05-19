@@ -129,6 +129,7 @@ class QAGate:
         return self._verify("asana", [
             (checks.check_freshness,         (),       {}),
             (checks.check_asana_footer,      (task,),  {}),
+            (checks.check_table_format,      (task,),  {}),   # structural + content check on all pipe tables
             (checks.check_pause_precedence,  (task,),  {}),   # blocks campaign-pause if ad-level cleanup pending
             (checks.check_numeric_claims,
              (task.get("notes", "") or task.get("name", ""),), {}),
