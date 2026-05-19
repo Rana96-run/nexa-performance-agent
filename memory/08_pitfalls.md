@@ -780,3 +780,27 @@ at group level for campaigns_daily; adsets collector remaps campaign→adset.
   All rows were written with spend=$0, causing the upsert to look unchanged and BQ freshness
   to lag. Real spend ($2,769 YTD) was recovered by adding the `fields` param. Fixed
   2026-05-10. See LinkedIn section above for the correct `fields` value.
+
+## campaign_health.py — two lead fan-out bugs (found 2026-05-18)
+
+**Bug 1 — campaigns_daily duplicate rows multiply HubSpot leads.**
+Channels affected: Snapchat (2 rows/date), Microsoft Ads (up to 2 rows/date).
+Symptom: `hs_leads` in audit tasks 2× what HubSpot shows.
+Fix: `campaign_health.py` now pre-aggregates `campaigns_daily` in a `cd` CTE
+(`GROUP BY date, channel, campaign_name`) before joining to HS. Applied 2026-05-18
+in commit fb4f274.
+
+**Bug 2 — shared campaign names across channels blend leads from the wrong channel.**
+Affected: Bing campaigns named identically to Google ones (e.g. `Search_AR_Brand_v2`
+exists in both `google_ads` and `microsoft_ads` in campaigns_daily). Filtering
+campaigns_daily by channel is correct, but HS leads were not filtered by channel →
+Bing CPQL used Google-sourced leads → fake CPQL of $23 when truth was $145+.
+Fix: `hs` CTE now includes `qoyod_source` mapped to channel slug. JOIN condition
+adds `hs.hs_channel = c.channel`. Orphan Bing campaigns now correctly show 0 leads.
+Two wrong PENDING APPROVAL scale tasks flagged [DO NOT APPROVE] in Asana 2026-05-18.
+
+**Prevention:** Any SQL JOINing `campaigns_daily c` to `hubspot_leads_module_daily h`
+must:
+1. Pre-agg cd: `SELECT date, channel, campaign_name, SUM(spend) … GROUP BY date, channel, campaign_name`
+2. Pre-agg hs: include `qoyod_source`, map to channel, join on channel too.
+Neither side alone is enough — both must be 1:1 and channel-aligned.

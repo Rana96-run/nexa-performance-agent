@@ -201,8 +201,10 @@ def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
             metrics={"bq_total": bq, "hs_total": hs, "drift": drift},
         )
     except Exception as e:
-        return QACheckResult(name="bq_hubspot_reconcile", passed=True, severity="warn",
-                             detail=f"reconciler unavailable: {e} — non-fatal")
+        # Do NOT silently pass — surface the failure so the team knows
+        # reconciliation was skipped and numbers need manual verification.
+        return QACheckResult(name="bq_hubspot_reconcile", passed=False, severity="warn",
+                             detail=f"reconciler error — manual check required: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -225,7 +227,10 @@ def check_numeric_claims(text: str, max_orphan_pct: float = 0.20) -> QACheckResu
     for m in _DOLLAR.finditer(text or ""):
         try:
             v = float(m.group(1).replace(",", ""))
-            if v >= 1.0:
+            # Only check spend-scale amounts (>= $500). CPQL/CPL values ($60–$200)
+            # will never match campaign spend totals — checking them generates
+            # constant false-positive orphan warnings that make the check useless.
+            if v >= 500.0:
                 cited.append(v)
         except ValueError:
             pass
@@ -301,8 +306,17 @@ def check_pause_precedence(task: dict) -> QACheckResult:
     # Only fire on campaign-level PAUSE tasks
     title_l = title.lower()
     notes_l = notes.lower()
-    is_pause = "pause" in title_l or "asset level: campaign" in notes_l and "action: pause" in notes_l
-    is_campaign_level = "asset level: campaign" in notes_l or "asset_level: campaign" in notes_l
+    # Support both legacy "key: value" footer format and current "| key | value |" table format
+    is_pause = (
+        "pause" in title_l
+        or "action: pause" in notes_l
+        or "| action | pause |" in notes_l
+    )
+    is_campaign_level = (
+        "asset level: campaign" in notes_l
+        or "asset_level: campaign" in notes_l
+        or "| asset level | campaign |" in notes_l
+    )
     if not (is_pause and is_campaign_level):
         return QACheckResult(name="pause_precedence", passed=True, severity="block",
                              detail="not a campaign-pause task — skipped")

@@ -296,21 +296,12 @@ def pre_publish_gate(findings: list[dict], days: int = 14,
 
 
 def _post_validation_failure(result: ValidationResult):
-    """Post a validation failure notice to the notify channel."""
-    try:
-        from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
-        from notifications.quiet import is_quiet, quiet_log
-        msg = result.slack_block()
-        if is_quiet():
-            quiet_log("validator", SLACK_CHANNEL_NOTIFY, msg)
-            return
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=SLACK_CHANNEL_NOTIFY, text=msg
-        )
-        print("[validator] Posted validation failure to Slack.")
-    except Exception as e:
-        print(f"[validator] Could not post to Slack: {e}")
+    """Log validation failure to console only — do NOT post to Slack.
+    Intermediate validation updates go to logs, not to the team channel.
+    The daily summary already covers the final outcome.
+    """
+    print("[validator] Validation failed — NOT publishing:")
+    print(result.summary())
 
 
 # ─── Manual run ───────────────────────────────────────────────────────────────

@@ -38,8 +38,10 @@ class _GatedSlackClient:
                     if isinstance(inner, dict):
                         text += "\n" + (inner.get("text") or "")
             gate.verify_slack(text=text, channel=kwargs.get("channel", ""))
-        except ImportError:
-            pass  # gate module not available — degrade gracefully
+        except ImportError as ie:
+            # Log explicitly so silent bypass is visible in Railway logs.
+            # The gate MUST be present in production — if this fires, investigate.
+            print(f"[qa-gate] BYPASS WARNING: gate module unavailable ({ie}) — QA verification skipped")
         return self._raw.chat_postMessage(**kwargs)
 
 
@@ -148,13 +150,13 @@ def post_nightly_approvals_digest(
             # Spend-trend sanity flag (set by campaign_health_tasks)
             trend = f.get("spend_trend")
             if trend == "no_recent_spend":
-                trend_tag = "  ·  ⚠️ *no recent spend — verify active*"
+                trend_tag = "  ·  *[no recent spend — verify active]*"
             elif trend == "declining":
                 recent = f.get("spend_trend_recent")
                 window = f.get("spend_trend_window")
-                trend_tag = f"  ·  ⚠️ *spend declining (${recent:.0f} vs ${window:.0f} avg)*" if recent and window else "  ·  ⚠️ *spend declining*"
+                trend_tag = f"  ·  *[spend declining — ${recent:.0f} vs ${window:.0f} avg]*" if recent and window else "  ·  *[spend declining]*"
             elif trend == "accelerating":
-                trend_tag = "  ·  ✅ *accelerating*"
+                trend_tag = "  ·  *[accelerating]*"
             else:
                 trend_tag = ""
             lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}{budget}{trend_tag}")
@@ -167,7 +169,7 @@ def post_nightly_approvals_digest(
             qual = f"{f.get('qual_rate', 0):.0f}%"
             # Alternative to full pause (set by campaign_health.py)
             cut = f.get("alt_budget_cut_pct")
-            alt_tag = f"  ·  💡 *alt: cut -{cut}% budget first*" if cut else ""
+            alt_tag = f"  ·  *Alt: cut -{cut}% budget first*" if cut else ""
             lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}  ·  qual {qual}{alt_tag}")
         executable_findings.extend(pause_findings)
 

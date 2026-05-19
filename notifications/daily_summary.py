@@ -267,7 +267,19 @@ def _peak_numbers_lines() -> list[str]:
         )
         client = get_client()
         rows = list(client.query(f"""
-            WITH hs AS (
+            -- Pre-aggregate campaigns_daily to ONE row per (date, channel, campaign_name).
+            -- Without this, multi-account setups (2 Google Ads accounts with the same
+            -- campaign_name on the same date) would fan-out HubSpot lead rows and inflate
+            -- leads / deflate CPQL in the Slack summary.
+            WITH cd AS (
+              SELECT date, channel, campaign_name, SUM(spend) AS spend
+              FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+              WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+                AND date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+                AND spend > 0
+              GROUP BY date, channel, campaign_name
+            ),
+            hs AS (
               SELECT date, lead_utm_campaign,
                      SUM(leads_total)     AS leads,
                      SUM(leads_qualified) AS sqls,
@@ -285,14 +297,11 @@ def _peak_numbers_lines() -> list[str]:
                 NULLIF(SUM(IF({LAG_OK_HS}, hs.sqls, 0)), 0)
               ), 0) AS cpql,
               {LAG_EXC_HS} AS lag_excluded_days
-            FROM `{PROJECT_ID}.{DATASET}.campaigns_daily` c
+            FROM cd c
             LEFT JOIN hs ON c.date = hs.date
                         AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
             LEFT JOIN `{PROJECT_ID}.{DATASET}.v_channel_key_map` m
                    ON c.channel = m.paid_channel
-            WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
-              AND c.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-              AND c.spend > 0
             GROUP BY 1
             ORDER BY spend DESC
         """).result())
@@ -412,12 +421,12 @@ def build_recommendations_text(findings: list) -> str:
         print(f"[daily_summary] Asana category query failed, falling back: {e}")
         summary = None
 
-    # Build compact category chips: icon+name ✓done ⏳pending
+    # Build compact category chips: icon+name  X done / Y pending
     def _chip(icon: str, label: str, done: int, pending: int) -> str:
         parts = []
-        if done:    parts.append(f"{done}✓")
-        if pending: parts.append(f"{pending}⏳")
-        return f"{icon} {label}: " + "  ".join(parts) if parts else ""
+        if done:    parts.append(f"{done} done")
+        if pending: parts.append(f"{pending} pending")
+        return f"{icon} {label}: " + "  /  ".join(parts) if parts else ""
 
     chips: list[str] = []
     if summary:
