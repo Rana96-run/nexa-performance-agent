@@ -804,3 +804,29 @@ must:
 1. Pre-agg cd: `SELECT date, channel, campaign_name, SUM(spend) … GROUP BY date, channel, campaign_name`
 2. Pre-agg hs: include `qoyod_source`, map to channel, join on channel too.
 Neither side alone is enough — both must be 1:1 and channel-aligned.
+
+## NEVER use `campaigns_daily.leads` as a leads metric (recurring violation)
+
+- **Symptom:** Channel reports inflated lead counts — e.g., Bing's
+  `WebsiteTraffic_Search_AR_Generic` showed 1,157 "leads" for $1,711 spend
+  ($1.48 "CPL") in the channel's own reporting. Reality on HubSpot side:
+  31 leads and 9 SQLs → real CPQL was $190 (4× the $45 pause threshold).
+- **Root cause:** `campaigns_daily.leads` is **channel-reported conversions
+  ingested verbatim**. For WebsiteTraffic-objective campaigns specifically,
+  the channel counts page views or visits as "conversions" — not real form
+  submissions. For most other objectives it's pixel-based and noisy too.
+- **Rule (non-negotiable, restated):** Leads and SQLs come from HubSpot
+  Lead Module ONLY (`hubspot_leads_module_daily`). Use the pre-aggregate-
+  then-join pattern (see CLAUDE.md "KPI measurement rules"). Spend stays
+  on the channel side; leads/SQLs cross over from HubSpot.
+- **Why it keeps happening (and how to prevent):**
+  - The `campaigns_daily.leads` column is RIGHT THERE in the schema and
+    tempting for quick queries.
+  - QA gate doesn't currently block ad-hoc analysis scripts from using it.
+  - Fix: any new analysis script that touches MS/Bing/Generic-channel
+    campaigns MUST join to `hubspot_leads_module_daily` for the leads
+    metric. NEVER report `cd.leads` as a lead count — only as a debug-
+    only "channel-reported conversions" field if at all.
+- Caught and re-documented 2026-05-19 (Rana flagged: "you still override the
+  qa gate layer and take the conversions from the channels while these are
+  page views not leads — we said 100 times leads come only from hubspot").
