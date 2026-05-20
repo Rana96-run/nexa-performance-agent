@@ -679,6 +679,40 @@ def _daily_full_mirror():
         print(f"[ops-scheduler] Daily HubSpot mirror failed (non-fatal): {e}")
 
 
+def _compliance_monitor():
+    """Daily 03:45 UTC — focused monitor for the 4 Google compliance campaigns
+    (ZATCAPhase2, ZATCAVendorShop, ZATCACompetitor, FinancialStatement).
+
+    Auto-actions (reversible, low risk):
+      - Kickstart graduation: TARGET_SPEND → MAXIMIZE_CONVERSIONS once campaign
+        accumulates 5+ HubSpot leads in 14d.
+
+    Flags (require human action — flagged in stdout + memory/audit_findings.md):
+      - Under-spending (< 50% of budget daily avg over 7d)
+      - Max CPC cap too low (full budget spent but < 10 clicks/week)
+      - High CPL (> $80 over 30+ clicks)
+      - Disapproved ads on enabled campaigns
+      - tCPA readiness (30+ conversions in 30d)
+
+    See scripts/audit_compliance_monitor.py for the full logic.
+    """
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["python", "scripts/audit_compliance_monitor.py"],
+            capture_output=True, timeout=180, cwd=os.path.dirname(__file__),
+        )
+        print(f"[ops-scheduler] Compliance monitor exit={r.returncode}")
+        if r.stdout:
+            tail = r.stdout.decode("utf-8", errors="replace").splitlines()[-30:]
+            for line in tail:
+                print(f"[compliance] {line}")
+        if r.returncode == 2:
+            print("[ops-scheduler] ⚠ HIGH-severity compliance finding — review")
+    except Exception as e:
+        print(f"[ops-scheduler] Compliance monitor crashed (non-fatal): {e}")
+
+
 def _daily_deep_audit():
     """Daily 03:30 UTC — deep audit catching bugs the QA gate misses.
 
@@ -754,7 +788,9 @@ def run():
     # Synthetic fixtures + known-good/known-bad inputs verify each check.
     # If a refactor silently breaks a check, this catches it.
     schedule.every().day.at("04:00").do(_gate_self_test)
-    schedule.every().day.at("03:30").do(_daily_deep_audit)  # 06:30 Riyadh
+    schedule.every().day.at("03:30").do(_daily_deep_audit)     # 06:30 Riyadh
+    schedule.every().day.at("03:45").do(_compliance_monitor)   # 06:45 Riyadh
+    schedule.every().day.at("15:00").do(_compliance_monitor)   # 18:00 Riyadh — midday recheck
     # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
     # On-demand outside those hours via POST /api/run-health-check
     for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
