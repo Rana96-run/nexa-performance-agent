@@ -9,6 +9,7 @@ tasks + summaries waiting at the start of the workday.
   1st   08:00               -> + monthly analysis
   Jan/Apr/Jul/Oct 1st 08:00 -> + quarterly analysis
 """
+import os
 import schedule
 import time
 import traceback
@@ -678,6 +679,38 @@ def _daily_full_mirror():
         print(f"[ops-scheduler] Daily HubSpot mirror failed (non-fatal): {e}")
 
 
+def _daily_deep_audit():
+    """Daily 03:30 UTC — deep audit catching bugs the QA gate misses.
+
+    Adversarial-tests the KPI rule hook, checks UTM suffix integrity on every
+    enabled Search campaign, flags disapproved ads on enabled campaigns,
+    checks attribution drift per channel/account, scans naming conventions.
+    See scripts/audit_daily.py for the full check list.
+
+    Auto-fixes safe categories (e.g. re-applies canonical UTM suffix if
+    missing). Flags risky ones for human review.
+
+    Caught its first real bug 2026-05-19: 3 enabled compliance campaigns
+    had their UTM suffix silently cleared during UI renames — broke HubSpot
+    attribution on ~$300/day of spend. Re-applied automatically.
+    """
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["python", "scripts/audit_daily.py"],
+            capture_output=True, timeout=300, cwd=os.path.dirname(__file__),
+        )
+        print(f"[ops-scheduler] Daily audit exit={r.returncode}")
+        if r.stdout:
+            tail = r.stdout.decode("utf-8", errors="replace").splitlines()[-30:]
+            for line in tail:
+                print(f"[audit] {line}")
+        if r.returncode == 2:
+            print("[ops-scheduler] ⚠ critical audit finding — review history")
+    except Exception as e:
+        print(f"[ops-scheduler] Daily audit crashed (non-fatal): {e}")
+
+
 def _gate_self_test():
     """Daily 04:00 UTC — verifies every QA gate check still behaves correctly
     against synthetic fixtures. Catches the 'silently broken check' failure
@@ -721,6 +754,7 @@ def run():
     # Synthetic fixtures + known-good/known-bad inputs verify each check.
     # If a refactor silently breaks a check, this catches it.
     schedule.every().day.at("04:00").do(_gate_self_test)
+    schedule.every().day.at("03:30").do(_daily_deep_audit)  # 06:30 Riyadh
     # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
     # On-demand outside those hours via POST /api/run-health-check
     for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
