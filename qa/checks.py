@@ -632,17 +632,26 @@ def check_bq_write(table: str, rows: list[dict], key_fields: list[str]) -> QAChe
             seen.add(k)
         if dupes:
             issues.append(f"{dupes} internal duplicate rows on key {key_fields}")
-    # Multi-account: if account_id is in row, must have ≥2 distinct values for ms/google/snap
+    # Multi-account: if account_id is in row, expect ≥1 distinct value. A batch
+    # with 0 accounts in a channel that's supposed to have any is a collector
+    # bug → BLOCK. A batch with 1 of 2 expected accounts is usually a paused
+    # secondary account (legitimate state, e.g. Meta's second account dormant
+    # since 2026-05) → WARN, don't block. Found 2026-05-20: Meta+TikTok
+    # generated 74 false-positive blocks/week from this previously.
+    warnings = []
     if rows and "account_id" in rows[0] and "channel" in rows[0]:
         ch = rows[0]["channel"]
         if ch in EXPECTED_ACCOUNTS:
             n = len({r.get("account_id") for r in rows if r.get("account_id")})
-            if n < EXPECTED_ACCOUNTS[ch] and len(rows) >= 10:
-                issues.append(f"only {n} account(s) in {ch} batch (expected {EXPECTED_ACCOUNTS[ch]})")
+            if n == 0 and len(rows) >= 10:
+                issues.append(f"0 account(s) in {ch} batch (expected {EXPECTED_ACCOUNTS[ch]}) — collector bug")
+            elif n < EXPECTED_ACCOUNTS[ch] and len(rows) >= 10:
+                warnings.append(f"only {n} account(s) in {ch} batch (expected {EXPECTED_ACCOUNTS[ch]}, likely paused)")
+    detail = "; ".join(issues + warnings) if (issues or warnings) else f"{len(rows)} rows ok"
     return QACheckResult(
         name="bq_write_sanity",
-        passed=not issues,
-        severity="block" if issues else "block",
-        detail="; ".join(issues) if issues else f"{len(rows)} rows ok",
-        metrics={"row_count": len(rows), "issues": issues},
+        passed=not issues,            # warnings do NOT fail the check
+        severity="block",
+        detail=detail,
+        metrics={"row_count": len(rows), "issues": issues, "warnings": warnings},
     )

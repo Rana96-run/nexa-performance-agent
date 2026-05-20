@@ -413,6 +413,17 @@ def _nightly():
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] daily reconciliation failed (non-fatal): {e}")
 
+    # 1b. Collector failure ping — closes the gap that allowed the May 18-20
+    # deals/leads silent failures. Scans agent_activity_log for any collector
+    # that failed in the last 24h with no recovery success since. Pings
+    # #nexa-health with a one-liner; the dashboard has the full audit trail.
+    try:
+        from analysers.collector_failures import check_collector_failures
+        check_collector_failures(window_hours=24, post_slack=True)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] collector failure check failed (non-fatal): {e}")
+
     # 1b. Re-index Drive so role prompts pick up newly shared files.
     _refresh_drive_index()
 
