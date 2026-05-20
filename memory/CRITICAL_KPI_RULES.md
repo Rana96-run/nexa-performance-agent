@@ -64,7 +64,48 @@ agent MUST mentally verify ALL of these:
    - Join to `hubspot_leads_module_daily` on `lead_utm_content` for the
      leads count, not on the ads_daily `leads` column.
 
-## 3. Self-check after writing a script — before running
+## 3. NEVER invent campaign names — match the existing channel convention
+
+The CLAUDE.md naming convention is `{Channel}_{Type}_{Language}_{Product}_{Audience}`,
+but the actual tokens used differ PER CHANNEL. Before creating any new campaign,
+**query the existing campaigns on that channel** and match the in-use pattern.
+
+**Caught violations (don't repeat):**
+
+- **2026-05-19 (Rana)** — created TikTok campaign as `Tiktok_WebForm_AR_Qawaem236`.
+  The actual TikTok convention is `Tiktok_{Type}_{Audience descriptors}_{Product}_{Format}`
+  where Type is `Conversion` or `LeadGen` and Format is `Websiteform` or `Instantform`.
+  Real existing campaigns:
+    - `Tiktok_Conversion_Prospecting_Interests_Invoice_Sectors_Websiteform`
+    - `Tiktok_LeadGen_Broad_Invoice_Websiteform`
+    - `Tiktok_Conversion_BOY_Prospecting_Broad_Websiteform`
+  Correct name: `Tiktok_Conversion_Prospecting_Interests_FinancialStatemnt_Websiteform`
+
+**Per-channel naming tokens to reference (queried 2026-05-19):**
+
+| Channel | Pattern | Type tokens | Format tokens |
+|---|---|---|---|
+| Google Ads | `Google_{Type}_{Lang}_{Product}_{Audience}` | Search / PMax / Display | Broad / Interests / Lookalike / Retargeting |
+| Microsoft Ads | `Bing_{Type}_{Lang}_{Product}` | Search / WebsiteTraffic | (no audience token in current portfolio) |
+| Meta | `Meta_{Type}_{Lang}_{Product}_{Audience}` | LeadGen / Conversion | Interests / Lookalike / Retargeting / Broad |
+| Snapchat | `Snapchat_{Type}_{Lang}_{Product}_{Audience}` | LeadGen | Interests / Lookalike / Broad |
+| TikTok | `Tiktok_{Type}_{Audience descriptors}_{Product}_{Format}` | Conversion / LeadGen / Awareness | Websiteform / Instantform / Conversion LP |
+
+**Pre-execution check (mandatory before creating ANY new campaign):**
+
+```sql
+-- KPI-RULE-BYPASS — just a listing query, not analyzing leads
+SELECT DISTINCT campaign_name
+FROM campaigns_daily
+WHERE channel = '<target_channel>'
+  AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 60 DAY)
+ORDER BY campaign_name
+LIMIT 50
+```
+
+Then pick the token set that matches >50% of existing campaigns. NEVER invent a new token unless you have user approval.
+
+## 4. Self-check after writing a script — before running
 
 Before executing any new analysis script, scan the SQL for:
 - `SELECT .* leads .* FROM .* campaigns_daily` → VIOLATION
