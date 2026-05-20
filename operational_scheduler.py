@@ -652,6 +652,49 @@ def _catchup_if_stale():
         print(f"[ops-scheduler] Startup catch-up check failed (non-fatal): {e}")
 
 
+def _watchdog_tick():
+    """Every-4h tick: never let BQ go stale. Independent of the nightly run —
+    catches missed schedules (Railway redeploy, scheduler crash, gate-block)
+    AND triggers re-pulls to catch HubSpot workflow re-attributions."""
+    try:
+        from analysers.freshness_watchdog import run_watchdog
+        run_watchdog(post_slack=True)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] watchdog failed (non-fatal): {e}")
+
+
+def _daily_full_mirror():
+    """Daily 06:00 UTC (09:00 Riyadh) — full sync_full_mirror of HubSpot.
+    The 12h scheduled refresh runs incremental; this is the BELT-AND-BRACES
+    full re-pull that guarantees re-attributed leads are picked up every day."""
+    try:
+        from collectors import hubspot_leads_bq
+        print("[ops-scheduler] Daily HubSpot full mirror starting…")
+        rows = hubspot_leads_bq.sync_full_mirror()
+        print(f"[ops-scheduler] Daily HubSpot mirror wrote {rows} rows")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Daily HubSpot mirror failed (non-fatal): {e}")
+
+
+def _gate_self_test():
+    """Daily 04:00 UTC — verifies every QA gate check still behaves correctly
+    against synthetic fixtures. Catches the 'silently broken check' failure
+    mode where a refactor turns a check into security theater. Logs to
+    qa_gate_events with surface='self_test'."""
+    try:
+        from qa.self_test import run_self_test
+        r = run_self_test(post_to_bq=True)
+        if r["broken_checks"]:
+            print(f"[ops-scheduler] Gate self-test FAILED: {r['broken_checks']}")
+        else:
+            print(f"[ops-scheduler] Gate self-test: {r['passed']}/{r['total']} OK")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Gate self-test failed (non-fatal): {e}")
+
+
 def run():
     schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
     # Second BQ refresh 12h later — picks up workflow re-classifications and
@@ -659,21 +702,43 @@ def run():
     # just refreshes BQ data so dashboards reflect current state.
     # Added 2026-05-15 to halve attribution lag (was 24h, now 12h).
     schedule.every().day.at("17:00").do(_refresh_bigquery)  # 20:00 Riyadh = 17:00 UTC
+
+    # ── Freshness watchdog: every 4h, NEVER let BQ go stale ──────────────────
+    # Checks each source table for MAX(date) lag > 1d OR last_write > 25h ago,
+    # and triggers a targeted re-sync of just the stale collector. This is the
+    # safety net for the case where the 05:00/17:00 scheduled runs were missed.
+    # Added 2026-05-20.
+    for _utc_h in (1, 5, 9, 13, 21):   # every ~4h, spread across the day
+        schedule.every().day.at(f"{_utc_h:02d}:30").do(_watchdog_tick)
+
+    # ── Daily HubSpot full mirror (catches re-attributed leads) ──────────────
+    # The 12h refresh runs incremental; this is the every-day full re-pull
+    # that guarantees workflow re-classifications land in BQ daily.
+    # 06:00 UTC = 09:00 Riyadh — after the nightly refresh has finished.
+    schedule.every().day.at("06:00").do(_daily_full_mirror)
+
+    # ── QA gate self-test (every day at 04:00 UTC, before nightly) ───────────
+    # Synthetic fixtures + known-good/known-bad inputs verify each check.
+    # If a refactor silently breaks a check, this catches it.
+    schedule.every().day.at("04:00").do(_gate_self_test)
     # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
     # On-demand outside those hours via POST /api/run-health-check
     for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
         schedule.every().day.at(f"{_utc_h:02d}:00").do(_run_health_check)
 
-    print("=" * 52)
+    print("=" * 60)
     print("  Qoyod Operational Scheduler — LIVE")
-    print("=" * 52)
+    print("=" * 60)
     print("  Daily    08:00 Riyadh (05:00 UTC)  — full nightly + BQ refresh")
-    print("  BQ      20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
+    print("  BQ       20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
+    print("  Mirror   09:00 Riyadh (06:00 UTC)  — daily HubSpot full mirror")
+    print("  Self-test 07:00 Riyadh (04:00 UTC) — QA gate check verification")
+    print("  Watchdog every ~4h — never let BQ go stale, auto-resync")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month")
     print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
     print("  Manual:  python main.py on_demand")
-    print("=" * 52)
+    print("=" * 60)
 
     # Startup health check — logs to console only; no Slack post.
     # Only the 07:00 scheduled run posts to Slack (and only on failures).
