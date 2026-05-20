@@ -1,0 +1,54 @@
+{
+  "_README": [
+    "This is an EXAMPLE settings file. Copy it to .claude/settings.json (not",
+    "committed) and add your own permissions list. The critical section",
+    "below — the KPI rule guard hook — should be kept EXACTLY as-is on every",
+    "team agent so we all enforce the same lead/SQL source-of-truth rule."
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \".claude\\hooks\\session_start_review.py\"",
+            "timeout": 30,
+            "statusMessage": "Reviewing git, Railway and health status..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "_comment": "Pre-send review for outbound surfaces — checks Slack format / Asana footer / naming convention",
+        "matcher": "mcp__slack__slack_post_message|mcp__cf5a443c-9504-41fe-9bad-fc615b5177a5__create_tasks",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \".claude\\hooks\\pre_send_review.py\"",
+            "timeout": 10,
+            "statusMessage": "Running pre-send review checklist..."
+          }
+        ]
+      },
+      {
+        "_comment": "CRITICAL — blocks analysis scripts that query campaigns_daily.leads as a leads metric. See memory/CRITICAL_KPI_RULES.md.",
+        "matcher": "Bash|PowerShell|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \".claude\\hooks\\kpi_rule_guard.py\"",
+            "timeout": 5,
+            "statusMessage": "Scanning for KPI-rule violations..."
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "_README": "Add your own permissions here — each team agent will have a different list",
+    "defaultMode": "bypassPermissions",
+    "allow": [],
+    "deny": []
+  }
+}

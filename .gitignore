@@ -22,7 +22,13 @@ venv/
 # ── Editors / OS ─────────────────────────────────────────────────────────
 .vscode/
 .idea/
-.claude/
+# .claude/ is mostly per-user (settings.json has user-specific permissions),
+# but we SHARE the hooks folder + an example settings template so all
+# team agents enforce the same KPI rules.
+.claude/*
+!.claude/hooks/
+!.claude/settings.example.json
+!.claude/skills/
 *.swp
 .DS_Store
 Thumbs.db
