@@ -1,0 +1,88 @@
+{
+  "sitelinks": [
+    {
+      "text": "خطط الأسعار",
+      "d1": "ابدأ من 120 ريال شهرياً",
+      "d2": "بدون رسوم خفية",
+      "url": "https://lp.qoyod.com/einvoice-integration/#pricing"
+    },
+    {
+      "text": "قصص نجاح العملاء",
+      "d1": "اقرأ تجارب 50,000+ شركة في السعودية",
+      "d2": "قيود شريك نجاحك وتميّزك",
+      "url": "https://lp.qoyod.com/einvoice-integration/#testimonials"
+    },
+    {
+      "text": "دليل المرحلة الثانية",
+      "d1": "كل ما تحتاجه عن ربط المرحلة الثانية",
+      "d2": "مع معرفة موعد إلزامك",
+      "url": "https://lp.qoyod.com/einvoice-integration/#faq"
+    },
+    {
+      "text": "اربط منشأتك بـ4 خطوات",
+      "d1": "خطوات من التسجيل إلى إصدار فواتيرك",
+      "d2": "فواتير متوافقة في أقل من ساعة",
+      "url": "https://lp.qoyod.com/einvoice-integration/#integration"
+    },
+    {
+      "text": "مميزات الفاتورة",
+      "d1": "متوافق ZATCA + REST API",
+      "d2": "كل ما تحتاجه للامتثال",
+      "url": "https://lp.qoyod.com/einvoice-integration/#features"
+    }
+  ],
+  "callouts": [
+    "REST API",
+    "XML + PDF/A-3",
+    "آلاف الشركات السعودية",
+    "بدون بطاقة ائتمان",
+    "تجربة 14 يوم",
+    "تكامل مع منصة فاتورة",
+    "دعم 24/7 بالعربية",
+    "ربط في دقائق",
+    "ضمان الامتثال أو استرداد",
+    "متوافق مع ZATCA"
+  ],
+  "snippets": [
+    {
+      "header": "Types",
+      "values": [
+        "XML",
+        "PDF/A-3",
+        "REST API",
+        "QR Code",
+        "Encrypted Seal"
+      ]
+    },
+    {
+      "header": "Service catalog",
+      "values": [
+        "e-invoicing",
+        "accounting",
+        "inventory",
+        "payroll",
+        "reports"
+      ]
+    },
+    {
+      "header": "Service catalog",
+      "values": [
+        "فوترة إلكترونية",
+        "محاسبة",
+        "مخزون",
+        "رواتب",
+        "تقارير"
+      ]
+    },
+    {
+      "header": "Types",
+      "values": [
+        "XML",
+        "PDF/A-3",
+        "REST API",
+        "QR Code",
+        "ختم مشفر"
+      ]
+    }
+  ]
+}
