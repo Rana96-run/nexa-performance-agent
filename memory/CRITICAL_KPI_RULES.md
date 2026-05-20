@@ -135,6 +135,31 @@ in URLs if they re-state what's already in account-level template.
 3. The canonical STANDARD_UTM_SUFFIX in `executors/google_ads.py` is the
    IDEAL. The team's actual setup may differ — match what's deployed.
 
+**Per-channel UTM setup actually deployed (queried 2026-05-20):**
+
+- **Google Ads (both accounts):** UTM tracking at **ACCOUNT level** via
+  `customer.tracking_url_template` + `customer.final_url_suffix`. Campaigns
+  inherit. NEVER set campaign-level overrides — duplicate UTMs.
+
+- **Microsoft Ads (both accounts):** UTM tracking at **CAMPAIGN level** —
+  each campaign has its own `TrackingUrlTemplate` with the canonical pattern:
+  ```
+  {lpurl}?utm_source=Bing&utm_medium=ppc&utm_audience={_adgroup}
+  &utm_content={_adname}&utm_term={keyword}&utm_campaign={_campaign}
+  &hsa_acc=1513020554&hsa_cam={campaignid}&hsa_grp={adgroupid}&hsa_ad={creative}
+  ```
+  Each campaign needs custom params: `campaign`, `adgroup`, `adname` (referenced
+  as `{_campaign}` etc. — the underscore is the brace syntax marker, not part
+  of the key). `FinalUrlSuffix` stays EMPTY on Bing — the suffix isn't used,
+  everything is in the tracking template.
+
+- **TikTok:** UTM not in tracking templates — uses standard `utm_source=tiktok`
+  added at ad level via URL params on the LP link.
+
+**Migration consideration:** Bing could be upgraded to account-level matching
+Google's pattern, but that touches all 13 active campaigns and risks breaking
+any per-campaign customization. Document the decision before doing it.
+
 ## 5. Self-check after writing a script — before running
 
 Before executing any new analysis script, scan the SQL for:
