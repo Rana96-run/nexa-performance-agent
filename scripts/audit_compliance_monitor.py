@@ -32,15 +32,25 @@ from google.protobuf import field_mask_pb2
 from google.cloud import bigquery
 from executors.google_ads import get_client
 
-ACCOUNT  = "1513020554"
-
-# Compliance portfolio — 4 Google campaigns (2 Bing + 1 TikTok monitored separately)
-COMPLIANCE = {
-    "23851270716": "ZATCAPhase2",
-    "23861101390": "ZATCAVendorShop",
-    "23861965426": "ZATCACompetitor",
-    "23861837000": "FinancialStatement",
+# Compliance portfolio — multi-account.
+# Acc 1 (1513020554): 4 campaigns. Acc 2 (5753494964): 2 mirrored campaigns.
+# (Bing + TikTok monitored separately.)
+ACCOUNTS = {
+    "1513020554": {
+        "23851270716": "ZATCAPhase2",
+        "23861101390": "ZATCAVendorShop",
+        "23861965426": "ZATCACompetitor",
+        "23861837000": "FinancialStatement",
+    },
+    "5753494964": {
+        "23865711095": "ZATCAPhase2_Acc2",
+        "23870151040": "FinancialStatement_Acc2",
+    },
 }
+# Flat lookup of all (account, campaign_id) pairs
+COMPLIANCE = {cid: name for acct in ACCOUNTS.values() for cid, name in acct.items()}
+# Reverse map cid → account
+CID_ACCOUNT = {cid: acct for acct, camps in ACCOUNTS.items() for cid in camps}
 
 LEAD_THRESHOLD_FOR_GRADUATION = 5     # 5+ HubSpot leads in 14d → switch to Max Conv
 TCPA_READINESS_THRESHOLD      = 30    # 30+ conv in 30d → flag for tCPA setting
@@ -71,41 +81,36 @@ print(f"\n{'=' * 78}")
 print(f"COMPLIANCE PORTFOLIO MONITOR — {datetime.now().isoformat(timespec='seconds')}")
 print('=' * 78)
 
-# A. Live state from Google Ads API
+# A. Live state from Google Ads API — per-account
 state = {}
-ids = ",".join(COMPLIANCE.keys())
-q = f"""
-SELECT campaign.id, campaign.name, campaign.status,
-       campaign.bidding_strategy_type,
-       campaign_budget.amount_micros
-FROM campaign WHERE campaign.id IN ({ids})
-"""
-for r in ga.search(customer_id=ACCOUNT, query=q):
-    state[str(r.campaign.id)] = {
-        "name":     r.campaign.name,
-        "status":   r.campaign.status.name,
-        "bidding":  r.campaign.bidding_strategy_type.name,
-        "budget":   r.campaign_budget.amount_micros / 1_000_000,
-    }
+for acct, camps in ACCOUNTS.items():
+    if not camps: continue
+    ids_acct = ",".join(camps.keys())
+    q = f"""
+    SELECT campaign.id, campaign.name, campaign.status,
+           campaign.bidding_strategy_type,
+           campaign_budget.amount_micros
+    FROM campaign WHERE campaign.id IN ({ids_acct})
+    """
+    for r in ga.search(customer_id=acct, query=q):
+        state[str(r.campaign.id)] = {
+            "name":     r.campaign.name,
+            "status":   r.campaign.status.name,
+            "bidding":  r.campaign.bidding_strategy_type.name,
+            "budget":   r.campaign_budget.amount_micros / 1_000_000,
+            "account":  acct,
+        }
 
-# B. Last 7d spend per campaign
-q_spend = f"""
-SELECT campaign_id, SUM(spend) AS spend_7d
-FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily`
-WHERE channel = 'google_ads'
-  AND account_id = '{ACCOUNT}'
-  AND campaign_id IN ('{",".join(COMPLIANCE.keys())}'.split(','))
-  AND date >= DATE_SUB(CURRENT_DATE("Asia/Riyadh"), INTERVAL 7 DAY)
-GROUP BY campaign_id
-"""
+# B. Last 7d spend per campaign — handled per-campaign below
 # Easier — query each separately
 for cid in COMPLIANCE:
+    acct = CID_ACCOUNT[cid]
     q_one = f"""
     SELECT SUM(spend) AS spend_7d,
            SUM(clicks) AS clicks_7d
     FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily`
     WHERE channel = 'google_ads'
-      AND account_id = '{ACCOUNT}'
+      AND account_id = '{acct}'
       AND campaign_id = '{cid}'
       AND date >= DATE_SUB(CURRENT_DATE("Asia/Riyadh"), INTERVAL 7 DAY)
     """
@@ -117,10 +122,12 @@ for cid in COMPLIANCE:
 
 # C. HubSpot truth — leads per campaign (14d + 30d)
 hs_markers = {
-    "23851270716": "zatcaphase2",
+    "23851270716": "zatcaphase2",       # Acc 1
     "23861101390": "zatcavendorshop",
     "23861965426": "zatcacompetitor",
     "23861837000": "financialstatem",
+    "23865711095": "zatcaphase2",       # Acc 2 (same UTM marker as Acc 1)
+    "23870151040": "financialstatem",
 }
 for cid, marker in hs_markers.items():
     q_hs = f"""
@@ -162,16 +169,17 @@ for cid, info in COMPLIANCE.items():
     status    = s.get("status", "")
 
     # ─── ACTION 1: Kickstart graduation ──────────────────────────────────
+    acct = CID_ACCOUNT[cid]
     if bidding == "TARGET_SPEND" and leads_14d >= LEAD_THRESHOLD_FOR_GRADUATION:
         try:
             op = get_client().get_type("CampaignOperation")
-            op.update.resource_name = f"customers/{ACCOUNT}/campaigns/{cid}"
+            op.update.resource_name = f"customers/{acct}/campaigns/{cid}"
             op.update.maximize_conversions.target_cpa_micros = 0
             get_client().copy_from(op.update_mask,
                 field_mask_pb2.FieldMask(paths=["maximize_conversions.target_cpa_micros"]))
-            r = camp_svc.mutate_campaigns(customer_id=ACCOUNT, operations=[op])
+            r = camp_svc.mutate_campaigns(customer_id=acct, operations=[op])
             log_action("kickstart_graduation",
-                f"{s['name']}: hit {leads_14d} leads in 14d (threshold {LEAD_THRESHOLD_FOR_GRADUATION}) → switched to MAXIMIZE_CONVERSIONS")
+                f"{s['name']} (acc {acct}): hit {leads_14d} leads in 14d (threshold {LEAD_THRESHOLD_FOR_GRADUATION}) → switched to MAXIMIZE_CONVERSIONS")
         except Exception as e:
             log_error(f"Failed to switch {s['name']}: {e}")
 
@@ -214,27 +222,30 @@ for cid, info in COMPLIANCE.items():
 print(f"\n{'=' * 78}")
 print("Disapproved ads on ENABLED compliance campaigns")
 print('=' * 78)
-try:
-    q = f"""
-    SELECT campaign.id, campaign.name,
-           ad_group_ad.ad.id,
-           ad_group_ad.policy_summary.policy_topic_entries
-    FROM ad_group_ad
-    WHERE campaign.id IN ({ids})
-      AND campaign.status = 'ENABLED'
-      AND ad_group_ad.status = 'ENABLED'
-      AND ad_group_ad.policy_summary.approval_status = 'DISAPPROVED'
-    """
-    found = 0
-    for r in ga.search(customer_id=ACCOUNT, query=q):
-        found += 1
-        topics = [t.topic for t in r.ad_group_ad.policy_summary.policy_topic_entries]
-        log_flag("high", "disapproved_ad",
-            f"{r.campaign.name}: ad_id={r.ad_group_ad.ad.id} DISAPPROVED — topics={topics}")
-    if found == 0:
-        print("  ✅ no disapproved ads")
-except Exception as e:
-    log_error(f"Disapproval check failed: {e}")
+found = 0
+for acct, camps in ACCOUNTS.items():
+    if not camps: continue
+    ids_acct = ",".join(camps.keys())
+    try:
+        q = f"""
+        SELECT campaign.id, campaign.name,
+               ad_group_ad.ad.id,
+               ad_group_ad.policy_summary.policy_topic_entries
+        FROM ad_group_ad
+        WHERE campaign.id IN ({ids_acct})
+          AND campaign.status = 'ENABLED'
+          AND ad_group_ad.status = 'ENABLED'
+          AND ad_group_ad.policy_summary.approval_status = 'DISAPPROVED'
+        """
+        for r in ga.search(customer_id=acct, query=q):
+            found += 1
+            topics = [t.topic for t in r.ad_group_ad.policy_summary.policy_topic_entries]
+            log_flag("high", "disapproved_ad",
+                f"{r.campaign.name} (acc {acct}): ad_id={r.ad_group_ad.ad.id} DISAPPROVED — topics={topics}")
+    except Exception as e:
+        log_error(f"Disapproval check failed for acc {acct}: {e}")
+if found == 0:
+    print("  ✅ no disapproved ads")
 
 
 # ── 4. Summary + append to history ───────────────────────────────────────

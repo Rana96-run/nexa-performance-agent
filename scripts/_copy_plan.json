@@ -1,0 +1,1023 @@
+{
+  "23861837000": {
+    "name": "Google_Search_AREN_FinancialStatement",
+    "id": "23861837000",
+    "bidding_strategy_type": "TARGET_SPEND",
+    "max_conv_tcpa_micros": 0,
+    "target_spend_ceiling_micros": 4000000,
+    "budget_micros": 80000000,
+    "network": {
+      "google_search": true,
+      "search_partners": true,
+      "content": false,
+      "partner_search": false
+    },
+    "tracking_url_template": "{lpurl}?utm_audience={_adgroup}&campaign_id={campaignid}&ad_group_id={adgroupid}&ad_id={creative}&utm_medium=ppc&utm_source=Google&utm_content={_adname}&utm_term={keyword}&utm_campaign={_campaign}&hsa_acc=1513020554&hsa_src={network}&hsa_tgt={targetid}&hsa_kw={keyword}&hsa_mt={matchtype}&hsa_net=adwords&hsa_ver=3&hsa_cam=23861837000&hsa_grp={adgroupid}&hsa_ad={creative}",
+    "final_url_suffix": "",
+    "geos": [
+      "geoTargetConstants/2682"
+    ],
+    "langs": [
+      "languageConstants/1000",
+      "languageConstants/1019"
+    ],
+    "neg_keywords": [
+      {
+        "text": "download",
+        "match": "BROAD"
+      },
+      {
+        "text": "course",
+        "match": "BROAD"
+      },
+      {
+        "text": "شرح",
+        "match": "BROAD"
+      },
+      {
+        "text": "تمويل",
+        "match": "BROAD"
+      },
+      {
+        "text": "شروحات",
+        "match": "BROAD"
+      },
+      {
+        "text": "دورات",
+        "match": "BROAD"
+      },
+      {
+        "text": "دورة",
+        "match": "BROAD"
+      }
+    ],
+    "adgroups": [
+      {
+        "id": 198301170444,
+        "name": "FinancialSt_AR",
+        "cpc_bid_micros": 10000,
+        "keywords": [
+          {
+            "text": "قوائم وزارة التجارة السعودية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "منصة قوائم وزارة التجارة",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "إيداع القوائم المالية في السعودية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "غرامة التأخر في إيداع القوائم المالية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "عقوبة عدم إيداع القوائم المالية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "موعد إيداع القوائم المالية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "نظام الشركات السعودي إيداع القوائم",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "كيف أودع القوائم المالية على منصة قوائم",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "متى يجب إيداع القوائم المالية وزارة التجارة",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "الفرق بين قوائم وزاتكا",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "متى تكون القوائم المالية مدققة إلزامياً",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "خطوات إيداع القوائم المالية في منصة قوائم",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "قرار 236 وزارة التجارة 1447",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "القوائم المالية للشركات الصغيرة في السعودية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "قرار وزاري 236",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "غرامة عدم إيداع القوائم المالية",
+            "match": "EXACT",
+            "status": "ENABLED"
+          }
+        ],
+        "neg_keywords": [
+          {
+            "text": "توظيف",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "وظيفة",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "وظائف",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "تحميل",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "نموذج",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "نماذج",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "تسجيل الدخول",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "تسجيل دخول",
+            "match": "BROAD",
+            "status": "ENABLED"
+          }
+        ],
+        "rsas": [
+          {
+            "headlines": [
+              {
+                "text": "تجنب غرامة قرار 236",
+                "pinned": null
+              },
+              {
+                "text": "أودع قوائمك المالية في دقائق",
+                "pinned": null
+              },
+              {
+                "text": "موعد الإيداع: 30 يونيو 2026",
+                "pinned": null
+              },
+              {
+                "text": "غرامة شخصية تصل 20,000 ريال",
+                "pinned": null
+              },
+              {
+                "text": "نظام متوافق مع منصة قوائم",
+                "pinned": null
+              },
+              {
+                "text": "تصدير XBRL بنقرة واحدة",
+                "pinned": null
+              },
+              {
+                "text": "إيداع القوائم المالية السعودية",
+                "pinned": null
+              },
+              {
+                "text": "تجربة 14 يوم بدون بطاقة",
+                "pinned": null
+              },
+              {
+                "text": "أنت مسؤول شخصياً عن الإيداع",
+                "pinned": null
+              },
+              {
+                "text": "احم المدير من غرامة قرار 236",
+                "pinned": null
+              },
+              {
+                "text": "إعداد القوائم في 14 دقيقة فقط",
+                "pinned": null
+              },
+              {
+                "text": "احسب غرامة شركتك الآن مع قيود",
+                "pinned": null
+              },
+              {
+                "text": "أودع قوائمك ب 120 ريال/شهر",
+                "pinned": null
+              },
+              {
+                "text": "ابدأ الإيداع الآن في دقائق",
+                "pinned": null
+              },
+              {
+                "text": "تجنّب عقوبة عدم إيداع القوائم",
+                "pinned": null
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "تجنب غرامة قرار 236 الشخصية. قيود يصدر قوائمك ويرفعها لمنصة قوائم في دقائق. ابدأ مجاناً.",
+                "pinned": null
+              },
+              {
+                "text": "أكثر من 50,000 شركة سعودية تستخدم قيود. تجربة 14 يوم بدون بطاقة. ابدأ الآن.",
+                "pinned": null
+              },
+              {
+                "text": "موعد إيداع قوائم 2025 ينتهي 30 يونيو 2026. غرامة شخصية تصل 20,000 ريال للمدير.",
+                "pinned": null
+              },
+              {
+                "text": "موعد الإيداع 30 يونيو 2026. قيود يصدر قوائمك جاهزة لمنصة قوائم. سجل مجاناً الآن.",
+                "pinned": null
+              }
+            ],
+            "path1": "تجنب الغرامات",
+            "path2": "",
+            "final_urls": [
+              "https://lp.qoyod.com/qawaem/"
+            ],
+            "status": "ENABLED"
+          },
+          {
+            "headlines": [
+              {
+                "text": "إيداع القوائم المالية | قيود",
+                "pinned": null
+              },
+              {
+                "text": "تجنب غرامة قرار 236 الشخصية",
+                "pinned": null
+              },
+              {
+                "text": "30 يونيو 2026 - الموعد النهائي",
+                "pinned": null
+              },
+              {
+                "text": "غرامة شخصية تصل 20,000 ريال",
+                "pinned": null
+              },
+              {
+                "text": "أودع على منصة قوائم بسرعة",
+                "pinned": null
+              },
+              {
+                "text": "تصدير XBRL تلقائياً",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ شركة سعودية",
+                "pinned": null
+              },
+              {
+                "text": "متوافق ZATCA وقوائم معاً",
+                "pinned": null
+              },
+              {
+                "text": "تجربة 14 يوم مجانية",
+                "pinned": null
+              },
+              {
+                "text": "إعداد سريع في 14 دقيقة",
+                "pinned": null
+              },
+              {
+                "text": "مسؤوليتك الشخصية كمدير",
+                "pinned": null
+              },
+              {
+                "text": "احمِ شركتك من قرار 236",
+                "pinned": null
+              },
+              {
+                "text": "موعد إيداع القوائم المالية",
+                "pinned": null
+              },
+              {
+                "text": "تجنّّّّب غرامة التأخر الآن",
+                "pinned": null
+              },
+              {
+                "text": "أسعار من 120 ريال شهرياً",
+                "pinned": null
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "إيداع القوائم المالية في منصة قوائم بسهولة. تجنب غرامة قرار 236 الشخصية. ابدأ مجاناً.",
+                "pinned": null
+              },
+              {
+                "text": "تجنب غرامة قرار 236 الشخصية. قيود يصدر قوائمك ويرفعها لمنصة قوائم في دقائق. ابدأ مجاناً.",
+                "pinned": null
+              },
+              {
+                "text": "موعد إيداع قوائم 2025 ينتهي 30 يونيو 2026. غرامة المدير حتى 20,000 ريال.",
+                "pinned": null
+              },
+              {
+                "text": "موعد الإيداع 30 يونيو 2026. قيود يصدر قوائمك جاهزة لمنصة قوائم. سجل مجاناً الآن.",
+                "pinned": null
+              }
+            ],
+            "path1": "",
+            "path2": "",
+            "final_urls": [
+              "https://lp.qoyod.com/qawaem/"
+            ],
+            "status": "ENABLED"
+          }
+        ]
+      },
+      {
+        "id": 199721186547,
+        "name": "FinancialSt_EN",
+        "cpc_bid_micros": 10000,
+        "keywords": [
+          {
+            "text": "Compliance Guaranteed",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "ZATCA vs Qawaem",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "Ministry of Commerce financial statements Saudi",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "Qawaem Platform",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "Qawaem platform Saudi Arabia",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "XBRL Export",
+            "match": "EXACT",
+            "status": "ENABLED"
+          }
+        ],
+        "neg_keywords": [],
+        "rsas": [
+          {
+            "headlines": [
+              {
+                "text": "Avoid Decision 236 Fines",
+                "pinned": null
+              },
+              {
+                "text": "File to Qawaem in Minutes",
+                "pinned": null
+              },
+              {
+                "text": "Penalties Up to SAR 20,000",
+                "pinned": null
+              },
+              {
+                "text": "Deadline: June 30, 2026",
+                "pinned": null
+              },
+              {
+                "text": "ZATCA + Qawaem Compliant",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ Saudi Businesses",
+                "pinned": null
+              },
+              {
+                "text": "Protect Directors from Fines",
+                "pinned": null
+              },
+              {
+                "text": "XBRL Export Built-In",
+                "pinned": null
+              },
+              {
+                "text": "Arabic Support 24/7",
+                "pinned": null
+              },
+              {
+                "text": "Compliance Guaranteed",
+                "pinned": null
+              },
+              {
+                "text": "14-Day Free Trial - No Card",
+                "pinned": null
+              },
+              {
+                "text": "File to Qawaem Platform Now",
+                "pinned": null
+              },
+              {
+                "text": "ISO 27001 + AES-256 Secure",
+                "pinned": null
+              },
+              {
+                "text": "ZATCA vs Qawaem",
+                "pinned": null
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "Decision 236 imposes personal director fines. Avoid with Qoyod's one-click Qawaem export.",
+                "pinned": null
+              },
+              {
+                "text": "Export financial statements as XBRL to Qawaem in one click. ZATCA-compatible. Audit-ready.",
+                "pinned": null
+              },
+              {
+                "text": "Deadline: June 30, 2026 for 2025 statements. Up to SAR 20,000 per director. Start free now",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ Saudi businesses use Qoyod. ISO 27001 certified. 14-day free trial, no credit card",
+                "pinned": null
+              }
+            ],
+            "path1": "",
+            "path2": "",
+            "final_urls": [
+              "https://lp.qoyod.com/qawaem/"
+            ],
+            "status": "ENABLED"
+          },
+          {
+            "headlines": [
+              {
+                "text": "Qoyod for Decision 236",
+                "pinned": null
+              },
+              {
+                "text": "Avoid Personal Director Fines",
+                "pinned": null
+              },
+              {
+                "text": "Deadline: June 30, 2026",
+                "pinned": null
+              },
+              {
+                "text": "Fines Up to SAR 20,000",
+                "pinned": null
+              },
+              {
+                "text": "File to Qawaem Quickly",
+                "pinned": null
+              },
+              {
+                "text": "Built-In XBRL Export",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ Saudi Businesses",
+                "pinned": null
+              },
+              {
+                "text": "ZATCA + Qawaem Compatible",
+                "pinned": null
+              },
+              {
+                "text": "14-Day Free Trial",
+                "pinned": null
+              },
+              {
+                "text": "Protect Directors",
+                "pinned": null
+              },
+              {
+                "text": "Setup in 14 Minutes",
+                "pinned": null
+              },
+              {
+                "text": "Compliance Guaranteed",
+                "pinned": null
+              },
+              {
+                "text": "Start Free - No Card Needed",
+                "pinned": null
+              },
+              {
+                "text": "ZATCA vs Qawaem",
+                "pinned": null
+              },
+              {
+                "text": "File Now on Qawaem Platform",
+                "pinned": null
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "Decision 236 puts personal fines on directors. Qoyod files to Qawaem fast. Start free.",
+                "pinned": null
+              },
+              {
+                "text": "Export financial statements as XBRL to Qawaem with one click. ZATCA-aligned. Audit-ready.",
+                "pinned": null
+              },
+              {
+                "text": "Deadline June 30, 2026 for 2025 statements. Up to SAR 20,000 per director. Start now.",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ Saudi businesses use Qoyod. ISO 27001 certified. 14-day free trial, no card.",
+                "pinned": null
+              }
+            ],
+            "path1": "",
+            "path2": "",
+            "final_urls": [
+              "https://lp.qoyod.com/qawaem/"
+            ],
+            "status": "ENABLED"
+          }
+        ]
+      }
+    ]
+  },
+  "23851270716": {
+    "name": "Google_Search_AREN_ZATCAPhase2",
+    "id": "23851270716",
+    "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+    "max_conv_tcpa_micros": 0,
+    "target_spend_ceiling_micros": 0,
+    "budget_micros": 60000000,
+    "network": {
+      "google_search": true,
+      "search_partners": true,
+      "content": false,
+      "partner_search": false
+    },
+    "tracking_url_template": "{lpurl}?utm_audience={_adgroup}&campaign_id={campaignid}&ad_group_id={adgroupid}&ad_id={creative}&utm_medium=ppc&utm_source=Google&utm_content={_adname}&utm_term={keyword}&utm_campaign={_campaign}&hsa_acc=1513020554&hsa_src={network}&hsa_tgt={targetid}&hsa_kw={keyword}&hsa_mt={matchtype}&hsa_net=adwords&hsa_ver=3&hsa_cam=23851270716&hsa_grp={adgroupid}&hsa_ad={creative}",
+    "final_url_suffix": "",
+    "geos": [
+      "geoTargetConstants/2682"
+    ],
+    "langs": [
+      "languageConstants/1000",
+      "languageConstants/1019"
+    ],
+    "neg_keywords": [
+      {
+        "text": "how to",
+        "match": "PHRASE"
+      },
+      {
+        "text": "what is",
+        "match": "PHRASE"
+      },
+      {
+        "text": "free download",
+        "match": "PHRASE"
+      },
+      {
+        "text": "دليل",
+        "match": "BROAD"
+      },
+      {
+        "text": "tutorial",
+        "match": "PHRASE"
+      },
+      {
+        "text": "explanation",
+        "match": "PHRASE"
+      },
+      {
+        "text": "guide",
+        "match": "PHRASE"
+      },
+      {
+        "text": "شرح",
+        "match": "BROAD"
+      },
+      {
+        "text": "كيف",
+        "match": "BROAD"
+      },
+      {
+        "text": "ما هي",
+        "match": "BROAD"
+      },
+      {
+        "text": "ما هو",
+        "match": "BROAD"
+      },
+      {
+        "text": "مخالفة",
+        "match": "BROAD"
+      },
+      {
+        "text": "متى",
+        "match": "BROAD"
+      },
+      {
+        "text": "أين",
+        "match": "BROAD"
+      },
+      {
+        "text": "غرامة",
+        "match": "BROAD"
+      },
+      {
+        "text": "تحميل مجاني",
+        "match": "PHRASE"
+      },
+      {
+        "text": "استخراج رقم ضريبي",
+        "match": "PHRASE"
+      },
+      {
+        "text": "فاتورة جاهزة للتعديل",
+        "match": "PHRASE"
+      }
+    ],
+    "adgroups": [
+      {
+        "id": 198246169404,
+        "name": "ZATCAPhase2_AR",
+        "cpc_bid_micros": 3000000,
+        "keywords": [
+          {
+            "text": "برنامج الفاتورة",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "منصة فاتورة",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "نظام الفاتورة الإلكترونية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "برنامج الفاتورة الإلكترونية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "نظام فوترة إلكترونية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "ربط الفاتورة الإلكترونية",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "المرحلة الثانية للفاتورة الإلكترونية",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "الربط مع هيئة الزكاة والدخل",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "الربط مع هيئة الزكاة والدخل المرحلة الثانية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "الربط مع هيئة الزكاة",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "دعم الفاتورة الإلكترونية",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "ربط منصة فاتورة",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "ربط المرحلة الثانية للفاتورة الإلكترونية",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "تكامل المرحلة الثانية",
+            "match": "EXACT",
+            "status": "ENABLED"
+          }
+        ],
+        "neg_keywords": [
+          {
+            "text": "مجاني",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "مجانية",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "توظيف",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "وظيفة",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "وظائف",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "تسجيل الدخول",
+            "match": "BROAD",
+            "status": "ENABLED"
+          },
+          {
+            "text": "تسجيل دخول",
+            "match": "BROAD",
+            "status": "ENABLED"
+          }
+        ],
+        "rsas": [
+          {
+            "headlines": [
+              {
+                "text": "ZATCA المرحلة الثانية | متوافق",
+                "pinned": null
+              },
+              {
+                "text": "ربط الفاتورة الإلكترونية",
+                "pinned": null
+              },
+              {
+                "text": "تكامل مع منصة فاتورة في دقائق",
+                "pinned": null
+              },
+              {
+                "text": "معتمد من هيئة الزكاة والضريبة",
+                "pinned": null
+              },
+              {
+                "text": "متوافق مع المرحلة الثانية",
+                "pinned": null
+              },
+              {
+                "text": "برنامج الفاتورة الإلكترونية",
+                "pinned": null
+              },
+              {
+                "text": "أكثر من 50 ألف شركة سعودية",
+                "pinned": null
+              },
+              {
+                "text": "تجربة مجانية 14 يوم",
+                "pinned": null
+              },
+              {
+                "text": "اشترك الآن بدون بطاقة ائتمانية",
+                "pinned": null
+              },
+              {
+                "text": "متوافق في 7 أيام أو استرداد",
+                "pinned": null
+              },
+              {
+                "text": "موعد المرحلة الثانية 30 يونيو",
+                "pinned": null
+              },
+              {
+                "text": "قيود - الحل المعتمد للسعودية",
+                "pinned": null
+              },
+              {
+                "text": "الربط مع هيئة الزكاة والدخل",
+                "pinned": null
+              },
+              {
+                "text": "المرحلة الثانية للفاتورة",
+                "pinned": null
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "اربط نظامك بمنصة فاتورة بسهولة. XML، PDF/A-3، REST API. معتمد من هيئة الزكاة.",
+                "pinned": null
+              },
+              {
+                "text": "أكثر من 50,000 شركة سعودية تستخدم Qoyod. تجربة مجانية 14 يوماً. ابدأ الآن.",
+                "pinned": null
+              },
+              {
+                "text": "الموجة 24 من المرحلة الثانية تنتهي 30 يونيو 2026. اربط نظامك في 7 أيام.",
+                "pinned": null
+              },
+              {
+                "text": "خدمة عملاء عربية على مدار الساعة. متخصص في السوق السعودي. مرحلة أولى وثانية.",
+                "pinned": null
+              }
+            ],
+            "path1": "",
+            "path2": "",
+            "final_urls": [
+              "https://lp.qoyod.com/einvoice-integration/"
+            ],
+            "status": "ENABLED"
+          }
+        ]
+      },
+      {
+        "id": 201783257932,
+        "name": "ZATCAPhase2_EN",
+        "cpc_bid_micros": 10000,
+        "keywords": [
+          {
+            "text": "ZATCA e-invoicing",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "ZATCA Phase 2",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "ZATCA integration",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "zatca integration",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "zatca e invoicing phase 2",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "zatca phase 2 integration",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "zatca phase 2 requirements",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "fatoora portal",
+            "match": "EXACT",
+            "status": "ENABLED"
+          },
+          {
+            "text": "fatoora portal",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          },
+          {
+            "text": "fatoora platform",
+            "match": "PHRASE",
+            "status": "ENABLED"
+          }
+        ],
+        "neg_keywords": [],
+        "rsas": [
+          {
+            "headlines": [
+              {
+                "text": "ZATCA Phase 2 Integration",
+                "pinned": null
+              },
+              {
+                "text": "Connect to Fatoora Fast",
+                "pinned": null
+              },
+              {
+                "text": "ZATCA Certified E-Invoicing",
+                "pinned": null
+              },
+              {
+                "text": "REST API + XML + PDF/A-3",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ Saudi Businesses",
+                "pinned": null
+              },
+              {
+                "text": "14-Day Free Trial - No Card",
+                "pinned": null
+              },
+              {
+                "text": "Phase 2 Deadline: 30 Jun",
+                "pinned": null
+              },
+              {
+                "text": "Arabic 24/7 Support",
+                "pinned": null
+              },
+              {
+                "text": "Phase 2 Compliance in 7 Days",
+                "pinned": null
+              },
+              {
+                "text": "Qoyod - Saudi #1 E-Invoice",
+                "pinned": null
+              },
+              {
+                "text": "Compliance Guaranteed",
+                "pinned": null
+              },
+              {
+                "text": "Phase 1 + Phase 2 Compliant",
+                "pinned": null
+              },
+              {
+                "text": "Fatoora Portal Integration",
+                "pinned": null
+              },
+              {
+                "text": "Zatca Phase 2 Requirements",
+                "pinned": null
+              },
+              {
+                "text": "Integrate Fatoora Platform",
+                "pinned": null
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "Connect your business to Fatoora portal easily. XML, PDF/A-3, REST API. ZATCA approved.",
+                "pinned": null
+              },
+              {
+                "text": "50,000+ Saudi companies use Qoyod. 14-day free trial. No credit card. Start now.",
+                "pinned": null
+              },
+              {
+                "text": "Wave 24 of Phase 2 ends 30 June 2026. Integrate in 7 days or your fees back.",
+                "pinned": null
+              },
+              {
+                "text": "Arabic-first customer support, 24/7. Specialized in the Saudi market.",
+                "pinned": null
+              }
+            ],
+            "path1": "",
+            "path2": "",
+            "final_urls": [
+              "https://lp.qoyod.com/einvoice-integration/"
+            ],
+            "status": "ENABLED"
+          }
+        ]
+      }
+    ]
+  }
+}
