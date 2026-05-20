@@ -3,12 +3,18 @@
 **You are working on the Qoyod Performance Agent.** Read in this order
 before doing anything else:
 
-1. **`docs/PLAYBOOK.md`** — who we are, audience, voice, goals,
+1. **`memory/CRITICAL_KPI_RULES.md`** — RE-READ EVERY SESSION before any
+   paid-media analysis. Compact list of non-negotiables the agent has
+   repeatedly violated. Highest priority. Enforced by hook
+   `.claude/hooks/kpi_rule_guard.py` which blocks Bash/Write/Edit calls
+   containing known violation patterns (e.g. `campaigns_daily.leads`
+   queried without joining `hubspot_leads_module_daily`).
+2. **`docs/PLAYBOOK.md`** — who we are, audience, voice, goals,
    market rules. This is identity context; ~5 minute read.
-2. **`memory/00_index.md`** — directory of topical memory files. Read
+3. **`memory/00_index.md`** — directory of topical memory files. Read
    only the ones relevant to the task at hand. Do **not** read them all
    up-front; that burns tokens for no gain.
-3. **`.claude/skills/README.md`** — reusable recipes for repetitive
+4. **`.claude/skills/README.md`** — reusable recipes for repetitive
    tasks (running a collector, checking creds, verifying BQ, Drive
    reads, OAuth, Meta probes).
 
