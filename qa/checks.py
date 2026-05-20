@@ -608,13 +608,21 @@ def check_table_format(task: dict) -> QACheckResult:
 # 9. BQ write sanity — incoming row batch passes basic integrity rules
 # ─────────────────────────────────────────────────────────────────────────────
 def check_bq_write(table: str, rows: list[dict], key_fields: list[str]) -> QACheckResult:
-    """Pass if incoming rows have no internal duplicates and required keys are populated."""
+    """Pass if incoming rows have no internal duplicates and required keys are populated.
+
+    Note (2026-05-20): `key_fields=["date"]` is a sentinel meaning
+    "rebuild entire date partition" — _rebuild_daily_buckets() in
+    hubspot_leads_bq.py uses this pattern. The upsert DELETEs the whole
+    date and re-INSERTs all rows for that day; multiple rows per date
+    are intentional, not duplicates. Same exemption applies to any
+    single-key upsert whose key is a partition column.
+    """
     issues = []
     if not rows:
         return QACheckResult(name="bq_write_sanity", passed=True, severity="block",
                              detail="empty batch — nothing to write")
-    # Internal dupe check
-    if key_fields:
+    # Internal dupe check — skipped for partition-rebuild upserts (key = ["date"] only)
+    if key_fields and key_fields != ["date"]:
         seen = set()
         dupes = 0
         for r in rows:

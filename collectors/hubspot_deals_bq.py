@@ -486,9 +486,20 @@ def collect_and_write(days: int = None, start_date: date = None,
 
     print(f"[deals] Processed {total_fetched} deals -> {len(rows)} daily buckets")
     _ensure_table_exists()
+    # Key MUST match the bucket grouping above (13 fields, not 5). Same class
+    # of bug as the leads collector fixed on 2026-05-18 — narrow upsert key
+    # made two buckets that differed only in deal_utm_audience / *_content /
+    # *_source / *_medium / *_term / *_id_sync look like duplicates to the QA
+    # gate. Bucket key is the source of truth.
     return upsert_rows("hubspot_deals_daily", rows,
                        key_fields=["date", "qoyod_source", "pipeline",
-                                   "stage_status", "deal_utm_campaign"])
+                                   "stage_status", "deal_utm_campaign",
+                                   "deal_utm_audience", "deal_utm_content",
+                                   "deal_utm_source", "deal_utm_medium",
+                                   "deal_utm_term",
+                                   "deal_campaign_id_sync",
+                                   "deal_adgroup_id_sync",
+                                   "deal_ad_id_sync"])
 
 
 def _ensure_table_exists():
