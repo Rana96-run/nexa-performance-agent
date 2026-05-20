@@ -150,6 +150,7 @@ class QAGate:
             (checks.check_freshness,              (), {}),
             (checks.check_multi_account_presence, (), {}),
             (checks.check_bq_hubspot_reconcile,   (), {}),
+            (checks.check_deals_full_reconcile,   (), {}),  # counts + amounts
         ])
         blockers = [r for r in results if not r.passed and r.severity == "block"]
         warns    = [r for r in results if not r.passed and r.severity == "warn"]

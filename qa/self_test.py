@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from .checks import (
     check_slack_format, check_asana_footer, check_bq_write,
     check_numeric_claims, check_freshness, check_multi_account_presence,
+    check_deals_full_reconcile,
 )
 from .errors import QACheckResult
 
@@ -78,6 +79,15 @@ FIXTURES = [
      check_numeric_claims,
      ("No dollar figures in this text.",),
      True, "no dollar figures"),
+
+    # ── Deals reconcile — live BQ↔HS check, fixtures use real data ───────
+    # No "bad" fixture: this check IS the production data. Pass = drift
+    # under thresholds (1% counts / 2% amounts). Fail = real production
+    # drift that needs attention. Self-test row will mirror gate output.
+    ("deals_full_reconcile_live",
+     check_deals_full_reconcile,
+     (),
+     True, ""),
 ]
 
 

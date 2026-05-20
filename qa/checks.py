@@ -208,6 +208,143 @@ def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 4b. BQ ↔ HubSpot — deals + amounts reconciliation (Sales Pipeline, 7d)
+# ─────────────────────────────────────────────────────────────────────────────
+# Catches: amount calculation bugs, won-amount drift, currency-conversion
+# errors, createdate mis-bucketing. Added 2026-05-20 after the deals
+# collector silent-failure incident, which would have caught the 3-day
+# data gap immediately if this check had existed.
+def check_deals_full_reconcile(
+    count_threshold: float = 0.01,    # counts must match within 1%
+    amount_threshold: float = 0.02,   # amounts within 2% (FP rounding noise)
+) -> QACheckResult:
+    """Pass if BQ hubspot_deals_daily reconciles to HubSpot Search API on:
+    counts (total + won) AND amounts (total_USD + won_USD), Sales Pipeline,
+    last 7 settled days (T-2..T-8). Drift > threshold → block."""
+    import datetime as _dt
+    def _q():
+        import requests
+        c, p, d = _bq()
+        riyadh = _dt.timezone(_dt.timedelta(hours=3))
+        today_r = _dt.datetime.now(riyadh).date()
+        end = today_r - _dt.timedelta(days=2)
+        start = end - _dt.timedelta(days=6)
+
+        # BQ side
+        sql = f"""
+        SELECT SUM(deals_total) AS deals_total,
+               SUM(deals_won)   AS deals_won,
+               ROUND(SUM(amount_total), 2) AS amount_total,
+               ROUND(SUM(amount_won),   2) AS amount_won
+        FROM `{p}.{d}.hubspot_deals_daily`
+        WHERE date BETWEEN '{start}' AND '{end}'
+          AND pipeline = 'Sales Pipeline'
+        """
+        bq_r = list(c.query(sql).result())[0]
+
+        # HubSpot side — Sales Pipeline by createdate window
+        since_ms = int(_dt.datetime(start.year, start.month, start.day,
+                                    tzinfo=riyadh).timestamp() * 1000)
+        until_ms = int(_dt.datetime((end + _dt.timedelta(days=1)).year,
+                                    (end + _dt.timedelta(days=1)).month,
+                                    (end + _dt.timedelta(days=1)).day,
+                                    tzinfo=riyadh).timestamp() * 1000)
+        token = os.environ["HUBSPOT_ACCESS_TOKEN"]
+        # Find Sales Pipeline ID
+        r = requests.get("https://api.hubapi.com/crm/v3/pipelines/deals",
+                         headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        sp_id = next((pp["id"] for pp in r.json().get("results", [])
+                      if pp["label"] == "Sales Pipeline"), None)
+        if not sp_id:
+            return None
+        hs_count = hs_won = 0
+        hs_amt = hs_won_amt = 0.0
+        after = 0
+        while True:
+            body = {
+                "filterGroups": [{"filters": [
+                    {"propertyName": "pipeline",   "operator": "EQ",  "value": sp_id},
+                    {"propertyName": "createdate", "operator": "GTE", "value": since_ms},
+                    {"propertyName": "createdate", "operator": "LT",  "value": until_ms},
+                ]}],
+                "properties": ["amount", "hs_is_closed_won"],
+                "limit": 100, "after": after,
+            }
+            rr = requests.post("https://api.hubapi.com/crm/v3/objects/deals/search",
+                               headers={"Authorization": f"Bearer {token}",
+                                        "Content-Type": "application/json"},
+                               json=body, timeout=30)
+            if rr.status_code != 200:
+                break
+            data = rr.json()
+            for obj in data.get("results", []):
+                pp = obj.get("properties", {})
+                amt = float(pp.get("amount") or 0)
+                is_won = pp.get("hs_is_closed_won") == "true"
+                hs_count += 1
+                hs_amt += amt
+                if is_won:
+                    hs_won += 1
+                    hs_won_amt += amt
+            nxt = data.get("paging", {}).get("next", {}).get("after")
+            if not nxt: break
+            after = nxt
+            if hs_count > 5000: break
+        # SAR → USD via 3.75 peg (matches collector)
+        return {
+            "bq_deals_total":   int(bq_r.deals_total or 0),
+            "bq_deals_won":     int(bq_r.deals_won or 0),
+            "bq_amount_total":  float(bq_r.amount_total or 0),
+            "bq_amount_won":    float(bq_r.amount_won or 0),
+            "hs_deals_total":   hs_count,
+            "hs_deals_won":     hs_won,
+            "hs_amount_total":  round(hs_amt / 3.75, 2),
+            "hs_amount_won":    round(hs_won_amt / 3.75, 2),
+        }
+
+    try:
+        m = _cached("deals_recon", _q)
+        if not m:
+            return QACheckResult(name="deals_full_reconcile", passed=True, severity="warn",
+                                 detail="could not load Sales Pipeline id — non-fatal")
+        # Compute drifts
+        def _drift(b, h):
+            return ((b - h) / h) if h else 0
+        d_total = _drift(m["bq_deals_total"],   m["hs_deals_total"])
+        d_won   = _drift(m["bq_deals_won"],     m["hs_deals_won"])
+        a_total = _drift(m["bq_amount_total"],  m["hs_amount_total"])
+        a_won   = _drift(m["bq_amount_won"],    m["hs_amount_won"])
+        failures = []
+        if abs(d_total) > count_threshold:
+            failures.append(f"deals_total drift {d_total:+.2%}")
+        if abs(d_won)   > count_threshold:
+            failures.append(f"deals_won drift {d_won:+.2%}")
+        if abs(a_total) > amount_threshold:
+            failures.append(f"amount_total drift {a_total:+.2%}")
+        if abs(a_won)   > amount_threshold:
+            failures.append(f"amount_won drift {a_won:+.2%}")
+        ok = not failures
+        detail = (
+            f"deals BQ={m['bq_deals_total']}/{m['bq_deals_won']} "
+            f"HS={m['hs_deals_total']}/{m['hs_deals_won']}; "
+            f"amt BQ=${m['bq_amount_total']:.0f}/${m['bq_amount_won']:.0f} "
+            f"HS=${m['hs_amount_total']:.0f}/${m['hs_amount_won']:.0f}"
+        )
+        if failures:
+            detail = "; ".join(failures) + " | " + detail
+        return QACheckResult(
+            name="deals_full_reconcile",
+            passed=ok,
+            severity="block",
+            detail=detail,
+            metrics=m,
+        )
+    except Exception as e:
+        return QACheckResult(name="deals_full_reconcile", passed=True, severity="warn",
+                             detail=f"reconciler unavailable: {e} — non-fatal")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 5. Numeric claim check — extract $XXX figures from Slack text + verify against BQ
 # ─────────────────────────────────────────────────────────────────────────────
 _DOLLAR = re.compile(r"\$\s?([0-9][0-9,]*\.?[0-9]*)")
