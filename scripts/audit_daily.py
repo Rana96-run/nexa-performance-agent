@@ -170,11 +170,16 @@ def check_disapproved_ads():
             add("medium", "disapproved", f"Acct {acct}: policy query failed: {str(e)[:200]}")
 
 
-# ── Check 4: Active campaigns missing canonical UTM suffix ───────────────
+# ── Check 4: UTM tracking integrity — EFFECTIVE (account OR campaign) ────
+# UTM tracking lives at ACCOUNT level (customer.tracking_url_template +
+# customer.final_url_suffix). Campaigns inherit unless they override.
+# A previous version of this check flagged 'missing campaign suffix' which
+# triggered a bad auto-fix (override of working account-level config).
+# This version checks effective state.
 def check_utm_suffix_missing():
     try:
         sys.path.insert(0, str(REPO))
-        from executors.google_ads import get_client, STANDARD_UTM_SUFFIX
+        from executors.google_ads import get_client
     except Exception as e:
         add("medium", "utm", f"Cannot import: {e}")
         return
@@ -183,17 +188,37 @@ def check_utm_suffix_missing():
     ga = client.get_service("GoogleAdsService")
     for acct in ["1513020554", "5753494964"]:
         try:
-            q = """
+            # 1. Check account-level UTM tracking
+            acc_suffix = ""
+            acc_template = ""
+            for r in ga.search(customer_id=acct, query="SELECT customer.final_url_suffix, customer.tracking_url_template FROM customer"):
+                acc_suffix   = r.customer.final_url_suffix or ""
+                acc_template = r.customer.tracking_url_template or ""
+            account_has_tracking = bool(acc_suffix) or bool(acc_template)
+
+            if not account_has_tracking:
+                add("high", "utm",
+                    f"Acct {acct}: NO account-level UTM tracking (neither final_url_suffix nor "
+                    f"tracking_url_template on customer). All UTM attribution at risk.")
+
+            # 2. Flag campaigns that OVERRIDE the account-level setting (may be intentional, but
+            #    duplicate-UTM bug possible if the override re-states what's already in account).
+            q_camp = """
             SELECT campaign.id, campaign.name, campaign.final_url_suffix
             FROM campaign
             WHERE campaign.status = 'ENABLED'
               AND campaign.advertising_channel_type = 'SEARCH'
             """
-            for r in ga.search(customer_id=acct, query=q):
-                if not r.campaign.final_url_suffix:
-                    add("medium", "utm",
-                        f"Acct {acct}: ENABLED Search campaign '{r.campaign.name}' has NO final_url_suffix — "
-                        f"UTM attribution to HubSpot likely broken.")
+            for r in ga.search(customer_id=acct, query=q_camp):
+                camp_suffix = r.campaign.final_url_suffix or ""
+                if camp_suffix and account_has_tracking:
+                    add("low", "utm",
+                        f"Acct {acct}: campaign '{r.campaign.name}' has campaign-level UTM suffix "
+                        f"overriding account-level — verify intentional (duplicate UTMs possible).")
+                elif not camp_suffix and not account_has_tracking:
+                    add("high", "utm",
+                        f"Acct {acct}: campaign '{r.campaign.name}' has UTM tracking at neither "
+                        f"account nor campaign level — attribution broken.")
         except Exception as e:
             add("low", "utm", f"Acct {acct}: utm check failed: {str(e)[:200]}")
 

@@ -105,7 +105,37 @@ LIMIT 50
 
 Then pick the token set that matches >50% of existing campaigns. NEVER invent a new token unless you have user approval.
 
-## 4. Self-check after writing a script — before running
+## 4. UTM tracking is at ACCOUNT level — never override at campaign level without reason
+
+The UTM tracking infrastructure lives at the **customer (account) level**
+in Google Ads:
+  - `customer.tracking_url_template` — the main template with `{lpurl}`
+    and standard UTMs (source, medium, campaign, content, audience, term)
+    plus `hsa_*` fields for HubSpot ingestion
+  - `customer.final_url_suffix` — IDs: `campaign_id={campaignid}&ad_group_id={adgroupid}&ad_id={creative}`
+
+All campaigns INHERIT both. Campaign-level overrides cause duplicate UTMs
+in URLs if they re-state what's already in account-level template.
+
+**Caught violation:**
+
+- **2026-05-20** — my daily audit flagged 3 compliance campaigns as
+  "missing UTM suffix" (because campaign-level was empty). I auto-fixed
+  by applying STANDARD_UTM_SUFFIX at campaign level — both accounts
+  already had full account-level tracking. My fix caused duplicate UTMs
+  in click URLs (utm_campaign twice). Reverted by clearing campaign-level
+  final_url_suffix + url_custom_parameters on the 4 affected campaigns.
+
+**Rule:**
+1. Before flagging "missing UTM" check `customer.final_url_suffix` AND
+   `customer.tracking_url_template` FIRST. If either is set at account
+   level, campaigns inherit.
+2. Only set campaign-level `final_url_suffix` if account-level is unset
+   OR a genuinely different tracking is needed.
+3. The canonical STANDARD_UTM_SUFFIX in `executors/google_ads.py` is the
+   IDEAL. The team's actual setup may differ — match what's deployed.
+
+## 5. Self-check after writing a script — before running
 
 Before executing any new analysis script, scan the SQL for:
 - `SELECT .* leads .* FROM .* campaigns_daily` → VIOLATION
