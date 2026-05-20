@@ -49,26 +49,34 @@ violations = []
 content_lower = content.lower()
 
 # ── Pattern 1: campaigns_daily.leads without HubSpot join ───────────────
+# Tighter signal — require BOTH a SQL-context marker (SELECT...FROM...campaigns_daily)
+# AND an actual leads reference in that query. This avoids false-positives in docs
+# strings, sheet rows, or commentary that mention 'campaigns_daily.leads' verbatim.
 if "campaigns_daily" in content_lower:
-    # Multiple lead-reference patterns
-    lead_patterns = [
-        r"\bsum\s*\(\s*(\w+\.)?leads\b",
-        r"\bselect[^;]*\bleads\b[^;]*\bfrom[^;]*campaigns_daily",
-        r"campaigns_daily[^;]*\.\s*leads\b",
-    ]
-    has_lead_select = any(re.search(p, content_lower, re.DOTALL) for p in lead_patterns)
-    has_hs_join = "hubspot_leads_module_daily" in content_lower
-
-    if has_lead_select and not has_hs_join:
-        violations.append({
-            "pattern": "campaigns_daily.leads queried without hubspot_leads_module_daily join",
-            "fix": (
-                "Leads MUST come from hubspot_leads_module_daily, NOT campaigns_daily. "
-                "Channel-reported 'leads' on campaigns_daily include page views and "
-                "are not real form submissions. See memory/CRITICAL_KPI_RULES.md for the "
-                "correct WITH-hs-pre-agg pattern."
-            ),
-        })
+    # Must look like real SQL — a SELECT clause that pulls FROM campaigns_daily
+    sql_context = re.search(
+        r"\bselect\b[^;]{0,500}\bfrom\s+[`\"']?\w*\.?\w*\.?campaigns_daily",
+        content_lower, re.DOTALL,
+    )
+    if sql_context:
+        # Within that SQL block, look for a 'leads' reference (column or sum/count)
+        sql_block = sql_context.group(0)
+        leads_in_sql = bool(
+            re.search(r"\b(sum|count|avg)\s*\(\s*(\w+\.)?leads\b", sql_block)
+            or re.search(r"\bselect\b[^;]*\bleads\b[^;]*\bfrom\b", sql_block)
+            or re.search(r"\bcampaigns_daily\.\s*leads\b", sql_block)
+        )
+        has_hs_join = "hubspot_leads_module_daily" in content_lower
+        if leads_in_sql and not has_hs_join:
+            violations.append({
+                "pattern": "campaigns_daily.leads queried in SQL without hubspot_leads_module_daily join",
+                "fix": (
+                    "Leads MUST come from hubspot_leads_module_daily, NOT campaigns_daily. "
+                    "Channel-reported 'leads' on campaigns_daily include page views and "
+                    "are not real form submissions. See memory/CRITICAL_KPI_RULES.md for the "
+                    "correct WITH-hs-pre-agg pattern."
+                ),
+            })
 
 # ── Pattern 2: ads_daily conversions/leads without HubSpot join ─────────
 if "ads_daily" in content_lower:
