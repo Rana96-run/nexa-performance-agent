@@ -54,8 +54,11 @@ content_lower = content.lower()
 # strings, sheet rows, or commentary that mention 'campaigns_daily.leads' verbatim.
 if "campaigns_daily" in content_lower:
     # Must look like real SQL — a SELECT clause that pulls FROM campaigns_daily
+    # Match fully-qualified BQ paths including hyphenated project IDs:
+    # `project-name.dataset.table`, project_name.dataset.table, dataset.table, table
+    # Use [\w\-] to handle hyphens in project IDs.
     sql_context = re.search(
-        r"\bselect\b[^;]{0,500}\bfrom\s+[`\"']?\w*\.?\w*\.?campaigns_daily",
+        r"\bselect\b[^;]{0,500}\bfrom\s+[`\"']?[\w\-]*\.?[\w\-]*\.?campaigns_daily",
         content_lower, re.DOTALL,
     )
     if sql_context:
