@@ -30,7 +30,10 @@ def _ad_card(rows: list[dict], mode: str) -> str:
                 f"**14d Spend:**    ${r['spend_14d']:.0f}\n"
                 f"**14d HS Leads:** {r['hs_leads_14d']}\n"
                 f"**CTR drop:**     {r['ctr_first7d']:.2%} → {r['ctr_last7d']:.2%} ({r['ctr_drop_pct']:.0f}% decline)\n"
-                f"**Verdict:**      Refresh creative — fatigue"
+                f"**Action:**       (1) Pause '{r['ad_name']}' in ad set '{r['adset']}'. "
+                f"(2) Duplicate it inside the same ad set. "
+                f"(3) Change the hook or lead visual — CTR has dropped {r['ctr_drop_pct']:.0f}% in 7 days, "
+                f"meaning the current creative is exhausted. Do not change audience or budget — isolate the creative variable."
             )
         elif mode == "frequency_sat":
             cards.append(
@@ -74,7 +77,9 @@ def _create_one_bucket(channel: str, bucket: str, findings: list[dict]) -> str |
         "ctr_fatigue":     (f"Daily creative-fatigue audit (last 14d). {len(findings)} {label} ad(s) "
                              f"with last-7d CTR ≥ 30% lower than the prior 7d.\n\n"
                              f"**Why this matters:** When an ad's audience has seen it too many times, "
-                             f"CTR collapses and CPC rises. Refresh the creative or rotate it out.\n\n"),
+                             f"CTR collapses and CPC rises. For each ad below: (1) pause the ad, "
+                             f"(2) duplicate it inside the same ad set, (3) change the hook or lead visual. "
+                             f"Do not change audience or budget — isolate the creative variable.\n\n"),
         "frequency_sat":   (f"Daily frequency-saturation audit (last 14d). {len(findings)} {label} ad(s) "
                              f"with avg frequency > 2.5x.\n\n"
                              f"**Why this matters:** Audience is over-saturated — same users see this ad "

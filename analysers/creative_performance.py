@@ -217,8 +217,19 @@ def _build_direction(best: list[dict], worst: list[dict], mode: str) -> str:
         w = worst[0]
         lines.append(
             f"Worst {label}: '{w['name']}' — "
-            f"{w['disquals']} disqualified leads, {w['qual_rate']*100:.0f}% qual. "
-            f"{'Add as negative keyword.' if mode == 'keyword' else 'Pause or rework this creative.'}"
+            f"{w['disquals']} disqualified leads, {w['qual_rate']*100:.0f}% qual rate. "
+            + (
+                "Add as negative keyword."
+                if mode == "keyword"
+                else (
+                    "Action: (1) Pause this ad in the platform. "
+                    "(2) Duplicate it inside the same ad set. "
+                    "(3) Change the hook or headline — the current version is attracting "
+                    "unqualified leads; try a copy angle that names the target buyer "
+                    "(e.g. 'for accountants', 'for restaurants', 'for 5+ employees'). "
+                    "Do not change the audience or budget — isolate the creative variable."
+                )
+            )
         )
 
     return " ".join(lines) if lines else f"No {label} qualification data available."

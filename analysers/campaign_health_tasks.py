@@ -647,7 +647,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                     "- If Lost IS (Budget) > 20%: raise daily budget\n"
                     "- If Lost IS (Rank) > 30%: improve Quality Score or raise bids\n"
                     "- If IS > 80%: broaden keywords / add new ad groups\n"
-                    "- If frequency > 3: refresh creatives to avoid ad fatigue\n"
+                    "- If frequency > 3: go to the Ads level in this campaign, identify the ad(s) with the highest frequency, then: (1) pause that ad, (2) duplicate it inside the same ad set, (3) change the hook or lead visual — do not change audience or budget\n"
                     "- Ensure `utm_source=paid_social&utm_medium=cpm` so brand-lift is tracked\n"
                 )
                 task_title = f"{channel.replace('_',' ').title()} — IS Review: {f['campaign']} ({date_range_str})"
