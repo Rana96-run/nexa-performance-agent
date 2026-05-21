@@ -1,0 +1,286 @@
+{
+  "ar": [
+    {
+      "keyword": "منصة قوائم",
+      "avg_monthly": 3600,
+      "competition": "LOW",
+      "low_cpc_usd": 0.623602,
+      "high_cpc_usd": 2.151938
+    },
+    {
+      "keyword": "محاسب قانوني",
+      "avg_monthly": 2400,
+      "competition": "MEDIUM",
+      "low_cpc_usd": 1.399086,
+      "high_cpc_usd": 5.153567
+    },
+    {
+      "keyword": "الاستعلام عن ايداع القوائم المالية",
+      "avg_monthly": 1900,
+      "competition": "LOW",
+      "low_cpc_usd": 2.213038,
+      "high_cpc_usd": 3.261608
+    },
+    {
+      "keyword": "قائمة الدخل",
+      "avg_monthly": 1600,
+      "competition": "LOW",
+      "low_cpc_usd": 0.525165,
+      "high_cpc_usd": 2.75267
+    },
+    {
+      "keyword": "قوائم وزارة التجارة",
+      "avg_monthly": 1600,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "قائمة الدخل والمركز المالي",
+      "avg_monthly": 1000,
+      "competition": "LOW",
+      "low_cpc_usd": 0.494128,
+      "high_cpc_usd": 1.506084
+    },
+    {
+      "keyword": "استعلام عن ايداع القوائم المالية",
+      "avg_monthly": 880,
+      "competition": "LOW",
+      "low_cpc_usd": 1.933551,
+      "high_cpc_usd": 4.150782
+    },
+    {
+      "keyword": "مكتب محاسب قانوني",
+      "avg_monthly": 590,
+      "competition": "MEDIUM",
+      "low_cpc_usd": 1.597976,
+      "high_cpc_usd": 4.635447
+    },
+    {
+      "keyword": "محاسب قانوني معتمد",
+      "avg_monthly": 390,
+      "competition": "MEDIUM",
+      "low_cpc_usd": 1.487958,
+      "high_cpc_usd": 4.583306
+    },
+    {
+      "keyword": "مكتب السديس محاسب قانوني",
+      "avg_monthly": 390,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "أشكال قائمة الدخل",
+      "avg_monthly": 260,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "الاستفسار عن حالة ايداع القوائم المالية",
+      "avg_monthly": 260,
+      "competition": "LOW",
+      "low_cpc_usd": 1.253133,
+      "high_cpc_usd": 4.227868
+    },
+    {
+      "keyword": "التحقق من ايداع القوائم المالية",
+      "avg_monthly": 260,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "تقرير مالي",
+      "avg_monthly": 210,
+      "competition": "LOW",
+      "low_cpc_usd": 0.410601,
+      "high_cpc_usd": 1.247734
+    },
+    {
+      "keyword": "مكتب محاسب قانوني معتمد",
+      "avg_monthly": 170,
+      "competition": "MEDIUM",
+      "low_cpc_usd": 1.451343,
+      "high_cpc_usd": 4.300493
+    },
+    {
+      "keyword": "الاستفسار عن ايداع القوائم المالية",
+      "avg_monthly": 170,
+      "competition": "LOW",
+      "low_cpc_usd": 0.922519,
+      "high_cpc_usd": 2.306175
+    },
+    {
+      "keyword": "قائمة الدخل pdf",
+      "avg_monthly": 170,
+      "competition": "LOW",
+      "low_cpc_usd": 0.342674,
+      "high_cpc_usd": 1.237953
+    },
+    {
+      "keyword": "قائمة الدخل الشامل",
+      "avg_monthly": 170,
+      "competition": "LOW",
+      "low_cpc_usd": 0.583588,
+      "high_cpc_usd": 1.77908
+    },
+    {
+      "keyword": "ايداع قوائم",
+      "avg_monthly": 140,
+      "competition": "LOW",
+      "low_cpc_usd": 1.253133,
+      "high_cpc_usd": 2.05702
+    },
+    {
+      "keyword": "قائمه الدخل",
+      "avg_monthly": 140,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "xbrl",
+      "avg_monthly": 110,
+      "competition": "LOW",
+      "low_cpc_usd": 2.018023,
+      "high_cpc_usd": 7.13055
+    },
+    {
+      "keyword": "محاسبة قانونية",
+      "avg_monthly": 110,
+      "competition": "MEDIUM",
+      "low_cpc_usd": 1.13023,
+      "high_cpc_usd": 2.81613
+    },
+    {
+      "keyword": "محاسب القانوني",
+      "avg_monthly": 110,
+      "competition": "LOW",
+      "low_cpc_usd": 1.212843,
+      "high_cpc_usd": 3.890791
+    },
+    {
+      "keyword": "نموذج ميزانية عمومية excel",
+      "avg_monthly": 110,
+      "competition": "LOW",
+      "low_cpc_usd": 1.076803,
+      "high_cpc_usd": 3.283443
+    },
+    {
+      "keyword": "إيداع القوائم المالية",
+      "avg_monthly": 110,
+      "competition": "LOW",
+      "low_cpc_usd": 1.386389,
+      "high_cpc_usd": 2.956624
+    },
+    {
+      "keyword": "وزارة التجارة قوائم",
+      "avg_monthly": 90,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "مكتب محاسبة قانوني",
+      "avg_monthly": 90,
+      "competition": "MEDIUM",
+      "low_cpc_usd": 1.587323,
+      "high_cpc_usd": 3.837902
+    },
+    {
+      "keyword": "ايداع القوائم المالية للشركات",
+      "avg_monthly": 90,
+      "competition": "LOW",
+      "low_cpc_usd": 1.366579,
+      "high_cpc_usd": 3.083196
+    },
+    {
+      "keyword": "استفسار عن ايداع قوائم مالية",
+      "avg_monthly": 50,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "برنامج قوائم وزارة التجارة",
+      "avg_monthly": 50,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    }
+  ],
+  "en": [
+    {
+      "keyword": "balance sheet format",
+      "avg_monthly": 260,
+      "competition": "LOW",
+      "low_cpc_usd": 0.64055,
+      "high_cpc_usd": 2.5
+    },
+    {
+      "keyword": "balance statement format",
+      "avg_monthly": 260,
+      "competition": "LOW",
+      "low_cpc_usd": 0.64055,
+      "high_cpc_usd": 2.5
+    },
+    {
+      "keyword": "balance sheet example",
+      "avg_monthly": 90,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "accounting sheet example",
+      "avg_monthly": 90,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "balance spreadsheet example",
+      "avg_monthly": 90,
+      "competition": "LOW",
+      "low_cpc_usd": 0.0,
+      "high_cpc_usd": 0.0
+    },
+    {
+      "keyword": "format of p&l account",
+      "avg_monthly": 90,
+      "competition": "LOW",
+      "low_cpc_usd": 1.256597,
+      "high_cpc_usd": 4.199729
+    },
+    {
+      "keyword": "balance sheet template excel",
+      "avg_monthly": 50,
+      "competition": "LOW",
+      "low_cpc_usd": 0.460602,
+      "high_cpc_usd": 3.340876
+    },
+    {
+      "keyword": "balance sheet format in excel",
+      "avg_monthly": 50,
+      "competition": "LOW",
+      "low_cpc_usd": 0.460602,
+      "high_cpc_usd": 3.340876
+    },
+    {
+      "keyword": "sample balance sheet excel",
+      "avg_monthly": 50,
+      "competition": "LOW",
+      "low_cpc_usd": 0.460602,
+      "high_cpc_usd": 3.340876
+    },
+    {
+      "keyword": "balance sheet format in excel sheet",
+      "avg_monthly": 50,
+      "competition": "LOW",
+      "low_cpc_usd": 0.460602,
+      "high_cpc_usd": 3.340876
+    }
+  ]
+}
