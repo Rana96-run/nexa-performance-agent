@@ -1,0 +1,537 @@
+{
+  "1513020554": {
+    "negatives": [
+      {
+        "text": "jobs",
+        "match": "BROAD"
+      },
+      {
+        "text": "download",
+        "match": "BROAD"
+      },
+      {
+        "text": "excel",
+        "match": "BROAD"
+      },
+      {
+        "text": "hiring",
+        "match": "BROAD"
+      },
+      {
+        "text": "template",
+        "match": "BROAD"
+      },
+      {
+        "text": "course",
+        "match": "BROAD"
+      },
+      {
+        "text": "pdf",
+        "match": "BROAD"
+      },
+      {
+        "text": "توظيف",
+        "match": "BROAD"
+      },
+      {
+        "text": "وظيفة",
+        "match": "BROAD"
+      },
+      {
+        "text": "وظائف",
+        "match": "BROAD"
+      },
+      {
+        "text": "تنزيل",
+        "match": "BROAD"
+      },
+      {
+        "text": "تحميل",
+        "match": "BROAD"
+      },
+      {
+        "text": "شرح",
+        "match": "BROAD"
+      },
+      {
+        "text": "تمويل",
+        "match": "BROAD"
+      },
+      {
+        "text": "شروحات",
+        "match": "BROAD"
+      },
+      {
+        "text": "دورات",
+        "match": "BROAD"
+      },
+      {
+        "text": "دورة",
+        "match": "BROAD"
+      },
+      {
+        "text": "محاسب قانوني",
+        "match": "PHRASE"
+      },
+      {
+        "text": "نماذج",
+        "match": "PHRASE"
+      },
+      {
+        "text": "نموذج",
+        "match": "PHRASE"
+      },
+      {
+        "text": "محاسبين قانونيين",
+        "match": "PHRASE"
+      },
+      {
+        "text": "مكتب محاسبة",
+        "match": "PHRASE"
+      }
+    ],
+    "audiences": [
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80137",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80133",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80279",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80281",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80538",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80530",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80518",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80463",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/92913",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/80536",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/1513020554/userInterests/92931",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/518368418",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/454728551",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/521753031",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/8244367599",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/8756063277",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/9273105583",
+        "negative": true
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/9274043400",
+        "negative": true
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/9272650060",
+        "negative": true
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/1513020554/userLists/9390701826",
+        "negative": false
+      }
+    ],
+    "call_assets": [
+      {
+        "phone": "8004330088",
+        "id": 200725347008
+      }
+    ],
+    "promo_assets": [
+      {
+        "target": "تجربة قيود",
+        "id": 363039042591
+      },
+      {
+        "target": "Qoyod Trial",
+        "id": 363039051015
+      },
+      {
+        "target": "Qoyod Annual Plan",
+        "id": 363039256950
+      },
+      {
+        "target": "باقة قيود السنوية",
+        "id": 363039297633
+      }
+    ],
+    "user_lists": [
+      {
+        "name": "All Converters",
+        "rn": "customers/1513020554/userLists/454728551",
+        "size": 6800
+      },
+      {
+        "name": "Ad Video Viewers",
+        "rn": "customers/1513020554/userLists/518368418",
+        "size": 460000
+      },
+      {
+        "name": "Channel Video Viewers",
+        "rn": "customers/1513020554/userLists/521753031",
+        "size": 480000
+      },
+      {
+        "name": "e-invoice page",
+        "rn": "customers/1513020554/userLists/8244367599",
+        "size": 1500
+      },
+      {
+        "name": "HubSpot - All Marketing Contacts",
+        "rn": "customers/1513020554/userLists/8756063277",
+        "size": 16000
+      },
+      {
+        "name": "All Converters",
+        "rn": "customers/1513020554/userLists/8954210395",
+        "size": 130000
+      },
+      {
+        "name": "HubSpot - All Customers",
+        "rn": "customers/1513020554/userLists/9272650060",
+        "size": 23000
+      },
+      {
+        "name": "Active SaaS Users",
+        "rn": "customers/1513020554/userLists/9273105583",
+        "size": 120000
+      },
+      {
+        "name": "HubSpot - Advanced/Premium/Pro Subscribers",
+        "rn": "customers/1513020554/userLists/9274043400",
+        "size": 11000
+      },
+      {
+        "name": "HubSpot - Advanced/Premium/Pro Subscribers",
+        "rn": "customers/1513020554/userLists/9274043415",
+        "size": 10000
+      },
+      {
+        "name": "HubSpot - All Customers",
+        "rn": "customers/1513020554/userLists/9274050165",
+        "size": 21000
+      }
+    ]
+  },
+  "5753494964": {
+    "negatives": [
+      {
+        "text": "jobs",
+        "match": "BROAD"
+      },
+      {
+        "text": "download",
+        "match": "BROAD"
+      },
+      {
+        "text": "excel",
+        "match": "BROAD"
+      },
+      {
+        "text": "hiring",
+        "match": "BROAD"
+      },
+      {
+        "text": "template",
+        "match": "BROAD"
+      },
+      {
+        "text": "course",
+        "match": "BROAD"
+      },
+      {
+        "text": "pdf",
+        "match": "BROAD"
+      },
+      {
+        "text": "توظيف",
+        "match": "BROAD"
+      },
+      {
+        "text": "وظيفة",
+        "match": "BROAD"
+      },
+      {
+        "text": "وظائف",
+        "match": "BROAD"
+      },
+      {
+        "text": "تنزيل",
+        "match": "BROAD"
+      },
+      {
+        "text": "تحميل",
+        "match": "BROAD"
+      },
+      {
+        "text": "شرح",
+        "match": "BROAD"
+      },
+      {
+        "text": "تمويل",
+        "match": "BROAD"
+      },
+      {
+        "text": "شروحات",
+        "match": "BROAD"
+      },
+      {
+        "text": "دورات",
+        "match": "BROAD"
+      },
+      {
+        "text": "دورة",
+        "match": "BROAD"
+      },
+      {
+        "text": "محاسب قانوني",
+        "match": "PHRASE"
+      },
+      {
+        "text": "نماذج",
+        "match": "PHRASE"
+      },
+      {
+        "text": "نموذج",
+        "match": "PHRASE"
+      },
+      {
+        "text": "محاسبين قانونيين",
+        "match": "PHRASE"
+      },
+      {
+        "text": "مكتب محاسبة",
+        "match": "PHRASE"
+      }
+    ],
+    "audiences": [
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80137",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80133",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80279",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80281",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80538",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80530",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80518",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80463",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/92913",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/80536",
+        "negative": false
+      },
+      {
+        "kind": "USER_INTEREST",
+        "rn": "customers/5753494964/userInterests/92931",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/518368418",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/521753031",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/8244367599",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/8756063277",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/8954210395",
+        "negative": false
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/9273105583",
+        "negative": true
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/9274043415",
+        "negative": true
+      },
+      {
+        "kind": "USER_LIST",
+        "rn": "customers/5753494964/userLists/9274050165",
+        "negative": true
+      }
+    ],
+    "call_assets": [
+      {
+        "phone": "8004330088",
+        "id": 51373323575
+      }
+    ],
+    "promo_assets": [
+      {
+        "target": "Qoyod Trial",
+        "id": 362875042049
+      },
+      {
+        "target": "باقة قيود السنوية",
+        "id": 362875214024
+      },
+      {
+        "target": "تجربة قيود",
+        "id": 363039051147
+      },
+      {
+        "target": "Qoyod Annual Plan",
+        "id": 363039302886
+      }
+    ],
+    "user_lists": [
+      {
+        "name": "All Converters",
+        "rn": "customers/5753494964/userLists/454728551",
+        "size": 6800
+      },
+      {
+        "name": "Ad Video Viewers",
+        "rn": "customers/5753494964/userLists/518368418",
+        "size": 460000
+      },
+      {
+        "name": "Channel Video Viewers",
+        "rn": "customers/5753494964/userLists/521753031",
+        "size": 480000
+      },
+      {
+        "name": "e-invoice page",
+        "rn": "customers/5753494964/userLists/8244367599",
+        "size": 1500
+      },
+      {
+        "name": "HubSpot - All Marketing Contacts",
+        "rn": "customers/5753494964/userLists/8756063277",
+        "size": 16000
+      },
+      {
+        "name": "All Converters",
+        "rn": "customers/5753494964/userLists/8954210395",
+        "size": 130000
+      },
+      {
+        "name": "Active SaaS Users",
+        "rn": "customers/5753494964/userLists/9273105583",
+        "size": 120000
+      },
+      {
+        "name": "HubSpot - Advanced/Premium/Pro Subscribers",
+        "rn": "customers/5753494964/userLists/9274043415",
+        "size": 10000
+      },
+      {
+        "name": "HubSpot - All Customers",
+        "rn": "customers/5753494964/userLists/9274050165",
+        "size": 21000
+      }
+    ]
+  }
+}
