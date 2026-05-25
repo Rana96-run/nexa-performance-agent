@@ -49,6 +49,13 @@ LEAD_OBJ = "0-136"
 
 PROPERTIES = [
     "hs_createdate", "hs_lastmodifieddate", "hs_pipeline", "hs_pipeline_stage", "hs_lead_is_open",
+    # Primary contact association — NULL when lead exists but no contact is
+    # linked. HubSpot UI's "All leads" view hides these by default; the team's
+    # reportable lead count must match the UI, so we capture this field and
+    # filter on it in the Overview scorecard. Orphan leads (NULL value) are
+    # surfaced as a separate data-quality signal.
+    "hs_primary_associated_object_name",
+    "hs_primary_contact_id",
     "lead_qoyod_source",
     "lead_utm_campaign", "lead_utm_audience", "lead_utm_content",
     "lead_utm_term", "lead_utm_source", "lead_utm_medium",
@@ -404,6 +411,12 @@ _INDIVIDUAL_SCHEMA = [
     _bq.SchemaField("is_qualified",         "BOOL"),
     _bq.SchemaField("is_disqualified",      "BOOL"),
     _bq.SchemaField("is_open",              "BOOL"),
+    # Primary contact association — TRUE iff lead has a primary contact linked.
+    # Matches HubSpot UI's "Primary Associated Object Name is known" filter.
+    # Added 2026-05-25 to align Hex Overview with HubSpot UI lead counts.
+    _bq.SchemaField("has_primary_assoc",    "BOOL"),
+    _bq.SchemaField("primary_assoc_name",   "STRING"),
+    _bq.SchemaField("primary_contact_id",   "STRING"),
     _bq.SchemaField("qoyod_source",         "STRING"),
     _bq.SchemaField("lead_utm_campaign",    "STRING"),
     _bq.SchemaField("lead_utm_audience",    "STRING"),
@@ -540,6 +553,12 @@ def _row_from_lead(lead: dict) -> dict | None:
     ) if disq else None
     disq_sub = (p.get("leads_disqualification_reason__sub_reasons") or None) if disq else None
 
+    # Primary contact association — true iff this lead has a primary contact
+    # linked. Matches HubSpot UI's "Primary Associated Object Name is known"
+    # filter exactly. When False the lead is an 'orphan' (form created Lead
+    # Module record but didn't link a Contact).
+    has_primary_assoc = bool((p.get("hs_primary_associated_object_name") or "").strip())
+
     return {
         "hs_object_id":        lead["id"],
         "hs_createdate":       created,
@@ -551,6 +570,9 @@ def _row_from_lead(lead: dict) -> dict | None:
         "is_qualified":        qual,
         "is_disqualified":     disq,
         "is_open":             is_open,
+        "has_primary_assoc":   has_primary_assoc,
+        "primary_assoc_name":  (p.get("hs_primary_associated_object_name") or "").strip() or None,
+        "primary_contact_id":  (p.get("hs_primary_contact_id") or "").strip() or None,
         "qoyod_source":        src_label,
         "lead_utm_campaign":   (p.get("lead_utm_campaign") or "").strip() or "__none__",
         "lead_utm_audience":   (p.get("lead_utm_audience") or "").strip() or None,
