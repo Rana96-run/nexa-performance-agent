@@ -257,22 +257,28 @@ def collect_and_write(days: int = None, incremental: bool = False):
                 if not d:
                     continue
                 rows.append({
-                    "date":          d,
-                    "channel":       "snapchat",
-                    "account_id":    acct,
-                    "campaign_id":   cid,
-                    "campaign_name": c.get("name"),
-                    "status":        c.get("status"),
-                    "objective":     c.get("objective"),
-                    "spend":         round(spend, 2),
-                    "impressions":   impressions,
-                    "clicks":        clicks,
-                    "ctr":           round(ctr, 4),
-                    "leads":         leads,
-                    "conversions":   float(conversions_total),
-                    "cpl":           round(spend / leads, 2) if leads > 0 else None,
-                    "currency":      "USD",
-                    "updated_at":    now,
+                    "date":             d,
+                    "channel":          "snapchat",
+                    "account_id":       acct,
+                    "campaign_id":      cid,
+                    "campaign_name":    c.get("name"),
+                    "status":           c.get("status"),
+                    "objective":        c.get("objective"),
+                    "spend":            round(spend, 2),
+                    "impressions":      impressions,
+                    "clicks":           clicks,
+                    "ctr":              round(ctr, 4),
+                    "leads":            leads,
+                    "conversions":      float(conversions_total),
+                    "cpl":              round(spend / leads, 2) if leads > 0 else None,
+                    "currency":         "USD",
+                    # Source-currency snapshot (alignment with other collectors).
+                    # Other channels (Meta/MS/TikTok) populate these; Snap was
+                    # missing them, leaving native columns NULL in BQ.
+                    # Fixed 2026-05-25.
+                    "spend_native":     round(spend_native, 2),
+                    "currency_native":  cur,
+                    "updated_at":       now,
                 })
                 acct_count += 1
         print(f"[snap]   account {acct}: {acct_count} rows across {len(campaigns)} campaigns")
