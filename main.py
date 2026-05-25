@@ -244,8 +244,16 @@ def _extract_tasks(cadence: str, results: list) -> tuple[list, list]:
                 "action":      action,
             })
 
-        # Actions needing human approval go to the approvals list
-        if action in channel_actions and decision.get("confidence", "").lower() == "high":
+        # Actions needing human approval go to the approvals list.
+        # Weekly/monthly/quarterly cadences: strategist recommendations go to Asana ONLY.
+        # Real-time Slack approval is reserved for the deterministic daily flow
+        # (_run_campaign_health creates the nightly #approvals digest). The strategist
+        # bundles multiple campaigns into one decision — Asana tasks let the team
+        # action each campaign independently. Established 2026-05-25 after the weekly
+        # strategist sent a "PAUSE Multiple" that auto-approved and crashed the cadence.
+        if (action in channel_actions
+                and decision.get("confidence", "").lower() == "high"
+                and cadence == "daily"):
             approvals.append(res)
 
     return tasks, approvals
