@@ -665,6 +665,38 @@ def _watchdog_tick():
         print(f"[ops-scheduler] watchdog failed (non-fatal): {e}")
 
 
+def _refresh_spend_only():
+    """Lightweight refresh — only the 5 paid spend collectors.
+
+    Runs every 2 hours during the workday to close the same-day spend gap
+    from platform retroactive adjustments (Meta click-fraud refunds, Snap/MS
+    impression billing finalization, Google invalid-click reversals).
+    Skips HubSpot collectors (heavy) and view refresh (no schema change).
+
+    Each platform takes ~30s; total ~3 min per cycle.
+    Added 2026-05-25 after dashboard showed $1670 vs platforms' $1700.
+    """
+    from collectors import (google_ads_bq, meta_bq, snap_bq, tiktok_bq,
+                             microsoft_ads_bq)
+    SPEND_COLLECTORS = [
+        ("google_ads",     google_ads_bq.collect_and_write),
+        ("meta",           meta_bq.collect_and_write),
+        ("snapchat",       snap_bq.collect_and_write),
+        ("tiktok",         tiktok_bq.collect_and_write),
+        ("microsoft_ads",  microsoft_ads_bq.collect_and_write),
+    ]
+    print("[ops-scheduler] Workday spend refresh starting…")
+    total = 0
+    for name, fn in SPEND_COLLECTORS:
+        try:
+            n = fn(incremental=True)
+            total += n or 0
+            print(f"  {name}: {n} rows")
+        except Exception as e:
+            print(f"  {name}: FAILED {e}")
+    print(f"[ops-scheduler] Workday spend refresh wrote {total} rows total")
+
+
 def _daily_full_mirror():
     """Daily 06:00 UTC (09:00 Riyadh) — full sync_full_mirror of HubSpot.
     The 12h scheduled refresh runs incremental; this is the BELT-AND-BRACES
@@ -778,6 +810,16 @@ def run():
     for _utc_h in (1, 5, 9, 13, 21):   # every ~4h, spread across the day
         schedule.every().day.at(f"{_utc_h:02d}:30").do(_watchdog_tick)
 
+    # ── Workday spend refresh — every 2h during business hours ──────────────
+    # Paid platforms apply retroactive spend adjustments throughout the day
+    # (Meta click-fraud refunds, Snap/MS auction finalization, Google invalid
+    # click reversals — typically 1–3% of spend). Without mid-day refreshes,
+    # the dashboard shows yesterday's spend with up to 12h of unfinalized
+    # adjustments. Refreshing every 2h closes the gap to <0.5%.
+    # Added 2026-05-25 after user reported $30 gap on $1700 yesterday spend.
+    for _utc_h in (6, 8, 10, 12):  # 09:00, 11:00, 13:00, 15:00 Riyadh
+        schedule.every().day.at(f"{_utc_h:02d}:00").do(_refresh_spend_only)
+
     # ── HubSpot full mirror — 3× daily to keep stage counts within ~4h ──────
     # Workflows re-classify leads throughout the workday (qualified, disq,
     # SQL transitions). Three explicit mirrors + the 4h watchdog guarantees
@@ -805,9 +847,10 @@ def run():
     print("=" * 60)
     print("  Daily    08:00 Riyadh (05:00 UTC)  — full nightly + BQ refresh")
     print("  BQ       20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
-    print("  Mirror   09:00 Riyadh (06:00 UTC)  — daily HubSpot full mirror")
+    print("  Spend   09/11/13/15 Riyadh (06/08/10/12 UTC) — workday spend refresh")
+    print("  Mirror   09/15/22 Riyadh (06/12/19 UTC) — HubSpot full mirror (3×/day)")
     print("  Self-test 07:00 Riyadh (04:00 UTC) — QA gate check verification")
-    print("  Watchdog every ~4h — never let BQ go stale, auto-resync")
+    print("  Watchdog every ~4h — never let BQ go stale, auto-resync (4h threshold)")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month")
     print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
