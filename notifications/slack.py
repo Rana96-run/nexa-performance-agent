@@ -279,16 +279,9 @@ def post_approval_request(analysis: dict, execution_metadata: dict | None = None
             blocks=blocks, text=fallback_text,
         )
         ts = response["ts"]
-        # Pre-add both reactions so the user just clicks an existing one
-        for emoji in ("white_check_mark", "x"):
-            try:
-                client.reactions_add(
-                    channel=SLACK_CHANNEL_APPROVAL,
-                    name=emoji,
-                    timestamp=ts,
-                )
-            except SlackApiError:
-                pass  # reaction already exists or missing scope — non-fatal
+        # Do NOT pre-add reactions — if the bot adds white_check_mark, check_approval()
+        # immediately sees it and auto-executes. A human must add the reaction manually.
+        # (Removed 2026-05-25 after agent-weekly auto-executed a pause without human approval.)
 
         # Persist for the events endpoint to look up on reaction
         meta = {

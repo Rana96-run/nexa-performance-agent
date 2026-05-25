@@ -560,7 +560,16 @@ def run_cadence(cadence: str, force: bool = False):
                     status=approval or "timeout",
                     details={"requested_action": dec.get("action", "?")})
             if approval == "approved":
-                execute_channel_action(dec)
+                try:
+                    execute_channel_action(dec)
+                except Exception as exec_err:
+                    print(f"[approval] execute_channel_action failed (non-fatal): {exec_err}")
+                    _bq_log(role="llm_cadence", _action_type="approve",
+                            action="execute_channel_action_failed",
+                            channel=dec.get("channel", ""), campaign=dec.get("campaign", ""),
+                            status="failed",
+                            details={"error": str(exec_err)[:300],
+                                     "requested_action": dec.get("action", "?")})
         else:
             print(f"[approval] No Slack ts — manual approval via Asana task.")
 

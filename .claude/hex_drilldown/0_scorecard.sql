@@ -97,8 +97,15 @@ SELECT
   COALESCE(l.disqualified, 0)                                                      AS disqualified_leads,
   ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.leads,     0)), 2)                           AS cpl,
   ROUND(SAFE_DIVIDE(s.spend, NULLIF(l.qualified, 0)), 2)                           AS cpql,
-  ROUND(SAFE_DIVIDE(l.qualified,    NULLIF(l.leads, 0)) * 100, 1)                  AS qual_rate_pct,
-  ROUND(SAFE_DIVIDE(l.disqualified, NULLIF(l.leads, 0)) * 100, 1)                  AS disq_rate_pct,
+  -- Rates against RESOLVED leads (qualified + disqualified), NOT total —
+  -- mirrors backend view paid_channel_campaign_daily.qual_rate definition.
+  -- This makes qual_rate_pct + disq_rate_pct = 100% by construction.
+  -- Fixed 2026-05-20 after dashboard showed 18.5% + 21.0% ≠ 100% (open leads
+  -- were the missing 60.5%).
+  ROUND(SAFE_DIVIDE(l.qualified,
+                    NULLIF(l.qualified + l.disqualified, 0)) * 100, 1)             AS qual_rate_pct,
+  ROUND(SAFE_DIVIDE(l.disqualified,
+                    NULLIF(l.qualified + l.disqualified, 0)) * 100, 1)             AS disq_rate_pct,
   -- Deal counts (all pipelines)
   COALESCE(d.deals_won,   0)                                                       AS deals_won,
   COALESCE(d.deals_lost,  0)                                                       AS deals_lost,
