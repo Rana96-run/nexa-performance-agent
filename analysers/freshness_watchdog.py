@@ -39,9 +39,20 @@ WATCHED_TABLES = [
     ("hubspot_deals_daily",        "date", "collectors.hubspot_deals_bq",  "collect_and_write",    {"days": 10}),
 ]
 
-# Two thresholds — re-sync if EITHER trips
+# Two thresholds — re-sync if EITHER trips.
+#
+# update_age_h was 25 (designed for catastrophic-outage detection between
+# nightly scheduled jobs). Tightened to 4h on 2026-05-25: HubSpot workflow
+# re-classifications happen continuously through the workday, and dashboards
+# showed stale qualified/disqualified counts because the watchdog never
+# triggered between 05:00 and 17:00 UTC scheduled runs. With 4h threshold,
+# the watchdog at 09:30 and 13:30 UTC will trigger a resync if BQ hasn't
+# been updated in >4h — keeping stage counts within ~4h of HubSpot reality.
+#
+# Trade-off: a few extra sync_full_mirror() runs/day (~3–4 vs ~1). Each takes
+# ~5–10 min and ~1500 HubSpot API calls — total still well within rate limits.
 MAX_LAG_DAYS         = 1     # MAX(date) must be within today-1 (yesterday)
-MAX_UPDATE_AGE_HOURS = 25    # most recent partition must have been written < 25h ago
+MAX_UPDATE_AGE_HOURS = 4     # most recent partition must have been written < 4h ago
 
 
 def _check_all() -> list[dict]:

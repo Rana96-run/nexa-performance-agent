@@ -778,11 +778,15 @@ def run():
     for _utc_h in (1, 5, 9, 13, 21):   # every ~4h, spread across the day
         schedule.every().day.at(f"{_utc_h:02d}:30").do(_watchdog_tick)
 
-    # ── Daily HubSpot full mirror (catches re-attributed leads) ──────────────
-    # The 12h refresh runs incremental; this is the every-day full re-pull
-    # that guarantees workflow re-classifications land in BQ daily.
-    # 06:00 UTC = 09:00 Riyadh — after the nightly refresh has finished.
-    schedule.every().day.at("06:00").do(_daily_full_mirror)
+    # ── HubSpot full mirror — 3× daily to keep stage counts within ~4h ──────
+    # Workflows re-classify leads throughout the workday (qualified, disq,
+    # SQL transitions). Three explicit mirrors + the 4h watchdog guarantees
+    # Hex stage counts are at most ~4h behind HubSpot reality.
+    # Tightened on 2026-05-25 after the user observed yesterday's qualified
+    # count was still wrong this morning (16/10 vs reality 21/21).
+    schedule.every().day.at("06:00").do(_daily_full_mirror)   # 09:00 Riyadh — after nightly
+    schedule.every().day.at("12:00").do(_daily_full_mirror)   # 15:00 Riyadh — midday catch
+    schedule.every().day.at("19:00").do(_daily_full_mirror)   # 22:00 Riyadh — end of workday
 
     # ── QA gate self-test (every day at 04:00 UTC, before nightly) ───────────
     # Synthetic fixtures + known-good/known-bad inputs verify each check.
