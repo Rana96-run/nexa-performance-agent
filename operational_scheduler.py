@@ -681,6 +681,17 @@ def _update_action_sheet():
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] Sheet update failed (non-fatal): {e}")
 
+    # Action Points tab — live Asana mirror (dedup'd, grouped by channel,
+    # real status from Asana custom Status field). Rebuilt fresh each run so
+    # it never drifts from Asana like the old hand-curated snapshot did.
+    try:
+        from analysers.action_points_sync import update_action_points
+        ap = update_action_points()
+        print(f"[ops-scheduler] Action Points: {ap['detail']}")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Action Points sync failed (non-fatal): {e}")
+
 
 def _refresh_spend_only():
     """Lightweight refresh — only the 5 paid spend collectors.
