@@ -49,18 +49,44 @@ def _riyadh_to_epoch_ms(date_str: str, hour: int = 0, minute: int = 0, second: i
 
 
 def _bq_leads_paid_by_channel(start: str, end: str) -> dict[str, int]:
-    """BQ — paid leads grouped by qoyod_source."""
+    """BQ — paid leads grouped by channel using the SAME definition reporting uses:
+    a lead is 'paid <channel>' iff its lead_utm_campaign matches a campaign that
+    ran spend in the same window. This eliminates the ~3% definitional drift
+    from inferred qoyod_source values diverging from HubSpot's raw property.
+    Aligned with QA gate reconciler 2026-05-20."""
     c = get_client()
     proj = os.environ["BQ_PROJECT_ID"]
     ds = os.environ["BQ_DATASET"]
+    # qoyod_source label → channel slug in campaigns_daily
+    SOURCE_TO_CHANNEL = {
+        "Google Ads": "google_ads", "Meta Ads": "meta", "Snapchat Ads": "snapchat",
+        "Tiktok Ads": "tiktok", "Microsoft Ads": "microsoft_ads",
+        "LinkedIn Ads": "linkedin", "Twitter Ads": "twitter",
+    }
     sql = f"""
-    SELECT qoyod_source, SUM(leads_total) AS leads
-    FROM `{proj}.{ds}.hubspot_leads_module_daily`
-    WHERE date BETWEEN '{start}' AND '{end}'
-      AND qoyod_source IN UNNEST({PAID_CHANNELS})
+    WITH hs AS (
+      SELECT lead_utm_campaign, SUM(leads_total) AS leads
+      FROM `{proj}.{ds}.hubspot_leads_module_daily`
+      WHERE date BETWEEN '{start}' AND '{end}'
+      GROUP BY 1
+    ),
+    camp AS (
+      SELECT LOWER(campaign_name) AS cname, ANY_VALUE(channel) AS channel
+      FROM `{proj}.{ds}.campaigns_daily`
+      WHERE date BETWEEN '{start}' AND '{end}' AND spend > 0
+      GROUP BY 1
+    )
+    SELECT camp.channel AS channel_slug, SUM(hs.leads) AS leads
+    FROM hs JOIN camp ON LOWER(hs.lead_utm_campaign) = camp.cname
     GROUP BY 1
     """
-    return {r.qoyod_source: r.leads or 0 for r in c.query(sql).result()}
+    out = {ch: 0 for ch in PAID_CHANNELS}
+    slug_to_source = {v: k for k, v in SOURCE_TO_CHANNEL.items()}
+    for r in c.query(sql).result():
+        label = slug_to_source.get(r.channel_slug)
+        if label:
+            out[label] = r.leads or 0
+    return out
 
 
 def _bq_deals_all_by_pipeline(start: str, end: str) -> dict[str, int]:
@@ -79,7 +105,10 @@ def _bq_deals_all_by_pipeline(start: str, end: str) -> dict[str, int]:
 
 
 def _hs_count_leads_for_source(source_value: str, since_ms: str, until_ms: str) -> int:
-    """HubSpot Lead Module count for a given qoyod_source."""
+    """HubSpot Lead Module count for a given qoyod_source.
+
+    Kept for backward compat; primary recon now uses _hs_paid_leads_by_channel.
+    """
     token = os.environ["HUBSPOT_ACCESS_TOKEN"]
     body = {
         "filterGroups": [{"filters": [
@@ -96,6 +125,72 @@ def _hs_count_leads_for_source(source_value: str, since_ms: str, until_ms: str) 
         json=body, timeout=30,
     )
     return r.json().get("total", 0) if r.status_code == 200 else 0
+
+
+def _hs_paid_leads_by_channel(start: str, end: str, since_ms: str, until_ms: str) -> dict[str, int]:
+    """HubSpot — paginate all leads in window, bucket each by lead_utm_campaign →
+    channel via campaigns_daily, return per-channel counts.
+
+    Same definition as BQ's paid leads view: a lead counts as 'paid <channel>'
+    iff its lead_utm_campaign matches a campaign that ran spend in the window.
+    """
+    token = os.environ["HUBSPOT_ACCESS_TOKEN"]
+    c = get_client()
+    proj = os.environ["BQ_PROJECT_ID"]
+    ds   = os.environ["BQ_DATASET"]
+
+    # Build lookup: campaign_name (lowercase) → channel_slug
+    SOURCE_TO_CHANNEL = {
+        "Google Ads": "google_ads", "Meta Ads": "meta", "Snapchat Ads": "snapchat",
+        "Tiktok Ads": "tiktok", "Microsoft Ads": "microsoft_ads",
+        "LinkedIn Ads": "linkedin", "Twitter Ads": "twitter",
+    }
+    slug_to_source = {v: k for k, v in SOURCE_TO_CHANNEL.items()}
+    sql = f"""
+    SELECT LOWER(campaign_name) AS cname, ANY_VALUE(channel) AS channel
+    FROM `{proj}.{ds}.campaigns_daily`
+    WHERE date BETWEEN '{start}' AND '{end}' AND spend > 0
+    GROUP BY 1
+    """
+    cname_to_channel = {r.cname: r.channel for r in c.query(sql).result()}
+
+    # Paginate HubSpot lead module
+    out = {label: 0 for label in SOURCE_TO_CHANNEL}
+    after = 0
+    pages = 0
+    while True:
+        body = {
+            "filterGroups": [{"filters": [
+                {"propertyName": "hs_createdate", "operator": "GTE", "value": since_ms},
+                {"propertyName": "hs_createdate", "operator": "LT",  "value": until_ms},
+            ]}],
+            "properties": ["lead_utm_campaign"],
+            "limit": 200,
+            "after": after,
+        }
+        r = requests.post(
+            "https://api.hubapi.com/crm/v3/objects/0-136/search",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=body, timeout=30,
+        )
+        if r.status_code != 200:
+            break
+        data = r.json()
+        for obj in data.get("results", []):
+            cname = (obj.get("properties", {}).get("lead_utm_campaign") or "").lower()
+            slug = cname_to_channel.get(cname)
+            if slug:
+                label = slug_to_source.get(slug)
+                if label:
+                    out[label] += 1
+        nxt = data.get("paging", {}).get("next", {}).get("after")
+        if not nxt:
+            break
+        after = nxt
+        pages += 1
+        if pages > 100:  # 100 × 200 = 20k hard ceiling
+            break
+    return out
 
 
 def _hs_count_deals_for_pipeline(pipeline_label: str, since_ms: str, until_ms: str) -> int:
@@ -142,8 +237,12 @@ def reconcile_daily(post_slack: bool = True) -> dict:
     print(f"[reconcile] Window {start} → {end} (Riyadh)")
 
     # ── LEADS ──────────────────────────────────────────────────────────────
+    # Both sides use the SAME definition: a lead counts as paid <channel> iff
+    # its lead_utm_campaign matches a campaign that ran spend in the window.
+    # This eliminates the ~3% definitional drift from inferred qoyod_source
+    # diverging from HubSpot's raw lead_qoyod_source. Aligned 2026-05-20.
     bq_leads = _bq_leads_paid_by_channel(start, end)
-    hs_leads = {ch: _hs_count_leads_for_source(ch, since_ms, until_ms) for ch in PAID_CHANNELS}
+    hs_leads = _hs_paid_leads_by_channel(start, end, since_ms, until_ms)
 
     leads_total_bq = sum(bq_leads.values())
     leads_total_hs = sum(hs_leads.values())
