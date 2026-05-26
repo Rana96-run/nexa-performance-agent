@@ -53,6 +53,24 @@ def _uptime_str() -> str:
     return f"{m}m"
 
 
+@app.errorhandler(Exception)
+def _handle_exception(e):
+    """Capture every unhandled Flask exception to BQ so the self-healer can detect it."""
+    import traceback
+    tb = traceback.format_exc()
+    route = request.path if request else "unknown"
+    try:
+        from logs.activity_logger import log_activity_async
+        log_activity_async(
+            role="ops_scheduler", action="dashboard_error", status="failed",
+            details={"route": route, "error": str(e)[:400], "traceback": tb[:800]},
+        )
+    except Exception:
+        pass
+    # Re-raise so Flask still returns its normal 500
+    raise e
+
+
 @app.route("/health")
 def health():
     uptime_s = int((datetime.utcnow() - _START_TIME).total_seconds())

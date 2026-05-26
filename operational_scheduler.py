@@ -811,6 +811,18 @@ def _gate_self_test():
         print(f"[ops-scheduler] Gate self-test failed (non-fatal): {e}")
 
 
+def _self_heal():
+    """Daily 06:30 UTC (09:30 Riyadh) — detect and fix known failure modes silently.
+    No alerts. Runs AFTER the nightly cycle so views are already fresh.
+    Healers: stale_views, failed_collectors, dashboard_errors, stuck_approvals, memory_update.
+    All actions logged to agent_activity_log (action='self_heal')."""
+    try:
+        from monitors.self_healer import run_self_heal
+        run_self_heal()
+    except Exception as e:
+        print(f"[ops-scheduler] self-heal failed (non-fatal): {e}")
+
+
 def run():
     schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
     # Second BQ refresh 12h later — picks up workflow re-classifications and
@@ -860,6 +872,7 @@ def run():
     schedule.every().day.at("04:00").do(_gate_self_test)
     schedule.every().day.at("03:30").do(_daily_deep_audit)     # 06:30 Riyadh
     schedule.every().day.at("03:45").do(_compliance_monitor)   # 06:45 Riyadh
+    schedule.every().day.at("06:30").do(_self_heal)            # 09:30 Riyadh — after nightly
     schedule.every().day.at("15:00").do(_compliance_monitor)   # 18:00 Riyadh — midday recheck
     # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
     # On-demand outside those hours via POST /api/run-health-check
@@ -875,6 +888,7 @@ def run():
     print("  Spend   09/11/13/15 Riyadh (06/08/10/12 UTC) — workday spend refresh")
     print("  Mirror   09/15/22 Riyadh (06/12/19 UTC) — HubSpot full mirror (3×/day)")
     print("  Self-test 07:00 Riyadh (04:00 UTC) — QA gate check verification")
+    print("  Self-heal 09:30 Riyadh (06:30 UTC) — detect+fix stale views, failed collectors, 500s")  # noqa
     print("  Watchdog every ~4h — never let BQ go stale, auto-resync (4h threshold)")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month")
