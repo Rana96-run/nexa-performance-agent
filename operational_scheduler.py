@@ -665,6 +665,23 @@ def _watchdog_tick():
         print(f"[ops-scheduler] watchdog failed (non-fatal): {e}")
 
 
+def _update_action_sheet():
+    """Append team-visible actions to the master ZATCA Action Log sheet.
+
+    Scans agent_activity_log since the last logged date in the sheet,
+    appends new team-visible action rows. Idempotent — uses sheet's own
+    last-row date as cursor. Runs nightly at 02:00 UTC = 05:00 Riyadh,
+    so the team sees yesterday's actions by 8 AM Riyadh standup.
+    """
+    try:
+        from analysers.sheet_action_logger import update_sheet
+        result = update_sheet()
+        print(f"[ops-scheduler] Sheet logger: {result['detail']}")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Sheet update failed (non-fatal): {e}")
+
+
 def _refresh_spend_only():
     """Lightweight refresh — only the 5 paid spend collectors.
 
@@ -810,6 +827,13 @@ def run():
     for _utc_h in (1, 5, 9, 13, 21):   # every ~4h, spread across the day
         schedule.every().day.at(f"{_utc_h:02d}:30").do(_watchdog_tick)
 
+    # ── Action sheet auto-update — daily 02:00 UTC = 05:00 Riyadh ───────────
+    # Appends yesterday's team-visible actions to the master ZATCA Action Log
+    # sheet. Replaces the manual _log_session_to_sheet.py workflow. Runs
+    # before the 05:00 nightly so the sheet is current by 8 AM Riyadh standup.
+    # Added 2026-05-25.
+    schedule.every().day.at("02:00").do(_update_action_sheet)
+
     # ── Workday spend refresh — every 2h during business hours ──────────────
     # Paid platforms apply retroactive spend adjustments throughout the day
     # (Meta click-fraud refunds, Snap/MS auction finalization, Google invalid
@@ -847,6 +871,7 @@ def run():
     print("=" * 60)
     print("  Daily    08:00 Riyadh (05:00 UTC)  — full nightly + BQ refresh")
     print("  BQ       20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
+    print("  Sheet   05:00 Riyadh (02:00 UTC) — append actions to master sheet")
     print("  Spend   09/11/13/15 Riyadh (06/08/10/12 UTC) — workday spend refresh")
     print("  Mirror   09/15/22 Riyadh (06/12/19 UTC) — HubSpot full mirror (3×/day)")
     print("  Self-test 07:00 Riyadh (04:00 UTC) — QA gate check verification")
