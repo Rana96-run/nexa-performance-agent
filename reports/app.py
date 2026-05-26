@@ -437,6 +437,7 @@ def activity_dashboard():
             SELECT
               DATE(ts, 'Asia/Riyadh') AS day,
               action,
+              role,
               COALESCE(rows_affected, 1) AS cnt
             FROM {T}.agent_activity_log
             WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
@@ -1569,13 +1570,14 @@ def activity_dashboard():
         },
     ]
     # Flatten all row sources into (action, role, cnt, day) tuples
+    # Use getattr with default so a missing column in any query never crashes the page
     _team_flat = []
     for r in detail_rows:
-        _team_flat.append((str(r.action or ""), str(r.role or ""), int(r.cnt or 1), r.day))
+        _team_flat.append((str(r.action or ""), str(getattr(r, "role", "") or ""), int(r.cnt or 1), r.day))
     for r in infra_rows:
-        _team_flat.append((str(r.action or ""), str(r.role or ""), int(r.cnt or 1), r.day))
+        _team_flat.append((str(r.action or ""), str(getattr(r, "role", "") or ""), int(r.cnt or 1), r.day))
     for r in intel_rows:
-        _team_flat.append((str(r.action or ""), str(r.role or ""), int(r.cnt or 1), r.day))
+        _team_flat.append((str(r.action or ""), str(getattr(r, "role", "") or ""), int(r.cnt or 1), r.day))
 
     team_roster = []
     for _m in _TEAM_DEFS:
