@@ -25,6 +25,7 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 | `connector-police.md` | Connector health checks, data gaps, freshness diagnosis |
 | `data-engineer.md` | BQ schema changes, new tables, backfills, view rebuilds |
 | `media-buyer.md` | Campaign creation, cloning, scaling, audience setup |
+| `cro-paid-specialist.md` | Landing page design/audit for paid campaigns, CPQL-to-LP loop |
 
 ---
 
@@ -97,10 +98,13 @@ Good: a skill that says "you are X, you think like Y, you always output Z, you n
 Nexa Performance Agent (this repo)
     ↓ writes agent_handoff_log (BQ)
     ├── Marketing Ops Management Agent  ← reads daily_ops_brief
-    └── Growth Marketing Agent          ← reads growth_signals (weekly)
+    ├── Growth Marketing Agent          ← reads growth_signals (weekly)
+    └── CRO Paid Specialist             ← reads CPQL from BQ, writes LP specs
+            ↕ references D:\Landing Page Agent\ (pages, prompts, brand docs)
 ```
 
-See `agent-handoff.md` for the full protocol and BQ schema.
+See `agent-handoff.md` for the BQ protocol.
+See `cro-paid-specialist.md` for the LP ↔ CPQL feedback loop.
 
 ---
 

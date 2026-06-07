@@ -66,3 +66,13 @@ asana_fields.txt
 asana_fields_check.txt
 asana_opts.txt
 asana_progress.txt
+
+# ── One-off probe / debug scripts (underscore prefix = temp, not production) ──
+scripts/_*.py
+scripts/_*.txt
+scripts/_*.json
+scripts/_*_sheet/
+scripts/_semrush_zatca/
+
+# ── Skills Building Reference (source material, not deployed code) ─────────
+Skills Building Ref/
