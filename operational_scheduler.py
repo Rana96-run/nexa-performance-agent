@@ -425,6 +425,23 @@ def _nightly():
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] collector failure check failed (non-fatal): {e}")
 
+    # 1c. Connector Police — proactive 5-check health scan for all 9 connectors.
+    # Runs freshness + row integrity + spend sanity + attribution + credentials.
+    # Writes to connector_health_log BQ table. Posts to #nexa-health only if
+    # any connector is BROKEN. Morning-analysis-flow gates on this check.
+    try:
+        from analysers.connector_tracker import run_all_checks
+        tracker_result = run_all_checks(post_slack=True, write_bq=True)
+        print(
+            f"[ops-scheduler] Connector health: {tracker_result['overall']} — "
+            f"{tracker_result['healthy_count']} healthy, "
+            f"{tracker_result['warning_count']} warning, "
+            f"{tracker_result['broken_count']} broken"
+        )
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] connector tracker failed (non-fatal): {e}")
+
     # 1b. Re-index Drive so role prompts pick up newly shared files.
     _refresh_drive_index()
 
