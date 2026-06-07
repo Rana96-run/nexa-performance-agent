@@ -2887,6 +2887,109 @@ def create_search_duplicate_task():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── Team Workspace ───────────────────────────────────────────────────────────
+
+@app.route("/team")
+def team_workspace():
+    """Team workspace — agent roles, skills, KPI zones, approval guide, architecture."""
+    from datetime import datetime, timezone, timedelta
+
+    riyadh  = timezone(timedelta(hours=3))
+    now_str = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M")
+
+    agent_status: dict = {}
+    connector_health: list = []
+    live_kpis: dict = {}
+
+    try:
+        from collectors.bq_writer import get_client
+        bq = get_client()
+        P  = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+        D  = os.getenv("BQ_DATASET", "qoyod_marketing")
+        T  = f"`{P}.{D}`"
+
+        # Last agent action
+        last_sql = f"""
+            SELECT role, action, channel, ts,
+                   TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), ts, MINUTE) AS mins_ago
+            FROM {T}.agent_activity_log ORDER BY ts DESC LIMIT 1
+        """
+        # Connector freshness
+        fresh_sql = f"""
+            SELECT channel, MAX(date) AS last_date,
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_ago
+            FROM {T}.campaigns_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+            GROUP BY channel
+            UNION ALL
+            SELECT 'hubspot_leads', MAX(date),
+                   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+            FROM {T}.hubspot_leads_module_daily
+            WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
+            ORDER BY channel
+        """
+        # Yesterday KPIs
+        kpi_sql = f"""
+            SELECT MAX(date) AS d, ROUND(SUM(spend),0) AS spend,
+                   SUM(leads_total) AS leads, SUM(qualified) AS sqls,
+                   ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified),0)),0) AS cpql
+            FROM {T}.paid_channel_daily
+            WHERE date = (SELECT MAX(date) FROM {T}.paid_channel_daily)
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            fl = ex.submit(lambda: list(bq.query(last_sql).result()))
+            ff = ex.submit(lambda: list(bq.query(fresh_sql).result()))
+            fk = ex.submit(lambda: list(bq.query(kpi_sql).result()))
+        last_rows  = fl.result()
+        fresh_rows = ff.result()
+        kpi_rows   = fk.result()
+
+        for r in last_rows:
+            mins = int(r.mins_ago or 0)
+            age  = f"{mins}m ago" if mins < 60 else (
+                   f"{mins//60}h {mins%60}m ago" if mins < 1440 else f"{mins//1440}d ago")
+            agent_status = {
+                "role":    r.role or "—",
+                "action":  (r.action or "").replace("_", " ").title(),
+                "channel": r.channel or "",
+                "age":     age,
+                "healthy": mins < 1440,
+            }
+        now_r = datetime.now(riyadh)
+        next_run = now_r.replace(hour=8, minute=0, second=0, microsecond=0)
+        if now_r >= next_run:
+            next_run += timedelta(days=1)
+        diff_m = int((next_run - now_r).total_seconds() // 60)
+        agent_status["next_in"] = f"{diff_m//60}h {diff_m%60}m" if diff_m >= 60 else f"{diff_m}m"
+
+        connector_health = [
+            {"channel": r.channel,
+             "last_date": str(r.last_date or "—"),
+             "days_ago": int(r.days_ago or 0),
+             "ok": (r.days_ago is not None and r.days_ago <= 1)}
+            for r in fresh_rows
+        ]
+        for r in kpi_rows:
+            live_kpis = {
+                "date": str(r.d or "—"),
+                "spend": int(r.spend or 0),
+                "leads": int(r.leads or 0),
+                "sqls":  int(r.sqls or 0),
+                "cpql":  int(r.cpql or 0) if r.cpql else None,
+            }
+    except Exception as e:
+        print(f"[team] BQ query failed (non-fatal): {e}")
+
+    return render_template(
+        "team.html",
+        last_updated=now_str,
+        agent_status=agent_status,
+        connector_health=connector_health,
+        live_kpis=live_kpis,
+    )
+
+
 # ─── Startup: warn if pending approvals were lost on redeploy ─────────────────
 
 def _check_pending_on_startup():
