@@ -30,7 +30,11 @@ Save as `scripts/check_creds.py` once (idempotent — Amar can run any time).
 ## Also check
 
 - `memory/02_credentials.md` — authoritative table of who's connected
-- Replit Secrets (if running on Replit) may differ from local `.env`
+- **For automated nightly credential checks** → use `connector-police.md` skill
+  (runs the same env-var check as step 5 of the 5-check connector health sweep,
+  plus freshness + row-integrity — no need to run this script manually during ops)
+
+> **Rule of thumb:** `check-creds.md` = ad-hoc debugging. `connector-police.md` = scheduled ops.
 
 ## Token-lifetime reminders
 

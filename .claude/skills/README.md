@@ -9,10 +9,10 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 
 | Type | Purpose | Files |
 |---|---|---|
-| **Role Skills** | Who Claude is when doing the work | paid-media-analyst, connector-police, data-engineer, media-buyer |
+| **Role Skills** | Who Claude is when doing the work | paid-media-analyst, connector-police, data-engineer, media-buyer, cro-paid-specialist |
 | **Client Skill** | Qoyod product knowledge + brand rules | qoyod-brand |
 | **Department Skills** | How each department operates | marketing-ops-dept, growth-marketing-dept |
-| **Workflow Skills** | End-to-end process automation | morning-analysis-flow, agent-handoff |
+| **Workflow Skills** | End-to-end process automation | morning-analysis-flow, agent-handoff, approval-execution-flow |
 | **Skill Library** | Procedure playbooks (how to do X) | All others below |
 
 ---
@@ -52,6 +52,7 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 |---|---|
 | `morning-analysis-flow.md` | Running the full daily analysis cycle (8 stages) |
 | `agent-handoff.md` | Writing handoffs to Ops/Growth agents, debugging stale data |
+| `approval-execution-flow.md` | Building nightly #approvals digest, executing ✅ actions, logging outcomes |
 
 ---
 
@@ -62,10 +63,10 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 | `auto-update.md` | **Every session** — resume from latest state + keep memory current |
 | `auto-commit-and-push.md` | **Every code change** — commit + push to origin/main |
 | `run-collector.md` | "Re-pull X" / "backfill Y" / anything that writes to BQ |
-| `check-creds.md` | "Is X connected?" / diagnosing empty tables |
+| `check-creds.md` | "Is X connected?" / diagnosing empty tables (ad-hoc) |
 | `bq-verify.md` | After a collector run, or dashboard looks off |
 | `oauth-helper.md` | New integration or expired LinkedIn token |
-| `drive-read.md` | "Check the brief in Drive" / pull a Drive file |
+| `drive.md` | Read from / write to Google Drive (replaces drive-read + drive-docs) |
 | `meta-probe.md` | Meta/IG API 400 on a specific metric |
 | `utm-lead-measurement.md` | CPL/CPQL joins at any grain — campaign / adset / ad / channel |
 | `hex-sql-cells.md` | Add or update SQL cells in the Hex notebook |
@@ -76,7 +77,8 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 | `railway-sync.md` | Railway env var management and deploy sync |
 | `memory-refresh.md` | Consolidate memory files after a long session |
 | `funnel-io.md` | Funnel.io data questions |
-| `drive-docs.md` | Google Drive document operations |
+| `recommendation-writer.md` | Turn a CPQL finding into a full recommendation + Asana task |
+| `slack-reporter.md` | **Before any Slack post** — format, channel rules, pre-send checklist |
 
 ---
 
