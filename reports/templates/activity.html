@@ -1886,28 +1886,30 @@ a:hover{text-decoration:underline}
       <!-- All 6 desks in one open-plan grid -->
       <div style="position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:36px 20px">
 
+        {# Specialists first/last — manager at position 4 (middle of 6, centre of row 2) #}
         {% set team = [
-          ("🧑‍💼","AI Orchestrator","#f59e0b",True,"08:00 Riyadh",
-           "Routes every task to the right specialist. Runs the 8-step intelligence loop daily. Posts to Slack, creates Asana tasks, and waits for ✅ before any write action."),
-          ("👩‍💻","Paid Media Analyst","#059669",False,"08:30 Riyadh",
-           "CPQL-first. Full period comparison on every analysis. CEO summary + technical detail. Never quotes a number without BQ verification first."),
-          ("🕵️","Connector Police","#0891b2",False,"08:30 Riyadh",
-           "5-check sweep: freshness, row counts, spend sanity, attribution, credentials. Posts to #nexa-health only when BROKEN — never for all-clear."),
-          ("👨‍💻","Data Engineer","#7c3aed",False,"On demand",
-           "BQ architect. No streaming inserts — ever. Schema changes, view rebuilds, backfills. 7-day BQ↔HubSpot reconciliation before declaring done."),
-          ("👩‍💼","Media Buyer","#dc2626",False,"On demand",
-           "Campaign architect. Full 12-field spec: naming, audience, both Meta pixels, UTM passthrough, LP assignment. Never executes a change without ✅."),
-          ("👨‍🎨","CRO Specialist","#d97706",False,"On demand",
-           "Bridges CPQL to LP performance. Audits pages, writes 8-section LP briefs, defines A/B tests. CPQL is the only success metric.")
+          ("👩‍💻","Paid Media Analyst","#059669",False,"08:30 Riyadh","📊",
+           "Compares current 7d vs prior 7d across Meta, Google, Snap, LinkedIn. Flags CPQL regressions, silent ad deaths, and launch-wave distortions. Outputs CEO paragraph + BQ-verified channel table. Never states a number without a live query via verify-before-reporting."),
+          ("🕵️","Connector Police","#0891b2",False,"08:30 Riyadh","🔍",
+           "Nightly 5-check sweep: last row date ≤1d, daily row count vs 7d avg, spend within ±30% of prior week, UTM attribution rate ≥90%, credential validity. Silent on green — fires to #nexa-health only on RED. Never posts an all-clear message."),
+          ("👨‍💻","Data Engineer","#7c3aed",False,"On demand","⚙️",
+           "Owns qoyod_marketing schema in BQ. No streaming inserts — always load_table_from_file(BytesIO(ndjson)). Runs view rebuilds (v_ad_performance, paid_channel_daily, channel_roas_daily). Requires 7-day BQ↔HubSpot row reconciliation before any change is declared done."),
+          ("🧑‍💼","AI Orchestrator","#f59e0b",True,"08:00 Riyadh","📋",
+           "Runs the 8-stage loop daily at 08:00 Riyadh: Observe BQ → Compare 7d/prior-7d → Investigate root cause → Decide with full setup → Queue in #approvals → Execute on ✅ → Monitor at 7d+14d → Write outcome to memory. Manages all 5 specialists."),
+          ("👩‍💼","Media Buyer","#dc2626",False,"On demand","💰",
+           "Builds campaigns to exact spec: {Channel}_{Type}_{Language}_{Product}_{Audience}, both Meta pixels (CRM 1782671302631317 + Web 3036579196577051), UTM passthrough mandatory, LP assigned before launch. Audience = Interests or Lookalike only — 'Prospecting' raises ValueError."),
+          ("👨‍🎨","CRO Specialist","#d97706",False,"On demand","🎯",
+           "Joins 14-day CPQL from campaigns_daily + hubspot_leads_module_daily to destination_url to surface underperforming LPs. Writes 8-section briefs (Hero → Problem → Features → How it Works → Proof → Trust → FAQ → CTA) for the LP Agent. UTM passthrough non-negotiable — without it CPQL is null.")
         ] %}
-        {% set mon_icons = ["📋","📊","🔍","⚙️","💰","🎯"] %}
 
-        {% for person, role, color, is_mgr, cadence, desc in team %}
-        <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+        {% for person, role, color, is_mgr, cadence, mon_icon, desc in team %}
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;
+                    {% if is_mgr %}grid-column:1 / -1;max-width:340px;margin:0 auto;width:100%;{% endif %}">
 
-          <!-- Character sitting behind the desk (overlaps desk top) -->
-          <div style="font-size:40px;line-height:1;margin-bottom:-18px;position:relative;z-index:2;
-                      filter:drop-shadow(0 -2px 6px rgba(0,0,0,.7))">
+          <!-- Character sitting behind the desk -->
+          <div style="font-size:{% if is_mgr %}56px{% else %}40px{% endif %};line-height:1;
+                      margin-bottom:{% if is_mgr %}-24px{% else %}-18px{% endif %};
+                      position:relative;z-index:2;filter:drop-shadow(0 -2px 6px rgba(0,0,0,.7))">
             {{ person }}
           </div>
 
@@ -1915,44 +1917,48 @@ a:hover{text-decoration:underline}
           <div style="width:100%;position:relative;z-index:1">
 
             <!-- Desk surface -->
-            <div style="background:#1e1409;border:1px solid #2d1c08;border-top:3px solid {{ color }};border-bottom:none;border-radius:8px 8px 0 0;padding:22px 12px 12px">
+            <div style="background:#1e1409;border:1px solid #2d1c08;
+                        border-top:{% if is_mgr %}4px{% else %}3px{% endif %} solid {{ color }};
+                        border-bottom:none;border-radius:8px 8px 0 0;
+                        padding:{% if is_mgr %}28px 20px 16px{% else %}22px 12px 12px{% endif %}">
 
               <!-- Monitor on desk -->
               <div style="background:#0d1117;border:1.5px solid #30363d;border-radius:4px 4px 2px 2px;display:inline-block;margin-bottom:2px;box-shadow:0 0 10px rgba(0,0,0,.6)">
                 {% if is_mgr %}
-                <div style="padding:5px 12px">
-                  <div style="display:flex;gap:4px;justify-content:center;margin-bottom:3px">
-                    <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
-                    <span style="width:5px;height:5px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
-                    <span style="width:5px;height:5px;border-radius:50%;background:#58a6ff;display:inline-block"></span>
+                <div style="padding:6px 16px">
+                  <div style="display:flex;gap:5px;justify-content:center;margin-bottom:4px">
+                    <span style="width:6px;height:6px;border-radius:50%;background:#3fb950;display:inline-block"></span>
+                    <span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
+                    <span style="width:6px;height:6px;border-radius:50%;background:#58a6ff;display:inline-block"></span>
                   </div>
-                  <div style="font-size:8px;color:#3fb950;font-family:monospace;white-space:nowrap;letter-spacing:.3px">8-step loop: ON</div>
+                  <div style="font-size:9px;color:#3fb950;font-family:monospace;white-space:nowrap;letter-spacing:.5px">8-step loop: ON · BQ: LIVE</div>
                 </div>
                 {% else %}
-                <div style="padding:7px 14px;font-size:18px;line-height:1">{{ mon_icons[loop.index0] }}</div>
+                <div style="padding:7px 14px;font-size:18px;line-height:1">{{ mon_icon }}</div>
                 {% endif %}
               </div>
 
               <!-- Monitor stand -->
-              <div style="width:12px;height:4px;background:#100c06;margin:1px auto 0;border-radius:0 0 2px 2px"></div>
-              <div style="width:22px;height:2px;background:#100c06;margin:0 auto 10px;border-radius:1px"></div>
+              <div style="width:{% if is_mgr %}14px{% else %}12px{% endif %};height:4px;background:#100c06;margin:1px auto 0;border-radius:0 0 2px 2px"></div>
+              <div style="width:{% if is_mgr %}26px{% else %}22px{% endif %};height:2px;background:#100c06;margin:0 auto {% if is_mgr %}12px{% else %}10px{% endif %};border-radius:1px"></div>
 
               <!-- Nameplate on desk -->
-              <div style="background:#2d1c08;border:1px solid #3d2810;border-radius:3px;padding:5px 12px;display:inline-block">
-                <div style="font-size:10px;font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.6px;white-space:nowrap">{{ role }}</div>
-                {% if is_mgr %}<div style="font-size:8px;color:#92400e;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:1px">Manager</div>{% endif %}
+              <div style="background:#2d1c08;border:1px solid #3d2810;border-radius:3px;
+                          padding:{% if is_mgr %}6px 18px{% else %}5px 12px{% endif %};display:inline-block">
+                <div style="font-size:{% if is_mgr %}12px{% else %}10px{% endif %};font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.6px;white-space:nowrap">{{ role }}</div>
+                {% if is_mgr %}<div style="font-size:9px;color:#92400e;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Manager · All Channels</div>{% endif %}
               </div>
 
             </div>
 
-            <!-- Desk front panel — gives the 3D desk edge depth -->
-            <div style="background:#271709;height:15px;border:1px solid #1a0a02;border-top:2px solid #3d2810;border-radius:0 0 7px 7px;box-shadow:0 6px 16px rgba(0,0,0,.6)"></div>
+            <!-- Desk front panel -->
+            <div style="background:#271709;height:{% if is_mgr %}18px{% else %}15px{% endif %};border:1px solid #1a0a02;border-top:2px solid #3d2810;border-radius:0 0 7px 7px;box-shadow:0 6px 16px rgba(0,0,0,.6)"></div>
 
           </div>
 
           <!-- Role info below desk -->
-          <div style="margin-top:16px;padding:0 4px">
-            <div style="font-size:12px;font-weight:700;color:#e6edf3;margin-bottom:5px">{{ role }}</div>
+          <div style="margin-top:{% if is_mgr %}18px{% else %}14px{% endif %};padding:0 4px">
+            <div style="font-size:{% if is_mgr %}14px{% else %}12px{% endif %};font-weight:700;color:#e6edf3;margin-bottom:5px">{{ role }}</div>
             <div style="font-size:11px;color:#6b7280;line-height:1.65">{{ desc }}</div>
             <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:9px">
               <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
