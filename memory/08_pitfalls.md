@@ -865,6 +865,26 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
   partition_cols = ", ".join(hs_cols)                        # for PARTITION BY
   ```
 
+## Databox — Custom Metric builder incompatible with Ingestion API datasets (2026-06-08)
+
+- **Symptom:** "Create a custom metric → From a data source or dataset" shows blank
+  formula builder for "Qoyod Spend - All Grains". Error in network:
+  `GET /d/customqueries/null/builder/4983284 → 422 "Request to datasets-engine failed.
+  Unprocessable Entity"`.
+- **Root cause:** Databox's analytics-backend `datasets-engine` has `datasetsMetadata: null`
+  for the Ingestion API data source (`4983284`). The Custom Metric builder only works for
+  native integrations (HubSpot, Google Ads, etc.) — NOT for Ingestion API datasets.
+  `POST /analytics-backend-api.databox.com/datasets` → 404 (no registration endpoint).
+- **Fix:** Use the Databox **Push API** (`push.databox.com`) instead.
+  `push_custom_metrics()` in `collectors/databox_pusher.py` pushes `$spend`, `$leads`,
+  `$sqls`, `$cpl`, `$cpql` as named time-series metrics. These appear directly in the
+  Metric Library without any UI step. Run: `railway run python collectors/databox_pusher.py push 90`
+  (needs Railway login: `railway login`).
+- **The Ingestion API dataset (`eff4621e`) is write-only** — data cannot be read back
+  via the REST API, so you can't use it as an intermediate BQ substitute.
+- **Data source IDs**: parent `4983171` = "Qoyod BQ" PAK connection; child `4983284` =
+  "Qoyod Spend - All Grains" dataset. The analytics-backend uses the child ID (4983284).
+
 ## 2026-06-08 — Agent-system rebuild (critical gates)
 
 - **The team is 9 agents (org chart), NOT the 13 `agent_activity_log` roles.** The

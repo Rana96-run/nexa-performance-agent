@@ -506,11 +506,131 @@ def run_push(days: int = 7, grains: list = None) -> int:
     return total
 
 
+def push_custom_metrics(days: int = 90) -> int:
+    """Push daily spend (+ CPL / CPQL / leads) as Databox Push API custom metrics.
+
+    These appear in Databox as a "Custom" connector under the PAK source,
+    available for any dashboard widget — no UI interaction required.
+
+    Metrics pushed (one value per day, all channels combined):
+      $spend       — total daily spend USD (SUM across all channels)
+      $leads       — total HubSpot leads  (SUM)
+      $sqls        — total SQLs / qualified leads (SUM)
+      $cpl         — blended Cost Per Lead  (spend / leads)
+      $cpql        — blended Cost Per SQL   (spend / sqls)
+
+    Also pushes per-channel spend:
+      $spend_google_ads, $spend_meta, $spend_snapchat,
+      $spend_tiktok, $spend_microsoft_ads, $spend_linkedin
+
+    Args:
+        days: How many days back to push (default 90).
+    """
+    if not DATABOX_TOKEN:
+        raise RuntimeError("DATABOX_TOKEN not set")
+
+    import base64
+    from google.cloud import bigquery
+
+    bq      = bigquery.Client()
+    today   = date.today()
+    since   = (today - timedelta(days=days)).isoformat()
+
+    sql = f"""
+    SELECT
+        date,
+        channel,
+        SUM(spend)               AS spend,
+        SUM(leads_total)         AS leads,
+        SUM(leads_qualified)     AS sqls
+    FROM `qoyod-marketing.qoyod_marketing.paid_channel_daily`
+    WHERE date >= '{since}'
+      AND date  < '{today.isoformat()}'
+    GROUP BY date, channel
+    ORDER BY date
+    """
+    rows = list(bq.query(sql).result())
+    if not rows:
+        print("[databox-push] no rows returned from BQ", flush=True)
+        return 0
+
+    # Aggregate per date across channels
+    from collections import defaultdict
+    by_date    = defaultdict(lambda: {"spend": 0.0, "leads": 0, "sqls": 0})
+    by_ch_date = defaultdict(float)   # (channel, date) → spend
+
+    for r in rows:
+        d   = str(r.date)
+        ch  = r.channel or "unknown"
+        sp  = float(r.spend  or 0)
+        lx  = int(r.leads    or 0)
+        sq  = int(r.sqls     or 0)
+        by_date[d]["spend"] += sp
+        by_date[d]["leads"] += lx
+        by_date[d]["sqls"]  += sq
+        by_ch_date[(ch, d)] += sp
+
+    # Build Push API payload — each item is one metric value
+    PUSH_URL = "https://push.databox.com"
+    creds    = base64.b64encode(f"{DATABOX_TOKEN}:".encode()).decode()
+    headers  = {
+        "Authorization": f"Basic {creds}",
+        "Content-Type":  "application/json",
+        "Accept":        "application/vnd.databox.v2+json",
+    }
+
+    payload_items = []
+    for d_str, agg in sorted(by_date.items()):
+        sp  = round(agg["spend"], 2)
+        lx  = agg["leads"]
+        sq  = agg["sqls"]
+        cpl  = round(sp / lx,  2) if lx  > 0 else None
+        cpql = round(sp / sq, 2) if sq > 0 else None
+        item: dict = {
+            "date":   f"{d_str}T00:00:00",
+            "$spend": sp,
+            "$leads": lx,
+            "$sqls":  sq,
+        }
+        if cpl  is not None: item["$cpl"]  = cpl
+        if cpql is not None: item["$cpql"] = cpql
+        payload_items.append(item)
+
+    # Per-channel spend
+    for (ch, d_str), sp in sorted(by_ch_date.items()):
+        key = "$spend_" + ch.replace("-", "_").replace(" ", "_")
+        payload_items.append({"date": f"{d_str}T00:00:00", key: round(sp, 2)})
+
+    # Push in batches of 100
+    sess  = _session()
+    total = 0
+    for i in range(0, len(payload_items), _BATCH):
+        batch = payload_items[i:i + _BATCH]
+        r = sess.post(
+            PUSH_URL,
+            headers=headers,
+            data=json.dumps({"data": batch}, ensure_ascii=False).encode("utf-8"),
+            timeout=_TIMEOUT,
+        )
+        r.raise_for_status()
+        total += len(batch)
+        print(f"[databox-push] batch {i // _BATCH + 1}: {len(batch)} items sent", flush=True)
+        time.sleep(0.3)
+
+    print(f"[databox-push] done — {total} metric values pushed ({len(by_date)} days)", flush=True)
+    return total
+
+
 if __name__ == "__main__":
     import sys
     # Usage: python collectors/databox_pusher.py [days] [grain]
     # e.g.:  python collectors/databox_pusher.py 7
     #        python collectors/databox_pusher.py 365 campaign
-    d = int(sys.argv[1]) if len(sys.argv) > 1 else 7
-    g = [sys.argv[2]] if len(sys.argv) > 2 else None
-    run_push(days=d, grains=g)
+    #        python collectors/databox_pusher.py push 90   ← custom metrics via Push API
+    if len(sys.argv) > 1 and sys.argv[1] == "push":
+        d = int(sys.argv[2]) if len(sys.argv) > 2 else 90
+        push_custom_metrics(days=d)
+    else:
+        d = int(sys.argv[1]) if len(sys.argv) > 1 else 7
+        g = [sys.argv[2]] if len(sys.argv) > 2 else None
+        run_push(days=d, grains=g)
