@@ -847,9 +847,20 @@ SELECT
   COALESCE(p.utm_audience, h.utm_audience)  AS utm_audience,
   p.platform_campaign_id                    AS campaign_id,
   p.platform_adset_id                       AS adset_id,
-  COALESCE(p.spend, u.spend, 0)             AS spend,
-  COALESCE(p.impressions, 0)                AS impressions,
-  COALESCE(p.clicks, 0)                     AS clicks,
+  -- Fan-out guard: when one adset's utm_audience matches multiple HubSpot rows
+  -- (different utm_campaigns), the platform↔hubspot join repeats this row, which
+  -- would multiply spend/impr/clicks. Count them ONCE per adset via ROW_NUMBER
+  -- (leaves lead attribution + the C/D fallbacks untouched). Verified 2026-06-09:
+  -- Meta spend $1052→$742 (=adsets_daily truth), leads byte-identical.
+  IF(ROW_NUMBER() OVER (PARTITION BY COALESCE(p.date,h.date), COALESCE(p.channel,h.channel),
+       COALESCE(CAST(p.platform_adset_id AS STRING), LOWER(TRIM(COALESCE(p.utm_audience,h.utm_audience))))
+     ORDER BY COALESCE(h.utm_campaign,'')) = 1, COALESCE(p.spend, u.spend, 0), 0)  AS spend,
+  IF(ROW_NUMBER() OVER (PARTITION BY COALESCE(p.date,h.date), COALESCE(p.channel,h.channel),
+       COALESCE(CAST(p.platform_adset_id AS STRING), LOWER(TRIM(COALESCE(p.utm_audience,h.utm_audience))))
+     ORDER BY COALESCE(h.utm_campaign,'')) = 1, COALESCE(p.impressions, 0), 0)     AS impressions,
+  IF(ROW_NUMBER() OVER (PARTITION BY COALESCE(p.date,h.date), COALESCE(p.channel,h.channel),
+       COALESCE(CAST(p.platform_adset_id AS STRING), LOWER(TRIM(COALESCE(p.utm_audience,h.utm_audience))))
+     ORDER BY COALESCE(h.utm_campaign,'')) = 1, COALESCE(p.clicks, 0), 0)          AS clicks,
   -- Strategy A/B: name match; C: adset-ID fallback; D: TikTok campaign-ID fallback
   COALESCE(h.leads,              h_id.leads,              h_cam.leads,              0) AS leads,
   COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified,    0) AS leads_qualified,
@@ -1034,9 +1045,17 @@ SELECT
   -- spend: only use real platform data. utm_proxy spend is proportionally
   -- allocated from campaign level and is NOT accurate at ad grain — show NULL
   -- so CPL/CPQL don't display fabricated numbers.
-  p.spend                                    AS spend,
-  COALESCE(p.impressions, 0)                 AS impressions,
-  COALESCE(p.clicks, 0)                      AS clicks,
+  -- Fan-out guard (same as v_adset_performance): count platform spend/impr/clicks
+  -- ONCE per ad even when the utm_content join fans out across multiple HubSpot rows.
+  IF(ROW_NUMBER() OVER (PARTITION BY COALESCE(p.date,h.date), COALESCE(p.channel,h.channel),
+       COALESCE(CAST(p.platform_ad_id AS STRING), LOWER(TRIM(COALESCE(p.utm_content,h.utm_content))))
+     ORDER BY COALESCE(h.utm_campaign,'')) = 1, p.spend, 0)                AS spend,
+  IF(ROW_NUMBER() OVER (PARTITION BY COALESCE(p.date,h.date), COALESCE(p.channel,h.channel),
+       COALESCE(CAST(p.platform_ad_id AS STRING), LOWER(TRIM(COALESCE(p.utm_content,h.utm_content))))
+     ORDER BY COALESCE(h.utm_campaign,'')) = 1, COALESCE(p.impressions,0), 0) AS impressions,
+  IF(ROW_NUMBER() OVER (PARTITION BY COALESCE(p.date,h.date), COALESCE(p.channel,h.channel),
+       COALESCE(CAST(p.platform_ad_id AS STRING), LOWER(TRIM(COALESCE(p.utm_content,h.utm_content))))
+     ORDER BY COALESCE(h.utm_campaign,'')) = 1, COALESCE(p.clicks,0), 0)      AS clicks,
   -- Strategy A/B: name match; C: ad-ID fallback; D: TikTok campaign-ID fallback
   COALESCE(h.leads,              h_id.leads,              h_cam.leads,              0) AS leads,
   COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified,    0) AS leads_qualified,

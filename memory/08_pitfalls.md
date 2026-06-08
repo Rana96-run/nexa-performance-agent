@@ -21,6 +21,22 @@ to the HubSpot adset-grain CTE — mirror the `cd` CTE pattern already in campai
 source IN fb/ig/meta): true Meta CPQL $42→$37 (IMPROVED).** Always cross-check view
 totals against raw `adsets_daily`/`campaigns_daily` (deduped) before trusting a CPQL delta.
 
+**FIXED 2026-06-09 (`collectors/bq_writer.py`).** Two fix attempts — the first was WRONG,
+caught by testing:
+- ❌ Adding the campaign to the platform↔hubspot JOIN key fixed spend BUT inflated leads
+  (snapchat 125→185) — it made `h.leads` NULL more often, over-triggering the Strategy-D
+  campaign-ID fallback (sprays campaign leads across adsets). Don't change the join.
+- ✅ Correct fix: a **window-dedup** on the platform-side metrics only — wrap spend/
+  impressions/clicks in `IF(ROW_NUMBER() OVER (PARTITION BY date,channel,adset_id ORDER BY
+  …)=1, metric, 0)` so a fanned row counts them ONCE. Lead attribution + C/D fallbacks
+  untouched. Same fix in `v_ad_performance` (partition by ad_id). Verified live-vs-live:
+  spend → adsets_daily truth (Meta $742, Snap $3457, TT $1623, MS $318), **leads/SQL byte-identical.**
+- ⚠️ **GOTCHA that wasted time:** `v_adset_performance` / `v_ad_performance` are
+  **materialized TABLEs** (rebuilt nightly via `materialize_heavy_views`), NOT live views.
+  When validating a view-SQL fix, compare a **fresh live recompute vs another live recompute** —
+  NOT against the stale materialized TABLE (its row set is yesterday's, so leads look "changed").
+  Re-materialize with `CREATE OR REPLACE TABLE` (the DROP-TABLE path is hook-blocked).
+
 ## Pause precedence — channel-dependent surgical cleanup runs before campaign-pause
 
 - **Rule (confirmed 2026-05-17):** A campaign hitting the pause threshold
