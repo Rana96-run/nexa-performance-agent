@@ -3,16 +3,15 @@ collectors/databox_pusher.py
 
 Pushes spend / CPL / CPQL from BigQuery to Databox REST API.
 
-One unified dataset contains all grains. Use the `grain` dimension in Databox
-widgets to filter to campaign / adset / ad / keyword / asset_group level.
+One unified dataset, four grains. Use the `grain` dimension in Databox
+widgets to filter to the desired level.
 
-Attribution fields match HubSpot UTM so Databox can join to existing CPL/CPQL
-custom metrics:
-  campaign    → lead_utm_campaign
-  adset       → lead_utm_audience   (includes PMax asset groups)
-  ad          → lead_utm_content
-  keyword     → lead_utm_term
-  asset_group → lead_utm_audience   (PMax only, UPPER(campaign) LIKE '%PMAX%')
+  grain=campaign    → campaign level       → lead_utm_campaign
+  grain=adset       → adset/adgroup/adsquad/asset_group level → lead_utm_audience
+                       (Meta adsets, Google adgroups + PMax asset groups,
+                        Snapchat adsquads, TikTok adgroups — all via utm_audience)
+  grain=ad          → ad/creative level    → lead_utm_content
+  grain=keyword     → keyword level        → lead_utm_term  (Google + Microsoft only)
 
 Dataset:
   "Qoyod Spend - All Grains"  →  739cde4e-3ba5-4ba9-98e8-701fa33111b7
@@ -26,7 +25,7 @@ Superseded per-grain dataset IDs (kept for reference / rollback):
   adset       → eec43dfb-fb3b-4f4c-8b71-e39bc9704ebd
   ad          → 73151fba-f7c7-4aaf-a695-2df41ad34833
   keyword     → 8e9dac81-8119-4729-8b93-c31b42381ed3
-  asset_group → 4d1cff88-24e3-40c4-8078-a9330de5472e
+  asset_group → 4d1cff88-24e3-40c4-8078-a9330de5472e  (merged into adset grain)
 """
 import os
 import json
@@ -54,7 +53,9 @@ _TIMEOUT      = 60      # seconds — SSL handshake + response
 _CHUNK_DAYS  = 30
 _CHUNK_SLEEP = 3.0      # seconds between chunks
 
-ALL_GRAINS = ["campaign", "adset", "ad", "keyword", "asset_group"]
+ALL_GRAINS = ["campaign", "adset", "ad", "keyword"]
+# Note: asset_group is NOT a separate grain — PMax asset groups appear in the
+# adset grain (v_adset_performance includes them via utm_audience).
 
 
 def _session() -> requests.Session:
@@ -181,25 +182,7 @@ def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
             WHERE date >= '{since}' AND date < '{until}'
             ORDER BY date, channel, utm_campaign, utm_term
         """
-    if grain == "asset_group":
-        # PMax asset groups flow into lead_utm_audience (same as adsets).
-        # Filter to PMax campaigns; utm_audience = asset_group name.
-        return f"""
-            SELECT date, channel,
-                   CAST(campaign_id AS STRING) AS campaign_id,
-                   utm_campaign  AS campaign_name,
-                   CAST(adset_id AS STRING)   AS asset_group_id,
-                   utm_audience  AS asset_group_name,
-                   spend, impressions, clicks,
-                   CPL AS cpl, CPQL AS cpql,
-                   ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-            FROM `{proj}.{ds}.v_adset_performance`
-            WHERE date >= '{since}' AND date < '{until}'
-              AND channel = 'google_ads'
-              AND UPPER(utm_campaign) LIKE '%PMAX%'
-            ORDER BY date, campaign_id, adset_id
-        """
-    raise ValueError(f"Unknown grain: {grain}")
+    raise ValueError(f"Unknown grain: {grain}  (valid: {ALL_GRAINS})")
 
 
 def _build_records(grain: str, rows) -> list:
@@ -268,20 +251,6 @@ def _build_records(grain: str, rows) -> list:
                 cpql         = _v(r.cpql),
             )
 
-        elif grain == "asset_group":
-            rec = _row(base,
-                campaign_id    = r.campaign_id or None,
-                campaign       = r.campaign_name or None,
-                asset_group_id = r.asset_group_id or None,
-                asset_group    = r.asset_group_name or None,
-                adset          = r.asset_group_name or None,   # utm_audience alias
-                spend          = _v(r.spend),
-                impressions    = _v(r.impressions),
-                clicks         = _v(r.clicks),
-                cpl            = _v(r.cpl),
-                cpql           = _v(r.cpql),
-                qual_rate_pct  = _v(r.qual_rate_pct),
-            )
         else:
             continue
 
