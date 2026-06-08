@@ -268,38 +268,48 @@ def _push_keyword(days: int) -> int:
 
 
 # ── Asset group grain (Google PMax) ───────────────────────────────────────────
+# PMax asset group names flow into lead_utm_audience in HubSpot (same as regular
+# adsets). v_adset_performance already captures them — we filter to PMax campaigns
+# (campaign_name LIKE 'PMax_%') to build a dedicated asset-group grain in Databox.
+# utm_audience = asset_group_name matches lead_utm_audience for attribution.
 
 def _push_asset_group(days: int) -> int:
     from collectors.bq_writer import get_client, PROJECT_ID, DATASET
     client = get_client()
     since  = (date.today() - timedelta(days=days)).isoformat()
-    try:
-        rows = client.query(f"""
-            SELECT date, channel,
-                   CAST(campaign_id    AS STRING) AS campaign_id,
-                   campaign_name,
-                   CAST(asset_group_id AS STRING) AS asset_group_id,
-                   asset_group_name,
-                   spend, impressions, clicks
-            FROM `{PROJECT_ID}.{DATASET}.google_ads_pmax_asset_groups`
-            WHERE date >= '{since}'
-            ORDER BY date, campaign_id, asset_group_id
-        """).result()
-    except Exception:
-        return 0   # table not ready yet — skip silently
+    rows = client.query(f"""
+        SELECT date, channel,
+               CAST(campaign_id AS STRING) AS campaign_id,
+               utm_campaign  AS campaign,
+               CAST(adset_id AS STRING)   AS asset_group_id,
+               utm_audience  AS asset_group,
+               spend, impressions, clicks,
+               CPL AS cpl, CPQL AS cpql,
+               ROUND(IFNULL(qual_rate, 0) * 100, 2) AS qual_rate_pct
+        FROM `{PROJECT_ID}.{DATASET}.v_adset_performance`
+        WHERE date >= '{since}'
+          AND channel = 'google_ads'
+          AND UPPER(utm_campaign) LIKE '%PMAX%'
+        ORDER BY date, campaign_id, adset_id
+    """).result()
 
     records = []
     for r in rows:
         records.append(_row(
             {"date": str(r.date), "channel": r.channel},
-            campaign_id      = r.campaign_id or None,
-            campaign         = r.campaign_name or None,
-            asset_group_id   = r.asset_group_id or None,
-            asset_group      = r.asset_group_name or None,
-            spend            = _v(r.spend),
-            impressions      = _v(r.impressions),
-            clicks           = _v(r.clicks),
+            campaign_id    = r.campaign_id or None,
+            campaign       = r.campaign or None,
+            asset_group_id = r.asset_group_id or None,
+            asset_group    = r.asset_group or None,
+            spend          = _v(r.spend),
+            impressions    = _v(r.impressions),
+            clicks         = _v(r.clicks),
+            cpl            = _v(r.cpl),
+            cpql           = _v(r.cpql),
+            qual_rate_pct  = _v(r.qual_rate_pct),
         ))
+    if not records:
+        return 0
     return _flush("asset_group", records)
 
 
