@@ -61,16 +61,19 @@ leads = channel_total - sum(utm_campaign_breakdown)
 This is shown in dashboards as "(no UTM — click-ID attribution only)" so
 users understand the number, not wonder why tables don't sum to totals.
 
-## Current state (as of this session)
+## Current state (implemented)
 
-- HubSpot collectors **do** capture `lead_utm_audience` and `lead_utm_content`
-  but they're only used as aggregation keys in `hubspot_leads_module_daily`,
-  not in an attribution join view yet.
-- `channel_roas_daily` currently joins HubSpot ↔ paid by
-  `qoyod_source ↔ channel` at channel grain only.
-- **TODO (see 09_open_tasks.md):** build `utm_paid_attribution_daily` view
-  that joins at campaign/adset/ad grain with the dual-strategy matcher and
-  unattributed bucket.
+- HubSpot collectors capture `lead_utm_audience` and `lead_utm_content` as
+  aggregation keys in `hubspot_leads_module_daily`.
+- `channel_roas_daily` joins HubSpot ↔ paid by `qoyod_source ↔ channel` at
+  channel grain.
+- **`utm_paid_attribution_daily` is live** — defined as
+  `UTM_PAID_ATTRIBUTION_VIEW_SQL` in `collectors/bq_writer.py`. It joins
+  `adsets_daily` spend with `hubspot_leads_module_daily` UTM attribution at
+  campaign/adset/ad grain, including a UTM-proxy CTE for cases where
+  `utm_audience` is only in HubSpot. Rematerialized every 6h via
+  `materialize_heavy_views()` in `collectors/views.py`. Powers
+  `v_adset_performance` and `v_ad_performance`.
 
 ## Sanity check queries
 

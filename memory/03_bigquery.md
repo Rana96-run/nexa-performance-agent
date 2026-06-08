@@ -17,15 +17,24 @@ filter fields. All writes go through `collectors/bq_writer.upsert_rows()`.
 
 ## Views (all `CREATE OR REPLACE`, rebuilt by `collectors/views.py`)
 
+### Materialized tables (rematerialized every 6h via `materialize_heavy_views()`)
+
+| Table | Purpose |
+|---|---|
+| `utm_paid_attribution_daily` | Campaign/adset/ad grain: adsets_daily spend + hubspot_leads_module_daily UTM attribution; includes UTM-proxy CTE for cases where utm_audience is only in HubSpot |
+| `paid_channel_campaign_daily` | Campaign-level blended: spend + leads + deals + CPL/CPQL/ROAS |
+| `channel_roas_daily` | Per (date, channel): spend + leads + deals + CPL/CPQL/ROAS + zones |
+| `paid_channel_daily` | Channel-level daily rollup |
+| `v_adset_performance` | Adset-level performance powered by utm_paid_attribution_daily |
+| `v_ad_performance` | Ad-level performance powered by utm_paid_attribution_daily |
+
+### Lightweight views
+
 | View | Purpose |
 |---|---|
 | `v_channel_key_map` | Lookup: ad-platform `channel` ↔ HubSpot `qoyod_source` label |
-| `campaign_performance_daily` | campaigns_daily + auto-tagged `seasonal_tag` + `format_tag` regex |
-| `campaign_performance_monthly` | monthly rollup |
-| `channel_roas_daily` | per (date, channel): spend + leads + deals + CPL/CPQL/ROAS + zones |
-| `channel_roas_monthly` | monthly rollup |
-| `disqualification_matrix` | per (date, source, pipeline, top_reason): disqualified count |
-| `pipeline_funnel` | monthly pipeline/stage funnel |
+| `v_agent_activity_dashboard` | Agent activity log for the activity dashboard |
+| `v_keyword_performance` | Keyword-level performance metrics |
 
 ## Schemas at a glance
 

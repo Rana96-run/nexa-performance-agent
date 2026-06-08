@@ -900,6 +900,7 @@ LEFT JOIN deals_by_id di
 LEFT JOIN deals_by_name dn
   ON COALESCE(p.date, h.date) = dn.date
   AND COALESCE(p.channel, h.channel) = dn.channel
+  AND LOWER(TRIM(COALESCE(p.campaign_name, h.utm_campaign))) = LOWER(TRIM(dn.utm_campaign))
   AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(dn.utm_audience))
 """
 
@@ -1084,6 +1085,7 @@ LEFT JOIN deals_by_id di
 LEFT JOIN deals_by_name dn
   ON COALESCE(p.date, h.date) = dn.date
   AND COALESCE(p.channel, h.channel) = dn.channel
+  AND LOWER(TRIM(COALESCE(p.campaign_name, h.utm_campaign))) = LOWER(TRIM(dn.utm_campaign))
   AND LOWER(TRIM(COALESCE(p.utm_content, h.utm_content))) = LOWER(TRIM(dn.utm_content))
 """
 

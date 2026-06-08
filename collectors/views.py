@@ -189,18 +189,21 @@ SELECT
   SAFE_DIVIDE(d.revenue_won,         s.spend) AS roas,
   SAFE_DIVIDE(d.new_biz_revenue_won, s.spend) AS new_biz_roas,
   SAFE_DIVIDE(d.deals_won, l.hs_leads) * 100  AS lead_to_deal_pct,
+  -- Zone thresholds mirror config.py campaign-level CPL_*/CPQL_* (single source of truth).
+  -- CPL:  scale <25 | acceptable <=35 | warning <=40 | else pause_zone
   CASE
     WHEN SAFE_DIVIDE(s.spend, l.hs_leads) IS NULL THEN 'no_data'
-    WHEN SAFE_DIVIDE(s.spend, l.hs_leads) < 20 THEN 'scale'
-    WHEN SAFE_DIVIDE(s.spend, l.hs_leads) <= 28 THEN 'acceptable'
-    WHEN SAFE_DIVIDE(s.spend, l.hs_leads) <= 30 THEN 'warning'
+    WHEN SAFE_DIVIDE(s.spend, l.hs_leads) < 25 THEN 'scale'
+    WHEN SAFE_DIVIDE(s.spend, l.hs_leads) <= 35 THEN 'acceptable'
+    WHEN SAFE_DIVIDE(s.spend, l.hs_leads) <= 40 THEN 'warning'
     ELSE 'pause_zone'
   END AS cpl_zone,
+  -- CPQL: scale <60 | acceptable <=80 | warning <=95 | else pause_zone
   CASE
     WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) IS NULL THEN 'no_data'
-    WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) < 40 THEN 'scale'
-    WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) <= 65 THEN 'acceptable'
-    WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) <= 80 THEN 'warning'
+    WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) < 60 THEN 'scale'
+    WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) <= 80 THEN 'acceptable'
+    WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) <= 95 THEN 'warning'
     ELSE 'pause_zone'
   END AS cpql_zone
 -- Spine-anchored: channel always appears for every date since its first campaign,
