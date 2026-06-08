@@ -1,9 +1,29 @@
 # The Police Loop — autonomous detect → route → fix → verify → report
 
-How the team catches and closes **any stale / error / bug** without it falling
-through. The detection already exists and is comprehensive; what this wires is the
-**hand-off after detection** so nothing sits unfixed (the gap found 2026-06-08:
-4 BROKEN connectors + LinkedIn 95-day stale were detected but never closed).
+How the team catches and closes **any stale / error / bug ANYWHERE in the system**
+without it falling through — not just inbound data connectors. This wires the
+**hand-off after detection** so nothing sits unfixed.
+
+## Scope — the police watches the WHOLE system (not just connectors→BQ)
+Detection must cover every surface that can break. Aggregate ALL detectors into one
+health view; each finding routes through the loop below.
+
+| Surface | Detector | Status |
+|---|---|---|
+| Inbound: connectors → BQ | `connector_tracker` (freshness/rows/spend/attrib/creds/amount) | ✅ |
+| Transforms: BQ views / schema drift | `self_healer` (stale_views), reconciliation | ✅ partial |
+| Config / structure (role overlap, mapping drift) | `dashboard_guard` | ✅ |
+| Data quality (anomalies, corrupt amounts, dedup/fan-out, attribution) | `spike_detector`, `amount_sanity` | 🟡 scattered |
+| Runtime (nightly loop fired? Railway up? stuck approvals?) | `self_healer`, heartbeats, `/health` | 🟡 partial |
+| Credentials PRESENT (all integrations) | `health.py` | ✅ presence-only |
+| **Outbound delivery** (Slack digest posted? Asana created? Hex/Databox/Drive pushed?) | failure heartbeats only | 🔴 **gap** |
+| **Executor actions** (did an approved pause/scale/keyword actually apply on-platform?) | — | 🔴 **gap** |
+| **Credential LIVENESS** (token present but expired/revoked → silent fail) | — | 🔴 **gap** |
+| **Cost / consumption anomalies** (token/BQ spend spike) | `cost_tracking` logs only | 🔴 **gap** |
+
+Closing the 🔴 gaps is the police-expansion backlog (`memory/09_open_tasks.md`). The
+detection above isn't complete — treat any *new* surface that can fail and has no
+detector as itself a police finding.
 
 ## The loop (every issue follows it)
 ```

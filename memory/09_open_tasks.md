@@ -34,6 +34,27 @@ Surfaced by `connector_health_log` + freshness check. Route via the police loop
       open stage, ~$257B/966B SAR) and correct its amount, then re-run
       `collectors/hubspot_deals_bq.py`. Police now auto-catches this (amount_sanity check).
 
+## P1 — Police expansion: watch the WHOLE system, not just inbound connectors
+
+The police (connector_tracker) is inbound-only. Detectors for other surfaces exist
+but are scattered + have gaps. Aggregate all under one health view + close the 🔴 gaps
+(see `docs/_shared/police-loop.md` scope table). Each routes through the police loop.
+- [ ] **Outbound delivery checks:** verify the daily #approvals Slack digest actually
+      posted, Asana tasks actually created, Hex refreshed, Databox pushed, report rendered/
+      uploaded to Drive — not just log-on-failure. Owner: `marketing-ops` / `ai-orchestrator`.
+- [ ] **Executor-action verification:** after an approved pause/scale/keyword executes,
+      confirm it actually applied on-platform (read back the ad/keyword state). Owner: `campaign-manager`.
+- [ ] **Credential liveness (not just presence):** `health.py` checks env-var presence;
+      add a live ping per integration (token present but expired/revoked = silent fail,
+      e.g. LinkedIn). Owner: `marketing-ops`.
+- [ ] **Cost/consumption anomaly check:** `cost_tracking` logs token/BQ spend but nothing
+      alerts on a spike. Add a sanity check (today's cost > N× 7d avg → flag). Owner: `growth-analyst`.
+- [ ] **Aggregate the detectors:** connector_tracker + self_healer + spike_detector +
+      dashboard_guard + health.py + the new checks → one police status the orchestrator reads.
+- [ ] **Persistent-WARNING → BROKEN escalation** (active channels only) — still to code in connector_tracker.
+- [ ] **Align dashboard `reports/app.py` role-sets** to the canonical 11_agent_roles mapping
+      (orphans: task_creator, collector, paid_media_strategist, campaign_creator).
+
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 
 Built on top of Option B from 2026-05-14:
