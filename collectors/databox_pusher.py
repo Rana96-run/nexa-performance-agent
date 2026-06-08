@@ -26,7 +26,7 @@ from datetime import date, timedelta
 DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
 _BASE         = "https://api.databox.com"
 _BATCH        = 100      # Databox max per ingestion request
-_BATCH_DELAY  = 0.3
+_BATCH_DELAY  = 1.0      # 1s between batches — avoids rate-limit (403) after ~40 rapid batches
 
 # Dataset IDs — created 2026-06-08 under data source 4983171 "Qoyod BQ"
 _DATASET = {
@@ -49,14 +49,25 @@ def _headers():
 
 
 def _flush(grain: str, records: list) -> int:
-    """Send all records in ≤100-item batches to the correct dataset."""
+    """Send all records in ≤100-item batches with retry on rate-limit (403/429)."""
     dataset_id = _DATASET[grain]
     url  = f"{_BASE}/v1/datasets/{dataset_id}/data"
     sent = 0
     for i in range(0, len(records), _BATCH):
-        batch = records[i : i + _BATCH]
-        resp  = requests.post(url, headers=_headers(), json={"records": batch}, timeout=30)
-        resp.raise_for_status()
+        batch   = records[i : i + _BATCH]
+        backoff = 5
+        for attempt in range(5):
+            resp = requests.post(url, headers=_headers(), json={"records": batch}, timeout=30)
+            if resp.status_code in (403, 429):
+                print(f"[databox] rate-limited on {grain} batch {i//100+1}, "
+                      f"waiting {backoff}s (attempt {attempt+1}/5)")
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            resp.raise_for_status()
+            break
+        else:
+            resp.raise_for_status()   # exhaust retries — surface the error
         sent += len(batch)
         if i + _BATCH < len(records):
             time.sleep(_BATCH_DELAY)
