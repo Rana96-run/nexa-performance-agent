@@ -250,7 +250,6 @@ a:hover{text-decoration:underline}
 .team-subs{display:flex;gap:10px;width:100%;flex-wrap:wrap;justify-content:center}
 .team-sub-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
                 padding:12px 12px 10px;position:relative;overflow:hidden;
-                flex:1;min-width:150px;max-width:200px;
                 display:flex;flex-direction:column;align-items:center;gap:6px;
                 transition:border-color .2s,box-shadow .2s}
 .team-sub-card:hover{border-color:var(--tc);box-shadow:0 0 0 1px var(--tc)33}
@@ -649,23 +648,22 @@ a:hover{text-decoration:underline}
 
       {# ── Connector stem + 3-branch bar ── #}
       <div class="tc-stem-down"></div>
-      <div class="tc-bar" style="width:min(100%,900px)">
+      <div class="tc-bar">
         <div class="tc-sub-wrap"><div class="tc-node" style="background:#dc2626"></div></div>
         <div class="tc-sub-wrap"><div class="tc-node" style="background:#059669"></div></div>
         <div class="tc-sub-wrap"><div class="tc-node" style="background:#6366f1"></div></div>
       </div>
-      <div style="display:flex;gap:16px;width:min(100%,900px);justify-content:space-around">
-        <div style="flex:1;display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
-        <div style="flex:1;display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
-        <div style="flex:1;display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
-      </div>
 
-      {# ── 3 Department columns ── #}
-      <div style="display:flex;gap:16px;width:100%;flex-wrap:wrap;justify-content:center">
+      {# ── 3 Department columns — same 3-col grid drives both stems and dept bodies ── #}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:18px auto;gap:0 16px;width:100%">
+        {# stem-up row (grid row 1) #}
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
 
         {# Performance dept #}
         {% set perf_members = team_roster | selectattr("dept", "equalto", "Performance") | list %}
-        <div style="flex:1;min-width:260px;max-width:320px">
+        <div>
           <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;
                        background:#7f1d1d;border:1px solid #dc2626;border-bottom:none;
                        font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fca5a5">
@@ -702,7 +700,7 @@ a:hover{text-decoration:underline}
 
         {# CRO / LP dept #}
         {% set cro_members = team_roster | selectattr("dept", "equalto", "CRO / LP") | list %}
-        <div style="flex:1;min-width:260px;max-width:320px">
+        <div>
           <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;
                        background:#064e3b;border:1px solid #059669;border-bottom:none;
                        font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6ee7b7">
@@ -739,7 +737,7 @@ a:hover{text-decoration:underline}
 
         {# Support dept #}
         {% set support_members = team_roster | selectattr("dept", "equalto", "Support") | list %}
-        <div style="flex:1;min-width:260px;max-width:320px">
+        <div>
           <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;
                        background:#1e1b4b;border:1px solid #6366f1;border-bottom:none;
                        font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#a5b4fc">

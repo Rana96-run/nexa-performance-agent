@@ -1595,7 +1595,7 @@ def activity_dashboard():
             "dept":   "CRO / LP",
             "dept_color": "#059669",
             "is_lead": True,
-            "roles":  {"cro_analysis", "spike_detector"},
+            "roles":  {"cro_analysis"},
             "sprite": "cro",
         },
         {
@@ -1613,7 +1613,7 @@ def activity_dashboard():
             "color":  "#0891b2",
             "dept":   "CRO / LP",
             "dept_color": "#059669",
-            "roles":  {"lp_deploy", "bq_refresh"},
+            "roles":  {"lp_deploy"},
             "sprite": "developer",
         },
         # ── Support dept ────────────────────────────────────────────────────
@@ -1632,7 +1632,7 @@ def activity_dashboard():
             "color":  "#8b5cf6",
             "dept":   "Support",
             "dept_color": "#6366f1",
-            "roles":  {"spike_detector", "bq_refresh", "llm_cadence", "daily_digest"},
+            "roles":  {"spike_detector", "bq_refresh", "llm_cadence"},
             "sprite": "analyst",
         },
     ]
