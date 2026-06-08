@@ -16,6 +16,7 @@ design-generation pipeline — see "About the source" below).
 | `prompt-templates.md` | creative/design prompt templates | brief → asset prompts |
 | `campaign-analysis.md` | campaign analysis reference | tie creative to performance |
 | `design-learnings.json` | accumulated design learnings | what worked before |
+| `how-to-generate-designs.md` | the operating guide — pipeline, formats, HiggsField, key rules | run the designer capability |
 
 ## About the source (`D:\Design Agent\`)
 That folder is a **working design-generation pipeline** — Python generators
