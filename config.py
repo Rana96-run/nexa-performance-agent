@@ -73,6 +73,9 @@ SNAPCHAT_REFRESH_TOKEN = os.getenv("SNAPCHAT_REFRESH_TOKEN")
 LI_ACCESS_TOKEN  = os.getenv("LI_ACCESS_TOKEN")
 LI_AD_ACCOUNT_URN = os.getenv("LI_AD_ACCOUNT_URN")
 
+# Databox Push API — custom metrics destination
+DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
+
 # Asana per-channel display labels (used as the prefix in section names).
 ASANA_CHANNEL_LABELS = {
     "google_ads":    "Google Ads",

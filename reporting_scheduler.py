@@ -334,6 +334,26 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] Hex refresh failed (non-fatal): {e}")
 
+    # ── Push merged metrics to Databox (skip silently if token not set) ──────
+    import os as _os
+    if _os.getenv("DATABOX_TOKEN"):
+        try:
+            from collectors.databox_pusher import run_push
+            push_days = 2 if (days is None and incremental) else (days or 365)
+            n_dp = run_push(days=push_days)
+            results["databox_push"] = (True, n_dp, 0)
+            log_activity_async(
+                role="bq_refresh", action="databox_push", status="success",
+                details={"data_points": n_dp, "days": push_days},
+            )
+        except Exception as e:
+            print(f"[scheduler] Databox push failed (non-fatal): {e}")
+            results["databox_push"] = (False, str(e), 0)
+            log_activity_async(
+                role="bq_refresh", action="databox_push", status="failed",
+                details={"error": str(e)[:300]},
+            )
+
     # ── Daily BQ ↔ HubSpot reconciliation (Phase 1 stability) ────────────────
     # Runs ONCE per day (only on the morning Riyadh cycle = utc_hour 5).
     # Catches silent collector failures, stale views, schema drift within 24h.
