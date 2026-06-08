@@ -22,5 +22,6 @@ identity + routing; the playbook is the operational procedure.
 - [growth-analyst](support/growth-analyst.md) — BQ analysis, forecasts, owns memory/
 
 ## Shared
+- [../_shared/how-to-use-the-team.md](../_shared/how-to-use-the-team.md) — how to talk to each agent (start here)
 - [../_shared/org-chart.md](../_shared/org-chart.md) · [handoff-protocol.md](../_shared/handoff-protocol.md) · [communication-rules.md](../_shared/communication-rules.md)
 - Root: `../../CLAUDE.md` · `../../memory/CRITICAL_KPI_RULES.md`
