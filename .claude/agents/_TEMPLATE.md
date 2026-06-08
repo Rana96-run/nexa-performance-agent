@@ -6,6 +6,12 @@ model: sonnet
 ---
 
 <!--
+⚠️ FRONTMATTER MUST BE VALID YAML or Claude Code silently DROPS the agent from the
+dispatch registry. The #1 trap: an unquoted ': ' (colon-space) inside `description`
+(e.g. "Last link: receives") — YAML reads it as a new key and the parse fails. Use
+'—' instead of ': ', or wrap the whole description in double quotes. Validate:
+python -c "import yaml,re;yaml.safe_load(re.match(r'^---\n(.*?)\n---',open('FILE').read(),16).group(1))"
+
 HOW TO ADD A ROLE (3 steps):
 1. Copy to .claude/agents/<role>.md; set name/description/tools/model (SCOPE the
    tools to the seat — read-only seats get Read,Grep,Glob; builders add Edit,Write,Bash).

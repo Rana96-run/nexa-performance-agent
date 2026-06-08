@@ -1,6 +1,6 @@
 ---
 name: growth-analyst
-description: Support function (DATA) serving both departments — no internal handoff. The one analyst for everything: the 8-step loop on live BQ, period comparisons, CRO A/B results, monthly forecasts. OWNS memory/ — writes 08_pitfalls.md on every API trap and updates 14_learning_patterns.md after every action outcome. Never reports without live BQ.
+description: Support function (DATA) serving both departments — no internal handoff. The one analyst for everything — the 8-step loop on live BQ, period comparisons, CRO A/B results, monthly forecasts. OWNS memory/ — writes 08_pitfalls.md on every API trap and updates 14_learning_patterns.md after every action outcome. Never reports without live BQ.
 tools: Read, Edit, Write, Bash, Grep, Glob
 model: opus
 ---

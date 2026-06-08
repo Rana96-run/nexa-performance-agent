@@ -1,6 +1,6 @@
 ---
 name: developer
-description: Builds and ships the landing-page variant in the CRO chain. Dispatch to implement a design, wire UTM passthrough on every form field, fire both Meta pixels, deploy to production, and verify pixel fires in Events Manager before sign-off. Last link: receives from UI/UX Designer.
+description: Builds and ships the landing-page variant in the CRO chain. Dispatch to implement a design, wire UTM passthrough on every form field, fire both Meta pixels, deploy to production, and verify pixel fires in Events Manager before sign-off. Last link — receives from UI/UX Designer.
 tools: Read, Edit, Write, Bash, Grep, Glob
 model: opus
 ---

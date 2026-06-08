@@ -9,6 +9,16 @@ agent loads only its own small files, not the whole repo.
 > performance_audit, ops_scheduler, …) are how work is **logged**, not the team
 > roster. The team is the 9 below.
 
+## Activation & troubleshooting
+- **Make agents callable:** Claude Code loads `.claude/agents/` at session start. After
+  adding/renaming/editing an agent, run **`/agents`** (or restart the session) so it's
+  dispatchable by name. Until then a *new* agent isn't in the registry.
+- **An agent silently won't load / "agent type not found"?** Its **frontmatter YAML is
+  invalid** — Claude Code drops it. Most common cause: an unquoted `: ` (colon-space)
+  inside `description`. Validate all 9:
+  `python -c "import glob,re,yaml; [yaml.safe_load(re.match(r'^---\n(.*?)\n---',open(f,encoding='utf-8').read(),16).group(1)) for f in glob.glob('.claude/agents/*.md') if 'README' not in f]"`
+  (2026-06-09: this dropped `growth-analyst`, `developer`, `ui-ux-designer` — fixed.)
+
 ## How to talk to a teammate
 Name the seat in plain language:
 - *"Ask the **campaign-manager** to build Meta_LeadGen_AR_Invoice_Interests."*

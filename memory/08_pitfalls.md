@@ -971,3 +971,17 @@ cause was the tracker itself, not the connectors. If it cries wolf again, check:
   05XXXXXXXX, or 5XXXXXXXX) → diagnoses "phone number in Amount field" explicitly. Test the
   **native (SAR)** value, not USD — the USD conversion (÷3.75) destroys the 966 prefix.
   Source-deal fix is HUMAN-gated (HubSpot read-only). The police watches deal amounts now.
+
+## Claude Code subagents — invalid YAML frontmatter silently drops the agent (2026-06-09)
+
+- **Symptom:** `Agent type 'growth-analyst' not found` mid-session, though the file looked
+  fine and it had dispatched earlier. 3 of 9 agents affected (growth-analyst, developer,
+  ui-ux-designer); the other 6 loaded.
+- **Root cause:** their `description:` had an **unquoted `: ` (colon-space)** —
+  growth-analyst's "everything: the 8-step loop", developer's "Last link: receives". YAML
+  reads the embedded colon as a new mapping key → `ScannerError: mapping values are not
+  allowed here` → Claude Code drops the agent from the dispatch registry.
+- **Fix:** remove the embedded `: ` (use `—`) or double-quote the description. Validate
+  with `yaml.safe_load` on the frontmatter (one-liner in `.claude/agents/README.md`);
+  then run `/agents` (or restart). **Rule:** agent `description` must be valid YAML — never
+  an unquoted colon-space. A subagent that can't load on its own = a frontmatter bug.

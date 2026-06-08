@@ -1,6 +1,6 @@
 ---
 name: ui-ux-designer
-description: Designs landing-page variants in the CRO chain. Dispatch to turn a CRO brief into an annotated LP design aligned to OCEAN personas, with the ZATCA badge above the fold and interaction notes for the Developer. Middle link: receives from CRO Specialist, hands to Developer.
+description: Designs landing-page variants in the CRO chain. Dispatch to turn a CRO brief into an annotated LP design aligned to OCEAN personas, with the ZATCA badge above the fold and interaction notes for the Developer. Middle link — receives from CRO Specialist, hands to Developer.
 tools: Read, Bash, Grep, Glob
 model: opus
 ---
