@@ -45,7 +45,23 @@ FROM UNNEST(['google_ads','meta','snapchat','tiktok','microsoft_ads','linkedin',
 
 CHANNEL_ROAS_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.channel_roas_daily` AS
-WITH spend AS (
+-- Spine guarantees every channel appears for every date since its first campaign,
+-- even on days with zero spend / zero leads / zero deals.
+WITH channel_first AS (
+  SELECT channel, MIN(date) AS first_date
+  FROM `{P}.{D}.campaigns_daily`
+  GROUP BY channel
+),
+spine AS (
+  -- One row per (date, channel) for the past 365 days, from channel's first appearance onward
+  SELECT d AS date, cf.channel
+  FROM UNNEST(GENERATE_DATE_ARRAY(
+    DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 365 DAY),
+    DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+  )) AS d
+  JOIN channel_first cf ON d >= cf.first_date
+),
+spend AS (
   SELECT date, channel,
          SUM(spend)        AS spend,
          SUM(impressions)  AS impressions,
@@ -118,14 +134,14 @@ deals AS (
   GROUP BY 1,2
 )
 SELECT
-  COALESCE(s.date, l.date, d.date)             AS date,
-  COALESCE(s.channel, l.channel, d.channel)    AS channel,
+  spine.date,
+  spine.channel,
   COALESCE(s.spend, 0)                         AS spend,
-  s.impressions,
-  s.clicks,
+  COALESCE(s.impressions, 0)                   AS impressions,
+  COALESCE(s.clicks, 0)                        AS clicks,
   SAFE_DIVIDE(s.clicks, s.impressions) * 100   AS ctr,
-  s.platform_leads,
-  s.platform_conversions,
+  COALESCE(s.platform_leads, 0)                AS platform_leads,
+  COALESCE(s.platform_conversions, 0)          AS platform_conversions,
   COALESCE(l.hs_leads, 0)        AS hs_leads,
   COALESCE(l.hs_qualified, 0)    AS hs_qualified,
   COALESCE(l.hs_disqualified, 0) AS hs_disqualified,
@@ -180,12 +196,12 @@ SELECT
     WHEN SAFE_DIVIDE(s.spend, l.hs_qualified) <= 80 THEN 'warning'
     ELSE 'pause_zone'
   END AS cpql_zone
--- FULL OUTER JOIN so lead-only channels (e.g. Organic Search, no spend)
--- still appear in the dashboard with NULL CPL/CPQL/ROAS instead of being dropped.
-FROM spend s
-FULL OUTER JOIN leads l ON s.date = l.date AND s.channel = l.channel
-LEFT JOIN deals d ON COALESCE(s.date, l.date) = d.date
-                 AND COALESCE(s.channel, l.channel) = d.channel
+-- Spine-anchored: channel always appears for every date since its first campaign,
+-- even on zero-spend / zero-lead days. spend/leads/deals LEFT JOINed on top.
+FROM spine
+LEFT JOIN spend s ON s.date = spine.date AND s.channel = spine.channel
+LEFT JOIN leads l ON l.date = spine.date AND l.channel = spine.channel
+LEFT JOIN deals d ON d.date = spine.date AND d.channel = spine.channel
 """
 
 
@@ -540,6 +556,19 @@ WITH
     SELECT 'linkedin',                'LinkedIn Ads'                  UNION ALL
     SELECT 'microsoft_ads',           'Microsoft Ads'
   ),
+  channel_first AS (
+    SELECT channel, MIN(date) AS first_date
+    FROM `{P}.{D}.campaigns_daily`
+    GROUP BY channel
+  ),
+  spine AS (
+    SELECT d AS date, cf.channel
+    FROM UNNEST(GENERATE_DATE_ARRAY(
+      DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 365 DAY),
+      DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+    )) AS d
+    JOIN channel_first cf ON d >= cf.first_date
+  ),
   spend AS (
     SELECT date, channel,
            SUM(spend)       AS spend,
@@ -595,8 +624,8 @@ WITH
     GROUP BY cm.channel, d.date
   )
 SELECT
-  COALESCE(s.date,    l.date,    d.date)    AS date,
-  COALESCE(s.channel, l.channel, d.channel) AS channel,
+  spine.date,
+  spine.channel,
   ROUND(IFNULL(s.spend, 0), 2)              AS spend,
   IFNULL(s.impressions, 0)                  AS impressions,
   IFNULL(s.clicks, 0)                       AS clicks,
@@ -628,10 +657,12 @@ SELECT
   ROUND(SAFE_DIVIDE(IFNULL(d.revenue_won,0), NULLIF(IFNULL(s.spend,0), 0)),    2) AS roas,
   -- ROAS: new business only
   ROUND(SAFE_DIVIDE(IFNULL(d.new_biz_revenue_won,0), NULLIF(IFNULL(s.spend,0), 0)), 2) AS new_biz_roas
-FROM spend s
-FULL OUTER JOIN leads  l ON l.date = s.date AND l.channel = s.channel
-FULL OUTER JOIN deals  d ON d.date = COALESCE(s.date, l.date)
-                        AND d.channel = COALESCE(s.channel, l.channel)
+-- Spine-anchored: every channel appears for every date since its first campaign,
+-- even on zero-spend / zero-lead days.
+FROM spine
+LEFT JOIN spend s ON s.date = spine.date AND s.channel = spine.channel
+LEFT JOIN leads l ON l.date = spine.date AND l.channel = spine.channel
+LEFT JOIN deals d ON d.date = spine.date AND d.channel = spine.channel
 """
 
 
