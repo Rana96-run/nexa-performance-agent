@@ -16,7 +16,10 @@ health view; each finding routes through the loop below.
 | Data quality (anomalies, corrupt amounts, dedup/fan-out, attribution) | `spike_detector`, `amount_sanity` | 🟡 scattered |
 | Runtime (nightly loop fired? Railway up? stuck approvals?) | `self_healer`, heartbeats, `/health` | 🟡 partial |
 | Credentials PRESENT (all integrations) | `health.py` | ✅ presence-only |
-| **Outbound delivery** (Slack digest posted? Asana created? Hex/Databox/Drive pushed?) | failure heartbeats only | 🔴 **gap** |
+| **Outbound delivery — Databox push** (both datasets pushed within 28h?) | `connector_tracker` SYSTEM_MONITORS (checks 6-8) | ✅ 2026-06-08 |
+| **Runtime health — Railway /health** | `connector_tracker` SYSTEM_MONITORS | ✅ 2026-06-08 |
+| **Runtime health — scheduler fired** | `connector_tracker` SYSTEM_MONITORS (agent_activity_log query) | ✅ 2026-06-08 |
+| **Outbound delivery — Slack/Asana** (digest posted? tasks created?) | failure heartbeats only | 🔴 **gap** |
 | **Executor actions** (did an approved pause/scale/keyword actually apply on-platform?) | — | 🔴 **gap** |
 | **Credential LIVENESS** (token present but expired/revoked → silent fail) | — | 🔴 **gap** |
 | **Cost / consumption anomalies** (token/BQ spend spike) | `cost_tracking` logs only | 🔴 **gap** |

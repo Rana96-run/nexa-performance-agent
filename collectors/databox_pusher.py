@@ -21,12 +21,13 @@ widgets to filter to the desired level.
     utm_term      = keyword text
     utm_medium    = form name / placement (from hubspot_leads_module_daily)
 
-Dataset:
-  "Qoyod Spend - All Grains"  →  eff4621e-a0ef-4e93-bcf6-9c48f6e8d4ae
+Datasets (active):
+  "Qoyod Spend - Daily Spend"  →  199c5297  (channel-day grain, leads/sqls/cpl/cpql)
+  "Qoyod Spend - All Grains"   →  6158be78  (4 grains unified; datetime date; minimal schema)
   Data source: 4983171 (PAK-linked "Qoyod BQ").
-  Schema with NUMBER types defined at creation time — spend/impressions/clicks/cpl/cpql/
-  qual_rate_pct/ctr_pct/quality_score are NUMBER; all others STRING.
-  Use SUM for volume fields (spend/impressions/clicks), AVG for ratio fields (cpl/cpql/etc).
+  Schema with NUMBER types defined at creation time — spend/impressions/clicks/leads/sqls/
+  cpl/cpql/qual_rate_pct are NUMBER; date is DATETIME; grain/channel/utm_campaign are STRING.
+  Use SUM for volume fields (spend/impressions/clicks/leads/sqls), AVG for ratio fields (cpl/cpql).
 
 Auth: x-api-key header with DATABOX_TOKEN (pak_ personal API key).
 Max 100 records per request per Databox docs.
@@ -34,6 +35,7 @@ Max 100 records per request per Databox docs.
 Superseded dataset IDs (kept for rollback reference):
   v1 all-grains (wrong field names, all-string) → 739cde4e-3ba5-4ba9-98e8-701fa33111b7
   v2 all-grains (correct names, all-string)     → 9ec1816a-f7a6-4ba5-b898-349718242d96
+  v3 all-grains (eff4621e — bad schema wrapper) → eff4621e-a0ef-4e93-bcf6-9c48f6e8d4ae
   campaign    → 6dbbd9df-4554-4c58-9fe4-9009c43e6e06
   adset       → eec43dfb-fb3b-4f4c-8b71-e39bc9704ebd
   ad          → 73151fba-f7c7-4aaf-a695-2df41ad34833
@@ -56,7 +58,7 @@ except Exception:
 
 DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
 _BASE         = "https://api.databox.com"
-_DATASET_ID   = "eff4621e-a0ef-4e93-bcf6-9c48f6e8d4ae"   # "Qoyod Spend - All Grains" (v3 — schema with NUMBER types defined at creation)
+_DATASET_ID   = "6158be78"   # "Qoyod Spend - All Grains" (v4 — correct datetime type, minimal schema)
 _BATCH        = 100     # Databox max per ingestion request
 _BATCH_DELAY  = 0.5     # seconds between batches (0.5s = ~120 req/min, well within Databox limits)
 _TIMEOUT      = 60      # seconds — SSL handshake + response
