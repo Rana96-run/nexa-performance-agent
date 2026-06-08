@@ -879,20 +879,32 @@ def initial_load_individual(start_date: date = None) -> int:
     return total_fetched
 
 
-def _flush_individual(client, rows: list[dict], label: str = "leads-initial") -> None:
-    """Append a batch of rows to hubspot_leads_individual via load job."""
+def _flush_individual(client, rows: list[dict], label: str = "leads-initial",
+                       write_disposition: str = "WRITE_APPEND") -> None:
+    """Write a batch of rows to hubspot_leads_individual via load job.
+
+    write_disposition:
+      - WRITE_APPEND   (default): add to existing rows
+      - WRITE_TRUNCATE          : atomically replace entire table (used by mirror's
+                                  first batch to avoid streaming-buffer DELETE issue)
+    """
     project  = os.getenv("BQ_PROJECT_ID")
     dataset  = os.getenv("BQ_DATASET")
     table_id = f"{project}.{dataset}.{_INDIVIDUAL_TABLE}"
     ndjson   = "\n".join(_json.dumps(r, default=str) for r in rows).encode()
+    # WRITE_TRUNCATE conflicts with ALLOW_FIELD_ADDITION (BQ rejects), so omit it
+    # in the truncate case. Subsequent WRITE_APPEND batches can still allow it.
+    extra = {} if write_disposition == "WRITE_TRUNCATE" else {
+        "schema_update_options": [_bq.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
+    }
     job_cfg  = _bq.LoadJobConfig(
         schema=_INDIVIDUAL_SCHEMA,
         source_format=_bq.SourceFormat.NEWLINE_DELIMITED_JSON,
-        write_disposition="WRITE_APPEND",
-        schema_update_options=[_bq.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
+        write_disposition=write_disposition,
+        **extra,
     )
     client.load_table_from_file(BytesIO(ndjson), table_id, job_config=job_cfg).result()
-    print(f"[{label}] flushed {len(rows)} rows")
+    print(f"[{label}] flushed {len(rows)} rows ({write_disposition})")
 
 
 def sync_full_mirror() -> int:
@@ -979,10 +991,21 @@ def sync_full_mirror() -> int:
     print(f"[mirror] fetched {len(all_rows)} leads total")
 
     # ── Replace all BQ rows with fresh data ──────────────────────────────────
-    client.query(f"DELETE FROM `{table_id}` WHERE TRUE").result()
-
+    # Bug fix (2026-06-08): the old pattern was DELETE WHERE TRUE + WRITE_APPEND
+    # batches. The DELETE failed silently when ANY row was in the streaming
+    # buffer (e.g. left over from an insert_rows_json call elsewhere), so the
+    # mirror aborted before writing anything. Worse, when DELETE succeeded but
+    # WRITE_APPEND collided with streaming-buffer rows, rows got dropped
+    # silently — explaining why "wrote 30,601" sometimes produced 15k tables.
+    #
+    # Fix: first batch uses WRITE_TRUNCATE (atomic full-table replace, NO
+    # streaming-buffer constraint). Remaining batches use WRITE_APPEND on the
+    # already-truncated table.
     for i in range(0, len(all_rows), 5000):
-        _flush_individual(client, all_rows[i:i + 5000], label="mirror")
+        batch = all_rows[i:i + 5000]
+        # First batch truncates; rest append
+        disposition = "WRITE_TRUNCATE" if i == 0 else "WRITE_APPEND"
+        _flush_individual(client, batch, label="mirror", write_disposition=disposition)
     print(f"[mirror] wrote {len(all_rows)} rows to {_INDIVIDUAL_TABLE}")
 
     # ── Rebuild all daily aggregates ─────────────────────────────────────────
