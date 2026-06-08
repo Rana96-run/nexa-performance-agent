@@ -188,17 +188,20 @@ do not hardcode in prompts or docs)
   `cost_micros`, Snap spend micro) must be divided by 1,000,000 BEFORE
   the USD conversion (see `memory/08_pitfalls.md`).
 
-**Agent roles** (authoritative — this repo runs 3 of them)
+**Agent team** (authoritative roster: `docs/_shared/org-chart.md`)
 
-| Role | File | Scope |
-|---|---|---|
-| Paid Media | `md_files/qoyod-paid-media-agent.md` | Pause / scale / budget / bid changes with approval |
-| Analyst / Strategist | `md_files/qoyod-analyst-agent.md` | LPs, bounce, traffic, converters, ads behavior, **scaling signals**, **lead-quality** |
-| Project Manager | `md_files/qoyod-task-flow.md` | Routes signals → tasks → chases → closes |
+The team is **9 Claude Code subagents** = 1 manager + 3 departments (see
+`CLAUDE.manager.md` for how they run):
+- **Manager:** `ai-orchestrator` — 8-step loop 08:00, gates writes ✅, owns handoffs.
+- **Performance** (LEAD `performance-lead`): `campaign-manager` ∥ `creative-strategist`.
+- **CRO / Landing Page** (sequential): `cro-specialist` → `ui-ux-designer` → `developer`.
+- **Support** (parallel): `marketing-ops` ∥ `growth-analyst` (owns `memory/`).
 
-**Separate agents (NOT in this repo — hand off via Asana):**
-- **Creative agent** — ad creatives, landing-page builds, CRO
-- **Marketing Ops agent** — lifecycle, HubSpot workflows, email sequences
+> **Two layers:** these dev-time subagents are separate from the **production
+> runtime** (`claude/roles.py`), which loads `md_files/qoyod-*.md` personas at
+> cadence on Railway. The PM/task-flow step is code, not an md file
+> (`main._extract_tasks` + `executors/asana`). Don't confuse them — see
+> `memory/11_agent_roles.md`.
 
 **Tech stack** (authoritative — see `memory/` for details)
 - **Data:** BigQuery (project-dataset via `.env`), load-job writes only, no streaming

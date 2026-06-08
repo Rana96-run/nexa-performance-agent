@@ -62,8 +62,12 @@ fix, and hand back a verified LP that moves the number.
 
 ## Knowledge Base — Landing Page Agent
 
-The Nexa CRO specialist has read access to all files in the Landing Page Agent
-at `D:\Landing Page Agent\`. The key knowledge pillars:
+A **local snapshot** of the reusable LP knowledge (design system, wireframes,
+brand, anti-claims, build prompts) now lives in-repo at
+`docs/landing-pages/reference/` — read that first (it's what the CRO agents use).
+`D:\Landing Page Agent\` remains the **source of truth** for the full project
+(live pages, screenshots, build scripts) and read access to it is below. The key
+knowledge pillars:
 
 ### LP Library (live pages on `lp.qoyod.com` / `www.qoyod.com`)
 | Page ID | Topic | File |

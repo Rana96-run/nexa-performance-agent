@@ -32,50 +32,45 @@
 
 `growth-analyst` owns `memory/` (writes 08_pitfalls + 14_learning_patterns).
 
-## Separate agents (NOT in this repo)
+## What's in-house vs external (updated 2026-06-08)
 
-| Role | What it owns | How we reach it |
-|---|---|---|
-| **Creative agent** | Ad creatives, LP builds, **CRO** (bounce fixes, form fixes, LP copy) | Asana `[Creative Brief]` tasks |
-| **Marketing Ops agent** | Lifecycle, HubSpot workflows, email sequences, list building | Asana `[MarkOps Brief]` tasks |
+The new org brought **CRO / Landing Page in-house** (Dept 2: `cro-specialist` →
+`ui-ux-designer` → `developer`) and made **Marketing Ops** an in-house Support
+seat. What stays external:
+- **Creative production** (cutting actual ad creatives) — briefed via Asana
+  `[Creative Brief]`. Our `creative-strategist` owns *direction*, not production.
+- **Lifecycle / email / HubSpot workflows** — briefed via Asana `[MarkOps Brief]`.
+  Our `marketing-ops` owns tracking/pixels/secrets, not lifecycle automation.
 
-## What was removed from this repo
-
-- `qoyod-creative-agent.md` — moved to external Creative agent
-- `qoyod-hubspot-cro-agent.md` — CRO merged into external Creative agent
-- Old "Marketing Ops" duties inside the PM flow — moved to external Marketing Ops agent
-- `qoyod-reporter-agent.md` — renamed to `qoyod-analyst-agent.md` and scoped
-  up to cover continuous analysis + scaling + lead-quality, not just digests
-
-## Decision flow at a glance
+## Decision flow at a glance (9-agent org)
 
 ```
 Data in BigQuery
+      │  growth-analyst (observe + compare, live BQ)
+      ▼
+performance-lead  →  routes the flag to the right seat
+      ├──► campaign-manager      : build / pause / scale (after ✅)
+      ├──► creative-strategist   : copy / A/B direction → external creative prod
+      └──► cro-specialist → ui-ux-designer → developer : the landing-page test
       │
       ▼
-Analyst agent  →  flags: scale / pause / LP / lead-quality
+ai-orchestrator  →  queues all writes into ONE #approvals digest
       │
       ▼
-Project Manager  →  routes + opens Asana task to correct owner
-      ├──► Paid Media agent (in repo): approval + execution
-      ├──► Creative agent (external): creative / LP / CRO
-      └──► Marketing Ops agent (external): lifecycle / workflow / email
+Human ✅ in Slack (anything touching a live ad account or LP deploy)
       │
       ▼
-Human approves in Slack (for anything that touches a live ad account)
-      │
-      ▼
-Action executed · logged · monitored for stop condition
+Executed · approval-tracked · re-evaluated 7d/14d · outcome → memory
 ```
 
 ## Non-negotiables
 
-- **Scaling** is the highest-leverage work this system does — Analyst
-  surfaces, PM routes, Paid Media drafts approval, human ✅, revert is
-  pre-approved as a stop condition.
-- **Lead-quality monitoring** is continuous, not periodic — Analyst watches
-  qual ratio + disqual-reason concentration + time-to-qualify per ad.
-- **This repo never does creative work or lifecycle work** — it briefs the
-  external agent via Asana with complete context and data.
+- **Scaling** is the highest-leverage work — `growth-analyst` surfaces,
+  `performance-lead` routes, `campaign-manager` drafts approval, human ✅, revert
+  is the pre-approved stop condition.
+- **Lead-quality monitoring** is continuous — qual ratio + disqual-reason
+  concentration + time-to-qualify per ad.
+- **Creative production + lifecycle stay external** — briefed via Asana with full
+  context. CRO/LP and tracking are now in-house.
 - **Lead ≠ SQL.** CPL from Lead module; CPQL from SQL (Contact module). Ad
   platforms optimize on Contact events only.
