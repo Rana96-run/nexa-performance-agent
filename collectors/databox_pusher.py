@@ -1,21 +1,32 @@
 """
 collectors/databox_pusher.py
 
-Pushes spend / impressions / clicks from BigQuery to Databox REST API.
+Pushes spend / CPL / CPQL from BigQuery to Databox REST API.
 
-Uses the new Databox REST API (api.databox.com) with pre-created datasets,
-one per grain. Attribution names match HubSpot UTM fields so Databox can
-join them to existing channel-level CPL/CPQL/won-amount custom metrics.
+One unified dataset contains all grains. Use the `grain` dimension in Databox
+widgets to filter to campaign / adset / ad / keyword / asset_group level.
 
-Grains → Dataset IDs (created 2026-06-08 under data source 4983171 "Qoyod BQ"):
+Attribution fields match HubSpot UTM so Databox can join to existing CPL/CPQL
+custom metrics:
+  campaign    → lead_utm_campaign
+  adset       → lead_utm_audience   (includes PMax asset groups)
+  ad          → lead_utm_content
+  keyword     → lead_utm_term
+  asset_group → lead_utm_audience   (PMax only, UPPER(campaign) LIKE '%PMAX%')
+
+Dataset:
+  "Qoyod Spend - All Grains"  →  739cde4e-3ba5-4ba9-98e8-701fa33111b7
+  Data source: 4983171 "Qoyod BQ"  (account 756469, Mohammad Irsheid's company)
+
+Auth: x-api-key header with DATABOX_TOKEN (pak_ personal API key).
+Max 100 records per request per Databox docs.
+
+Superseded per-grain dataset IDs (kept for reference / rollback):
   campaign    → 6dbbd9df-4554-4c58-9fe4-9009c43e6e06
   adset       → eec43dfb-fb3b-4f4c-8b71-e39bc9704ebd
   ad          → 73151fba-f7c7-4aaf-a695-2df41ad34833
   keyword     → 8e9dac81-8119-4729-8b93-c31b42381ed3
   asset_group → 4d1cff88-24e3-40c4-8078-a9330de5472e
-
-Auth: x-api-key header with DATABOX_TOKEN (pak_ personal API key).
-Max 100 records per request per Databox docs.
 """
 import os
 import json
@@ -25,36 +36,39 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from datetime import date, timedelta
+try:
+    import sys
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
 _BASE         = "https://api.databox.com"
-_BATCH        = 100      # Databox max per ingestion request
-_BATCH_DELAY  = 1.2      # pause between batches
-_TIMEOUT      = 60       # seconds — SSL handshake + response
+_DATASET_ID   = "739cde4e-3ba5-4ba9-98e8-701fa33111b7"   # "Qoyod Spend - All Grains"
+_BATCH        = 100     # Databox max per ingestion request
+_BATCH_DELAY  = 1.2     # seconds between batches
+_TIMEOUT      = 60      # seconds — SSL handshake + response
+
+# Databox WAF/quota limit is ~85 batches per session.
+# Large backfills chunk into ≤30-day windows (each window stays under quota).
+_CHUNK_DAYS  = 30
+_CHUNK_SLEEP = 3.0      # seconds between chunks
+
+ALL_GRAINS = ["campaign", "adset", "ad", "keyword", "asset_group"]
 
 
 def _session() -> requests.Session:
     """Session with automatic retry on connection errors and 429."""
-    s       = requests.Session()
-    retry   = Retry(
+    s     = requests.Session()
+    retry = Retry(
         total=5,
-        backoff_factor=3,          # waits 3, 6, 12, 24, 48s
+        backoff_factor=3,           # waits 3, 6, 12, 24, 48s
         status_forcelist=[429],
         allowed_methods=["POST"],
         raise_on_status=False,
     )
-    adapter = HTTPAdapter(max_retries=retry)
-    s.mount("https://", adapter)
+    s.mount("https://", HTTPAdapter(max_retries=retry))
     return s
-
-# Dataset IDs — created 2026-06-08 under data source 4983171 "Qoyod BQ"
-_DATASET = {
-    "campaign":    "6dbbd9df-4554-4c58-9fe4-9009c43e6e06",
-    "adset":       "eec43dfb-fb3b-4f4c-8b71-e39bc9704ebd",
-    "ad":          "73151fba-f7c7-4aaf-a695-2df41ad34833",
-    "keyword":     "8e9dac81-8119-4729-8b93-c31b42381ed3",
-    "asset_group": "4d1cff88-24e3-40c4-8078-a9330de5472e",
-}
 
 
 def _headers():
@@ -63,25 +77,25 @@ def _headers():
     return {
         "x-api-key":    DATABOX_TOKEN,
         "Accept":       "application/json",
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
     }
 
 
-def _flush(grain: str, records: list) -> int:
-    """Send all records in ≤100-item batches.
+def _flush(records: list) -> int:
+    """Send all records to the unified dataset in ≤100-item batches.
 
     - Raw UTF-8 bytes (ensure_ascii=False) bypasses WAF that blocks \\uXXXX.
     - Session with urllib3 Retry handles connection drops and 429 automatically.
     """
-    dataset_id = _DATASET[grain]
-    url     = f"{_BASE}/v1/datasets/{dataset_id}/data"
-    headers = {**_headers(), "Content-Type": "application/json; charset=utf-8"}
-    sess    = _session()
-    sent    = 0
+    if not records:
+        return 0
+    url  = f"{_BASE}/v1/datasets/{_DATASET_ID}/data"
+    sess = _session()
+    sent = 0
     for i in range(0, len(records), _BATCH):
         batch      = records[i : i + _BATCH]
         body_bytes = json.dumps({"records": batch}, ensure_ascii=False).encode("utf-8")
-        resp       = sess.post(url, headers=headers, data=body_bytes, timeout=_TIMEOUT)
+        resp       = sess.post(url, headers=_headers(), data=body_bytes, timeout=_TIMEOUT)
         resp.raise_for_status()
         sent += len(batch)
         if i + _BATCH < len(records):
@@ -106,268 +120,260 @@ def _row(base: dict, **extra) -> dict:
     return {k: v for k, v in rec.items() if v is not None and v != ""}
 
 
-# ── Campaign grain ────────────────────────────────────────────────────────────
-# campaign_name is normalised (latest name per campaign_id via ANY_VALUE in BQ)
-# and matches lead_utm_campaign in HubSpot.
+# ── Per-grain BQ queries ──────────────────────────────────────────────────────
 
-def _push_campaign(days: int) -> int:
-    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
-    client = get_client()
-    since  = (date.today() - timedelta(days=days)).isoformat()
-    rows = client.query(f"""
-        SELECT date, channel,
-               CAST(campaign_id AS STRING) AS campaign_id,
-               campaign_name,
-               spend, impressions, clicks,
-               cpl, cpql, qual_rate_pct, ctr_pct
-        FROM `{PROJECT_ID}.{DATASET}.paid_channel_campaign_daily`
-        WHERE date >= '{since}'
-        ORDER BY date, channel, campaign_id
-    """).result()
+def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
+    """Return BQ SQL for one grain over [since, until)."""
+    if grain == "campaign":
+        return f"""
+            SELECT date, channel,
+                   CAST(campaign_id AS STRING) AS campaign_id,
+                   campaign_name,
+                   spend, impressions, clicks,
+                   cpl, cpql, qual_rate_pct, ctr_pct
+            FROM `{proj}.{ds}.paid_channel_campaign_daily`
+            WHERE date >= '{since}' AND date < '{until}'
+            ORDER BY date, channel, campaign_id
+        """
+    if grain == "adset":
+        return f"""
+            SELECT date, channel,
+                   CAST(campaign_id AS STRING) AS campaign_id,
+                   utm_campaign  AS campaign_name,
+                   CAST(adset_id AS STRING)   AS adset_id,
+                   utm_audience  AS adset_name,
+                   spend, impressions, clicks,
+                   CPL AS cpl, CPQL AS cpql,
+                   ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
+            FROM `{proj}.{ds}.v_adset_performance`
+            WHERE date >= '{since}' AND date < '{until}'
+            ORDER BY date, channel, campaign_id, adset_id
+        """
+    if grain == "ad":
+        return f"""
+            SELECT date, channel,
+                   CAST(campaign_id AS STRING) AS campaign_id,
+                   utm_campaign  AS campaign_name,
+                   CAST(adset_id AS STRING)   AS adset_id,
+                   utm_audience  AS adset_name,
+                   CAST(ad_id AS STRING)      AS ad_id,
+                   utm_content   AS ad_name,
+                   creative_type,
+                   spend, impressions, clicks,
+                   CPL AS cpl, CPQL AS cpql,
+                   ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
+            FROM `{proj}.{ds}.v_ad_performance`
+            WHERE date >= '{since}' AND date < '{until}'
+            ORDER BY date, channel, campaign_id, ad_id
+        """
+    if grain == "keyword":
+        return f"""
+            SELECT date, channel,
+                   utm_campaign AS campaign_name,
+                   utm_audience AS adset_name,
+                   utm_term     AS keyword,
+                   match_type,
+                   quality_score,
+                   spend, impressions, clicks,
+                   ROUND(ctr*100,4) AS ctr_pct,
+                   CPL AS cpl, CPQL AS cpql
+            FROM `{proj}.{ds}.v_keyword_performance`
+            WHERE date >= '{since}' AND date < '{until}'
+            ORDER BY date, channel, utm_campaign, utm_term
+        """
+    if grain == "asset_group":
+        # PMax asset groups flow into lead_utm_audience (same as adsets).
+        # Filter to PMax campaigns; utm_audience = asset_group name.
+        return f"""
+            SELECT date, channel,
+                   CAST(campaign_id AS STRING) AS campaign_id,
+                   utm_campaign  AS campaign_name,
+                   CAST(adset_id AS STRING)   AS asset_group_id,
+                   utm_audience  AS asset_group_name,
+                   spend, impressions, clicks,
+                   CPL AS cpl, CPQL AS cpql,
+                   ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
+            FROM `{proj}.{ds}.v_adset_performance`
+            WHERE date >= '{since}' AND date < '{until}'
+              AND channel = 'google_ads'
+              AND UPPER(utm_campaign) LIKE '%PMAX%'
+            ORDER BY date, campaign_id, adset_id
+        """
+    raise ValueError(f"Unknown grain: {grain}")
 
+
+def _build_records(grain: str, rows) -> list:
+    """Convert BQ rows to Databox record dicts with a `grain` field."""
     records = []
     for r in rows:
-        records.append(_row(
-            {"date": str(r.date), "channel": r.channel},
-            campaign_id   = r.campaign_id or None,
-            campaign      = r.campaign_name or None,
-            spend         = _v(r.spend),
-            impressions   = _v(r.impressions),
-            clicks        = _v(r.clicks),
-            cpl           = _v(r.cpl),
-            cpql          = _v(r.cpql),
-            qual_rate_pct = _v(r.qual_rate_pct),
-            ctr_pct       = _v(r.ctr_pct),
-        ))
-    return _flush("campaign", records)
+        base = {"date": str(r.date), "channel": r.channel, "grain": grain}
+
+        if grain == "campaign":
+            rec = _row(base,
+                campaign_id  = r.campaign_id or None,
+                campaign     = r.campaign_name or None,
+                spend        = _v(r.spend),
+                impressions  = _v(r.impressions),
+                clicks       = _v(r.clicks),
+                cpl          = _v(r.cpl),
+                cpql         = _v(r.cpql),
+                qual_rate_pct= _v(r.qual_rate_pct),
+                ctr_pct      = _v(r.ctr_pct),
+            )
+
+        elif grain == "adset":
+            rec = _row(base,
+                campaign_id  = r.campaign_id or None,
+                campaign     = r.campaign_name or None,
+                adset_id     = r.adset_id or None,
+                adset        = r.adset_name or None,
+                spend        = _v(r.spend),
+                impressions  = _v(r.impressions),
+                clicks       = _v(r.clicks),
+                cpl          = _v(r.cpl),
+                cpql         = _v(r.cpql),
+                qual_rate_pct= _v(r.qual_rate_pct),
+            )
+
+        elif grain == "ad":
+            rec = _row(base,
+                campaign_id  = r.campaign_id or None,
+                campaign     = r.campaign_name or None,
+                adset_id     = r.adset_id or None,
+                adset        = r.adset_name or None,
+                ad_id        = r.ad_id or None,
+                ad           = r.ad_name or None,
+                creative_type= r.creative_type or None,
+                spend        = _v(r.spend),
+                impressions  = _v(r.impressions),
+                clicks       = _v(r.clicks),
+                cpl          = _v(r.cpl),
+                cpql         = _v(r.cpql),
+                qual_rate_pct= _v(r.qual_rate_pct),
+            )
+
+        elif grain == "keyword":
+            # Keywords have no numeric IDs — attribution is text-based via utm_term
+            rec = _row(base,
+                campaign     = r.campaign_name or None,
+                adset        = r.adset_name or None,
+                keyword      = r.keyword or None,
+                match_type   = r.match_type or None,
+                quality_score= _v(r.quality_score),
+                spend        = _v(r.spend),
+                impressions  = _v(r.impressions),
+                clicks       = _v(r.clicks),
+                ctr_pct      = _v(r.ctr_pct),
+                cpl          = _v(r.cpl),
+                cpql         = _v(r.cpql),
+            )
+
+        elif grain == "asset_group":
+            rec = _row(base,
+                campaign_id    = r.campaign_id or None,
+                campaign       = r.campaign_name or None,
+                asset_group_id = r.asset_group_id or None,
+                asset_group    = r.asset_group_name or None,
+                adset          = r.asset_group_name or None,   # utm_audience alias
+                spend          = _v(r.spend),
+                impressions    = _v(r.impressions),
+                clicks         = _v(r.clicks),
+                cpl            = _v(r.cpl),
+                cpql           = _v(r.cpql),
+                qual_rate_pct  = _v(r.qual_rate_pct),
+            )
+        else:
+            continue
+
+        records.append(rec)
+    return records
 
 
-# ── Adset / adgroup grain ─────────────────────────────────────────────────────
-# utm_audience matches lead_utm_audience in HubSpot.
-
-def _push_adset(days: int) -> int:
+def _push_grain_window(grain: str, since: str, until: str) -> int:
+    """Push one grain for one date window [since, until)."""
     from collectors.bq_writer import get_client, PROJECT_ID, DATASET
-    client = get_client()
-    since  = (date.today() - timedelta(days=days)).isoformat()
-    rows = client.query(f"""
-        SELECT date, channel,
-               CAST(campaign_id AS STRING) AS campaign_id,
-               utm_campaign  AS campaign,
-               CAST(adset_id AS STRING)   AS adset_id,
-               utm_audience  AS adset,
-               spend, impressions, clicks,
-               CPL AS cpl, CPQL AS cpql,
-               ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-        FROM `{PROJECT_ID}.{DATASET}.v_adset_performance`
-        WHERE date >= '{since}'
-        ORDER BY date, channel, campaign_id, adset_id
-    """).result()
-
-    records = []
-    for r in rows:
-        records.append(_row(
-            {"date": str(r.date), "channel": r.channel},
-            campaign_id   = r.campaign_id or None,
-            campaign      = r.campaign or None,
-            adset_id      = r.adset_id or None,
-            adset         = r.adset or None,
-            spend         = _v(r.spend),
-            impressions   = _v(r.impressions),
-            clicks        = _v(r.clicks),
-            cpl           = _v(r.cpl),
-            cpql          = _v(r.cpql),
-            qual_rate_pct = _v(r.qual_rate_pct),
-        ))
-    return _flush("adset", records)
-
-
-# ── Ad / creative grain ───────────────────────────────────────────────────────
-# utm_content matches lead_utm_content in HubSpot.
-
-def _push_ad(days: int) -> int:
-    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
-    client = get_client()
-    since  = (date.today() - timedelta(days=days)).isoformat()
-    rows = client.query(f"""
-        SELECT date, channel,
-               campaign_id,
-               utm_campaign AS campaign,
-               adset_id,
-               utm_audience AS adset,
-               ad_id,
-               utm_content  AS ad,
-               creative_type,
-               spend, impressions, clicks,
-               CPL AS cpl, CPQL AS cpql,
-               ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-        FROM `{PROJECT_ID}.{DATASET}.v_ad_performance`
-        WHERE date >= '{since}'
-        ORDER BY date, channel, campaign_id, ad_id
-    """).result()
-
-    records = []
-    for r in rows:
-        records.append(_row(
-            {"date": str(r.date), "channel": r.channel},
-            campaign_id   = r.campaign_id or None,
-            campaign      = r.campaign or None,
-            adset_id      = r.adset_id or None,
-            adset         = r.adset or None,
-            ad_id         = r.ad_id or None,
-            ad            = r.ad or None,
-            creative_type = r.creative_type or None,
-            spend         = _v(r.spend),
-            impressions   = _v(r.impressions),
-            clicks        = _v(r.clicks),
-            cpl           = _v(r.cpl),
-            cpql          = _v(r.cpql),
-            qual_rate_pct = _v(r.qual_rate_pct),
-        ))
-    return _flush("ad", records)
-
-
-# ── Keyword grain (Google Ads + Microsoft Ads) ────────────────────────────────
-# utm_term matches lead_utm_term in HubSpot.
-
-def _push_keyword(days: int) -> int:
-    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
-    client = get_client()
-    since  = (date.today() - timedelta(days=days)).isoformat()
-    rows = client.query(f"""
-        SELECT date, channel,
-               utm_campaign AS campaign,
-               utm_audience AS adgroup,
-               utm_term     AS keyword,
-               match_type,
-               quality_score,
-               spend, impressions, clicks,
-               ROUND(ctr*100,4) AS ctr_pct,
-               CPL AS cpl, CPQL AS cpql
-        FROM `{PROJECT_ID}.{DATASET}.v_keyword_performance`
-        WHERE date >= '{since}'
-        ORDER BY date, channel, utm_campaign, utm_term
-    """).result()
-
-    records = []
-    for r in rows:
-        records.append(_row(
-            {"date": str(r.date), "channel": r.channel},
-            campaign      = r.campaign or None,
-            adgroup       = r.adgroup or None,
-            keyword       = r.keyword or None,
-            match_type    = r.match_type or None,
-            quality_score = _v(r.quality_score),
-            spend         = _v(r.spend),
-            impressions   = _v(r.impressions),
-            clicks        = _v(r.clicks),
-            ctr_pct       = _v(r.ctr_pct),
-            cpl           = _v(r.cpl),
-            cpql          = _v(r.cpql),
-        ))
-    return _flush("keyword", records)
-
-
-# ── Asset group grain (Google PMax) ───────────────────────────────────────────
-# PMax asset group names flow into lead_utm_audience in HubSpot (same as regular
-# adsets). v_adset_performance already captures them — we filter to PMax campaigns
-# (campaign_name LIKE 'PMax_%') to build a dedicated asset-group grain in Databox.
-# utm_audience = asset_group_name matches lead_utm_audience for attribution.
-
-def _push_asset_group(days: int) -> int:
-    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
-    client = get_client()
-    since  = (date.today() - timedelta(days=days)).isoformat()
-    rows = client.query(f"""
-        SELECT date, channel,
-               CAST(campaign_id AS STRING) AS campaign_id,
-               utm_campaign  AS campaign,
-               CAST(adset_id AS STRING)   AS asset_group_id,
-               utm_audience  AS asset_group,
-               spend, impressions, clicks,
-               CPL AS cpl, CPQL AS cpql,
-               ROUND(IFNULL(qual_rate, 0) * 100, 2) AS qual_rate_pct
-        FROM `{PROJECT_ID}.{DATASET}.v_adset_performance`
-        WHERE date >= '{since}'
-          AND channel = 'google_ads'
-          AND UPPER(utm_campaign) LIKE '%PMAX%'
-        ORDER BY date, campaign_id, adset_id
-    """).result()
-
-    records = []
-    for r in rows:
-        records.append(_row(
-            {"date": str(r.date), "channel": r.channel},
-            campaign_id    = r.campaign_id or None,
-            campaign       = r.campaign or None,
-            asset_group_id = r.asset_group_id or None,
-            asset_group    = r.asset_group or None,
-            spend          = _v(r.spend),
-            impressions    = _v(r.impressions),
-            clicks         = _v(r.clicks),
-            cpl            = _v(r.cpl),
-            cpql           = _v(r.cpql),
-            qual_rate_pct  = _v(r.qual_rate_pct),
-        ))
-    if not records:
-        return 0
-    return _flush("asset_group", records)
+    client  = get_client()
+    sql     = _grain_sql(grain, since, until, PROJECT_ID, DATASET)
+    rows    = client.query(sql).result()
+    records = _build_records(grain, rows)
+    return _flush(records)
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
-_GRAIN_FNS = {
-    "campaign":    _push_campaign,
-    "adset":       _push_adset,
-    "ad":          _push_ad,
-    "keyword":     _push_keyword,
-    "asset_group": _push_asset_group,
-}
-
-
 def run_push(days: int = 7, grains: list = None) -> int:
     """
-    Push spend data to Databox.
+    Push spend data to Databox unified dataset.
+
+    For daily incremental runs (days ≤ _CHUNK_DAYS) runs straight through.
+    For large backfills (days > _CHUNK_DAYS) splits into 30-day windows so
+    each window stays under Databox's per-session batch quota.
 
     Args:
-        days:   Lookback window. Default 7. Use 365 for one-time backfill.
-        grains: Which grains to push. Default = all. Use a single grain to
-                work around Databox's per-session request quota (~85 batches).
-                e.g. grains=["ad"] runs only the ad grain in a fresh session.
+        days:   Lookback window in days. Default 7.
+        grains: Grain list. Default = all five grains.
+                Pass a single grain for per-grain backfill:
+                  python collectors/databox_pusher.py 365 campaign
 
     Returns:
-        Total records pushed.
-
-    Backfill strategy (quota workaround):
-        Run each grain separately:
-          python collectors/databox_pusher.py 365 campaign
-          python collectors/databox_pusher.py 365 adset
-          python collectors/databox_pusher.py 365 ad
-          python collectors/databox_pusher.py 365 keyword
-          python collectors/databox_pusher.py 365 asset_group
+        Total records pushed across all grains and chunks.
     """
     if not DATABOX_TOKEN:
         raise RuntimeError("DATABOX_TOKEN not set")
 
-    targets = grains or list(_GRAIN_FNS.keys())
+    targets = grains or ALL_GRAINS
+    today   = date.today()
     total   = 0
-    for name in targets:
-        fn = _GRAIN_FNS[name]
-        try:
-            n = fn(days)
-            total += n
-            print(f"[databox] {name}: {n:,} records pushed")
-        except Exception as e:
-            print(f"[databox] {name} FAILED: {e}")
-            raise
 
-    print(f"[databox] total: {total:,} records")
+    if days <= _CHUNK_DAYS:
+        # Small window — single pass
+        since = (today - timedelta(days=days)).isoformat()
+        until = today.isoformat()
+        for name in targets:
+            try:
+                n = _push_grain_window(name, since, until)
+                total += n
+                print(f"[databox] {name}: {n:,} records pushed")
+            except Exception as e:
+                print(f"[databox] {name} FAILED: {e}")
+                raise
+    else:
+        # Large backfill — chunk into _CHUNK_DAYS windows, newest-first
+        windows = []
+        end = today
+        remaining = days
+        while remaining > 0:
+            chunk = min(remaining, _CHUNK_DAYS)
+            start = end - timedelta(days=chunk)
+            windows.append((start.isoformat(), end.isoformat()))
+            end = start
+            remaining -= chunk
+
+        for name in targets:
+            n_g = 0
+            for i, (w_since, w_until) in enumerate(windows):
+                try:
+                    n = _push_grain_window(name, w_since, w_until)
+                    n_g  += n
+                    total += n
+                    print(f"[databox] {name} chunk {i+1}/{len(windows)}"
+                          f" ({w_since} to {w_until}): {n:,} records")
+                    if i + 1 < len(windows):
+                        time.sleep(_CHUNK_SLEEP)
+                except Exception as e:
+                    print(f"[databox] {name} chunk {i+1} ({w_since}→{w_until}) FAILED: {e}")
+                    raise
+            print(f"[databox] {name} total: {n_g:,} records")
+
+    print(f"[databox] grand total: {total:,} records")
     return total
 
 
 if __name__ == "__main__":
     import sys
     # Usage: python collectors/databox_pusher.py [days] [grain]
-    # e.g.:  python collectors/databox_pusher.py 365 campaign
+    # e.g.:  python collectors/databox_pusher.py 7
+    #        python collectors/databox_pusher.py 365 campaign
     d = int(sys.argv[1]) if len(sys.argv) > 1 else 7
     g = [sys.argv[2]] if len(sys.argv) > 2 else None
     run_push(days=d, grains=g)
