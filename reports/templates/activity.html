@@ -276,6 +276,35 @@ a:hover{text-decoration:underline}
 .team-last strong{color:#8b949e;font-weight:500}
 .sub-badge{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
             color:#484f58;border:1px solid #21262d;border-radius:10px;padding:1px 7px}
+/* ── Code Health ── */
+.ch-panel{background:#161b22;border:1px solid #30363d;border-radius:10px;
+           padding:18px 22px;margin-bottom:24px}
+.ch-header{display:flex;align-items:center;justify-content:space-between;
+            flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.ch-title{font-size:13px;font-weight:600;color:#e6edf3}
+.ch-meta{font-size:11px;color:#484f58}
+.ch-stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.ch-stat{background:#0d1117;border:1px solid #21262d;border-radius:7px;
+          padding:10px 16px;min-width:90px;text-align:center}
+.ch-stat-num{font-size:22px;font-weight:700;line-height:1}
+.ch-stat-lbl{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+.ch-violation{border:1px solid #30363d;border-radius:7px;padding:10px 14px;
+               margin-bottom:8px;background:#0d1117}
+.ch-viol-id{font-size:11px;color:#8b949e;font-family:"SFMono-Regular",Consolas,monospace}
+.ch-viol-desc{font-size:12px;color:#e6edf3;margin:4px 0}
+.ch-viol-hint{font-size:11px;color:#484f58;font-style:italic}
+.ch-agent-pill{display:inline-block;font-size:10px;font-weight:600;border-radius:10px;
+                padding:1px 8px;margin-bottom:6px}
+.ch-sev-block{background:#2d1515;border-color:#7f1d1d;color:#fca5a5}
+.ch-sev-warn {background:#2d2415;border-color:#78350f;color:#fcd34d}
+.ch-audit-log{border-top:1px solid #21262d;margin-top:14px;padding-top:12px}
+.ch-audit-entry{font-size:11px;color:#6e7681;font-family:"SFMono-Regular",Consolas,monospace;
+                 padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-scan-btn{padding:6px 14px;font-size:12px;font-weight:600;border-radius:6px;
+              border:1px solid #30363d;background:#21262d;color:#e6edf3;cursor:pointer;
+              transition:background .15s}
+.ch-scan-btn:hover{background:#30363d}
+.ch-clean{color:#39d353;font-size:13px;font-weight:600}
 </style>
 </head>
 <body>
@@ -773,6 +802,96 @@ a:hover{text-decoration:underline}
     {% endif %}
 
   </div>
+  {% endif %}
+
+  <!-- ── Code Health ── -->
+  {% if code_health is defined %}
+  <div class="section-head">Code Health — Dashboard Violations</div>
+  <div class="ch-panel">
+    <div class="ch-header">
+      <div>
+        <span class="ch-title">Agent Source Guard</span>
+        <span class="ch-meta" style="margin-left:10px">
+          {% if code_health.last_scan %}Last scan: {{ code_health.last_scan }}{% else %}Never scanned{% endif %}
+        </span>
+      </div>
+      <button class="ch-scan-btn" id="ch-scan-btn" onclick="runDashboardScan()">Run Scan</button>
+    </div>
+
+    <div class="ch-stats">
+      <div class="ch-stat">
+        <div class="ch-stat-num" style="color:{% if code_health.open_count > 0 %}#f85149{% else %}#39d353{% endif %}">
+          {{ code_health.open_count }}
+        </div>
+        <div class="ch-stat-lbl">Open</div>
+      </div>
+      <div class="ch-stat">
+        <div class="ch-stat-num" style="color:#39d353">{{ code_health.fixed_count }}</div>
+        <div class="ch-stat-lbl">Fixed</div>
+      </div>
+      <div class="ch-stat">
+        <div class="ch-stat-num" style="color:#8b949e">{{ code_health.open_count + code_health.fixed_count }}</div>
+        <div class="ch-stat-lbl">Total</div>
+      </div>
+    </div>
+
+    {% if code_health.never_scanned %}
+    <div style="color:#484f58;font-size:12px">No scan data yet. Click <em>Run Scan</em> to check for violations.</div>
+    {% elif code_health.clean %}
+    <div class="ch-clean">✓ All checks passing — no open violations</div>
+    {% else %}
+      {% for agent_name, violations in code_health.by_agent.items() %}
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#8b949e;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">
+          {{ agent_name }}
+          <span style="font-weight:400;color:#484f58">({{ violations|length }})</span>
+        </div>
+        {% for v in violations %}
+        <div class="ch-violation">
+          <span class="ch-agent-pill {% if v.severity == 'block' %}ch-sev-block{% else %}ch-sev-warn{% endif %}" style="border:1px solid">
+            {{ v.severity|upper }}
+          </span>
+          <div class="ch-viol-id">{{ v.id }}</div>
+          <div class="ch-viol-desc">{{ v.description }}</div>
+          {% if v.fix_hint %}
+          <div class="ch-viol-hint">Fix: {{ v.fix_hint }}</div>
+          {% endif %}
+          <div style="font-size:10px;color:#484f58;margin-top:4px">{{ v.file }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if code_health.audit_log %}
+    <div class="ch-audit-log">
+      <div style="font-size:11px;color:#8b949e;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Recent Audit Log</div>
+      {% for entry in code_health.audit_log %}
+      <div class="ch-audit-entry">{{ entry }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <script>
+  function runDashboardScan() {
+    var btn = document.getElementById('ch-scan-btn');
+    btn.disabled = true; btn.textContent = 'Scanning…';
+    fetch('/api/ondemand/dashboard-scan', {method:'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var poll = d.poll || '/api/ondemand/status/dashboard_scan';
+        var iv = setInterval(function(){
+          fetch(poll).then(function(r){ return r.json(); }).then(function(s){
+            if (!s.running) {
+              clearInterval(iv);
+              window.location.reload();
+            }
+          });
+        }, 1200);
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent='Run Scan'; });
+  }
+  </script>
   {% endif %}
 
   <!-- ── Heatmap ── -->

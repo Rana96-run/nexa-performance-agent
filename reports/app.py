@@ -301,6 +301,57 @@ _WORKFLOWS = {
 }
 
 
+def _load_code_health() -> dict:
+    """Read dashboard violations queue + audit log from memory/."""
+    import json as _j
+    from pathlib import Path as _P
+    base  = _P(__file__).resolve().parent.parent
+    queue = base / "memory" / "dashboard_violations.jsonl"
+    log   = base / "memory" / "14_activity_dashboard.md"
+
+    violations: list[dict] = []
+    if queue.exists():
+        for raw in queue.read_text(encoding="utf-8").splitlines():
+            raw = raw.strip()
+            if raw:
+                try:
+                    violations.append(_j.loads(raw))
+                except Exception:
+                    pass
+
+    audit_entries: list[str] = []
+    if log.exists():
+        for line in log.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                audit_entries.append(line)
+
+    open_vs  = [v for v in violations if v.get("status") == "open"]
+    fixed_vs = [v for v in violations if v.get("status") == "fixed"]
+
+    # Group open violations by responsible agent
+    by_agent: dict[str, list[dict]] = {}
+    for v in open_vs:
+        by_agent.setdefault(v.get("agent", "unknown"), []).append(v)
+
+    # Last scan timestamp (most recent entry regardless of status)
+    last_scan = None
+    if violations:
+        ts_list = [v.get("ts", "") for v in violations if v.get("ts")]
+        last_scan = max(ts_list)[:10] if ts_list else None
+
+    return {
+        "open":        open_vs,
+        "open_count":  len(open_vs),
+        "fixed_count": len(fixed_vs),
+        "by_agent":    by_agent,
+        "audit_log":   audit_entries[-8:],
+        "last_scan":   last_scan,
+        "clean":       len(open_vs) == 0 and bool(violations),
+        "never_scanned": not violations,
+    }
+
+
 @app.route("/activity")
 def activity_dashboard():
     """HTML agent activity dashboard — GitHub-style heatmap + expandable cards + workflow modals."""
@@ -1670,6 +1721,9 @@ def activity_dashboard():
             "last_action": (_last_act or "").replace("_", " ").title() if _last_act else "—",
         })
 
+    # ── Code Health — violations queue + audit log ───────────────────────────
+    code_health = _load_code_health()
+
     print(f"[activity] pre-render at {round(time.time()-_t0,1)}s", flush=True)
     html = render_template(
         "activity.html",
@@ -1691,6 +1745,7 @@ def activity_dashboard():
         pending_approvals=pending_approvals,
         team_roster=team_roster,
         today=today,
+        code_health=code_health,
     )
     print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
     with _ACTIVITY_CACHE_LOCK:
@@ -2562,6 +2617,23 @@ def ondemand_ad_audit():
     if not started:
         return jsonify({"status": "already_running"}), 202
     return jsonify({"status": "started", "poll": "/api/ondemand/status/ad_audit"})
+
+
+@app.route("/api/ondemand/dashboard-scan", methods=["POST"])
+def ondemand_dashboard_scan():
+    """Re-scan dashboard source files for violations, update the queue."""
+    def _run():
+        import subprocess, sys
+        r = subprocess.run(
+            [sys.executable, "scripts/scan_dashboard.py"],
+            capture_output=True, text=True, timeout=30,
+        )
+        return {"stdout": r.stdout[-2000:], "stderr": r.stderr[-500:],
+                "returncode": r.returncode}
+    started = _run_ondemand_task("dashboard_scan", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/dashboard_scan"})
 
 
 @app.route("/api/ondemand/status/<key>")
