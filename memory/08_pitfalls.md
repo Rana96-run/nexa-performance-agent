@@ -3,6 +3,24 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## v_adset_performance — spend fan-out inflates CPQL (found 2026-06-09)
+
+**Symptom:** Meta "CPQL +25% regression" (reported $37→$46 last-7d vs prior-7d)
+was a measurement artifact, not a real decline. `v_adset_performance` over-counted
+CUR-window Meta spend $1,052 vs raw $742 (`campaigns_daily`/`adsets_daily` deduped
+both = $742). Entire gap was ONE day: 2026-06-07 view spend $500 vs raw $190.
+**Cause:** adset `Meta_LeadGen_Invoice_Intersts/JobTitles_Instantform` (adset_id
+120248894675830198, $103) appeared **4× in the view** on 06-07 — its `utm_audience`
+matched multiple HubSpot lead-grain rows and spend was NOT pre-aggregated before the
+join, so each match repeated the full $103 → $412. Same fan-out class as
+campaign_health.py Bug 1 (2026-05-18), but inside the VIEW definition this time.
+**Fix needed (hand to performance-lead/developer):** pre-aggregate spend per
+(date, channel, adset_id) in a CTE inside `v_adset_performance` BEFORE the LEFT JOIN
+to the HubSpot adset-grain CTE — mirror the `cd` CTE pattern already in campaign_health.py.
+**Verification done my own CTE join (deduped spend + pre-agg HS on lead_utm_audience,
+source IN fb/ig/meta): true Meta CPQL $42→$37 (IMPROVED).** Always cross-check view
+totals against raw `adsets_daily`/`campaigns_daily` (deduped) before trusting a CPQL delta.
+
 ## Pause precedence — channel-dependent surgical cleanup runs before campaign-pause
 
 - **Rule (confirmed 2026-05-17):** A campaign hitting the pause threshold
