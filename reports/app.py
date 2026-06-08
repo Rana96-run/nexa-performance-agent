@@ -1662,7 +1662,7 @@ def activity_dashboard():
             "color":         "#f59e0b",
             "dept":          "Performance",
             "dept_color":    "#dc2626",
-            "roles":         {"llm_cadence"},
+            "roles":         set(),  # creative direction isn't a logged runtime function
             "sprite":        "creative",
             "charter":       [
                 "Maps audience segments to OCEAN personality profiles",
@@ -1755,7 +1755,7 @@ def activity_dashboard():
             "color":         "#8b5cf6",
             "dept":          "Support",
             "dept_color":    "#6366f1",
-            "roles":         {"spike_detector", "bq_refresh"},
+            "roles":         {"spike_detector", "bq_refresh", "llm_cadence"},
             "sprite":        "analyst",
             "charter":       [
                 "Owns memory/ — writes 08_pitfalls.md, updates 14_learning_patterns.md",
