@@ -32,6 +32,33 @@
 
 `growth-analyst` owns `memory/` (writes 08_pitfalls + 14_learning_patterns).
 
+## Three taxonomies — how the layers map (the "one source of truth" view)
+
+There are three vocabularies in this repo. They are NOT the same axis; this table
+is the bridge so a change in one is traceable to the others.
+
+| 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py` → `md_files/`) | Activity-log label(s) |
+|---|---|---|
+| `ai-orchestrator` | `daily_report` (qoyod-daily-report.md) + manager-os | `ops_scheduler`, `daily_digest` |
+| `performance-lead` | `paid_media_strategist` (nexa-strategist.md) | `performance_audit` |
+| `campaign-manager` | `media_buyer` (qoyod-paid-media-agent.md) | `campaign_creator`, `keyword_management`, `performance_audit` |
+| `creative-strategist` | — (brand-identity shared) | — |
+| `cro-specialist` / `ui-ux-designer` / `developer` | — (CRO was external in the runtime era) | — |
+| `marketing-ops` | — | `bq_refresh`, `collector`, `health_monitor` (tracking/infra) |
+| `growth-analyst` | `paid_media_analyst` (qoyod-analyst-agent.md) | `spike_detector`, `bq_refresh`, `llm_cadence` |
+
+Shared runtime context: `qoyod-manager-os.md` ↔ `CLAUDE.manager.md`;
+`qoyod-brand-identity.md` ↔ `docs/landing-pages/reference/brand/`.
+
+### Phase-2 unification (NOT done — deliberate)
+Pointing `claude/roles.py` directly at the dev playbooks would shrink the runtime
+prompts (rich ~23KB personas → tight procedures) and **degrade production**. The
+correct unify is to (a) keep `md_files/` as the runtime's rich source, and (b)
+have each persona and its dev playbook cross-reference this table so neither
+drifts — or, if we want true single-source, *grow* the playbooks to runtime depth
+first, then repoint. Either way it's a reviewed change to live code, not a blind
+repoint. Left for an explicit go.
+
 ## What's in-house vs external (updated 2026-06-08)
 
 The new org brought **CRO / Landing Page in-house** (Dept 2: `cro-specialist` →
