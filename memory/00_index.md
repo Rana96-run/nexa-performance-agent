@@ -31,6 +31,7 @@ single concern. Read only what you need.
 | `14_learning_patterns.md` | Outcome library — what worked / didn't after each recommended action. Read before recommending a similar action. |
 | `14_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
 | `utm_template.md` | Canonical Google Ads UTM `final_url_suffix` template + custom-param convention. Read BEFORE proposing any UTM string. |
+| `15_operational_history.md` | Institutional log of one-off learnings/steps/actions (distilled from the retired `scripts/_*.py`). "Have we done/investigated X before?" |
 
 ## The team (agents) — NEW
 

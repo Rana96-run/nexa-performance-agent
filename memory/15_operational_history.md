@@ -1,0 +1,275 @@
+# 15 - Operational History (distilled from retired one-off scripts)
+
+This is the institutional record of the one-off **learnings, steps, and actions**
+taken to build and fix the system. The throwaway `scripts/_*.py` that performed
+them were removed from the repo (kept locally / in git history) once their
+knowledge was captured here. Each line = what was done, with its source script as
+provenance. The RECURRING engine lives in the packages + the 34 real CLI tools;
+this file is the history of the manual scaffolding behind it.
+
+- **LEARNING** = an investigation/probe that produced a finding (durable findings
+  also live in `08_pitfalls.md` / `01_architecture.md`).
+- **STEP** = a phase in building something (sheets, campaigns, audiences).
+- **ACTION** = a change executed once on BQ or an ad account (already permanent).
+
+
+## Learnings (investigations & findings)
+
+- `_analyze_workflow.py` - Parse the v4 flow JSON and produce a human-readable summary of the
+- `_audit_all_active_extensions.py` - Audit ALL active (ENABLED) campaigns across both Google Ads accounts -
+- `_audit_autofix_utm.py` - Auto-fix: re-apply canonical UTM final_url_suffix to ENABLED Search
+- `_audit_einvoice_campaigns.py` - Audit the 2 new ZATCA Phase 2 campaigns post-creation.
+- `_audit_qoyod_source_logic.py` - Audit qoyod_source classification gaps. For each known paid signal,
+- `_audit_workflow_raw.py` - Audit every branch from raw v4 JSON. For each branch:
+- `_audit_zatca_extras.py` - Find RSA IDs on C1 + HubSpot conversion action IDs.
+- `_audit_zatca_full.py` - Full audit of the 3 ZATCA campaigns - checks every setting we've discussed.
+- `_check_30v90_gap.py` - Quantify the 30-day window gap: of all Google leads with gclid in last 7d,
+- `_check_account_utm_suffix.py` - Check account-level (customer.final_url_suffix) on both accounts.
+- `_check_c3_keyword_statuses.py` - See every system_serving_status on C3 keywords.
+- `_check_campaign_id_sync.py` - Verify lead_campaign_id_sync is populated in BQ after cursor sync.
+- `_check_campaign_ids.py` - Check campaign_id column in campaigns_daily for TikTok/Google/Microsoft.
+- `_check_campaigns_daily_schema.py` - 
+- `_check_compliance_bidding_and_leads.py` - Verify (1) current bidding strategy on each Google compliance campaign,
+- `_check_contact_cta.py` - Check if Contact.cta_source / cta_source_url are populated for recent
+- `_check_cta_population.py` - Check 1) Does lead_cta_source exist on Contact object?
+- `_check_cta_props_v2.py` - Re-check CTA props on Lead Module + sample populated leads.
+- `_check_deal_sync_pop.py` - Verify deal_*_id_sync columns are populated per channel after backfill.
+- `_check_drilldown_coverage.py` - Check if drilldown columns are actually populated for ANY leads.
+- `_check_drilldown_hs.py` - Pull a few recent Google-Ads leads from HubSpot directly and dump ALL their
+- `_check_gclid_table.py` - Check if gclid_attribution table exists and has data.
+- `_check_google_lead_ids.py` - Check a recent Google Ads lead - does the associated Contact have campaign_id /
+- `_check_hs_ad_props.py` - List all HubSpot Lead Module properties related to ad tracking
+- `_check_hsa_in_urls.py` - Check if hsa_cam/hsa_grp/hsa_ad land inside any URL-tracking property on
+- `_check_hsa_props.py` - Find HubSpot Lead Module properties that store the parsed hsa_* URL parameters.
+- `_check_ids.py` - SELECT channel, {id_col}, {name_col}
+- `_check_individual_cols.py` - 
+- `_check_lead_cta_props.py` - Verify lead_cta_source + lead_cta_source_url exist on Lead Module and check
+- `_check_lead_name_issues.py` - Diagnose lead attribution issues:
+- `_check_lead_sync_coverage.py` - Check lead module sync ID coverage by channel (last 3 days).
+- `_check_linkedin_scope.py` - Verify the LinkedIn access token has rw_organization_admin scope.
+- `_check_meta_campaign_ids.py` - Verify Meta campaign IDs in campaigns_daily match lead_campaign_id_sync.
+- `_check_microsoft_accounts.py` - Compare the 2 Microsoft Ads accounts on last-30d performance to pick
+- `_check_ms_account2_leads.py` - Re-investigate Microsoft Ads Account 187231519 lead attribution.
+- `_check_ms_account_tracking.py` - Check MS Ads account-level UTM tracking on both accounts.
+- `_check_ms_existing_tracking.py` - Inspect how existing Bing campaigns do UTM tracking - at what level.
+- `_check_ms_scale_signals_v2.py` - Microsoft Ads campaign-level last-30d using HUBSPOT as lead source of truth.
+- `_check_qawaem_ad_policy.py` - Check the policy review status of the Qawaem RSAs.
+- `_check_qawaem_assets_policy.py` - Check policy status of sitelinks/extensions for the Qawaem campaign.
+- `_check_qawaem_state.py` - Check current state of Google_Search_AR_FinancialStatemnt - ad groups,
+- `_check_rename_orphans.py` - Find leads orphaned by campaign/adset/ad RENAMES:
+- `_check_renamed_entities.py` - Find renamed entities (same ID -> multiple names over time) at campaign, adset, and ad level.
+- `_check_schema.py` - Check adsets_daily and campaigns_daily schema.
+- `_check_sheet_tabs.py` - Print exact byte representation of existing tab names.
+- `_check_snap_cookie_leak.py` - Check qoyod_source distribution for leads attributed by Snapchat campaign ID.
+- `_check_snap_ids.py` - Check if Snapchat lead_campaign_id_sync UUIDs match campaigns_daily.campaign_id.
+- `_check_strategy_d.py` - Verify Strategy D is working: check v_adset_performance for TikTok/Meta
+- `_check_sync_props.py` - Check the new sync properties on HubSpot Lead Module:
+- `_check_tiktok_join.py` - Diagnose TikTok 0 leads: compare adsets_daily utm_audience vs HubSpot lead_utm_audience.
+- `_check_tiktok_state.py` - Pull TikTok current state from BQ - campaigns, spend, leads, SQLs over
+- `_check_today_sync.py` - Check sync ID coverage for TODAY only (Riyadh date), per channel.
+- `_check_tracking_templates.py` - Check current Google Ads + Microsoft Ads tracking templates to see
+- `_check_user_lists.py` - Check what user_list audiences (Customer Match, Site Visitors, Video
+- `_check_zatca_budgets.py` - Check whether the 3 ZATCA campaigns share a budget, and inspect conversion goal.
+- `_check_zatca_url_options.py` - Check URL options + CPC bid limits on the 3 ZATCA campaigns.
+- `_diag_brand_v2.py` - Diagnose Search_AR_Brand_v2 (22434988923 - Acc 1) leakage.
+- `_diag_campaign_assets.py` - Diagnostic - print campaign_asset resource names exactly as search returns
+- `_diag_qawaem_serving.py` - Diagnose why Google_Search_AREN_FinancialStatement (Acc 1) is not serving.
+- `_diag_qawaem_serving2.py` - Cleaner v2 - confirm zero impressions because of $0.01 CPC bid.
+- `_fetch_qoyod_source_workflow.py` - Fetch the 'Digital Marketing: Populating Qoyod Sources' workflow and dump
+- `_fetch_v4_flow.py` - flowId from v3 migrationStatus
+- `_fetch_workflow_v4.py` - Fetch the active 'Digital Marketing: Populating Qoyod Sources' workflow
+- `_find_all_qoyod_setters.py` - Search every workflow's actions for ones that set 'qoyod_source' (any value).
+- `_find_click_id_props.py` - Find which property names on Lead Module hold Google + Microsoft click IDs.
+- `_find_fin_statement_campaigns_acc1.py` - Find any other Financial Statement / Qawaem campaigns on Acc 1.
+- `_find_qawaem_campaign.py` - Locate the new FinancialStatemnt campaign + its ad groups on both accounts.
+- `_inspect_einvoice_acc2.py` - Inspect Search_E-invoice_AR (16851344135) on Acc 2 - list ad groups,
+- `_inspect_for_copy_to_acc2.py` - Read live config for the 2 campaigns we'll copy to Acc 2 (5753494964):
+- `_inspect_gclid_schema.py` - 
+- `_inspect_is_finstatement_acc1.py` - Inspect Google_ImpressionShare_AREN_FinancialStatement (Acc 1, camp
+- `_inspect_phase2_extensions_acc1.py` - Pull all sitelinks, callouts, structured snippets currently linked to
+- `_list_google_customers.py` - List all Google Ads customer accounts accessible under the MCC.
+- `_list_hubspot_workflows.py` - List HubSpot workflows and find ones related to setting qoyod_source.
+- `_measure_click_id_leakage.py` - Quantify which paid click_id has the most leakage (contacts with that
+- `_measure_drilldown_gap.py` - Measure how many Google Ads leads have empty utm_campaign but DO have
+- `_parse_v3_workflow.py` - Parse the v3 workflow JSON which has the actual filter logic.
+- `_parse_workflow_tree.py` - Walk the nested BRANCH/SET_PROPERTY action tree recursively.
+- `_parse_workflow_v4_full.py` - Parse the v4 workflow's listBranches to extract all 14 channel-classification
+- `_probe_acc2_ceiling.py` - See why Acc 2 ceiling mutate failed (was already $0 - maybe no-op rejected).
+- `_probe_gclid_90d.py` - Query Google Ads click_view for a specific unresolved gclid across 90 days
+- `_probe_google_source.py` - Find what value hs_analytics_source_data_1 actually holds for Google
+- `_verify_all_ids.py` - Verify all three sync ID columns are populated in BQ after mirror.
+- `_verify_bing_qawaem_both.py` - Verify Qawaem campaign exists on BOTH Bing accounts.
+- `_verify_broad_added.py` - Verify all BROAD keywords are present and ENABLED.
+- `_verify_deals.py` - Verify deals data: amounts, won amounts, createdate logic, new_biz calc.
+- `_verify_drilldown_data.py` - Verify drilldown columns now exist + sample Google leads with empty utm_campaign.
+- `_verify_extensions.py` - Verify all extensions are linked to both ZATCA Phase 2 campaigns.
+- `_verify_id_props_all_objects.py` - Confirm campaign_id / ad_group_id / ad_id exist on Contact, Lead, Deal
+- `_verify_qawaem_ad_strength.py` - Verify Ad Strength rating on all 4 newly-created Qawaem RSAs.
+- `_verify_qawaem_bids_both.py` - Verify FinancialStatement bid settings on both accounts after manual edit.
+- `_verify_utm_suffix_now.py` - Verify the actual UTM suffix state on critical campaigns.
+- `_verify_zatca_competitor.py` - Final state of Campaign 3 (Google_Search_AR_ZATCACompetitor_Broad).
+- `_verify_zatca_sitelinks.py` - List all sitelinks currently linked to each ZATCA campaign + their URLs.
+- `_verify_zatca_split.py` - Verify the AR/EN ad-group split across all 3 ZATCA campaigns.
+
+## Steps (build phases)
+
+- `_build_master_sheet_v2.py` - V2 master sheet - properly designed, formatted, structured.
+- `_build_master_sheet_v3.py` - V3 master sheet - channel-grouped stacked tables.
+- `_create_accounting_lp_sitelinks.py` - Create 4 sitelinks anchored on https://lp.qoyod.com/accounting/.
+- `_create_domain_visitor_audience.py` - Create a flexible-rule remarketing list:
+- `_create_domain_visitor_audience_acc2.py` - Replicate the domain-filtered website-visitor remarketing list on Acc2
+- `_create_einvoice_campaigns.py` - Create the 2 E-Invoice / ZATCA Phase 2 campaigns in Google Ads
+- `_create_master_sheet.py` - Create the master Google Sheet inside the shared Drive folder. Writes
+- `_create_v_lead_attribution.py` - Create v_lead_attribution view - unified lead attribution combining:
+- `_create_zatca_competitor_campaign.py` - Create Campaign 3 - ZATCA x Competitor conquesting.
+- `_create_zatca_followup_task.py` - Create Asana task for the manual UI steps required to complete the
+- `_create_zatca_task_direct.py` - Create the ZATCA follow-up Asana task via direct API (bypassing QA gate).
+- `_sheet_add_second_bing.py` - Add the second Bing Qawaem campaign to tab 13.
+- `_sheet_fix_tiktok_name.py` - Update master sheet - TikTok campaign was renamed.
+- `_sheet_update_budget_and_bidding.py` - Update master sheet:
+- `_sheet_update_ms_tiktok_qawaem.py` - Update master sheet with MS Ads Qawaem (created) + TikTok WebForm Qawaem
+- `_tailor_acc1_brand_extensions.py` - Acc1: add brand-themed callouts + snippets to the 3 Brand campaigns.
+- `_tailor_acc2_einvoice_extensions.py` - Acc2: add ZATCA Phase 2-themed callouts + 2 structured snippets to all
+- `_tailor_pmax_tech_and_english.py` - Two targeted fixes on Account 2:
+- `_tailor_pmax_tech_continue.py` - Continue from the failure point: create snippet 2 with valid header,
+
+## Actions (one-time changes executed)
+
+- `_acc2_audiences_parity.py` - Bring Acc2 prospecting campaigns to parity with Acc1's audience treatment.
+- `_acc2_einvoice_lp_sitelinks.py` - Final Acc2 gap: replicate the 5 /einvoice-integration LP-anchored
+- `_accounting_sitelinks_acc2.py` - Account 2 (5753494964):
+- `_add_broad_head_terms.py` - Add BROAD variants of 2 head terms to both AR ad groups.
+- `_add_extensions_to_einvoice.py` - Add the 4 missing extension assets to both ZATCA Phase 2 campaigns:
+- `_add_ids_to_breakdowns.py` - Surface adset_id in 2_adsets.sql and ad_id in 3_ads.sql for all 6 channels.
+- `_add_snippet_and_call.py` - Add the remaining 2 extension assets - structured snippet + call.
+- `_add_user_list_audiences.py` - Add CRM + site visitor + video viewer audiences to ZATCA + Brand campaigns.
+- `_alter_drilldown_cols.py` - 
+- `_alter_leads_table.py` - Add lead_campaign_id_sync column to hubspot_leads_module_daily and hubspot_leads_individual.
+- `_apply_utm_suffix_zatca.py` - Apply canonical final_url_suffix + custom parameters to the 3 ZATCA
+- `_bq_annotate_campaigns_daily_leads.py` - Add a strong column description to campaigns_daily.leads so the BQ
+- `_brand_add_observation_audiences.py` - Apply the same 11 observation audiences (direct + indirect) to the 3
+- `_brand_campaigns_perf.py` - Pull 30d + 90d conversion performance for the 3 brand campaigns on Acc 1.
+- `_bump_acc1_ceiling.py` - Path A: bump Acc 1 FinancialStatement ceiling $4 -> $10 for fast ramp.
+- `_cleanup_drilldown.py` - Cleanup the drilldown work that didn't help:
+- `_cleanup_qawaem_ads.py` - Clean up paused experimental RSAs from the 4 Qawaem ad groups.
+- `_clear_adgroup_bid.py` - Try to clear ad-group cpc_bid_micros - extract clean error.
+- `_compare_google_accounts.py` - Compare the 2 Google Ads accounts on last 60d performance.
+- `_copy_phase2_only.py` - Retry the Phase2 copy in isolation. Error from first run was
+- `_copy_phase2_v2.py` - Phase2 copy attempt 3: budget already exists. Try MAX_CONV again with
+- `_copy_to_acc2.py` - Replay scripts/_copy_plan.json onto Acc 2 (5753494964).
+- `_dedupe_and_expand_extensions.py` - Complete extension setup for the 2 ZATCA Phase 2 campaigns:
+- `_deploy_brand_rsa_v1.py` - Deploy keyword-rich RSA to Search_AR_Brand v1 (the winner).
+- `_diagnose_bq_stale.py` - Diagnose BQ freshness for the 2 tables flagged by the recon alert.
+- `_diagnose_may17.py` - Diagnose May 17 BQ vs HubSpot lead gap (BQ=18, HS=99 reported).
+- `_discover_indirect_audiences.py` - Discover INDIRECT-but-effective audiences for ZATCA campaigns.
+- `_dump_workflow_raw.py` - Dump the workflow actions in a readable form to understand the structure.
+- `_einvoice_acc2_sitelink_match.py` - On Acc 2 Search_E-invoice_AR (16851344135):
+- `_finalize_zatca_competitor_campaign.py` - Finalize the ZATCA x Competitor campaign (23861965426):
+- `_finstatement_sitelink_isolate.py` - Move all campaign-level sitelinks to ad-group level on the 3
+- `_fix_brand_v2.py` - Fix Search_AR_Brand_v2 (23032247671):
+- `_fix_campaign_id_in_hex.py` - Fix the 6 channel/1_campaigns.sql files where the campaign_id insertion
+- `_fix_einvoice_campaigns.py` - Fix the 3 critical gaps + truncated headlines on the 2 new ZATCA Phase 2
+- `_fix_google_task.py` - Correct the misrouted Google Ads task to a keyword+LP review.
+- `_fix_network_only.py` - Targeted fix - turn OFF Display Network on the 2 campaigns.
+- `_fix_qawaem_adgroup_custom_params.py` - Set ad-group-level custom params on both Qawaem ad groups so UTM
+- `_fix_qawaem_rsa_url.py` - Fix RSA final_url on FinancialSt_AR - was /accounting/, should be /qawaem/.
+- `_force_dedup_retry.py` - Force-retry the dedup with explicit per-operation error handling.
+- `_force_drop_gclid.py` - 
+- `_group_by_id_only.py` - Collapse name variations under the same ID - change GROUP BY in all 18
+- `_link_accounting_sitelinks_acc1.py` - Link the 4 /accounting sitelinks (already created on Acc1) to the 3 Brand
+- `_link_visitor_audience_to_pmax.py` - Apply the website-visitor audience as a signal to the 2 PMax campaigns
+- `_mirror_treatment_is_finstatement.py` - Mirror today's treatment onto Google_ImpressionShare_AREN_FinancialStatement
+- `_ms_add_rsa_and_negatives.py` - Add RSA + negatives to the already-created Qawaem campaign on MS Ads.
+- `_ms_auth_smoketest.py` - Smoke test - verify MS Ads OAuth works + we can read account info.
+- `_ms_bulk_create_qawaem.py` - Create the Qawaem campaign on Microsoft Ads via BulkServiceManager.
+- `_ms_bulk_create_qawaem_acc2.py` - Create the Qawaem campaign on Microsoft Account 2 (187231519) via Bulk.
+- `_ms_bulk_rsa_only.py` - Add just the RSA to the existing Qawaem MS Ads ad group via Bulk.
+- `_ms_create_qawaem.py` - Create the Qawaem (Decision 236) campaign on Microsoft Ads Account 1
+- `_ms_csv_upload_rsa.py` - Upload RSA via raw Bulk CSV file. Bypasses the bingads SDK suds layer
+- `_ms_fix_qawaem_tracking.py` - Fix Qawaem campaigns on both Bing accounts to match the existing
+- `_ms_probe_campaign_fields.py` - Inspect what fields the Campaign object exposes via the bingads SDK.
+- `_ms_verify_qawaem.py` - Verify the Qawaem campaign was fully created on Microsoft Ads.
+- `_ms_verify_qawaem_acc2.py` - Verify the Qawaem campaign exists on MS Acc 2.
+- `_name_google_customers.py` - Get descriptive names of each customer under the MCC so we can pick
+- `_our_keyword_inventory.py` - Dump our entire active Google Ads keyword inventory so we can cross-ref
+- `_pause_c3_rarely_served.py` - Pause all C3 keywords with system_serving_status = RARELY_SERVED.
+- `_pause_qawaem_disapproved_rsas.py` - Pause the 2 disapproved Qawaem RSAs now that the fresh ones are approved.
+- `_phase2_add_keywords_acc2.py` - Add 8 missing high-volume keywords + 1 negative + 2 broad head terms
+- `_phase2_extensions_acc2.py` - Replay scripts/_phase2_ext_plan.json onto ZATCAPhase2 on Acc 2.
+- `_phase2_kw_research_acc2.py` - ZATCAPhase2 on Acc 2 - pull keyword ideas, compare to current set,
+- `_promo_money_retry.py` - Try money_amount_off promotion (SAR 100 off Qoyod Annual Plan).
+- `_promo_remove_and_retry.py` - Remove the 1% promotions and find the max accepted percent_off.
+- `_prove_direct_is_paid.py` - Prove that DIRECT_TRAFFIC contacts with gclid set are actually Google Ads
+- `_qawaem_bundle_execute.py` - Execute the Qawaem optimization bundle on both accounts:
+- `_qawaem_bundle_inspect.py` - Inspect what's already linked to each FinancialStatement campaign:
+- `_qawaem_create_fresh_rsa.py` - Force fresh policy review on the Qawaem campaign by creating NEW RSAs
+- `_qawaem_excellent_rsa.py` - Create one EXCELLENT-strength RSA per ad group (AR + EN on both accounts).
+- `_qawaem_excellent_rsa_en.py` - Retry EN RSAs only - descriptions trimmed to 90 chars.
+- `_qawaem_extensions_acc2.py` - Add Qawaem extensions (sitelinks + callouts + structured snippets) to the
+- `_qawaem_full_bundle.py` - Full audience + extension bundle for Google_Search_AR_FinancialStatemnt:
+- `_qawaem_keyword_research.py` - Pull high-volume Qawaem / Financial Statement related keyword ideas.
+- `_qawaem_pathA_execute.py` - Path A execution: add 12 high-volume AR keywords + 1 platform-themed RSA
+- `_qawaem_pathA_inspect.py` - Inspect existing AR keywords on both accounts' FinancialSt_AR ad groups
+- `_qawaem_pathA_kw_only.py` - Keyword-only retry of Path A - RSAs were created on first run; this only
+- `_qawaem_promo_only.py` - Promotion asset retry only - steps 1+2 already done.
+- `_qawaem_recreate_disapproved_sitelinks.py` - Recreate the 3 disapproved Qawaem sitelinks to force fresh policy review.
+- `_qawaem_rsa_v2_diverse.py` - Round 2: replace previous RSAs with more diverse-themed headlines to push
+- `_rebuild_zatca_tabs_as_tables.py` - Rebuild tabs 13 + 14 in proper table structure to match the rest of the
+- `_rebuild_zatca_tabs_v2.py` - Rebuild tabs 13 + 14 as PURE flat tables to match the format of tabs
+- `_recent_slack.py` - 
+- `_reconcile_by_day.py` - Check leads day-by-day to see if the gap is today's mirror-lag.
+- `_reconcile_deals_pipelines.py` - Reconcile pipeline deal counts: BQ vs what HubSpot UI shows.
+- `_reconcile_leads_paid.py` - Reconcile last-7-day paid leads: BigQuery vs HubSpot Lead Module API.
+- `_reconcile_option_b.py` - Reconcile paid_channel_campaign_daily (Option B view) against HubSpot
+- `_recreate_views.py` - Recreate all BQ views, skipping any that are materialised tables.
+- `_resolve_phantom_paid.py` - Take the 10 DIRECT_TRAFFIC contacts with gclids (from earlier proof),
+- `_restore_channel_kpi_scorecards.py` - Restore all-pipeline metrics to the 6 channel-level KPI scorecard files.
+- `_restore_overview_files.py` - Add the all-pipeline metrics BACK to overview-level Hex SQL files.
+- `_revert_campaign_utm_override.py` - Revert my mistaken campaign-level UTM suffix override.
+- `_run_mirror.py` - Run full HubSpot leads mirror to populate lead_campaign_id_sync for all leads.
+- `_sample_existing_suffix.py` - Find a few existing campaigns that already have final_url_suffix set, so we
+- `_semrush_zatca_research.py` - Direct Semrush API pull - competitor paid keywords + keyword gaps +
+- `_set_qawaem_bids_both.py` - Apply bid settings on both accounts' FinancialStatement campaigns:
+- `_slim_deal_views.py` - Recreate the 3 slimmed views in BQ:
+- `_slim_hex_sql.py` - Bulk-update Hex dashboard SQL files in .claude/hex_drilldown/ to match the
+- `_spot_check_ids.py` - Spot-check that all 3 levels expose IDs in their views.
+- `_switch_phase2_back_to_max_conv.py` - Switch ZATCAPhase2 back to MAXIMIZE_CONVERSIONS - it has 5 leads / 4 SQLs
+- `_test_adsbot_access.py` - Test how lp.qoyod.com/qawaem/ responds to different user agents.
+- `_test_channel_precedence.py` - Smoke-test channel-aware pause precedence.
+- `_test_ios_access.py` - Verify the iOS 404 issue Google flagged.
+- `_test_ping_format.py` - Smoke-test the new ping format (no actual post).
+- `_test_precedence.py` - Smoke-test the campaign-pause-precedence guard end to end.
+- `_test_qa_gate.py` - Smoke-test the QA gate end-to-end.
+- `_tiktok_schema_probe.py` - Show columns of paid_channel_daily so we use the right field names.
+- `_top_keywords.py` - Top-performing Google Ads keywords with HIGH quality score, HIGH volume,
+- `_trace_google_chain.py` - Trace one Google contact with campaign_id populated -> associated Lead ->
+- `_tt_create_qawaem_campaign.py` - Create the Qawaem WebForm campaign on TikTok (Account 2024).
+- `_tt_list_existing_names.py` - List existing TikTok campaign names to match the naming convention.
+- `_tt_list_pixels.py` - List TikTok pixels for the advertiser to find the numeric pixel_id.
+- `_tt_rename_qawaem.py` - Rename the TikTok Qawaem campaign to follow established convention.
+- `_tt_smoketest.py` - Verify TikTok Business API access token works on advertiser 2024.
+- `_update_sheet_for_qawaem.py` - Update master sheet to include the new Qawaem (Decision 236) campaign:
+- `_update_v_lead_attribution_with_drilldown.py` - Update v_lead_attribution view to add Strategy E (drilldown fallback).
+- `_validate_hex_sql.py` - Dry-run all Hex SQL files against BigQuery to verify they parse. Replaces
+- `_zatca_add_age_only.py` - Add only age ranges as observation to all 3 ZATCA campaigns.
+- `_zatca_add_arabic_snippets.py` - Add 2 Arabic-value structured snippets + link to all 3 ZATCA campaigns.
+- `_zatca_add_features_sitelink.py` - Create the #features sitelink + link to all 3 ZATCA campaigns.
+- `_zatca_add_indirect_audiences.py` - Add 5 indirect-but-effective audiences as observation to all 3 ZATCA
+- `_zatca_add_lp_sitelinks.py` - Create 2 new sitelinks anchored on the e-invoice LP, link to all 3 ZATCA
+- `_zatca_add_observation_targeting.py` - Add audiences + age ranges as OBSERVATION (not targeting) to all 3 ZATCA
+- `_zatca_c3_competitor_optimization.py` - Optimize C3 (ZATCACompetitor) based on URL-seeded research findings.
+- `_zatca_competitor_url_ideas.py` - Free competitor research fallback - use Keyword Planner with competitor
+- `_zatca_dedupe_sitelinks.py` - Dedupe overlapping sitelinks across the 3 ZATCA campaigns.
+- `_zatca_en_rsas_fix.py` - Create EN RSAs in the 3 _EN_AdGroups (re-shortened headlines  30 chars).
+- `_zatca_keyword_discovery.py` - Pull live keyword ideas (avg monthly searches + competition) from Google
+- `_zatca_master_cleanup.py` - ZATCA campaigns master cleanup - sequential atomic steps so one failure
+- `_zatca_master_cleanup_step2.py` - Step 2: handle what step 1 couldn't.
+- `_zatca_newlp_fix.py` - Fix overconstrained testimonial-only ads:
+- `_zatca_promote_sitelinks_to_campaign.py` - Promote the 5 /zatca-einvoice/ sitelinks (currently linked only at the
+- `_zatca_remove_3_sitelinks.py` - Unlink 3 sitelinks from all 3 ZATCA campaigns.
+- `_zatca_remove_network_security_audience.py` - Remove the 'Network & Enterprise Security' audience from all 3 ZATCA
+- `_zatca_selective_opt.py` - Try multiple approaches to set selective_optimization.
+- `_zatca_sitelink_isolate.py` - Migrate sitelinks from CAMPAIGN level to AD-GROUP level so each ad
+- `_zatca_split_languages.py` - Split each ZATCA campaign into AR + EN ad groups.
+- `_zatca_testimonials_bundle.py` - Create a testimonial-angled ad group + RSA + ad-group-level sitelinks
+- `_zatca_update_master_sheet.py` - Update the existing master sheet with:
