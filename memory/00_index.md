@@ -51,12 +51,21 @@ The flat `NN_*.md` files in this folder are **shared org memory** — every agen
 may read them; several are referenced by exact path in `CLAUDE.md` and the
 production runtime, so they don't move.
 
+## Knowledge base — curated reference guides
+
+`knowledge_base/` holds longer-form reference docs (see `knowledge_base/README.md`):
+- `knowledge_base/looker_to_bq_mapping.md` — Looker dashboards → BigQuery fields
+- `knowledge_base/organic_setup_guide.md` — organic-channel setup
+
+(Moved here 2026-06-08 from `md_files/` to stop reference docs scattering.)
+
 ## External references (not in repo)
 
 - Google Drive: https://drive.google.com/drive/folders/1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74
   (Claude can't read Drive; ask user to paste relevant doc contents if needed)
-- `md_files/` in repo: Looker mapping, organic setup guide, brand identity,
-  agent spec. Longer-form than memory files; read when doing relevant work.
+- `md_files/` in repo: now **only the 6 runtime persona sources** loaded by
+  `claude/roles.py` (+ `_archived/` for superseded ones). Brand identity lives at
+  `md_files/qoyod-brand-identity.md` (runtime loads it by path).
 
 ## Update discipline
 
