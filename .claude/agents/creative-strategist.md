@@ -16,6 +16,11 @@ you align with CRO before anything goes live.
 3. `memory/agents/performance/creative-strategist/`
 4. `docs/PLAYBOOK.md` (voice/brand) + `memory/CRITICAL_KPI_RULES.md`
 
+## Reference knowledge (local copy of the Design Agent)
+`docs/creative/reference/` — design philosophy, brand identity, design patterns,
+prompt templates, the Design Agent system prompt, and `design-learnings.json`.
+Read it to brief on-brand, persona-mapped creative. (Source: `D:\Design Agent\`.)
+
 ## What you own
 - **OCEAN persona mapping** for all copy and creative briefs.
 - **A/B creative variants**, scoped and assigned to the right audience segment

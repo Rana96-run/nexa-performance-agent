@@ -1,0 +1,415 @@
+{
+  "version": 2,
+  "campaigns": [
+    {
+      "date": "2026-04-30",
+      "brand": "qoyod",
+      "preset": "",
+      "campaign_title": "mobile_invoicing_june2025",
+      "brief_summary": "",
+      "design_count": 3,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "photo",
+          "headline_ar": "فاتورة من هاتفك؟",
+          "headline_line2_ar": "الصفقة اتفقنا",
+          "badge_ar": "فوترة من هاتفك",
+          "checklist_count": 0,
+          "has_app": true,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "photo",
+          "headline_ar": "أصدر فواتيرك",
+          "headline_line2_ar": "مكتبك في جيبك",
+          "badge_ar": "تطبيق قيود",
+          "checklist_count": 0,
+          "has_app": true,
+          "partner_logo": ""
+        },
+        {
+          "format": "story",
+          "bg_style": "photo",
+          "headline_ar": "فاتورتك جاهزة",
+          "headline_line2_ar": "٣ ثوان — مو دقائق",
+          "badge_ar": "قبل / بعد قيود",
+          "checklist_count": 0,
+          "has_app": true,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qoyod",
+      "preset": "",
+      "campaign_title": "qoyod_campaign",
+      "brief_summary": "",
+      "design_count": 0,
+      "designs": []
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qoyod",
+      "preset": "",
+      "campaign_title": "qoyod_hesabat_fi_jibek",
+      "brief_summary": "",
+      "design_count": 3,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "أنت في أجازة",
+          "headline_line2_ar": "",
+          "badge_ar": "يشتغل من أي مكان",
+          "checklist_count": 0,
+          "has_app": true,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "على كل أجهزتك",
+          "headline_line2_ar": "",
+          "badge_ar": "سحابي بالكامل",
+          "checklist_count": 0,
+          "has_app": true,
+          "partner_logo": ""
+        },
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "جهاز جديد؟",
+          "headline_line2_ar": "",
+          "badge_ar": "بدون تثبيت",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qoyod",
+      "preset": "",
+      "campaign_title": "qoyod_zatca_compliance_2025",
+      "brief_summary": "",
+      "design_count": 4,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "photo",
+          "headline_ar": "٥,٠٠٠ ريال",
+          "headline_line2_ar": "غرامة ما تتوقعها",
+          "badge_ar": "⚠ تنبيه: فوترة إلزامية",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": "zatca"
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "٣ أسئلة",
+          "headline_line2_ar": "تعرف فيها وضع شركتك",
+          "badge_ar": "اختبار الامتثال السريع",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": "zatca"
+        },
+        {
+          "format": "story",
+          "bg_style": "photo",
+          "headline_ar": "درع أو غرامة؟",
+          "headline_line2_ar": "القرار الآن",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": "zatca"
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "المرحلة الثانية",
+          "headline_line2_ar": "بدأت ولا تنتظر",
+          "badge_ar": "متوافق ١٠٠٪ | زاتكا",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": "zatca"
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qoyod",
+      "preset": "",
+      "campaign_title": "qoyod_zatca_phase2",
+      "brief_summary": "",
+      "design_count": 4,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "فاتورتك الإلكترونية؟",
+          "headline_line2_ar": "بضغطة زر واحدة",
+          "badge_ar": "المرحلة الثانية ✓",
+          "checklist_count": 0,
+          "has_app": true,
+          "partner_logo": "zatca"
+        },
+        {
+          "format": "post",
+          "bg_style": "photo",
+          "headline_ar": "نمت مرتاح البارحة؟",
+          "headline_line2_ar": "المرحلة الثانية تشمل منشأتك",
+          "badge_ar": "زاتكا — المرحلة الثانية",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": "zatca"
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "قبل قيود — بعد قيود",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 4,
+          "has_app": false,
+          "partner_logo": "zatca"
+        },
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "٣ أشياء لازم تعرفها",
+          "headline_line2_ar": "",
+          "badge_ar": "الفاتورة الإلكترونية 📋",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": "zatca"
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "accounting_cleanup_2026",
+      "brief_summary": "",
+      "design_count": 3,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "light",
+          "headline_ar": "حساباتك مهوّشة؟",
+          "headline_line2_ar": "من الصفر",
+          "badge_ar": "معتمد من SOCPA",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "story",
+          "bg_style": "photo",
+          "headline_ar": "قبل وبعد",
+          "headline_line2_ar": "دفاتر ما تنكسر",
+          "badge_ar": "معتمد من SOCPA",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "story",
+          "bg_style": "light",
+          "headline_ar": "الأرقام تتصلح",
+          "headline_line2_ar": "نظّفناها",
+          "badge_ar": "معتمد من SOCPA",
+          "checklist_count": 3,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "qbookkeeping_app_features_awareness",
+      "brief_summary": "",
+      "design_count": 4,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "ليش تدفع راتب محاسب؟",
+          "headline_line2_ar": "",
+          "badge_ar": "فريق SOCPA معتمد",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "محاسبك أجازة وأنت قلقان؟",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "٣ غرامات تتربص فيك",
+          "headline_line2_ar": "",
+          "badge_ar": "امتثال ١٠٠٪",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "خلف كل رقم فريق يسهر عليه",
+          "headline_line2_ar": "",
+          "badge_ar": "معتمد من SOCPA",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "qbookkeeping_awareness_2026",
+      "brief_summary": "",
+      "design_count": 2,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "كم ساعة تضيّع في المحاسبة؟",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "خلف كل رقم فريق يسهر",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "qbookkeeping_campaign",
+      "brief_summary": "",
+      "design_count": 0,
+      "designs": []
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "qbookkeeping_restaurants_2025",
+      "brief_summary": "",
+      "design_count": 2,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "وأرباحـــك وين؟",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "الأرقام علينـــا",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "qbookkeeping_restaurants_june2025",
+      "brief_summary": "",
+      "design_count": 2,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "مبيعاتك تزيد وأرباحك ما تتحرك؟",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "أنت تطبخ ونحن نحسب",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    },
+    {
+      "date": "2026-04-30",
+      "brand": "qbookkeeping",
+      "preset": "",
+      "campaign_title": "qbookkeeping_restaurant_owners_2025",
+      "brief_summary": "",
+      "design_count": 2,
+      "designs": [
+        {
+          "format": "story",
+          "bg_style": "navy",
+          "headline_ar": "وفلوسك وين؟",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        },
+        {
+          "format": "post",
+          "bg_style": "navy",
+          "headline_ar": "ومحاسبك ما جاء",
+          "headline_line2_ar": "",
+          "badge_ar": "",
+          "checklist_count": 0,
+          "has_app": false,
+          "partner_logo": ""
+        }
+      ]
+    }
+  ],
+  "brand_notes": {},
+  "preset_notes": {}
+}

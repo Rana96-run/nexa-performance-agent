@@ -1,6 +1,7 @@
 # Playbook — Creative Strategist
 
 **Seat:** Performance. **Agent:** `creative-strategist`. Parallel peer: `campaign-manager`.
+**Reference:** `docs/creative/reference/` — design philosophy, brand, patterns, prompt templates, learnings (from the Design Agent).
 
 ## Purpose
 Decide what we say and to whom, and align LP assets with CRO before launch.
