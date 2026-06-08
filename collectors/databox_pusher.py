@@ -509,8 +509,15 @@ def run_push(days: int = 7, grains: list = None) -> int:
 def push_custom_metrics(days: int = 90) -> int:
     """Push daily spend (+ CPL / CPQL / leads) as Databox Push API custom metrics.
 
-    These appear in Databox as a "Custom" connector under the PAK source,
-    available for any dashboard widget — no UI interaction required.
+    Uses the Databox Push API (push.databox.com) which requires a PUSH CONNECTOR TOKEN
+    — this is DIFFERENT from the PAK (DATABOX_TOKEN).
+
+    How to get the push connector token:
+      1. Go to app.databox.com → Connect Data → Custom → Push Custom Data
+      2. Create a new connector (e.g. "Qoyod Push Metrics") or find an existing one
+      3. Copy the connector token (looks like a 32-char hex string, NOT pak_...)
+      4. Store it in Railway as DATABOX_PUSH_TOKEN
+         (railway run railway variables set DATABOX_PUSH_TOKEN=<token>)
 
     Metrics pushed (one value per day, all channels combined):
       $spend       — total daily spend USD (SUM across all channels)
@@ -526,8 +533,15 @@ def push_custom_metrics(days: int = 90) -> int:
     Args:
         days: How many days back to push (default 90).
     """
-    if not DATABOX_TOKEN:
-        raise RuntimeError("DATABOX_TOKEN not set")
+    DATABOX_PUSH_TOKEN = os.getenv("DATABOX_PUSH_TOKEN", "")
+    if not DATABOX_PUSH_TOKEN:
+        raise RuntimeError(
+            "DATABOX_PUSH_TOKEN not set.\n"
+            "The Push API uses a connector token (NOT the PAK).\n"
+            "Go to app.databox.com → Connect Data → Custom → Push Custom Data,\n"
+            "create/find the connector, copy its token, and set it in Railway:\n"
+            "  railway variables set DATABOX_PUSH_TOKEN=<your_connector_token>"
+        )
 
     import base64
     from google.cloud import bigquery
@@ -536,14 +550,17 @@ def push_custom_metrics(days: int = 90) -> int:
     today   = date.today()
     since   = (today - timedelta(days=days)).isoformat()
 
+    _proj = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+    _ds   = os.getenv("BQ_DATASET",    "qoyod_marketing")
+
     sql = f"""
     SELECT
         date,
         channel,
-        SUM(spend)               AS spend,
-        SUM(leads_total)         AS leads,
-        SUM(leads_qualified)     AS sqls
-    FROM `qoyod-marketing.qoyod_marketing.paid_channel_daily`
+        SUM(spend)       AS spend,
+        SUM(leads_total) AS leads,
+        SUM(qualified)   AS sqls
+    FROM `{_proj}.{_ds}.paid_channel_daily`
     WHERE date >= '{since}'
       AND date  < '{today.isoformat()}'
     GROUP BY date, channel
@@ -572,7 +589,7 @@ def push_custom_metrics(days: int = 90) -> int:
 
     # Build Push API payload — each item is one metric value
     PUSH_URL = "https://push.databox.com"
-    creds    = base64.b64encode(f"{DATABOX_TOKEN}:".encode()).decode()
+    creds    = base64.b64encode(f"{DATABOX_PUSH_TOKEN}:".encode()).decode()
     headers  = {
         "Authorization": f"Basic {creds}",
         "Content-Type":  "application/json",
