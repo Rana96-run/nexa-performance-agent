@@ -421,22 +421,27 @@ Before building anything new, ask: does a tool already in use solve this?
 - **Don't delete env vars based on "no Python import" alone.** Before removing any env var from `.env`, Railway, or GitHub Secrets, ask: (1) is it reserved for a feature currently disabled but expected to be re-enabled (e.g. `EMAIL_*` for the future Slack-→-email switch)? (2) does it hold real human/entity metadata (e.g. `ASANA_ASSIGNEE_<NAME>`)? (3) is it consumed by a different runtime than the one I'm grepping (GH Actions YAML, not Railway Python)? If any answer is yes-or-unsure, keep it. Env vars are free; surprise outages aren't.
 - **Call it out** — if asked to build something that already exists elsewhere in the stack, say so and propose the simpler path instead.
 
-## Lean knowledge, not archives (non-negotiable mindset)
+## Memory is the one store — lean of clutter, rich in knowledge (non-negotiable mindset)
 
 We work to **learn, gain experience, evolve, and become unbreakable** — NOT to be
-an archive full of files and crowded data. The system's strength is its **distilled
-knowledge** (memory, playbooks, learnings), not a hoard of leftover artifacts.
+an archive of crowded files and scattered data. The distinction that matters:
 
-- **Capture the learning, then drop the file.** A one-off script, a probe, a
-  migration, raw reference material — once its *finding/outcome* is in `memory/`,
-  the file is clutter. Remove it (untrack if recoverable matters; delete if the
-  knowledge is fully captured).
-- **Before keeping any file, ask: "is the knowledge already captured?"** If yes,
-  keeping the file makes us heavier, not stronger.
-- **Recoverability ≠ reason to hoard.** Git history + memory hold what matters;
-  the working tree should stay lean.
-- This is why `scripts/_*` one-offs became `memory/15_operational_history.md`, and
-  why we don't accumulate dead folders. Evolve by distilling, not by storing.
+- **`memory/` is the ONE place we store.** It is the brain we lean on for every
+  decision *because it holds all the data.* **A large memory is a GOOD thing** —
+  as long as it stays **clean, organized, indexed, and has clearly-marked critical
+  areas.** We do not shrink memory; we grow it and curate it.
+- **"Lean" = lean of CLUTTER, not lean of memory.** The thing we remove is loose
+  files outside memory — one-off scripts, probes, migrations, raw reference
+  material. We **distill them INTO memory, then drop the file.** Bigger memory,
+  emptier working tree.
+- **Before keeping any file, ask: "is the knowledge in memory yet?"** If not,
+  capture it first. If yes, the file is clutter — remove it.
+- **Keep memory decision-grade:** every session reads `memory/CRITICAL_KPI_RULES.md`
+  (the critical area) and navigates via `memory/00_index.md`. When you add
+  knowledge, file it under the right topical/KB/per-role section and update the
+  index — never dump it loose.
+- This is why `scripts/_*` one-offs became `memory/15_operational_history.md`.
+  Evolve by distilling into an organized memory, not by storing clutter.
 
 ## When unsure
 

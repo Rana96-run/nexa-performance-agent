@@ -4,12 +4,20 @@
 session so it doesn't re-discover the codebase from scratch. Each file is a
 single concern. Read only what you need.
 
+## ⚠️ CRITICAL AREA — read every session before any paid-media work
+- **`CRITICAL_KPI_RULES.md`** — non-negotiables the agent has repeatedly violated;
+  hook-enforced. Highest priority. **Decisions lean on this first.**
+
 ## Read-order convention
 
-1. **First:** read `../PLAYBOOK.md` (who we are, voice, goals, market rules)
+1. **First:** `CRITICAL_KPI_RULES.md` (the critical area, above) + `../PLAYBOOK.md`
 2. Read `00_index.md` (this file)
 3. Read the topical file for the task at hand
 4. Don't read all memory files up-front — that's what burns tokens
+
+> Memory is the one store and we lean on it for decisions — so it stays **clean,
+> organized, fully indexed, with the critical area marked**. Adding knowledge?
+> File it under the right section below and add its row here. Never dump it loose.
 
 ## Directory
 
@@ -32,6 +40,7 @@ single concern. Read only what you need.
 | `14_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
 | `utm_template.md` | Canonical Google Ads UTM `final_url_suffix` template + custom-param convention. Read BEFORE proposing any UTM string. |
 | `15_operational_history.md` | Institutional log of one-off learnings/steps/actions (distilled from the retired `scripts/_*.py`). "Have we done/investigated X before?" |
+| `audit_findings.md` | Dated log of automated audit flags (attribution / spend-with-0-leads). Check when investigating a flagged channel/campaign. |
 
 ## The team (agents) — NEW
 
