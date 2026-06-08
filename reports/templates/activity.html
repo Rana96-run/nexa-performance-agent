@@ -228,27 +228,55 @@ a:hover{text-decoration:underline}
                  background:#161b22;border:1px solid #30363d;border-radius:12px;
                  padding:3px 10px;font-size:11px;color:#8b949e}
 
-/* ── Agent team roster ── */
-.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));
-            gap:12px;margin-bottom:24px}
-.team-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
-            padding:16px 18px;position:relative;overflow:hidden}
-.team-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
-                    background:var(--tc)}
-.team-card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
-.team-emoji{font-size:22px;flex-shrink:0;line-height:1;margin-top:1px}
+/* ── Agent team hierarchy ── */
+.team-hierarchy{display:flex;flex-direction:column;align-items:center;
+                 gap:0;margin-bottom:28px;width:100%}
+.team-main-wrap{display:flex;flex-direction:column;align-items:center;width:100%}
+.team-main-card{background:#161b22;border:1px solid #7c3aed;border-radius:12px;
+                 padding:18px 24px;position:relative;overflow:hidden;
+                 display:flex;align-items:center;gap:20px;
+                 max-width:540px;width:100%;
+                 box-shadow:0 0 0 1px #7c3aed33,0 4px 24px #7c3aed18}
+.team-main-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+                          background:#7c3aed}
+.tc-stem-down{width:2px;height:24px;background:#30363d;margin:0 auto;flex-shrink:0}
+.tc-bar{position:relative;width:100%;display:flex;justify-content:space-around;padding:0}
+.tc-bar::before{content:'';position:absolute;top:0;left:10%;right:10%;
+                  height:2px;background:#30363d}
+.tc-sub-wrap{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0}
+.tc-node{width:8px;height:8px;border-radius:50%;background:#30363d;
+          margin-top:-4px;flex-shrink:0;z-index:1}
+.tc-stem-up{width:2px;height:18px;background:#30363d;flex-shrink:0}
+.team-subs{display:flex;gap:10px;width:100%;flex-wrap:wrap;justify-content:center}
+.team-sub-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
+                padding:12px 12px 10px;position:relative;overflow:hidden;
+                flex:1;min-width:150px;max-width:200px;
+                display:flex;flex-direction:column;align-items:center;gap:6px;
+                transition:border-color .2s,box-shadow .2s}
+.team-sub-card:hover{border-color:var(--tc);box-shadow:0 0 0 1px var(--tc)33}
+.team-sub-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+                         background:var(--tc)}
+.team-sprite{flex-shrink:0;image-rendering:pixelated;display:block}
+.team-card-info{flex:1;min-width:0}
 .team-title{font-size:13px;font-weight:600;color:#e6edf3;line-height:1.3}
-.team-desc{font-size:11px;color:#8b949e;line-height:1.45;margin-bottom:10px}
-.team-roles{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.team-title-sub{font-size:11px;font-weight:600;color:#e6edf3;line-height:1.3;
+                  text-align:center;margin-bottom:2px}
+.team-desc{font-size:11px;color:#8b949e;line-height:1.45}
+.team-desc-sub{font-size:10px;color:#6e7681;line-height:1.4;text-align:center}
+.team-roles{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.team-roles-center{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;justify-content:center}
 .team-role-tag{font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;
-                padding:2px 7px;font-family:"SFMono-Regular",Consolas,monospace}
-.team-stats{display:flex;gap:18px;margin-bottom:10px}
+                padding:2px 6px;font-family:"SFMono-Regular",Consolas,monospace}
+.team-stats{display:flex;gap:14px}
+.team-stats-center{display:flex;gap:12px;justify-content:center;margin-top:4px}
 .team-stat-num{font-size:22px;font-weight:700;color:#e6edf3;line-height:1}
-.team-stat-lbl{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:.05em;
-                margin-top:2px}
-.team-last{font-size:11px;color:#484f58;padding-top:8px;border-top:1px solid #21262d;
-            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team-stat-num-sm{font-size:15px;font-weight:700;color:#e6edf3;line-height:1;text-align:center}
+.team-stat-lbl{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+.team-last{font-size:10px;color:#484f58;padding-top:6px;border-top:1px solid #21262d;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
 .team-last strong{color:#8b949e;font-weight:500}
+.sub-badge{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+            color:#484f58;border:1px solid #21262d;border-radius:10px;padding:1px 7px}
 </style>
 </head>
 <body>
@@ -479,43 +507,281 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
-  <!-- ── Agent Team Roster ── -->
+  <!-- ── Agent Team Hierarchy ── -->
   {% if team_roster %}
   <div class="section-head">Agent Team</div>
-  <div class="team-grid">
-    {% for member in team_roster %}
-    <div class="team-card" style="--tc:{{ member.color }}">
-      <div class="team-card-top">
-        <div class="team-emoji">{{ member.emoji }}</div>
-        <div>
-          <div class="team-title">{{ member.title }}</div>
+
+  {# ── Pixel-art sprite macro ── #}
+  {% macro sprite(name, size) %}
+  {% set s = size|default(64) %}
+  {% if name == "manager" %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <!-- crown spikes -->
+    <rect x="6"  y="0"  width="6" height="6" fill="#f59e0b"/>
+    <rect x="21" y="0"  width="6" height="6" fill="#f59e0b"/>
+    <rect x="36" y="0"  width="6" height="6" fill="#f59e0b"/>
+    <!-- crown band -->
+    <rect x="0"  y="6"  width="48" height="6" fill="#f59e0b"/>
+    <!-- crown gem -->
+    <rect x="21" y="6"  width="6"  height="6" fill="#c084fc"/>
+    <!-- face -->
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <!-- eyes -->
+    <rect x="15" y="18" width="6"  height="6" fill="#1e1b4b"/>
+    <rect x="27" y="18" width="6"  height="6" fill="#1e1b4b"/>
+    <!-- smile -->
+    <rect x="15" y="24" width="18" height="3"  fill="#c47a3a"/>
+    <!-- purple suit -->
+    <rect x="6"  y="30" width="36" height="12" fill="#7c3aed"/>
+    <!-- white shirt -->
+    <rect x="21" y="30" width="6"  height="12" fill="#ede9fe"/>
+    <!-- arms -->
+    <rect x="0"  y="30" width="6"  height="12" fill="#7c3aed"/>
+    <rect x="42" y="30" width="6"  height="12" fill="#7c3aed"/>
+    <!-- legs -->
+    <rect x="12" y="42" width="9"  height="6"  fill="#4c1d95"/>
+    <rect x="27" y="42" width="9"  height="6"  fill="#4c1d95"/>
+  </svg>
+  {% elif name == "engineer" %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <!-- antenna -->
+    <rect x="21" y="0"  width="6"  height="6"  fill="#a5f3fc"/>
+    <rect x="21" y="6"  width="6"  height="6"  fill="#67e8f9"/>
+    <!-- robot head -->
+    <rect x="6"  y="12" width="36" height="18" fill="#0891b2"/>
+    <!-- eye sockets -->
+    <rect x="9"  y="15" width="12" height="12" fill="#f0f9ff"/>
+    <rect x="27" y="15" width="12" height="12" fill="#f0f9ff"/>
+    <!-- pupils -->
+    <rect x="12" y="18" width="6"  height="6"  fill="#fbbf24"/>
+    <rect x="30" y="18" width="6"  height="6"  fill="#fbbf24"/>
+    <!-- grill -->
+    <rect x="9"  y="27" width="6"  height="3"  fill="#155e75"/>
+    <rect x="21" y="27" width="6"  height="3"  fill="#155e75"/>
+    <rect x="33" y="27" width="6"  height="3"  fill="#155e75"/>
+    <!-- body -->
+    <rect x="6"  y="30" width="36" height="12" fill="#0e7490"/>
+    <!-- panel -->
+    <rect x="18" y="33" width="12" height="6"  fill="#22d3ee"/>
+    <!-- arms -->
+    <rect x="0"  y="30" width="6"  height="12" fill="#0891b2"/>
+    <rect x="42" y="30" width="6"  height="12" fill="#0891b2"/>
+    <!-- legs -->
+    <rect x="12" y="42" width="9"  height="6"  fill="#164e63"/>
+    <rect x="27" y="42" width="9"  height="6"  fill="#164e63"/>
+  </svg>
+  {% elif name == "analyst" %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <!-- dark hair -->
+    <rect x="12" y="0"  width="24" height="12" fill="#1e1b4b"/>
+    <!-- face -->
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <!-- glasses frame -->
+    <rect x="6"  y="15" width="15" height="9"  fill="#059669"/>
+    <rect x="27" y="15" width="15" height="9"  fill="#059669"/>
+    <!-- lenses -->
+    <rect x="9"  y="18" width="9"  height="6"  fill="#d1fae5"/>
+    <rect x="30" y="18" width="9"  height="6"  fill="#d1fae5"/>
+    <!-- eyes through lenses -->
+    <rect x="12" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="30" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <!-- bridge -->
+    <rect x="21" y="18" width="6"  height="3"  fill="#059669"/>
+    <!-- body -->
+    <rect x="6"  y="30" width="36" height="12" fill="#059669"/>
+    <!-- bar chart on body -->
+    <rect x="12" y="39" width="4"  height="3"  fill="#86efac"/>
+    <rect x="18" y="36" width="4"  height="6"  fill="#86efac"/>
+    <rect x="24" y="33" width="4"  height="9"  fill="#86efac"/>
+    <rect x="30" y="35" width="4"  height="7"  fill="#86efac"/>
+    <!-- arms -->
+    <rect x="0"  y="30" width="6"  height="12" fill="#059669"/>
+    <rect x="42" y="30" width="6"  height="12" fill="#059669"/>
+    <!-- legs -->
+    <rect x="12" y="42" width="9"  height="6"  fill="#064e3b"/>
+    <rect x="27" y="42" width="9"  height="6"  fill="#064e3b"/>
+  </svg>
+  {% elif name == "strategist" %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <!-- wizard hat tip -->
+    <rect x="21" y="0"  width="6"  height="6"  fill="#d97706"/>
+    <!-- hat middle -->
+    <rect x="15" y="6"  width="18" height="6"  fill="#d97706"/>
+    <!-- hat base -->
+    <rect x="9"  y="12" width="30" height="6"  fill="#d97706"/>
+    <!-- star on hat -->
+    <rect x="22" y="3"  width="4"  height="4"  fill="#fef9c3"/>
+    <!-- face -->
+    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
+    <!-- glowing eyes -->
+    <rect x="15" y="21" width="6"  height="6"  fill="#92400e"/>
+    <rect x="27" y="21" width="6"  height="6"  fill="#92400e"/>
+    <rect x="15" y="21" width="3"  height="3"  fill="#fef3c7"/>
+    <rect x="27" y="21" width="3"  height="3"  fill="#fef3c7"/>
+    <!-- amber robe -->
+    <rect x="6"  y="30" width="36" height="12" fill="#d97706"/>
+    <!-- robe detail -->
+    <rect x="21" y="30" width="6"  height="12" fill="#fbbf24"/>
+    <!-- arms -->
+    <rect x="0"  y="30" width="6"  height="12" fill="#b45309"/>
+    <rect x="42" y="30" width="6"  height="12" fill="#b45309"/>
+    <!-- legs -->
+    <rect x="12" y="42" width="9"  height="6"  fill="#78350f"/>
+    <rect x="27" y="42" width="9"  height="6"  fill="#78350f"/>
+  </svg>
+  {% elif name == "media" %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <!-- top hat -->
+    <rect x="15" y="0"  width="18" height="6"  fill="#dc2626"/>
+    <rect x="9"  y="6"  width="30" height="6"  fill="#dc2626"/>
+    <!-- $ on hat -->
+    <rect x="22" y="1"  width="4"  height="10" fill="#fef2f2"/>
+    <rect x="18" y="3"  width="12" height="3"  fill="#fef2f2"/>
+    <rect x="18" y="6"  width="12" height="3"  fill="#fef2f2"/>
+    <!-- face -->
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <!-- eyes -->
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <!-- smile -->
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <!-- body -->
+    <rect x="6"  y="30" width="36" height="12" fill="#dc2626"/>
+    <!-- chart going up -->
+    <rect x="12" y="39" width="3"  height="3"  fill="#fca5a5"/>
+    <rect x="18" y="36" width="3"  height="6"  fill="#fca5a5"/>
+    <rect x="24" y="33" width="3"  height="9"  fill="#fca5a5"/>
+    <rect x="30" y="30" width="3"  height="12" fill="#fca5a5"/>
+    <!-- arrow -->
+    <rect x="27" y="30" width="9"  height="3"  fill="#fca5a5"/>
+    <!-- arms -->
+    <rect x="0"  y="30" width="6"  height="12" fill="#dc2626"/>
+    <rect x="42" y="30" width="6"  height="12" fill="#dc2626"/>
+    <!-- legs -->
+    <rect x="12" y="42" width="9"  height="6"  fill="#7f1d1d"/>
+    <rect x="27" y="42" width="9"  height="6"  fill="#7f1d1d"/>
+  </svg>
+  {% elif name == "comms" %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <!-- chat bubble (top right) -->
+    <rect x="24" y="0"  width="24" height="12" fill="#2563eb"/>
+    <rect x="27" y="3"  width="18" height="3"  fill="#bfdbfe"/>
+    <rect x="27" y="7"  width="12" height="3"  fill="#bfdbfe"/>
+    <!-- bubble tail -->
+    <rect x="24" y="12" width="6"  height="6"  fill="#2563eb"/>
+    <!-- face (left side, offset slightly) -->
+    <rect x="6"  y="6"  width="24" height="24" fill="#fde68a"/>
+    <!-- eyes -->
+    <rect x="9"  y="15" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="21" y="15" width="6"  height="6"  fill="#1e1b4b"/>
+    <!-- smile -->
+    <rect x="12" y="21" width="12" height="3"  fill="#c47a3a"/>
+    <!-- body -->
+    <rect x="0"  y="30" width="42" height="12" fill="#2563eb"/>
+    <!-- white collar -->
+    <rect x="15" y="30" width="12" height="6"  fill="#dbeafe"/>
+    <!-- arm right -->
+    <rect x="42" y="30" width="6"  height="12" fill="#2563eb"/>
+    <!-- legs -->
+    <rect x="6"  y="42" width="9"  height="6"  fill="#1e40af"/>
+    <rect x="21" y="42" width="9"  height="6"  fill="#1e40af"/>
+  </svg>
+  {% else %}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="6"  width="24" height="24" fill="#30363d"/>
+    <rect x="15" y="15" width="6"  height="6"  fill="#58a6ff"/>
+    <rect x="27" y="15" width="6"  height="6"  fill="#58a6ff"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#21262d"/>
+  </svg>
+  {% endif %}
+  {% endmacro %}
+
+  {# ── Hierarchy layout ── #}
+  <div class="team-hierarchy">
+
+    {# Main orchestrator card #}
+    {% set main = team_roster | selectattr("is_main") | first %}
+    {% if main %}
+    <div class="team-main-wrap">
+      <div class="team-main-card">
+        <div class="team-sprite">{{ sprite(main.sprite, 72) }}</div>
+        <div class="team-card-info">
+          <div style="font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+                       color:#7c3aed;margin-bottom:4px">✦ ORCHESTRATOR</div>
+          <div class="team-title" style="font-size:15px">{{ main.title }}</div>
+          <div class="team-desc" style="margin-top:4px">{{ main.desc }}</div>
+          <div class="team-roles" style="margin-top:8px">
+            {% for r in main.roles %}<span class="team-role-tag">{{ r }}</span>{% endfor %}
+          </div>
+          <div class="team-stats" style="margin-top:10px;gap:20px">
+            <div>
+              <div class="team-stat-num">{{ main.actions_30d }}</div>
+              <div class="team-stat-lbl">actions 30d</div>
+            </div>
+            <div>
+              <div class="team-stat-num">{{ main.actions_7d }}</div>
+              <div class="team-stat-lbl">actions 7d</div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="team-desc">{{ member.desc }}</div>
-      <div class="team-roles">
-        {% for r in member.roles %}
-        <span class="team-role-tag">{{ r }}</span>
+
+      {# Connector stem down from main card #}
+      <div class="tc-stem-down"></div>
+
+      {# Horizontal bar — one node per subagent #}
+      {% set subs = team_roster | rejectattr("is_main") | list %}
+      <div class="tc-bar" style="width:min(100%,{{ subs|length * 190 }}px)">
+        {% for _ in subs %}
+        <div class="tc-sub-wrap">
+          <div class="tc-node" style="background:{{ loop.cycle('#0891b2','#059669','#d97706','#dc2626','#2563eb') }}"></div>
+        </div>
         {% endfor %}
       </div>
-      <div class="team-stats">
-        <div>
-          <div class="team-stat-num">{{ member.actions_30d }}</div>
-          <div class="team-stat-lbl">actions 30d</div>
+
+      {# Connector stems up into sub cards #}
+      <div style="display:flex;gap:10px;width:min(100%,{{ subs|length * 190 }}px);justify-content:center">
+        {% for _ in subs %}
+        <div style="flex:1;max-width:200px;display:flex;justify-content:center">
+          <div class="tc-stem-up"></div>
         </div>
-        <div>
-          <div class="team-stat-num">{{ member.actions_7d }}</div>
-          <div class="team-stat-lbl">actions 7d</div>
-        </div>
+        {% endfor %}
       </div>
-      <div class="team-last">
-        {% if member.last_day %}
-          <strong>Last:</strong> {{ member.last_action }} &nbsp;·&nbsp; {{ member.last_day }}
-        {% else %}
-          <span style="color:#484f58">No activity in window</span>
-        {% endif %}
+
+      {# Subagent cards #}
+      <div class="team-subs" style="width:min(100%,{{ subs|length * 200 }}px)">
+        {% for member in subs %}
+        <div class="team-sub-card" style="--tc:{{ member.color }}">
+          <div class="sub-badge">SUBAGENT</div>
+          <div class="team-sprite">{{ sprite(member.sprite, 48) }}</div>
+          <div class="team-title-sub">{{ member.title }}</div>
+          <div class="team-desc-sub">{{ member.desc }}</div>
+          <div class="team-roles-center">
+            {% for r in member.roles %}<span class="team-role-tag">{{ r }}</span>{% endfor %}
+          </div>
+          <div class="team-stats-center">
+            <div style="text-align:center">
+              <div class="team-stat-num-sm">{{ member.actions_30d }}</div>
+              <div class="team-stat-lbl">30d</div>
+            </div>
+            <div style="text-align:center">
+              <div class="team-stat-num-sm">{{ member.actions_7d }}</div>
+              <div class="team-stat-lbl">7d</div>
+            </div>
+          </div>
+          <div class="team-last">
+            {% if member.last_day %}
+              <strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}
+            {% else %}
+              <span style="color:#484f58">No activity in window</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
       </div>
     </div>
-    {% endfor %}
+    {% endif %}
+
   </div>
   {% endif %}
 
