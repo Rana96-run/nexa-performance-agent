@@ -62,10 +62,16 @@ DETECT ─► ROUTE ─► FIX ─► VERIFY ─► REPORT
 - **Autonomous, no human hands:** data/view/collector self-heal, dashboard/config fixes, schema reconciliation checks. (`self_healer` already does several of these.)
 - **Human-gated, always:** (1) any **ad-account write** (pause/scale/create/budget) — the #approvals ✅; (2) **credential/OAuth** changes (LinkedIn token, MS re-auth); (3) **source-code** changes push only after review. An agent that auto-pushes unreviewed code or auto-spends is breakable, not unbreakable.
 
-## Currently open (detected, not yet closed) — 2026-06-08
-Tracked in `memory/09_open_tasks.md`:
-- **LinkedIn — 95-day stale** (last 2026-03-05). WARNING only → never alerted. Likely expired token → `scripts/linkedin_refresh.py` or re-OAuth (human-gated).
-- **BROKEN:** `bing`, `google`, `hubspot_deals`, `hubspot_leads` — each has a `fix_command` in `connector_health_log`. Route → verify root cause (some may be legit "no activity", e.g. paused MS account) before re-running.
+## Status — 2026-06-08 (after the loop ran end-to-end)
+Tracked in `memory/09_open_tasks.md`. The morning's 5 flags were VERIFIED:
+- **LinkedIn 95-day stale → RESOLVED:** idle, not a bug (no active campaigns). Idle-aware guard added.
+- **`bing` / `google` / `hubspot_leads` BROKEN → RESOLVED:** false positives from 3 tracker
+  bugs (channel-label mismatch, channel-less HubSpot tables, too-tight freshness threshold) — all fixed.
+- **`hubspot_deals` BROKEN → ROOT-CAUSED:** the "$257.7B" amount was a **phone number**
+  (deal `505631711439`, `966504406958 SAR` = +966 50 440 6958) typed into the Amount field.
+  **HUMAN fix open** (HubSpot read-only); police now auto-diagnoses the phone signature.
+
+Net: 5 flags → 4 were police false-positives (fixed), 1 real human-error (open for human).
 
 ## Coverage rule (so nothing is unseated)
 **Every one of the 13 `agent_activity_log` roles must be owned by a seat** (see the
