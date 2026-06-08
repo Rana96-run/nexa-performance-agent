@@ -42,6 +42,8 @@ Thumbs.db
 # ── Runtime output ────────────────────────────────────────────────────────
 logs/*.log
 *.log
+# Generated audit logs (dashboard-guard output — regenerated, not source)
+memory/dashboard_violations.jsonl
 
 # ── Local data / cache ────────────────────────────────────────────────────
 data/
