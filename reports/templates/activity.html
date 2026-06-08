@@ -276,6 +276,46 @@ a:hover{text-decoration:underline}
 .team-last strong{color:#8b949e;font-weight:500}
 .sub-badge{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
             color:#484f58;border:1px solid #21262d;border-radius:10px;padding:1px 7px}
+/* ── Agent modal ── */
+.team-sub-card{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.team-sub-card:hover{border-color:var(--tc,#30363d);
+  box-shadow:0 0 0 1px var(--tc,#30363d)33}
+.team-main-card{cursor:pointer;transition:box-shadow .15s}
+.team-main-card:hover{box-shadow:0 0 0 2px #7c3aed55}
+.agent-modal-backdrop{position:fixed;inset:0;background:#00000088;z-index:900;
+  display:none;align-items:center;justify-content:center;padding:20px}
+.agent-modal-backdrop.open{display:flex}
+.agent-modal{background:#161b22;border:1px solid #30363d;border-radius:12px;
+  max-width:540px;width:100%;max-height:88vh;overflow-y:auto;position:relative}
+.agent-modal-header{padding:20px 22px 14px;border-bottom:1px solid #21262d;
+  display:flex;align-items:flex-start;gap:14px}
+.agent-modal-body{padding:18px 22px 22px}
+.agent-modal-close{position:absolute;top:14px;right:16px;background:none;border:none;
+  color:#8b949e;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;
+  border-radius:4px}
+.agent-modal-close:hover{color:#e6edf3;background:#21262d}
+.am-section{margin-top:16px}
+.am-section-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:#484f58;margin-bottom:8px}
+.am-charter-item{display:flex;gap:8px;font-size:12px;color:#c9d1d9;padding:4px 0;
+  border-bottom:1px solid #21262d22;line-height:1.5}
+.am-charter-item:last-child{border-bottom:none}
+.am-charter-bullet{color:var(--tc,#58a6ff);flex-shrink:0;margin-top:1px}
+.am-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.am-flow-pill{font-size:11px;padding:3px 10px;border-radius:10px;border:1px solid #30363d;
+  color:#8b949e;background:#0d1117}
+.am-flow-arrow{color:#484f58;font-size:12px}
+.am-flow-pill.am-self{color:#e6edf3;border-color:var(--tc,#58a6ff);
+  background:var(--tc,#58a6ff)18}
+.am-role-tag{display:inline-block;font-size:10px;background:#21262d;color:#6e7681;
+  border-radius:4px;padding:2px 8px;font-family:"SFMono-Regular",Consolas,monospace;
+  margin:2px}
+.am-recent-row{display:flex;justify-content:space-between;align-items:center;
+  font-size:11px;padding:5px 0;border-bottom:1px solid #21262d33;color:#c9d1d9}
+.am-recent-row:last-child{border-bottom:none}
+.am-recent-day{color:#484f58;flex-shrink:0;margin-left:10px}
+.am-file{font-size:10px;color:#484f58;font-family:"SFMono-Regular",Consolas,monospace;
+  margin-top:4px}
 /* ── Code Health ── */
 .ch-panel{background:#161b22;border:1px solid #30363d;border-radius:10px;
            padding:18px 22px;margin-bottom:24px}
@@ -660,9 +700,14 @@ a:hover{text-decoration:underline}
 
     {# ── Orchestrator (full-width top card) ── #}
     {% set main = team_roster | selectattr("is_main") | first %}
+    {# ── Embed full roster as JS for the modal ── #}
+    <script>
+    window._AGENT_ROSTER = {{ team_roster | tojson }};
+    </script>
+
     {% if main %}
     <div class="team-main-wrap">
-      <div class="team-main-card">
+      <div class="team-main-card" onclick="openAgentModal(0)" style="cursor:pointer">
         <div class="team-sprite">{{ sprite(main.sprite, 72) }}</div>
         <div class="team-card-info">
           <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa;margin-bottom:4px">✦ ORCHESTRATOR · ALL DEPTS</div>
@@ -701,7 +746,7 @@ a:hover{text-decoration:underline}
           <div style="border:1px solid #dc262644;border-radius:0 0 8px 8px;padding:10px;
                        background:#161b22;display:flex;flex-direction:column;gap:8px">
             {% for member in perf_members %}
-            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%">
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')" title="Click to expand {{ member.title }}'s full structure">
               {% if member.is_lead %}
               <div class="sub-badge" style="color:#fca5a5;border-color:#dc2626">DEPT LEAD</div>
               {% else %}
@@ -738,7 +783,7 @@ a:hover{text-decoration:underline}
           <div style="border:1px solid #05966944;border-radius:0 0 8px 8px;padding:10px;
                        background:#161b22;display:flex;flex-direction:column;gap:8px">
             {% for member in cro_members %}
-            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%">
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')" title="Click to expand {{ member.title }}'s full structure">
               {% if member.is_lead %}
               <div class="sub-badge" style="color:#6ee7b7;border-color:#059669">DEPT LEAD</div>
               {% else %}
@@ -775,7 +820,7 @@ a:hover{text-decoration:underline}
           <div style="border:1px solid #6366f144;border-radius:0 0 8px 8px;padding:10px;
                        background:#161b22;display:flex;flex-direction:column;gap:8px">
             {% for member in support_members %}
-            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%">
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')" title="Click to expand {{ member.title }}'s full structure">
               <div class="sub-badge">SUBAGENT</div>
               <div style="display:flex;align-items:center;gap:10px;width:100%">
                 <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
@@ -3053,6 +3098,125 @@ function toggleTeamView() {
     })
     .catch(function() {}); // silent — never break the page
 })();
+</script>
+
+<!-- ── Agent detail modal ── -->
+<div class="agent-modal-backdrop" id="agent-modal-backdrop" onclick="closeAgentModal(event)">
+  <div class="agent-modal" id="agent-modal" style="--tc:#58a6ff">
+    <button class="agent-modal-close" onclick="closeAgentModal()">✕</button>
+    <div class="agent-modal-header" id="am-header"></div>
+    <div class="agent-modal-body" id="am-body"></div>
+  </div>
+</div>
+
+<script>
+function openAgentModal(idx) {
+  var a = window._AGENT_ROSTER[idx];
+  if (!a) return;
+  _renderAgentModal(a);
+}
+function openAgentByTitle(title) {
+  var roster = window._AGENT_ROSTER || [];
+  for (var i = 0; i < roster.length; i++) {
+    if (roster[i].title === title) { openAgentModal(i); return; }
+  }
+}
+function closeAgentModal(e) {
+  if (e && e.target !== document.getElementById('agent-modal-backdrop')) return;
+  document.getElementById('agent-modal-backdrop').classList.remove('open');
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') document.getElementById('agent-modal-backdrop').classList.remove('open'); });
+
+function _renderAgentModal(a) {
+  var modal = document.getElementById('agent-modal');
+  modal.style.setProperty('--tc', a.color || '#58a6ff');
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  var deptBadge = '';
+  if (a.is_main) {
+    deptBadge = '<span style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa">✦ ORCHESTRATOR · ALL DEPTS</span>';
+  } else if (a.dept) {
+    var dc = a.dept_color || '#8b949e';
+    var badge = a.is_lead ? 'DEPT LEAD' : 'SUBAGENT';
+    deptBadge = '<span style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+dc+'">'+a.dept+' · '+badge+'</span>';
+  }
+  document.getElementById('am-header').innerHTML =
+    '<div style="flex-shrink:0" id="am-sprite-wrap"></div>' +
+    '<div style="flex:1;min-width:0">' +
+      deptBadge +
+      '<div style="font-size:16px;font-weight:700;color:#e6edf3;margin-top:3px">'+_esc(a.title)+'</div>' +
+      '<div style="font-size:12px;color:#8b949e;margin-top:4px;line-height:1.5">'+_esc(a.desc)+'</div>' +
+      '<div style="display:flex;gap:14px;margin-top:10px">' +
+        '<div><span style="font-size:18px;font-weight:700;color:'+a.color+'">'+a.actions_30d+'</span> <span style="font-size:10px;color:#484f58;text-transform:uppercase">actions 30d</span></div>' +
+        '<div><span style="font-size:18px;font-weight:700;color:'+a.color+'">'+a.actions_7d+'</span> <span style="font-size:10px;color:#484f58;text-transform:uppercase">7d</span></div>' +
+      '</div>' +
+    '</div>';
+
+  // ── Body ────────────────────────────────────────────────────────────────
+  var html = '';
+
+  // Charter
+  if (a.charter && a.charter.length) {
+    html += '<div class="am-section"><div class="am-section-title">Charter</div>';
+    a.charter.forEach(function(line){
+      html += '<div class="am-charter-item"><span class="am-charter-bullet">▸</span><span>'+_esc(line)+'</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // Handoff flow
+  var hasPrev = a.receives_from && a.receives_from.length;
+  var hasNext = a.sends_to && a.sends_to.length;
+  if (hasPrev || hasNext) {
+    html += '<div class="am-section"><div class="am-section-title">Handoff Chain</div><div class="am-flow">';
+    if (hasPrev) {
+      a.receives_from.forEach(function(t,i){
+        html += '<span class="am-flow-pill">'+_esc(t)+'</span>';
+        if (i < a.receives_from.length-1) html += '<span class="am-flow-arrow">·</span>';
+      });
+      html += '<span class="am-flow-arrow">→</span>';
+    }
+    html += '<span class="am-flow-pill am-self">'+_esc(a.title)+'</span>';
+    if (hasNext) {
+      html += '<span class="am-flow-arrow">→</span>';
+      a.sends_to.forEach(function(t,i){
+        html += '<span class="am-flow-pill">'+_esc(t)+'</span>';
+        if (i < a.sends_to.length-1) html += '<span class="am-flow-arrow">·</span>';
+      });
+    }
+    html += '</div></div>';
+  }
+
+  // Activity log roles
+  if (a.roles && a.roles.length) {
+    html += '<div class="am-section"><div class="am-section-title">Activity Log Roles</div><div>';
+    a.roles.forEach(function(r){
+      html += '<span class="am-role-tag">'+_esc(r)+'</span>';
+    });
+    html += '</div></div>';
+  }
+
+  // Recent actions
+  if (a.recent_actions && a.recent_actions.length) {
+    html += '<div class="am-section"><div class="am-section-title">Recent Activity</div>';
+    a.recent_actions.forEach(function(r){
+      html += '<div class="am-recent-row"><span>'+_esc(r.action)+'</span><span class="am-recent-day">'+(r.day||'—')+'</span></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="am-section"><div class="am-section-title">Recent Activity</div><div style="font-size:12px;color:#484f58">No activity in selected window</div></div>';
+  }
+
+  // Agent file path
+  if (a.agent_file) {
+    html += '<div class="am-section"><div class="am-section-title">Agent Definition</div><div class="am-file">'+_esc(a.agent_file)+'</div></div>';
+  }
+
+  document.getElementById('am-body').innerHTML = html;
+  document.getElementById('agent-modal-backdrop').classList.add('open');
+}
+
+function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
 </body>
 </html>
