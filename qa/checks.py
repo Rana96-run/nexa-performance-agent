@@ -208,6 +208,84 @@ def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 4a. LIVE drift check — current-month BQ vs HubSpot, no settled-window exclusion
+# ─────────────────────────────────────────────────────────────────────────────
+# The reconciler above uses T-2..T-8 (excludes recent) to avoid false positives
+# from in-progress qualification. But that means drift on CURRENT data passes
+# silently. This check fills the gap: compares total lead COUNT (no date
+# bucketing math) for the current week, all-source, against HubSpot live.
+# Cheap: single HS Search call with limit=1 returns total. Cached 60s so
+# dashboard reloads don't repeat the call.
+def check_live_drift(threshold_warn: float = 0.05,
+                      threshold_block: float = 0.10) -> QACheckResult:
+    """Current-week BQ vs HubSpot live total drift.
+
+    warn (yellow banner) if drift > 5%, block (red banner) if drift > 10%.
+    Drift detection only — does NOT auto-resync (the watchdog handles that
+    every 2h). Pure detection so the dashboard shows truth in real time.
+    """
+    import datetime as _dt
+    def _q():
+        import requests
+        c, p, d = _bq()
+        riyadh = _dt.timezone(_dt.timedelta(hours=3))
+        today_r = _dt.datetime.now(riyadh).date()
+        week_start = today_r - _dt.timedelta(days=6)   # last 7 days incl today
+        since_ms = int(_dt.datetime(week_start.year, week_start.month, week_start.day,
+                                    tzinfo=riyadh).timestamp() * 1000)
+        until_ms = int(_dt.datetime(today_r.year, today_r.month, today_r.day, 23, 59, 59,
+                                    tzinfo=riyadh).timestamp() * 1000) + 1
+        # BQ side — count individual leads created this week
+        sql = f"""
+        SELECT COUNT(*) AS n
+        FROM `{p}.{d}.hubspot_leads_individual`
+        WHERE hs_createdate BETWEEN '{week_start}' AND '{today_r}'
+        """
+        bq_n = list(c.query(sql).result())[0].n or 0
+        # HubSpot side — single Search API call with limit=1, read `total` field
+        body = {
+            "filterGroups": [{"filters": [
+                {"propertyName": "hs_createdate", "operator": "GTE", "value": since_ms},
+                {"propertyName": "hs_createdate", "operator": "LT",  "value": until_ms},
+            ]}],
+            "properties": ["hs_createdate"],
+            "limit": 1,
+        }
+        r = requests.post("https://api.hubapi.com/crm/v3/objects/0-136/search",
+                          headers={"Authorization": f"Bearer {os.environ['HUBSPOT_ACCESS_TOKEN']}",
+                                   "Content-Type": "application/json"},
+                          json=body, timeout=20)
+        if r.status_code != 200:
+            return None
+        hs_n = r.json().get("total", 0)
+        return {"bq": int(bq_n), "hs": int(hs_n), "window": f"{week_start} to {today_r}"}
+
+    try:
+        m = _cached("live_drift", _q)
+        if not m:
+            return QACheckResult(name="live_drift", passed=True, severity="warn",
+                                 detail="HubSpot live API unreachable — non-fatal")
+        bq, hs = m["bq"], m["hs"]
+        drift = ((bq - hs) / hs) if hs else 0
+        if abs(drift) > threshold_block:
+            sev, ok = "block", False
+        elif abs(drift) > threshold_warn:
+            sev, ok = "warn",  False
+        else:
+            sev, ok = "warn",  True   # warn severity but pass if within tolerance
+        return QACheckResult(
+            name="live_drift",
+            passed=ok,
+            severity=sev,
+            detail=f"live 7d total — bq={bq} hs={hs} drift={drift:+.2%} (window {m['window']})",
+            metrics={"bq": bq, "hs": hs, "drift": drift, "window": m["window"]},
+        )
+    except Exception as e:
+        return QACheckResult(name="live_drift", passed=True, severity="warn",
+                             detail=f"live drift unavailable: {e} — non-fatal")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 4b. BQ ↔ HubSpot — deals + amounts reconciliation, TWO scopes
 # ─────────────────────────────────────────────────────────────────────────────
 # Two distinct reportable views the team uses:

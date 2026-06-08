@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from .checks import (
     check_slack_format, check_asana_footer, check_bq_write,
     check_numeric_claims, check_freshness, check_multi_account_presence,
-    check_deals_full_reconcile,
+    check_deals_full_reconcile, check_live_drift,
 )
 from .errors import QACheckResult
 
@@ -79,6 +79,12 @@ FIXTURES = [
      check_numeric_claims,
      ("No dollar figures in this text.",),
      True, "no dollar figures"),
+
+    # ── Live drift — current-week BQ vs HS, fills the gap reconciler misses ─
+    ("live_drift_current_week",
+     check_live_drift,
+     (),
+     True, ""),
 
     # ── Deals reconcile — live BQ↔HS check, fixtures use real data ───────
     # No "bad" fixture: this check IS the production data. Pass = drift

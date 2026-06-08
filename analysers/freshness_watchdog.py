@@ -52,7 +52,11 @@ WATCHED_TABLES = [
 # Trade-off: a few extra sync_full_mirror() runs/day (~3–4 vs ~1). Each takes
 # ~5–10 min and ~1500 HubSpot API calls — total still well within rate limits.
 MAX_LAG_DAYS         = 1     # MAX(date) must be within today-1 (yesterday)
-MAX_UPDATE_AGE_HOURS = 4     # most recent partition must have been written < 4h ago
+# Tightened 4h → 2h on 2026-06-08: a 61-lead month-to-date drift slipped
+# through at exactly the 4h threshold (last write was 4h ago, watchdog
+# didn't fire). 2h ensures the watchdog at 01:30/05:30/09:30/13:30/21:30
+# UTC catches drift between scheduled mirrors. Cost: ~2 extra mirrors/day.
+MAX_UPDATE_AGE_HOURS = 2     # most recent partition must have been written < 2h ago
 
 
 def _check_all() -> list[dict]:

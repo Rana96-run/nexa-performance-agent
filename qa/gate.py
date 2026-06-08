@@ -149,7 +149,8 @@ class QAGate:
         results = self._run_attempt([
             (checks.check_freshness,              (), {}),
             (checks.check_multi_account_presence, (), {}),
-            (checks.check_bq_hubspot_reconcile,   (), {}),
+            (checks.check_bq_hubspot_reconcile,   (), {}),  # settled window
+            (checks.check_live_drift,             (), {}),  # current-week live drift
             (checks.check_deals_full_reconcile,   (), {}),  # counts + amounts
         ])
         blockers = [r for r in results if not r.passed and r.severity == "block"]
