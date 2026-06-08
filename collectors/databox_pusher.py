@@ -45,7 +45,7 @@ DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
 _BASE         = "https://api.databox.com"
 _DATASET_ID   = "739cde4e-3ba5-4ba9-98e8-701fa33111b7"   # "Qoyod Spend - All Grains"
 _BATCH        = 100     # Databox max per ingestion request
-_BATCH_DELAY  = 1.2     # seconds between batches
+_BATCH_DELAY  = 0.5     # seconds between batches (0.5s = ~120 req/min, well within Databox limits)
 _TIMEOUT      = 60      # seconds — SSL handshake + response
 
 # Databox WAF/quota limit is ~85 batches per session.
@@ -453,9 +453,9 @@ def run_push(days: int = 7, grains: list = None) -> int:
             try:
                 n = _push_grain_window(name, since, until)
                 total += n
-                print(f"[databox] {name}: {n:,} records pushed")
+                print(f"[databox] {name}: {n:,} records pushed", flush=True)
             except Exception as e:
-                print(f"[databox] {name} FAILED: {e}")
+                print(f"[databox] {name} FAILED: {e}", flush=True)
                 raise
     else:
         # Large backfill — chunk into _CHUNK_DAYS windows, newest-first
@@ -477,15 +477,16 @@ def run_push(days: int = 7, grains: list = None) -> int:
                     n_g  += n
                     total += n
                     print(f"[databox] {name} chunk {i+1}/{len(windows)}"
-                          f" ({w_since} to {w_until}): {n:,} records")
+                          f" ({w_since} to {w_until}): {n:,} records", flush=True)
                     if i + 1 < len(windows):
                         time.sleep(_CHUNK_SLEEP)
                 except Exception as e:
-                    print(f"[databox] {name} chunk {i+1} ({w_since}→{w_until}) FAILED: {e}")
+                    print(f"[databox] {name} chunk {i+1} ({w_since}→{w_until}) FAILED: {e}",
+                          flush=True)
                     raise
-            print(f"[databox] {name} total: {n_g:,} records")
+            print(f"[databox] {name} total: {n_g:,} records", flush=True)
 
-    print(f"[databox] grand total: {total:,} records")
+    print(f"[databox] grand total: {total:,} records", flush=True)
     return total
 
 
