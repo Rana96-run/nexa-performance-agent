@@ -344,6 +344,14 @@ IG insights:
 - `login_customer_id` is the MCC, not the child account.
 - PMax campaigns have **no ad groups**; they have **asset groups**. Requires
   a different query (`asset_group` resource).
+- **A PMax `asset_group` IS the adset grain — same level as an ad set / ad group.**
+  PMax has no ad-group level, so its asset group occupies the adset slot. In BQ they
+  are **merged into `adsets_daily` / `v_adset_performance`** (NOT a separate grain),
+  carry **`utm_audience`** (the adset-level UTM, like Meta ad set / Google ad group /
+  Snap ad squad / LinkedIn campaign / TikTok ad group), and are **excluded from the
+  ads grain** (`ads_daily`). So the 4 grains are campaign · **adset (incl. PMax asset
+  group)** · ad · keyword. Built by `_build_pmax_asset_group_rows_for_adsets()` in
+  `collectors/google_ads_bq.py`; merged 2026-06 (commit `eda263e`).
 - Cost in **micros** (`cost_micros / 1_000_000`).
 - **Keyword policy is centralised in `executors/keyword_policy.py`.** Don't
   duplicate ALWAYS_NEGATIVE / BRAND_ONLY / NEVER_NEGATIVE patterns into other
