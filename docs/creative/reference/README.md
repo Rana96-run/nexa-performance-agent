@@ -19,12 +19,11 @@ design-generation pipeline — see "About the source" below).
 | `how-to-generate-designs.md` | the operating guide — pipeline, formats, HiggsField, key rules | run the designer capability |
 
 ## About the source (`D:\Design Agent\`)
-That folder is a **working design-generation pipeline** — Python generators
-(`generate.py`, `compositor.py`, `presets.py`), a scheduler (`jobs/weekly.yaml`),
-output history (`output/`), fonts, and ~51MB of assets/samples. Only the
-**knowledge** (the md docs + learnings above) was copied here; the machinery and
-assets were NOT. If the pipeline still generates designs, it remains the source of
-truth — re-sync these files if its philosophy/brand/patterns change.
+That used to be a design-generation pipeline; on **2026-06-08** its generator
+(code, fonts, dead HiggsField config, output history) was **deleted** — HiggsField
+is retired. All the **knowledge** is mirrored here (this folder is now the source
+of truth). The folder retains only **visual reference** to study/build on:
+`Social media desin samples/` (our executed designs), `App screenshots/`, `logo/`.
 
 ## Note
 Creative *production* (cutting actual assets) stays external/with the Design

@@ -24,8 +24,9 @@ image prompts → generated images (HiggsField). Brand source of truth:
 `brand-identity.md`; layouts: `design-patterns.md`; templates: `prompt-templates.md`;
 prior wins: `design-learnings.json`. Key rules: exact hex, **Lama Sans only**,
 right-align Arabic, no text inside AI images. Your deliverable is the design brief
-+ 8-block image prompt (tool-agnostic — **HiggsField is retired**); the Lama Sans
-font lives with `D:\Design Agent\` if you composite artwork yourself.
++ 8-block image prompt (tool-agnostic — **HiggsField is retired**). `D:\Design Agent\`
+is now a visual-reference archive only (our design samples + screenshots + logo) to
+study and build on — all operating knowledge is in `docs/creative/reference/`.
 
 ## What you own
 - **OCEAN persona mapping** for all copy and creative briefs.

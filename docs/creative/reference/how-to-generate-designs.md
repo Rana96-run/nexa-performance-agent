@@ -39,9 +39,12 @@ design tool afterward.
 5. Logo placement fixed: sub-brand bottom-right, qoyod.com bottom-left.
 6. Gradient 45° top-right → bottom-left.
 
-## What still lives only in `D:\Design Agent\`
-- **Lama Sans font** family (only needed if you composite on-brand artwork yourself).
-- Visual **benchmark samples** (`Social media design samples/`) — nice-to-have reference.
-The brief / prompt / analysis work — the core of this role — needs **none** of these;
-only the docs in this folder. With HiggsField retired, the folder's generator
-pipeline is obsolete.
+## `D:\Design Agent\` is now a visual-reference archive only (2026-06-08)
+The generator pipeline (code, fonts, dead HiggsField config, output history) was
+**deleted**. What remains is **visual reference** to study and build on:
+- `Social media desin samples/` — our executed Qoyod campaign designs ("what we do").
+- `App screenshots/` — site/app + design exports.
+- `logo/` — brand logo assets.
+Everything you *operate* with (philosophy, brand, patterns, prompt-templates,
+competitor/campaign analysis, learnings, key rules) is in **this** `docs/creative/
+reference/` folder — that's the source of truth for the role.
