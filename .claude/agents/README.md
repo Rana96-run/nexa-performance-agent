@@ -36,6 +36,8 @@ Name the seat in plain language:
 - Manager `ai-orchestrator` gates every write and routes cross-dept work.
 
 ## The map
+- `../../docs/INDEX.md` — **MASTER INDEX**: the one front door to everything (shared + per-role)
+- `../../docs/playbooks/_shared.md` — the **shared playbook** (shared data + activities every role reads)
 - `../../CLAUDE.manager.md` — the **Manager OS**: how `ai-orchestrator` runs the team (loop, routing, gate, cadence)
 - `../../docs/_shared/how-to-use-the-team.md` — **start here:** how to talk to each agent + example asks
 - `../../docs/_shared/org-chart.md` · `handoff-protocol.md` · `communication-rules.md`

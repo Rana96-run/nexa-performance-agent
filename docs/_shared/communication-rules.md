@@ -10,6 +10,7 @@ Inventing values that aren't in your owned files is the #1 cause of hallucinatio
 
 ## 2. Read before you act
 Before any task, in this order:
+0. The shared playbook: `docs/playbooks/_shared.md` (shared data + activities)
 1. Your own playbook: `docs/playbooks/<dept>/<role>.md`
 2. Your own memory: `memory/agents/<dept>/<role>/`
 3. Relevant shared memory: `memory/CRITICAL_KPI_RULES.md` first, then the

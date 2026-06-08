@@ -3,6 +3,12 @@
 Each agent has one playbook. The agent file (`.claude/agents/<name>.md`) is
 identity + routing; the playbook is the operational procedure.
 
+> **Read first — shared playbook:** [`_shared.md`](_shared.md) (shared data +
+> activities + rules every role uses). Master index of everything: [`../INDEX.md`](../INDEX.md).
+
+## Shared (one for all)
+- [_shared.md](_shared.md) — shared data, activities, rules every role reads
+
 ## Manager
 - [ai-orchestrator](ai-orchestrator.md) — the 8-step daily loop, routing, the ✅ gate
 
