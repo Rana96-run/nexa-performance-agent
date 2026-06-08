@@ -42,6 +42,18 @@
             "statusMessage": "Scanning for KPI-rule violations..."
           }
         ]
+      },
+      {
+        "_comment": "Dashboard guard — catches role overlap + CSS alignment on every Write/Edit to reports/. Violations queued in memory/dashboard_violations.jsonl. Block-severity exits 2. Run dashboard-audit workflow to auto-fix.",
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \".claude\\hooks\\dashboard_guard.py\"",
+            "timeout": 10,
+            "statusMessage": "Dashboard guard: checking role overlap + CSS alignment..."
+          }
+        ]
       }
     ]
   },

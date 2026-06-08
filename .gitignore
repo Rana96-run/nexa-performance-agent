@@ -30,6 +30,7 @@ venv/
 !.claude/settings.example.json
 !.claude/skills/
 !.claude/agents/
+!.claude/workflows/
 *.swp
 .DS_Store
 Thumbs.db
