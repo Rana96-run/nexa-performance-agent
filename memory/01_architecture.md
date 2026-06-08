@@ -128,3 +128,9 @@ Nexa Performance Agent/
   - Activity: `Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`
 - **Railway** for hosting: single dyno runs both schedulers + Flask; env vars
   managed via Railway dashboard or `scripts/sync_railway_env.py`.
+- **Databox** for external BI dashboards: unified dataset `eff4621e-a0ef-4e93-bcf6-9c48f6e8d4ae`
+  pushed by `collectors/databox_pusher.py`. All 4 grains (campaign/adset/ad/keyword) in one
+  dataset with `grain` dimension. Fields: channel (utm_source), qoyod_source (HubSpot label),
+  utm_medium, utm_campaign, utm_audience, utm_content, utm_term, spend (NUMBER/SUM),
+  impressions, clicks, leads, sqls, cpl, cpql, qual_rate_pct, ctr_pct, quality_score.
+  Run backfill: `railway run python -c "from collectors.databox_pusher import run_push; run_push(days=365)"`

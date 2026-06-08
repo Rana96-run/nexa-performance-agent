@@ -103,6 +103,27 @@ Campaign IDs (customer 5753494964):
 - [x] **LinkedIn token re-minted** — verified active with `rw_organization_admin`,
   expires 2026-07-19. `clone_campaign_creatives()` now functional.
 
+## P2 — Databox unified dataset (DONE — 2026-06-08)
+
+- [x] **Dataset v3 created** with NUMBER schema at creation time (only way to get SUM/AVG
+  aggregation in Databox — type inference always gives STRING/COUNT).
+  Dataset ID: `eff4621e-a0ef-4e93-bcf6-9c48f6e8d4ae`
+  dataSourceId at creation: `4983171` (PAK-linked source)
+- [x] **UTM column naming** — channel=utm_source (BQ slug), qoyod_source=HubSpot label,
+  utm_medium=form/placement, grain dimension separates campaign/adset/ad/keyword levels.
+  Hierarchy: utm_campaign → utm_audience → utm_content (ads) / utm_term (keywords).
+- [x] **Snapchat adsquads included** in adset grain via `v_adset_performance`
+  (9,483 rows, 251 distinct adsquads confirmed in last 30 days).
+- [x] **365-day backfill complete** — all 4 grains:
+  - campaign: 38,184 records
+  - adset:    61,763 records
+  - ad:      194,394 records
+  - keyword:  24,628 records
+- [x] **Superseded datasets deleted** — v1 `739cde4e` (wrong names, all-string),
+  v2 `9ec1816a` (correct names, all-string). Only v3 active.
+- [x] **`collectors/databox_pusher.py`** — `run_push(days=N, grains=[...])` is the
+  entry point. PARTITION BY fix (hs. alias scope), flush=True on all prints.
+
 ## P3 — Nice-to-have
 
 - [ ] Weekly email digest via Gmail SMTP (creds set)
