@@ -156,7 +156,7 @@ those four parts is incomplete and should be rewritten.
 - **HubSpot is read-only** unless Amar explicitly approves in Slack.
   No PATCH / DELETE / POST to HubSpot without sign-off.
 - **Arabic copy is MSA.** Never colloquial. See `docs/PLAYBOOK.md` §4.
-- **Secrets live in Railway only.** Never hardcode. For local runs use `railway run python <script>` — Railway injects all vars. `.env` contains only `GOOGLE_APPLICATION_CREDENTIALS` (local cert path). `.env.example` is the key reference (committed to git, no values).
+- **Secrets live in Railway only.** Never hardcode. For local runs use `railway run python <script>` — Railway injects all vars. Local credential files live in **`secrets/`** (gitignored) — currently `secrets/bigquery-key.json`; `.env` holds only `GOOGLE_APPLICATION_CREDENTIALS` (the local path to it). `.env.example` is the key reference (committed to git, no values). (Consolidated from the old `certs/` into `secrets/` 2026-06-08, matching the reference layout.)
 - **Spend is always reported in USD.** `campaigns_daily.spend` stores USD regardless
   of channel. Never label spend figures as SAR. Platforms returning micros (Google Ads
   `cost_micros`, Snap `spend`) are divided by 1,000,000 to get USD before writing to BQ.

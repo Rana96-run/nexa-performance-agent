@@ -2,8 +2,8 @@
 .env
 .env.*
 !.env.example
-certs/
 secrets/
+certs/          # legacy — credentials consolidated into secrets/ 2026-06-08
 bigquery-key.json
 *.json.key
 *service-account*.json
