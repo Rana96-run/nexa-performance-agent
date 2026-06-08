@@ -1,11 +1,18 @@
 """
-Unified reporting views for Looker Studio.
+Unified reporting views — channel and campaign grain.
 
-Two master views power the dashboards:
-  - channel_roas_daily   (per date x channel: spend, leads, CPL, CPQL, deals, ROAS)
-  - channel_roas_monthly (same metrics rolled up to month)
+Materialized tables (rebuilt every 6h by materialize_heavy_views()):
+  - utm_paid_attribution_daily   (UTM-joined spend + leads, campaign grain)
+  - paid_channel_campaign_daily  (spend + leads + deals, campaign grain)
+  - channel_roas_daily           (spend + leads + deals + ROAS, channel grain — spine-anchored)
+  - paid_channel_daily           (same, channel grain via qoyod_source join — spine-anchored)
+  - v_adset_performance          (adset grain)
+  - v_ad_performance             (ad grain)
 
-Plus drill-down views per mapping doc.
+Lightweight views (ALL_VIEWS, refreshed by refresh_all_views()):
+  - v_channel_key_map            (channel slug → display name)
+  - v_agent_activity_dashboard   (agent activity heatmap for Hex)
+  - v_keyword_performance        (keyword grain, via _sub_campaign_views())
 """
 import os
 from dotenv import load_dotenv

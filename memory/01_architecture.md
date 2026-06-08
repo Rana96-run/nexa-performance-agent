@@ -92,7 +92,7 @@ Nexa Performance Agent/
 │   └── ad_drilldown.py           # ad/keyword drill-down Markdown tables
 ├── collectors/             # BQ collectors (one per data source)
 │   ├── bq_writer.py        # shared: MERGE helper + schemas
-│   ├── views.py            # creates paid_channel_daily, v_lp_*, etc
+│   ├── views.py            # creates v_channel_key_map, v_agent_activity_dashboard; materializes paid_channel_daily, channel_roas_daily, etc
 │   ├── google_ads_bq.py    # campaign + adgroup + ad + keywords grain
 │   ├── meta_bq.py          # campaign + adset + ad grain
 │   ├── snap_bq.py          # campaign + adset + ad grain
@@ -115,6 +115,51 @@ Nexa Performance Agent/
 ├── memory/                 # ← this folder
 └── .claude/skills/         # reusable skill recipes
 ```
+
+## BQ table inventory (canonical — update when tables are added/dropped)
+
+### Source tables (written by collectors)
+| Table | Collector | Key fields |
+|---|---|---|
+| `campaigns_daily` | google_ads_bq, meta_bq, snap_bq, tiktok_bq, linkedin_bq, microsoft_ads_bq | date, channel, campaign_id |
+| `adsets_daily` | same collectors | date, channel, campaign_id, adset_id |
+| `ads_daily` | same collectors | date, channel, campaign_id, ad_id |
+| `keywords_daily` | google_ads_bq, microsoft_ads_bq | date, channel, campaign_id, adgroup_id |
+| `pmax_asset_groups_daily` | google_ads_bq | date, channel, campaign_id |
+| `platform_campaign_snapshot` | platform_snapshot.py | channel, campaign_id |
+| `hubspot_leads_module_daily` | hubspot_leads_bq.py | date, qoyod_source, lead_utm_campaign |
+| `hubspot_leads_individual` | hubspot_leads_bq.py | hs_object_id |
+| `hubspot_deals_daily` | hubspot_deals_bq.py | date, pipeline, qoyod_source |
+| `organic_page_daily` | meta_organic_bq, youtube_bq | date, channel |
+| `gclid_attribution` | google_ads_bq | gclid |
+| `agent_activity_log` | activity_logger.py | role, status |
+| `connector_health_log` | connector_tracker.py | connector, check_type |
+| `asana_task_status` | asana_sync.py | task_id |
+| `qa_gate_events` | gate.py | surface, check_name |
+
+### Materialized tables (rebuilt every 6h by `materialize_heavy_views()`)
+| Table | Source views |
+|---|---|
+| `utm_paid_attribution_daily` | campaigns_daily + hubspot_leads_module_daily |
+| `paid_channel_campaign_daily` | campaigns_daily + hubspot_leads_module_daily + hubspot_deals_daily |
+| `channel_roas_daily` | campaigns_daily + hubspot_leads_module_daily + hubspot_deals_daily (spine-anchored) |
+| `paid_channel_daily` | campaigns_daily + hubspot_leads_module_daily + hubspot_deals_daily (spine-anchored) |
+| `v_adset_performance` | adsets_daily + utm_paid_attribution_daily + hubspot_leads_module_daily |
+| `v_ad_performance` | ads_daily + utm_paid_attribution_daily + hubspot_leads_module_daily |
+
+### Lightweight views (from `ALL_VIEWS` + `_sub_campaign_views()`)
+| View | Purpose |
+|---|---|
+| `v_channel_key_map` | Channel slug → display name mapping |
+| `v_agent_activity_dashboard` | Agent activity heatmap (Nexa-Agent-Activity Hex) |
+| `v_keyword_performance` | Keyword grain with QS, IS, leads |
+
+### Dropped tables (removed 2026-06-09 — do not recreate)
+hubspot_leads_daily, channel_roas_monthly, campaign_performance, campaign_performance_daily,
+campaign_performance_monthly, disqualification_matrix, pipeline_funnel, lead_funnel_by_pipeline,
+lead_utm_performance, v_lp_combined_weekly, v_lp_ga4_daily, v_lp_ga4_funnel_daily,
+v_lp_performance_weekly, v_lp_weekly_summary, v_session_lead_match, v_signup_funnel_weekly,
+v_website_funnel_daily
 
 ## Tech choices (and why)
 
