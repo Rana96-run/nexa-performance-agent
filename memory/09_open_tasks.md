@@ -26,13 +26,14 @@ Surfaced by `connector_health_log` + freshness check. Route via the police loop
 - [x] **`hubspot_deals` ~10-day stale → self-resolved.** VERIFY (2026-06-08) showed
       the collector caught up: MAX(date)=2026-06-08, continuous daily rows since
       2026-05-28. Was a transient incremental-window lag, now fresh. No action.
-- [ ] **🔴 CORRUPT DEAL AMOUNT (found during the deals verify, HUMAN fix needed):**
-      `2026-06-08` Bookkeeping / Google Ads / **3 open deals = $257,734,508,522 USD
-      (≈966B SAR)** — vs a normal 90-day daily *max* of $95k (≈2.7M× normal). A
-      fat-finger/corrupt deal amount inflating pipeline value. **HubSpot is read-only**
-      → a human must find the outlier deal (Bookkeeping pipeline, Google Ads source,
-      open stage, ~$257B/966B SAR) and correct its amount, then re-run
-      `collectors/hubspot_deals_bq.py`. Police now auto-catches this (amount_sanity check).
+- [ ] **🔴 PHONE NUMBER IN DEAL AMOUNT (HUMAN fix needed):** deal **`505631711439`**
+      ("نوادر الانعام - New Deal", Bookkeeping pipeline, owner **Nouran Emad**) has
+      `amount` = **966504406958 SAR** = the phone number **+966 50 440 6958** (966 = KSA
+      code) typed into the Amount field — inflating pipeline value to $257.7B.
+      Link: https://app.hubspot.com/contacts/144952270/record/0-3/505631711439
+      **HubSpot read-only → human sets Amount to the real SAR value**, then re-run
+      `collectors/hubspot_deals_bq.py`. Police now auto-detects this (amount_sanity +
+      `_looks_like_phone` on the native SAR value).
 
 ## P1 — Police expansion: watch the WHOLE system, not just inbound connectors
 

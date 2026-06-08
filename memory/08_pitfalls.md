@@ -937,7 +937,11 @@ cause was the tracker itself, not the connectors. If it cries wolf again, check:
   ~28–48h old and normal (collector lags up to 2d pre-08:00) → tighter = daily false WARNING.
 - **Idle ≠ broken:** a channel with no active campaigns / no spend (or `known_paused`)
   is HEALTHY-IDLE, not stale/BROKEN (LinkedIn). Suppressed in `run_connector_check`.
-- **No deal-amount check existed → a $257.7B (966B SAR) corrupt deal slipped through.**
-  Added `check_amount_sanity` (deals only): daily `amount_total` > 50× the 90d median →
-  BROKEN. Found a fat-finger Bookkeeping deal 2026-06-08 (2.7M× normal). The police now
-  watches deal amounts, not just spend. Source deal fix is HUMAN-gated (HubSpot read-only).
+- **A "corrupt" deal amount was actually a PHONE NUMBER typed into the Amount field
+  (human error, not data corruption).** Deal 505631711439 had `amount` = 966504406958 SAR
+  — i.e. `+966 50 440 6958` (966 = KSA country code). Owner entered the contact's phone
+  into Amount. `check_amount_sanity` (deals): daily `amount_total` > 50× 90d median → BROKEN,
+  AND `_looks_like_phone(native_SAR)` recognises the signature (starts 966 + 12 digits, or
+  05XXXXXXXX, or 5XXXXXXXX) → diagnoses "phone number in Amount field" explicitly. Test the
+  **native (SAR)** value, not USD — the USD conversion (÷3.75) destroys the 966 prefix.
+  Source-deal fix is HUMAN-gated (HubSpot read-only). The police watches deal amounts now.
