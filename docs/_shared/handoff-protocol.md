@@ -42,7 +42,9 @@ cro-specialist ──► ui-ux-designer ──► developer ──► (back to) 
                                           verify in Events Mgr)
 ```
 This is the only **direct, sequential handoff chain** in the org. Each link waits
-for the previous one's output.
+for the previous one's output. The artifact travels through the shared workspace
+`docs/landing-pages/` with **one filename per test**: `briefs/` (cro-specialist)
+→ `designs/` (ui-ux-designer) → `specs/` (developer) → result back to cro-specialist.
 
 ### Dept 3 — Support (parallel, no internal handoff)
 ```

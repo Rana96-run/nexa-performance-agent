@@ -1,6 +1,7 @@
 # Playbook — UI/UX Designer
 
 **Seat:** CRO / Landing Page. **Agent:** `ui-ux-designer`. Receives from `cro-specialist`, hands to `developer`.
+**Workspace:** read `docs/landing-pages/briefs/`, write `docs/landing-pages/designs/` (same filename).
 
 ## Purpose
 Turn the CRO brief into a buildable, persona-aligned LP design.

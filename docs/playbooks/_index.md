@@ -15,6 +15,7 @@ identity + routing; the playbook is the operational procedure.
 - [cro-specialist](cro/cro-specialist.md) — brief, hypothesis, test-result decision
 - [ui-ux-designer](cro/ui-ux-designer.md) — LP design, annotated handoff
 - [developer](cro/developer.md) — build, UTM, pixels, deploy, verify
+- **Workspace:** [../landing-pages/README.md](../landing-pages/README.md) — briefs/ → designs/ → specs/ + templates
 
 ## Dept 3 — Support (parallel, no internal handoff)
 - [marketing-ops](support/marketing-ops.md) — UTM/pixel/secrets policy

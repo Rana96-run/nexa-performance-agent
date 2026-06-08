@@ -21,6 +21,11 @@ clean, annotated spec to the Developer.
 - **ZATCA compliance badge above the fold — mandatory.**
 - **Annotated design with interaction notes for the Developer handoff.**
 
+## Workspace (the landing-page folders)
+Read the brief in `docs/landing-pages/briefs/`; write your annotated design to
+`docs/landing-pages/designs/` using the **same filename**. See
+`docs/landing-pages/README.md`.
+
 ## Position in the chain
 You are a **shared resource from product**, coordinated by `cro-specialist`.
 Receive the brief from `cro-specialist`; hand the annotated design to `developer`.

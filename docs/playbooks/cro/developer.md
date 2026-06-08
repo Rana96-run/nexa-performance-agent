@@ -1,6 +1,7 @@
 # Playbook — Developer
 
 **Seat:** CRO / Landing Page. **Agent:** `developer`. Receives from `ui-ux-designer`, returns to `cro-specialist`.
+**Workspace:** read `docs/landing-pages/designs/`, write `docs/landing-pages/specs/` + fill the ZATCA/pixel/UTM checklist.
 
 ## Purpose
 Build the variant, instrument it correctly, ship it, and verify before sign-off.

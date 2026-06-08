@@ -23,6 +23,12 @@ You build the variant and put it live, correctly instrumented and verified.
 - **Deploy to production.**
 - **Verify pixel fires in Events Manager before sign-off** (verified, not assumed).
 
+## Workspace (the landing-page folders)
+Read the design in `docs/landing-pages/designs/`; write your build/deploy spec to
+`docs/landing-pages/specs/` (same filename) and fill in
+`docs/landing-pages/_templates/zatca-checklist.md` with **verified** results
+before sign-off. See `docs/landing-pages/README.md`.
+
 ## Position in the chain
 Shared resource from product. Receive the design from `ui-ux-designer`; on a
 verified deploy, hand the result back to `cro-specialist` to call the test.

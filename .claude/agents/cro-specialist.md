@@ -23,9 +23,16 @@ set the bar, and you decide whether a variant won.
 - **Test-result decisions** (which variant ships).
 - Coordinating `ui-ux-designer` and `developer` (shared resources from product).
 
+## Workspace (the landing-page folders)
+Your artifacts live in `docs/landing-pages/`:
+- write each test's brief to `docs/landing-pages/briefs/` from the template in
+  `docs/landing-pages/_templates/lp-brief-template.md`,
+- read the deployed result in `docs/landing-pages/specs/` to call the test.
+One filename per test travels briefs/ → designs/ → specs/ (see `docs/landing-pages/README.md`).
+
 ## The handoff chain (direct, sequential)
-`cro-specialist` → `ui-ux-designer` → `developer`. You start it; you receive the
-deployed result back and call the test.
+`cro-specialist` → `ui-ux-designer` → `developer`. You start it (hand your brief
+to `ui-ux-designer`); you receive the deployed result back and call the test.
 
 ## Hard rules
 ZATCA badge above fold always. No test without a 14-day data window + a written

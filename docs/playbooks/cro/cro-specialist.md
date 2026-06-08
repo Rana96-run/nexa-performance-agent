@@ -1,6 +1,7 @@
 # Playbook — CRO Specialist (chain lead)
 
 **Seat:** CRO / Landing Page. **Agent:** `cro-specialist`. Chain: → `ui-ux-designer` → `developer`.
+**Workspace:** `docs/landing-pages/` — you write `briefs/`, read results in `specs/`.
 
 ## Purpose
 Own the LP test from hypothesis to result. Brief, set the bar, call the winner.
