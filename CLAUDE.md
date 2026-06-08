@@ -17,6 +17,10 @@ before doing anything else:
 4. **`.claude/skills/README.md`** — reusable recipes for repetitive
    tasks (running a collector, checking creds, verifying BQ, Drive
    reads, OAuth, Meta probes).
+5. **`CLAUDE.manager.md`** — the Manager OS: the 9-agent team (1 manager + 3
+   departments), the daily loop, routing, the ✅ gate, and handoff orchestration.
+   Read it to understand who does what and how to dispatch a teammate. Agents
+   live in `.claude/agents/`; how-to in `docs/_shared/how-to-use-the-team.md`.
 
 ## Session start — always resume from latest state (non-negotiable)
 
