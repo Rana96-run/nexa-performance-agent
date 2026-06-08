@@ -150,64 +150,174 @@ def _row(base: dict, **extra) -> dict:
 
 # ── Per-grain BQ queries ──────────────────────────────────────────────────────
 
+# utm_medium values to EXCLUDE from the dominant-medium pick.
+# These are generic channel-type labels, not meaningful form/placement names.
+_MEDIUM_JUNK = (
+    "ppc", "cpc", "paidsocial", "paid_social", "paid", "social",
+    "none", "organic", "email", "-", ".", "__placement__",
+    "unknown", "offline", "referral", "internal", "test_medium",
+    "sms", "whatsapp", "twitter", "comment", "others",
+)
+
+def _medium_cte(since: str, until: str, proj: str, ds: str,
+                join_cols: list, hs_cols: list) -> str:
+    """Return a BQ CTE that picks the dominant (non-generic) utm_medium from
+    hubspot_leads_module_daily for the given join keys.
+
+    join_cols: column names in the outer query to join ON (e.g. ['channel','utm_campaign'])
+    hs_cols:   matching column names in hubspot_leads_module_daily
+               (e.g. ['hs_channel','lead_utm_campaign'])
+    The CTE is named `medium_cte`.
+    """
+    junk_list = ", ".join(f"'{v}'" for v in _MEDIUM_JUNK)
+    # group_cols: prefixed with 'hs.' for the inner medium_raw SELECT
+    # partition_cols: bare column names for PARTITION BY (no table alias in that scope)
+    group_cols     = ", ".join(f"hs.{c}" for c in hs_cols)
+    partition_cols = ", ".join(hs_cols)
+    return f"""
+    medium_raw AS (
+      -- Dominant non-generic utm_medium per join key from HubSpot
+      SELECT
+        hs.date,
+        CASE hs.qoyod_source
+          WHEN 'Google Ads'    THEN 'google_ads'
+          WHEN 'Meta Ads'      THEN 'meta'
+          WHEN 'Snapchat Ads'  THEN 'snapchat'
+          WHEN 'Tiktok Ads'    THEN 'tiktok'
+          WHEN 'Microsoft Ads' THEN 'microsoft_ads'
+          WHEN 'LinkedIn Ads'  THEN 'linkedin'
+          ELSE LOWER(REPLACE(hs.qoyod_source, ' ', '_'))
+        END AS hs_channel,
+        {group_cols},
+        hs.lead_utm_medium,
+        SUM(hs.leads_total) AS med_leads
+      FROM `{proj}.{ds}.hubspot_leads_module_daily` hs
+      WHERE hs.date >= '{since}' AND hs.date < '{until}'
+        AND hs.lead_utm_medium IS NOT NULL
+        AND LOWER(TRIM(hs.lead_utm_medium)) NOT IN ({junk_list})
+      GROUP BY 1, 2, {", ".join(str(i+3) for i in range(len(hs_cols)))}, {len(hs_cols)+3}
+    ),
+    medium_cte AS (
+      -- Pick the medium with the most leads per join key
+      SELECT * EXCEPT(med_leads, row_n)
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY date, hs_channel, {partition_cols}
+          ORDER BY med_leads DESC
+        ) AS row_n
+        FROM medium_raw
+      )
+      WHERE row_n = 1
+    )"""
+
+
 def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
-    """Return BQ SQL for one grain over [since, until)."""
+    """Return BQ SQL for one grain over [since, until), with utm_medium attached."""
     if grain == "campaign":
+        med = _medium_cte(since, until, proj, ds,
+                          join_cols=["campaign_name"],
+                          hs_cols=["lead_utm_campaign"])
         return f"""
-            SELECT date, channel,
-                   CAST(campaign_id AS STRING) AS campaign_id,
-                   campaign_name,
-                   spend, impressions, clicks,
-                   cpl, cpql, qual_rate_pct, ctr_pct
-            FROM `{proj}.{ds}.paid_channel_campaign_daily`
-            WHERE date >= '{since}' AND date < '{until}'
-            ORDER BY date, channel, campaign_id
+            WITH {med},
+            camp AS (
+              SELECT date, channel,
+                     CAST(campaign_id AS STRING) AS campaign_id,
+                     campaign_name,
+                     spend, impressions, clicks,
+                     cpl, cpql, qual_rate_pct, ctr_pct
+              FROM `{proj}.{ds}.paid_channel_campaign_daily`
+              WHERE date >= '{since}' AND date < '{until}'
+            )
+            SELECT c.*, m.lead_utm_medium AS utm_medium
+            FROM camp c
+            LEFT JOIN medium_cte m
+              ON c.date = m.date AND c.channel = m.hs_channel
+              AND LOWER(TRIM(c.campaign_name)) = LOWER(TRIM(m.lead_utm_campaign))
+            ORDER BY c.date, c.channel, c.campaign_id
         """
     if grain == "adset":
+        med = _medium_cte(since, until, proj, ds,
+                          join_cols=["utm_campaign", "utm_audience"],
+                          hs_cols=["lead_utm_campaign", "lead_utm_audience"])
         return f"""
-            SELECT date, channel,
-                   CAST(campaign_id AS STRING) AS campaign_id,
-                   utm_campaign  AS campaign_name,
-                   CAST(adset_id AS STRING)   AS adset_id,
-                   utm_audience  AS adset_name,
-                   spend, impressions, clicks,
-                   CPL AS cpl, CPQL AS cpql,
-                   ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-            FROM `{proj}.{ds}.v_adset_performance`
-            WHERE date >= '{since}' AND date < '{until}'
-            ORDER BY date, channel, campaign_id, adset_id
+            WITH {med},
+            adset AS (
+              SELECT date, channel,
+                     CAST(campaign_id AS STRING) AS campaign_id,
+                     utm_campaign  AS campaign_name,
+                     CAST(adset_id AS STRING)   AS adset_id,
+                     utm_audience  AS adset_name,
+                     spend, impressions, clicks,
+                     CPL AS cpl, CPQL AS cpql,
+                     ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
+              FROM `{proj}.{ds}.v_adset_performance`
+              WHERE date >= '{since}' AND date < '{until}'
+            )
+            SELECT a.*, m.lead_utm_medium AS utm_medium
+            FROM adset a
+            LEFT JOIN medium_cte m
+              ON a.date = m.date AND a.channel = m.hs_channel
+              AND LOWER(TRIM(a.campaign_name)) = LOWER(TRIM(m.lead_utm_campaign))
+              AND LOWER(TRIM(a.adset_name))    = LOWER(TRIM(m.lead_utm_audience))
+            ORDER BY a.date, a.channel, a.campaign_id, a.adset_id
         """
     if grain == "ad":
+        med = _medium_cte(since, until, proj, ds,
+                          join_cols=["utm_campaign", "utm_audience"],
+                          hs_cols=["lead_utm_campaign", "lead_utm_audience"])
         return f"""
-            SELECT date, channel,
-                   CAST(campaign_id AS STRING) AS campaign_id,
-                   utm_campaign  AS campaign_name,
-                   CAST(adset_id AS STRING)   AS adset_id,
-                   utm_audience  AS adset_name,
-                   CAST(ad_id AS STRING)      AS ad_id,
-                   utm_content   AS ad_name,
-                   creative_type,
-                   spend, impressions, clicks,
-                   CPL AS cpl, CPQL AS cpql,
-                   ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-            FROM `{proj}.{ds}.v_ad_performance`
-            WHERE date >= '{since}' AND date < '{until}'
-            ORDER BY date, channel, campaign_id, ad_id
+            WITH {med},
+            ad AS (
+              SELECT date, channel,
+                     CAST(campaign_id AS STRING) AS campaign_id,
+                     utm_campaign  AS campaign_name,
+                     CAST(adset_id AS STRING)   AS adset_id,
+                     utm_audience  AS adset_name,
+                     CAST(ad_id AS STRING)      AS ad_id,
+                     utm_content   AS ad_name,
+                     creative_type,
+                     spend, impressions, clicks,
+                     CPL AS cpl, CPQL AS cpql,
+                     ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
+              FROM `{proj}.{ds}.v_ad_performance`
+              WHERE date >= '{since}' AND date < '{until}'
+            )
+            SELECT a.*, m.lead_utm_medium AS utm_medium
+            FROM ad a
+            LEFT JOIN medium_cte m
+              ON a.date = m.date AND a.channel = m.hs_channel
+              AND LOWER(TRIM(a.campaign_name)) = LOWER(TRIM(m.lead_utm_campaign))
+              AND LOWER(TRIM(a.adset_name))    = LOWER(TRIM(m.lead_utm_audience))
+            ORDER BY a.date, a.channel, a.campaign_id, a.ad_id
         """
     if grain == "keyword":
+        # Keywords: utm_medium is mostly 'ppc' for search — still expose it
+        # but join at campaign+adgroup level (no finer join available)
+        med = _medium_cte(since, until, proj, ds,
+                          join_cols=["utm_campaign", "utm_audience"],
+                          hs_cols=["lead_utm_campaign", "lead_utm_audience"])
         return f"""
-            SELECT date, channel,
-                   utm_campaign AS campaign_name,
-                   utm_audience AS adset_name,
-                   utm_term     AS keyword,
-                   match_type,
-                   quality_score,
-                   spend, impressions, clicks,
-                   ROUND(ctr*100,4) AS ctr_pct,
-                   CPL AS cpl, CPQL AS cpql
-            FROM `{proj}.{ds}.v_keyword_performance`
-            WHERE date >= '{since}' AND date < '{until}'
-            ORDER BY date, channel, utm_campaign, utm_term
+            WITH {med},
+            kw AS (
+              SELECT date, channel,
+                     utm_campaign AS campaign_name,
+                     utm_audience AS adset_name,
+                     utm_term     AS keyword,
+                     match_type,
+                     quality_score,
+                     spend, impressions, clicks,
+                     ROUND(ctr*100,4) AS ctr_pct,
+                     CPL AS cpl, CPQL AS cpql
+              FROM `{proj}.{ds}.v_keyword_performance`
+              WHERE date >= '{since}' AND date < '{until}'
+            )
+            SELECT k.*, m.lead_utm_medium AS utm_medium
+            FROM kw k
+            LEFT JOIN medium_cte m
+              ON k.date = m.date AND k.channel = m.hs_channel
+              AND LOWER(TRIM(k.campaign_name)) = LOWER(TRIM(m.lead_utm_campaign))
+              AND LOWER(TRIM(k.adset_name))    = LOWER(TRIM(m.lead_utm_audience))
+            ORDER BY k.date, k.channel, k.campaign_name, k.keyword
         """
     raise ValueError(f"Unknown grain: {grain}  (valid: {ALL_GRAINS})")
 
@@ -223,11 +333,13 @@ def _build_records(grain: str, rows) -> list:
     """
     records = []
     for r in rows:
+        utm_medium = getattr(r, "utm_medium", None) or None
         base = {
-            "date":    str(r.date),
-            "channel": r.channel,
-            "source":  _channel_to_source(r.channel),   # HubSpot-compatible label
-            "grain":   grain,
+            "date":        str(r.date),
+            "channel":     r.channel,                    # utm_source equivalent (BQ slug)
+            "qoyod_source": _channel_to_source(r.channel),  # HubSpot qoyod_source label
+            "utm_medium":  utm_medium,                   # form name / placement (if set)
+            "grain":       grain,
         }
 
         if grain == "campaign":
