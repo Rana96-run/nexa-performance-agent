@@ -205,175 +205,6 @@ LEFT JOIN deals d ON d.date = spine.date AND d.channel = spine.channel
 """
 
 
-CHANNEL_ROAS_MONTHLY_SQL = f"""
-CREATE OR REPLACE VIEW `{P}.{D}.channel_roas_monthly` AS
-SELECT
-  DATE_TRUNC(date, MONTH) AS month,
-  channel,
-  SUM(spend)          AS spend,
-  SUM(impressions)    AS impressions,
-  SUM(clicks)         AS clicks,
-  SAFE_DIVIDE(SUM(clicks), SUM(impressions)) * 100 AS ctr,
-  SUM(platform_leads) AS platform_leads,
-  SUM(hs_leads)       AS hs_leads,
-  SUM(hs_qualified)   AS hs_qualified,
-  SUM(hs_disqualified) AS hs_disqualified,
-  SUM(hs_open)        AS hs_open,
-  SUM(deals_total)         AS deals_total,
-  SUM(deals_won)           AS deals_won,
-  SUM(deals_lost)          AS deals_lost,
-  SUM(deals_open)          AS deals_open,
-  SUM(revenue_won)         AS revenue_won,
-  SUM(amount_lost)         AS amount_lost,
-  SUM(pipeline_open)       AS pipeline_open,
-  SUM(amount_total)        AS amount_total,
-  SUM(new_biz_deals_won)   AS new_biz_deals_won,
-  SUM(new_biz_revenue_won) AS new_biz_revenue_won,
-  SAFE_DIVIDE(SUM(spend), SUM(hs_leads))       AS cpl,
-  SAFE_DIVIDE(SUM(spend), SUM(hs_qualified))   AS cpql,
-  SAFE_DIVIDE(SUM(hs_qualified),   SUM(hs_qualified) + SUM(hs_disqualified)) * 100 AS qual_rate_pct,
-  SAFE_DIVIDE(SUM(hs_disqualified), SUM(hs_qualified) + SUM(hs_disqualified)) * 100 AS disq_rate_pct,
-  SAFE_DIVIDE(SUM(revenue_won),         SUM(spend)) AS roas,
-  SAFE_DIVIDE(SUM(new_biz_revenue_won), SUM(spend)) AS new_biz_roas,
-  SAFE_DIVIDE(SUM(deals_won), SUM(hs_leads)) * 100  AS lead_to_deal_pct
-FROM `{P}.{D}.channel_roas_daily`
-GROUP BY 1,2
-"""
-
-
-CAMPAIGN_PERFORMANCE_DAILY_SQL = f"""
-CREATE OR REPLACE VIEW `{P}.{D}.campaign_performance_daily` AS
-SELECT
-  c.date,
-  c.channel,
-  c.account_id,
-  c.campaign_id,
-  c.campaign_name,
-  c.status,
-  c.objective,
-  c.spend,
-  c.impressions,
-  c.clicks,
-  c.ctr,
-  c.leads       AS platform_leads,
-  c.conversions AS platform_conversions,
-  c.cpl         AS platform_cpl,
-  -- Seasonal / format tags for filtering in Looker
-  CASE
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'ramadan|eid|ramdan') THEN 'Ramadan/Eid'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'zatka|zakat|vat|tax') THEN 'ZATCA/Tax'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'sale|offer|discount') THEN 'Promo'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'brand|awareness') THEN 'Brand'
-    ELSE 'Always-on'
-  END AS seasonal_tag,
-  CASE
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'pmax|performance ?max') THEN 'PMax'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'search') THEN 'Search'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'display') THEN 'Display'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'video|youtube') THEN 'Video'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'reel|story|stories') THEN 'Reels/Stories'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'feed') THEN 'Feed'
-    ELSE 'Other'
-  END AS format_tag,
-  -- Creative type dimension (UGC / TGC / Video / Image)
-  CASE
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'\bugc\b') THEN 'UGC'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'\btgc\b') THEN 'TGC'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'video|reel|youtube') THEN 'Video'
-    WHEN REGEXP_CONTAINS(LOWER(c.campaign_name), r'image|static|photo|banner') THEN 'Image'
-    ELSE 'Other'
-  END AS creative_type
-FROM `{P}.{D}.campaigns_daily` c
-"""
-
-
-CAMPAIGN_PERFORMANCE_MONTHLY_SQL = f"""
-CREATE OR REPLACE VIEW `{P}.{D}.campaign_performance_monthly` AS
-SELECT
-  DATE_TRUNC(date, MONTH) AS month,
-  channel,
-  account_id,
-  campaign_id,
-  ANY_VALUE(campaign_name) AS campaign_name,
-  ANY_VALUE(status)        AS status,
-  ANY_VALUE(objective)     AS objective,
-  ANY_VALUE(seasonal_tag)    AS seasonal_tag,
-  ANY_VALUE(format_tag)      AS format_tag,
-  ANY_VALUE(creative_type)   AS creative_type,
-  SUM(spend)               AS spend,
-  SUM(impressions)         AS impressions,
-  SUM(clicks)              AS clicks,
-  SAFE_DIVIDE(SUM(clicks), SUM(impressions)) * 100 AS ctr,
-  SUM(platform_leads)      AS platform_leads,
-  SAFE_DIVIDE(SUM(spend), SUM(platform_leads)) AS platform_cpl
-FROM `{P}.{D}.campaign_performance_daily`
-GROUP BY 1,2,3,4
-"""
-
-
-DISQUAL_MATRIX_SQL = f"""
-CREATE OR REPLACE VIEW `{P}.{D}.disqualification_matrix` AS
--- Cross-tab of disqualification reasons matching the PDF matrix layout:
--- rows = main reason, columns drillable by pipeline / channel / month
-SELECT
-  DATE_TRUNC(date, MONTH)   AS month,
-  date,
-  qoyod_source,
-  pipeline,
-  top_disq_reason           AS disqual_reason,
-  -- Map verbose reasons to cleaner labels for the report
-  CASE top_disq_reason
-    WHEN 'No lead response'             THEN 'No Lead Response'
-    WHEN 'After 8+ sales attempts'      THEN 'After 8+ Attempts'
-    WHEN 'Number failed'                THEN 'Number Failed'
-    WHEN 'Not a Buyer'                  THEN 'Not a Buyer'
-    WHEN 'No Registered business'       THEN 'No Registered Business'
-    WHEN 'Browsing/Testing'             THEN 'Browsing / Testing'
-    WHEN 'Training'                     THEN 'Training'
-    WHEN 'Existing customer'            THEN 'Existing Customer'
-    WHEN 'Urdu speaker'                 THEN 'Urdu Speaker'
-    WHEN 'Student'                      THEN 'Student'
-    WHEN 'Lead denies'                  THEN 'Lead Denies'
-    WHEN 'Out of region'                THEN 'Out of Region'
-    ELSE COALESCE(top_disq_reason, 'Other')
-  END AS disqual_reason_label,
-  SUM(leads_disqualified) AS disqualified_count
-FROM `{P}.{D}.hubspot_leads_module_daily`
-WHERE leads_disqualified > 0
-GROUP BY 1,2,3,4,5,6
-"""
-
-
-PIPELINE_FUNNEL_SQL = f"""
-CREATE OR REPLACE VIEW `{P}.{D}.pipeline_funnel` AS
--- Funnel by month x channel x pipeline.
--- Stages: Total -> Qualified -> Disqualified -> Open
--- Matches the PDF funnel chart + disqualification cross-tab
-SELECT
-  DATE_TRUNC(date, MONTH)  AS month,
-  date,
-  qoyod_source,
-  pipeline,
-  -- Friendly pipeline label for Looker display
-  CASE
-    WHEN LOWER(pipeline) LIKE '%book%'    THEN 'Bookkeeping Pipeline'
-    WHEN LOWER(pipeline) LIKE '%lead%'    THEN 'Lead Pipeline'
-    WHEN LOWER(pipeline) LIKE '%account%' THEN 'Lead Pipeline'
-    ELSE COALESCE(pipeline, 'Lead Pipeline')
-  END AS pipeline_label,
-  stage,
-  SUM(leads_total)        AS leads_total,
-  SUM(leads_qualified)    AS leads_qualified,
-  SUM(leads_disqualified) AS leads_disqualified,
-  SUM(leads_open)         AS leads_open,
-  -- Conversion rates
-  ROUND(SAFE_DIVIDE(SUM(leads_qualified), SUM(leads_total)) * 100, 1) AS qual_rate_pct,
-  ROUND(SAFE_DIVIDE(SUM(leads_disqualified), SUM(leads_total)) * 100, 1) AS disqual_rate_pct
-FROM `{P}.{D}.hubspot_leads_module_daily`
-GROUP BY 1,2,3,4,5,6
-"""
-
-
 # ─── Unified paid-channel view (single source of truth for the dashboard) ────
 # Joins ad-platform spend with HubSpot leads + deals, computing CPL/CPQL/ROAS
 # in SQL.  All reporting MUST use this view — no Python-side spend/leads math.
@@ -744,14 +575,8 @@ GROUP BY day, category, channel
 
 ALL_VIEWS = [
     ("v_channel_key_map",            CHANNEL_MAP_SQL),
-    ("campaign_performance_daily",   CAMPAIGN_PERFORMANCE_DAILY_SQL),
-    ("campaign_performance_monthly", CAMPAIGN_PERFORMANCE_MONTHLY_SQL),
-    # channel_roas_daily is a MATERIALIZED TABLE — handled by materialize_heavy_views()
-    # channel_roas_monthly reads from that table so it must stay here as a VIEW
-    ("channel_roas_monthly",         CHANNEL_ROAS_MONTHLY_SQL),
-    ("disqualification_matrix",      DISQUAL_MATRIX_SQL),
-    ("pipeline_funnel",              PIPELINE_FUNNEL_SQL),
-    # paid_channel_campaign_daily + paid_channel_daily are MATERIALIZED TABLES
+    # paid_channel_campaign_daily + paid_channel_daily + channel_roas_daily
+    # are MATERIALIZED TABLES — handled by materialize_heavy_views()
     # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
     ("v_agent_activity_dashboard",   AGENT_ACTIVITY_DASHBOARD_SQL),
 ]
@@ -768,29 +593,9 @@ def _sub_campaign_views():
     # Only lightweight grain views that don't need instant-read speed live here.
     from collectors.bq_writer import (
         V_KEYWORD_PERFORMANCE_SQL,
-        V_LP_PERFORMANCE_WEEKLY_SQL,
-        V_LP_WEEKLY_SUMMARY_SQL,
-        V_SIGNUP_FUNNEL_WEEKLY_SQL,
-        V_LP_GA4_DAILY_SQL,
-        V_LP_GA4_FUNNEL_DAILY_SQL,
-        V_LP_COMBINED_WEEKLY_SQL,
-        V_WEBSITE_FUNNEL_DAILY_SQL,
-        V_SESSION_LEAD_MATCH_SQL,
     )
     return [
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
-        # LP views — dependency order matters: weekly before summary
-        ("v_lp_performance_weekly", V_LP_PERFORMANCE_WEEKLY_SQL),
-        ("v_lp_weekly_summary",     V_LP_WEEKLY_SUMMARY_SQL),
-        ("v_signup_funnel_weekly",  V_SIGNUP_FUNNEL_WEEKLY_SQL),
-        # GA4 base views
-        ("v_lp_ga4_daily",          V_LP_GA4_DAILY_SQL),
-        ("v_lp_ga4_funnel_daily",   V_LP_GA4_FUNNEL_DAILY_SQL),
-        # Combined views
-        ("v_lp_combined_weekly",    V_LP_COMBINED_WEEKLY_SQL),
-        ("v_website_funnel_daily",  V_WEBSITE_FUNNEL_DAILY_SQL),
-        # Exact session-to-lead match via ga4_client_id
-        ("v_session_lead_match",    V_SESSION_LEAD_MATCH_SQL),
     ]
 
 
