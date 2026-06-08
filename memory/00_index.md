@@ -34,8 +34,9 @@ single concern. Read only what you need.
 
 ## The team (agents) — NEW
 
-The marketing org is now **15 separate Claude Code subagents** across 3
-departments, each with its own playbook and memory. Start here:
+The team is **9 Claude Code subagents** (1 manager + 3 departments), matching the
+live "NEXA OPERATIONS HQ — The Team" dashboard. (NOT the 13 `agent_activity_log`
+role labels — those are how work is *logged*, not who the team *is*.) Start here:
 
 | Where | What |
 |---|---|

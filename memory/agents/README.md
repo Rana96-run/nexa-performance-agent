@@ -1,40 +1,24 @@
 # Per-Agent Memory
 
-Each agent has its own folder here: `memory/agents/<department>/<role>/`. This is
-**that agent's private memory** — the feedback it has received, the patterns it
-has learned, and its own critical reminders. An agent reads its own folder on
-boot and writes to it whenever it learns something durable.
+Each of the 9 agents has its own folder: `memory/agents/<dept>/<role>/` (the
+manager sits at `memory/agents/ai-orchestrator/`). This is that agent's private
+memory — feedback received, patterns learned, critical reminders. An agent reads
+its own folder on boot and writes to it when it learns something durable.
 
-## Why separate from `memory/*.md`
-The flat `memory/NN_*.md` files (architecture, bigquery, pitfalls, learning
-patterns, CRITICAL_KPI_RULES …) are **shared org memory** — cross-cutting facts
-every agent may need, and several are referenced by exact path in `CLAUDE.md`
-and the production runtime. Those stay where they are. Per-agent memory layers
-on top: role-specific, small, and owned by one seat.
+`growth-analyst` additionally owns the **shared** `memory/` (writes
+`08_pitfalls.md`, updates `14_learning_patterns.md`). The flat `memory/NN_*.md`
+files are shared org memory and several are referenced by exact path in
+`CLAUDE.md` + the runtime, so they don't move.
 
-## File convention (same as the root memory system)
-One fact per file, kebab-case name, with frontmatter:
-
+## File convention
+One fact per file, kebab-case, with frontmatter:
 ```markdown
 ---
-name: <short-slug>
-description: <one-line summary — used to decide relevance on recall>
+name: <slug>
+description: <one-line summary for recall>
 metadata:
   type: feedback | learning | critical | reference
 ---
-
-<the fact. For feedback/learning add **Why:** and **How to apply:** lines.
-Link related memories with [[their-name]].>
+<the fact. feedback/learning add **Why:** and **How to apply:**. Link [[other-slug]].>
 ```
-
 Each folder has a `MEMORY.md` index — one line per fact, newest on top.
-
-## Types
-- **feedback** — guidance a manager gave this role (with the why).
-- **learning** — a pattern the role discovered (what worked / failed).
-- **critical** — a must-never-violate reminder specific to this role.
-- **reference** — a pointer (a script, a dashboard, a BQ view) the role reuses.
-
-## Routing rule
-- Role-specific → here. Cross-cutting trap → `memory/08_pitfalls.md`.
-- Action outcome → `memory/14_learning_patterns.md`. Must-never → `memory/CRITICAL_KPI_RULES.md`.

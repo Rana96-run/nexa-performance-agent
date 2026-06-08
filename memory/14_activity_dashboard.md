@@ -24,6 +24,30 @@ Schema:
 
 Riyadh timezone: DATETIME(ts, 'Asia/Riyadh')
 
+## ⚠️ Log-roles ≠ team agents (corrected 2026-06-08)
+`agent_activity_log.role` is a **logging taxonomy**, not the team roster. The team
+is **9 agents** (see `docs/_shared/org-chart.md` / `11_agent_roles.md`). A live
+`SELECT DISTINCT role` on 2026-06-08 returned **13** values — this file previously
+documented only 7, which caused a wrong agent rebuild. The full live set:
+
+| role | rows (all-time, 2026-06-08) | kind |
+|---|---|---|
+| `health_monitor` | 10790 | infra (heartbeat) |
+| `bq_refresh` | 2104 | infra (collector pass) |
+| `task_creator` | 659 | function (Asana tasks) |
+| `ops_scheduler` | 446 | infra (cron orchestration) |
+| `performance_audit` | 256 | function (audits) |
+| `llm_cadence` | 155 | function (LLM analysis) |
+| `user` | 75 | human (approvals) |
+| `spike_detector` | 37 | function (anomalies) |
+| `keyword_management` | 34 | function (keywords) |
+| `collector` | 15 | infra (manual/test runs) |
+| `daily_digest` | 8 | function (digest post) |
+| `paid_media_strategist` | 6 | function (LLM strategist) |
+| `campaign_creator` | 3 | function (campaign create) |
+
+Keep this table refreshed whenever a new `role` appears (the heatmap auto-adds rows).
+
 ## Role taxonomy (function-based; renamed 2026-05-06)
 
 | Role                 | What it does                                                              |

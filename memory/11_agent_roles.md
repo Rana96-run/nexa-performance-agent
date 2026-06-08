@@ -1,35 +1,36 @@
 # Agent Roles — What Lives Here vs Elsewhere
 
-> **Canonical roster is now `docs/_shared/org-chart.md`.** As of 2026-06-08 the
-> team is **15 separate Claude Code subagents** in `.claude/agents/`, across 3
-> departments (Performance Marketing, Growth Marketing, Marketing Operations),
-> each with its own playbook (`docs/playbooks/<dept>/<role>.md`) and private
-> memory (`memory/agents/<dept>/<role>/`). This file is kept as a quick map; the
-> org-chart is the source of truth.
+> **Canonical roster is `docs/_shared/org-chart.md`.** As of 2026-06-08 the team
+> is **9 agents** (1 manager + 3 departments), matching the live "NEXA OPERATIONS
+> HQ — The Team" dashboard. Each is a Claude Code subagent in `.claude/agents/`
+> with its own playbook (`docs/playbooks/<dept>/<role>.md`) and memory
+> (`memory/agents/<dept>/<role>/`).
+
+## 9 agents ≠ 13 log-roles (the trap that caused a wrong rebuild)
+- **The team = 9 agents** (org chart, below). This is who exists.
+- **`agent_activity_log` has 13 `role` values** — these are how work is *logged*,
+  NOT teammates: infra/system labels (`health_monitor`, `bq_refresh`, `collector`,
+  `ops_scheduler`), the human (`user`), and function buckets the agents act under
+  (`performance_audit`, `keyword_management`, `task_creator`, `daily_digest`,
+  `campaign_creator`, `llm_cadence`, `paid_media_strategist`). Don't build agents
+  from the log table — build from the org chart.
 
 ## Two layers — don't confuse them
-- **Dev-time subagents** (`.claude/agents/*.md`) — the team you and Claude work
-  with in Claude Code. Isolated context per role → less hallucination. This is
-  the new structure.
+- **Dev-time subagents** (`.claude/agents/*.md`) — the 9-agent team. Isolated
+  context per role → less hallucination.
 - **Production runtime** (`claude/roles.py` + `claude/manager.py`) — the
-  autonomous Railway product; makes one Anthropic API call per role at cadence.
-  Still live, untouched by the subagent revamp. Phase 2 will point it at the
-  same playbooks so there's one source of truth.
+  autonomous Railway product; logs under the 13 function-roles above. Untouched.
 
-## In this repo (the 3 departments)
+## The 9 agents (3 departments + manager)
 
-| Dept | Manager | Roles |
+| Dept | Agent | Parallel/Sequential |
 |---|---|---|
-| **Performance Marketing** | `performance-lead` | media-buyer · paid-media-analyst · paid-media-strategist · data-engineer · connector-police · cro-paid-specialist · keyword-strategist |
-| **Growth Marketing** | `growth-lead` | growth-strategist · market-expansion-analyst |
-| **Marketing Operations** | `ops-manager` | ops-reporter · approval-coordinator |
-| _routing above all_ | `cmo-orchestrator` | — |
+| _Manager_ | `ai-orchestrator` | gates all writes ✅, owns all handoffs, 8-step loop 08:00 |
+| Performance (LEAD `performance-lead`) | `campaign-manager`, `creative-strategist` | the two directs run **in parallel** |
+| CRO / Landing Page | `cro-specialist` → `ui-ux-designer` → `developer` | **direct sequential handoff** |
+| Support (serve both, no internal handoff) | `marketing-ops`, `growth-analyst` | run **in parallel** |
 
-### Legacy persona files (superseded)
-The old `md_files/qoyod-*.md` personas (paid-media, analyst, strategist, daily-report,
-creative, hubspot-cro, manager-os) are the **runtime's** prompt sources, loaded by
-`claude/roles.py`. They are NOT the dev-time agents. Don't edit them to change a
-subagent — edit `.claude/agents/` + `docs/playbooks/`.
+`growth-analyst` owns `memory/` (writes 08_pitfalls + 14_learning_patterns).
 
 ## Separate agents (NOT in this repo)
 

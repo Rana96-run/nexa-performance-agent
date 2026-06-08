@@ -1,55 +1,50 @@
-# Agents — The Marketing Team (index + how to use)
+# Agents — Nexa Operations HQ · The Team (index + how to use)
 
-This folder holds the **real Claude Code subagents**. Each `*.md` here (except
-`README.md` and `_TEMPLATE.md`) is one teammate with its own isolated context,
-its own playbook, and its own memory. Splitting roles this way is what stops the
-"one giant agent talking to itself" problem and cuts hallucination — each agent
-loads only its own small context, not the whole repo.
+The **real** team: **9 agents** = 1 manager + 3 departments. Each `*.md` here
+(except `README.md` and `_TEMPLATE.md`) is one teammate with its own isolated
+context, playbook, and memory. Isolated context is what cuts hallucination — each
+agent loads only its own small files, not the whole repo.
+
+> Note: the `agent_activity_log` *function labels* (bq_refresh, health_monitor,
+> performance_audit, ops_scheduler, …) are how work is **logged**, not the team
+> roster. The team is the 9 below.
 
 ## How to talk to a teammate
-Say it in plain language and name the seat:
-- *"Ask the **media-buyer** to draft a scale plan for Meta_LeadGen_AR_Invoice_Interests."*
-- *"Have the **paid-media-analyst** explain why CPQL jumped on Google last week."*
-- *"**cmo-orchestrator**: leads are down this month — who should look at it?"*
-
-When you name a seat, that single subagent runs in its own context and answers
-**as that role.** When you're not sure who, ask the **cmo-orchestrator** — it
-routes to the right department and role.
+Name the seat in plain language:
+- *"Ask the **campaign-manager** to build Meta_LeadGen_AR_Invoice_Interests."*
+- *"Have the **growth-analyst** run the weekly period comparison on live BQ."*
+- *"**cro-specialist**: start an LP test for the Invoice page."*
+- *"**ai-orchestrator**: leads are down this month — route it."*
 
 ## The roster
 
 | Agent | Dept | Role |
 |---|---|---|
-| `cmo-orchestrator` | — | Top manager / router. Receives any request, routes to a dept. |
-| `performance-lead` | Performance | Dept manager — owns the daily cycle + #approvals digest. |
-| `media-buyer` | Performance | Pause/scale/budget/bid, cloning, audiences. Executes after ✅. |
-| `paid-media-analyst` | Performance | Period comparison, anomaly attribution, lead quality. |
-| `paid-media-strategist` | Performance | Channel mix, scale plans, quarterly bets. |
-| `data-engineer` | Performance | BQ schema, collectors, views, backfills. |
-| `connector-police` | Performance | Connector health + data freshness gate. |
-| `cro-paid-specialist` | Performance | LP audit/specs, CPQL→LP loop. |
-| `keyword-strategist` | Performance | Google Ads keyword policy engine. |
-| `growth-lead` | Growth | Dept manager — weekly brief + budget/channel directive. |
-| `growth-strategist` | Growth | SOSTAC-X planning, roadmap, audience/creative direction. |
-| `market-expansion-analyst` | Growth | New channel/city/sector/product test proposals. |
-| `ops-manager` | Ops | Dept manager — leadership reports + escalations. |
-| `ops-reporter` | Ops | Builds report tables from handoffs; flags stale data. |
-| `approval-coordinator` | Ops | Tracks #approvals; logs 7d/14d outcomes. |
+| `ai-orchestrator` | — | Manager over all 3 depts. 8-step loop 08:00, gates writes ✅, owns handoffs. |
+| `performance-lead` | Performance (LEAD) | KPI zones, 14-day min, channel mix + budget, the ✅/❌ sign-off. |
+| `campaign-manager` | Performance | 12-field naming, both Meta pixels, keyword policy buckets. |
+| `creative-strategist` | Performance | OCEAN personas, A/B variants, LP alignment with CRO. |
+| `cro-specialist` | CRO / LP (chain lead) | 8-section LP brief, hypothesis, ZATCA badge, test-result decision. |
+| `ui-ux-designer` | CRO / LP | LP variant design to persona, annotated handoff to Developer. |
+| `developer` | CRO / LP | Build LP, UTM passthrough, pixel fires, deploy, verify in Events Mgr. |
+| `marketing-ops` | Support (OPS) | UTM/pixel/field-map policy, Railway secrets, #nexa-health on RED. |
+| `growth-analyst` | Support (DATA) | Owns memory/; 8-step loop on live BQ, period compares, forecasts. |
 
-## The map (read these to understand the team)
-- `../../docs/_shared/org-chart.md` — who exists, who manages whom, who owns what
-- `../../docs/_shared/handoff-protocol.md` — how work passes between seats
-- `../../docs/_shared/communication-rules.md` — how the team behaves
+## Parallel vs sequential
+- **Parallel:** campaign-manager ∥ creative-strategist · marketing-ops ∥ growth-analyst.
+- **Sequential (direct handoff):** cro-specialist → ui-ux-designer → developer.
+- Manager `ai-orchestrator` gates every write and routes cross-dept work.
+
+## The map
+- `../../docs/_shared/org-chart.md` · `handoff-protocol.md` · `communication-rules.md`
 - `../../docs/playbooks/_index.md` — every agent's playbook
-- `../../memory/agents/` — per-agent memory (feedback + learnings)
+- `../../memory/agents/` — per-agent memory (`agents/README.md`)
 
 ## Adding / renaming a role
-Copy `_TEMPLATE.md`, then create the matching playbook and memory folder, then
-update `org-chart.md` and this table. Keep each agent file small — that is the
-whole point.
+Copy `_TEMPLATE.md`, add a playbook + memory folder, update `org-chart.md` + this
+table. Keep each agent file small. `.claude/agents/` is allowlisted in `.gitignore`.
 
 ## Relationship to the production runtime
-These subagents are **dev-time** — they help you (and Claude) work on the repo.
-The autonomous Railway product still runs through `claude/roles.py` +
-`claude/manager.py`. The two are kept in sync by pointing both at the same
-playbooks (a later phase). Editing an agent here does NOT change Railway.
+These are **dev-time** subagents. The autonomous Railway product runs through
+`claude/roles.py` + `claude/manager.py` (a separate layer). Editing an agent here
+does NOT change Railway.
