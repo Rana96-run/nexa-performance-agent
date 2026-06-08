@@ -1918,77 +1918,179 @@ a:hover{text-decoration:underline}
         </div>
       </div>
 
-      <!-- ── 3 Department strips ────────────────────────────────────────────── -->
-      {% set departments = [
-        ("👩‍💻","Paid Media Performance","#059669",
-         [
-           ("📊","Performance Lead","Owns CPQL targets, 7d vs prior-7d comparison windows, channel mix, and budget allocation. Sets the brief for every campaign launch and signs off on scale/pause decisions."),
-           ("📋","Campaign Manager","Builds campaigns to the 12-field naming spec. Executes ad builds with both Meta pixels (CRM 1782671302631317 + Web 3036579196577051). Audience is Interests or Lookalike — never Prospecting. Never executes without ✅."),
-           ("🎨","Creative Strategist","Briefs copy and creatives using OCEAN persona mapping. Scopes A/B variants, assigns to the right audience per channel, and coordinates LP asset alignment with CRO.")
-         ]),
-        ("👨‍🎨","CRO & Conversion","#d97706",
-         [
-           ("🎯","CRO Specialist","Defines test hypothesis from 14-day CPQL + destination_url data. Writes the 8-section LP brief with clear success criteria. Coordinates design and dev resources from product team."),
-           ("🖌️","UI/UX Designer","Designs LP variants aligned to OCEAN persona mapping. ZATCA compliance badge above fold is non-negotiable. Hands off annotated design with interaction notes to Developer. Shared resource from product."),
-           ("💻","Developer","Builds LP variant, implements UTM passthrough, wires pixel and conversion tracking, deploys to production. Verifies all pixel fires before sign-off. Shared resource from product.")
-         ]),
-        ("🔧","Marketing Ops & Analytics","#0891b2",
-         [
-           ("🔗","Marketing Ops","Owns UTM hygiene, pixel health (both Meta pixels), HubSpot field mapping, and connector freshness. Manages Railway env vars and credential rotation. Fires #nexa-health on RED only."),
-           ("📊","Growth Analyst","One analyst for everything: 8-step loop on live BQ data, CRO A/B results, CPQL regressions, silent-death flags, and monthly forecasts. Writes the verified Slack digest. Never reports without querying BQ first.")
-         ])
-      ] %}
-
+      <!-- ── Department strips — each has its own layout type ───────────────── -->
       <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:14px">
-      {% for person, dept, color, chain in departments %}
-      <div style="background:#161b22;border:1px solid #21262d;border-left:3px solid {{ color }};border-radius:10px;overflow:hidden">
-        <div style="display:flex;align-items:stretch;flex-wrap:wrap">
 
-          <!-- Compact desk (left sidebar) -->
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
-                      padding:18px 14px;border-right:1px solid #21262d;flex-shrink:0;
-                      min-width:100px;text-align:center;background:#1a1009">
-            <div style="font-size:30px;line-height:1;margin-bottom:-12px;position:relative;z-index:2;filter:drop-shadow(0 -1px 4px rgba(0,0,0,.6))">{{ person }}</div>
-            <div style="width:72px;position:relative;z-index:1">
-              <div style="background:#1e1409;border:1px solid #2d1c08;border-top:2px solid {{ color }};border-bottom:none;border-radius:4px 4px 0 0;padding:10px 6px 8px">
-                <div style="background:#2d1c08;border-radius:2px;padding:3px 5px">
-                  <div style="font-size:7px;font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.3px;line-height:1.3">{{ dept }}</div>
+        <!-- ════ 1. PAID MEDIA PERFORMANCE — hierarchy (Lead directs, Manager + Creative parallel) ════ -->
+        <div style="background:#161b22;border:1px solid #21262d;border-left:3px solid #059669;border-radius:10px;overflow:hidden">
+          <div style="display:flex;align-items:stretch;flex-wrap:wrap">
+
+            <!-- Desk sidebar -->
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                        padding:18px 14px;border-right:1px solid #21262d;flex-shrink:0;
+                        min-width:100px;text-align:center;background:#1a1009">
+              <div style="font-size:30px;line-height:1;margin-bottom:-12px;position:relative;z-index:2;filter:drop-shadow(0 -1px 4px rgba(0,0,0,.6))">👩‍💻</div>
+              <div style="width:72px;position:relative;z-index:1">
+                <div style="background:#1e1409;border:1px solid #2d1c08;border-top:2px solid #059669;border-bottom:none;border-radius:4px 4px 0 0;padding:10px 6px 8px">
+                  <div style="background:#2d1c08;border-radius:2px;padding:3px 5px">
+                    <div style="font-size:7px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.3px;line-height:1.3">Paid Media Performance</div>
+                  </div>
+                </div>
+                <div style="background:#271709;height:7px;border-radius:0 0 3px 3px;border:1px solid #1a0a02;border-top:none;box-shadow:0 3px 8px rgba(0,0,0,.5)"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:10px">
+                <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
+                <span style="font-size:8px;color:#484f58">3 roles</span>
+              </div>
+            </div>
+
+            <!-- Hierarchy content -->
+            <div style="flex:1;min-width:260px;padding:16px 14px">
+
+              <!-- Performance Lead — full width, owns KPI policy -->
+              <div style="background:#0d1117;border:1px solid #21262d;border-top:2px solid #059669;border-radius:6px;padding:10px 14px;position:relative;max-width:460px">
+                <div style="position:absolute;top:-1px;right:8px;background:#059669;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">LEAD</div>
+                <div style="font-size:20px;line-height:1;margin-bottom:5px">📊</div>
+                <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">Performance Lead</div>
+                <div style="font-size:10px;color:#6b7280;line-height:1.55">Owns KPI thresholds in config.py: CPQL zones, CPL zones, 14-day minimum window for every pause/scale decision. Sets channel mix and budget allocation. Reacts to #approvals digest with ✅/❌ — all write actions are gated on this single reaction. No campaign launches without sign-off.</div>
+              </div>
+
+              <!-- Directs arrow -->
+              <div style="display:flex;align-items:center;gap:6px;padding:7px 0 7px 12px">
+                <div style="width:1px;height:18px;background:#059669;opacity:.35"></div>
+                <span style="font-size:9px;color:#059669;font-weight:700;letter-spacing:.6px;text-transform:uppercase">directs</span>
+              </div>
+
+              <!-- Campaign Manager + Creative Strategist — parallel, both report to Lead -->
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+
+                <div style="flex:1;min-width:170px;background:#0d1117;border:1px solid #21262d;border-top:2px solid #059669;border-radius:6px;padding:10px 12px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#059669;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">2</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">📋</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">Campaign Manager</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Enforces the 12-field naming spec on every build. Configures both Meta pixels (CRM 1782671302631317 + Web 3036579196577051) without exception. Applies keyword policy buckets: ALWAYS_NEGATIVE, BRAND_ONLY, COMPETITOR. Audience must be Interests or Lookalike — Prospecting raises ValueError. Never executes without ✅.</div>
+                </div>
+
+                <div style="flex:1;min-width:170px;background:#0d1117;border:1px solid #21262d;border-top:2px solid #059669;border-radius:6px;padding:10px 12px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#059669;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">3</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">🎨</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">Creative Strategist</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Owns OCEAN persona mapping for all copy and creative briefs. Scopes A/B creative variants and assigns them to the right audience segment per channel. Coordinates LP asset alignment with CRO Specialist before any test goes live.</div>
+                </div>
+
+              </div>
+            </div><!-- /hierarchy content -->
+
+          </div>
+        </div>
+
+        <!-- ════ 2. CRO & CONVERSION — sequential handoff (brief → design → build) ════ -->
+        <div style="background:#161b22;border:1px solid #21262d;border-left:3px solid #d97706;border-radius:10px;overflow:hidden">
+          <div style="display:flex;align-items:stretch;flex-wrap:wrap">
+
+            <!-- Desk sidebar -->
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                        padding:18px 14px;border-right:1px solid #21262d;flex-shrink:0;
+                        min-width:100px;text-align:center;background:#1a1009">
+              <div style="font-size:30px;line-height:1;margin-bottom:-12px;position:relative;z-index:2;filter:drop-shadow(0 -1px 4px rgba(0,0,0,.6))">👨‍🎨</div>
+              <div style="width:72px;position:relative;z-index:1">
+                <div style="background:#1e1409;border:1px solid #2d1c08;border-top:2px solid #d97706;border-bottom:none;border-radius:4px 4px 0 0;padding:10px 6px 8px">
+                  <div style="background:#2d1c08;border-radius:2px;padding:3px 5px">
+                    <div style="font-size:7px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.3px;line-height:1.3">CRO &amp; Conversion</div>
+                  </div>
+                </div>
+                <div style="background:#271709;height:7px;border-radius:0 0 3px 3px;border:1px solid #1a0a02;border-top:none;box-shadow:0 3px 8px rgba(0,0,0,.5)"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:10px">
+                <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
+                <span style="font-size:8px;color:#484f58">3 roles</span>
+              </div>
+            </div>
+
+            <!-- Sequential handoff chain -->
+            <div style="flex:1;min-width:260px;padding:16px 14px;display:flex;gap:0;flex-wrap:wrap;align-items:flex-start">
+
+              <div style="display:flex;align-items:flex-start;flex-shrink:0;margin-bottom:8px">
+                <div style="background:#0d1117;border:1px solid #21262d;border-top:2px solid #d97706;border-radius:6px;padding:10px 12px;width:165px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#d97706;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">1</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">🎯</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">CRO Specialist</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Owns the 8-section LP brief template and test hypothesis. Defines success criteria from 14-day CPQL + destination_url data. ZATCA compliance badge above fold is non-negotiable on every LP. Coordinates UI/UX and Developer resources from product team. Owns test-result decisions.</div>
+                </div>
+                <div style="display:flex;align-items:center;padding:0 5px;margin-top:28px;color:#d97706;font-size:16px;flex-shrink:0">→</div>
+              </div>
+
+              <div style="display:flex;align-items:flex-start;flex-shrink:0;margin-bottom:8px">
+                <div style="background:#0d1117;border:1px solid #21262d;border-top:2px solid #d97706;border-radius:6px;padding:10px 12px;width:165px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#d97706;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">2</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">🖌️</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">UI/UX Designer</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Designs LP variants aligned to OCEAN persona mapping. ZATCA compliance badge above fold mandatory. Produces annotated design with interaction notes for Developer handoff. Shared resource from product — coordinated by CRO Specialist.</div>
+                </div>
+                <div style="display:flex;align-items:center;padding:0 5px;margin-top:28px;color:#d97706;font-size:16px;flex-shrink:0">→</div>
+              </div>
+
+              <div style="display:flex;align-items:flex-start;flex-shrink:0;margin-bottom:8px">
+                <div style="background:#0d1117;border:1px solid #21262d;border-top:2px solid #d97706;border-radius:6px;padding:10px 12px;width:165px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#d97706;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">3</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">💻</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">Developer</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Builds LP variant, implements UTM passthrough on every form field, wires both pixel fires, deploys to production. Verifies pixel fires in Events Manager before sign-off. Shared resource from product team.</div>
                 </div>
               </div>
-              <div style="background:#271709;height:7px;border-radius:0 0 3px 3px;border:1px solid #1a0a02;border-top:none;box-shadow:0 3px 8px rgba(0,0,0,.5)"></div>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;margin-top:10px">
-              <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
-              <span style="font-size:8px;color:#484f58">{{ chain|length }} roles</span>
+
             </div>
           </div>
-
-          <!-- Handoff chain -->
-          <div style="flex:1;min-width:260px;padding:16px 14px;display:flex;gap:0;flex-wrap:wrap;align-items:flex-start">
-            {% for step_emoji, step_title, step_desc in chain %}
-            <div style="display:flex;align-items:flex-start;flex-shrink:0;margin-bottom:8px">
-              <!-- Step card -->
-              <div style="background:#0d1117;border:1px solid #21262d;border-top:2px solid {{ color }};
-                          border-radius:6px;padding:10px 12px;width:155px;position:relative">
-                <!-- Step number -->
-                <div style="position:absolute;top:-1px;right:8px;background:{{ color }};color:#0d1117;
-                            font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;
-                            letter-spacing:.3px">{{ loop.index }}</div>
-                <div style="font-size:20px;line-height:1;margin-bottom:5px">{{ step_emoji }}</div>
-                <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">{{ step_title }}</div>
-                <div style="font-size:10px;color:#6b7280;line-height:1.55">{{ step_desc }}</div>
-              </div>
-              <!-- Arrow connector -->
-              {% if not loop.last %}
-              <div style="display:flex;align-items:center;padding:0 5px;margin-top:28px;color:#2d1c08;font-size:16px;flex-shrink:0">→</div>
-              {% endif %}
-            </div>
-            {% endfor %}
-          </div>
-
         </div>
-      </div>
-      {% endfor %}
+
+        <!-- ════ 3. MARKETING OPS & ANALYTICS — parallel support (no handoff, both serve all teams) ════ -->
+        <div style="background:#161b22;border:1px solid #21262d;border-left:3px solid #0891b2;border-radius:10px;overflow:hidden">
+          <div style="display:flex;align-items:stretch;flex-wrap:wrap">
+
+            <!-- Desk sidebar -->
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                        padding:18px 14px;border-right:1px solid #21262d;flex-shrink:0;
+                        min-width:100px;text-align:center;background:#1a1009">
+              <div style="font-size:30px;line-height:1;margin-bottom:-12px;position:relative;z-index:2;filter:drop-shadow(0 -1px 4px rgba(0,0,0,.6))">🔧</div>
+              <div style="width:72px;position:relative;z-index:1">
+                <div style="background:#1e1409;border:1px solid #2d1c08;border-top:2px solid #0891b2;border-bottom:none;border-radius:4px 4px 0 0;padding:10px 6px 8px">
+                  <div style="background:#2d1c08;border-radius:2px;padding:3px 5px">
+                    <div style="font-size:7px;font-weight:700;color:#0891b2;text-transform:uppercase;letter-spacing:.3px;line-height:1.3">Marketing Ops &amp; Analytics</div>
+                  </div>
+                </div>
+                <div style="background:#271709;height:7px;border-radius:0 0 3px 3px;border:1px solid #1a0a02;border-top:none;box-shadow:0 3px 8px rgba(0,0,0,.5)"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:10px">
+                <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
+                <span style="font-size:8px;color:#484f58">2 roles</span>
+              </div>
+            </div>
+
+            <!-- Parallel support functions -->
+            <div style="flex:1;min-width:260px;padding:16px 14px">
+              <div style="font-size:9px;font-weight:700;color:#0891b2;letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px;opacity:.8">Support functions — serve both departments above, no internal handoff</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+
+                <div style="flex:1;min-width:180px;background:#0d1117;border:1px solid #21262d;border-top:2px solid #0891b2;border-radius:6px;padding:10px 12px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#0891b2;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">OPS</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">🔗</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">Marketing Ops</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Owns UTM structure policy, pixel health (both Meta pixels), and HubSpot lead_utm_campaign field mapping. Manages Railway env vars and credential rotation — single source of truth for all secrets. Fires #nexa-health on RED only, never posts all-clears.</div>
+                </div>
+
+                <div style="flex:1;min-width:180px;background:#0d1117;border:1px solid #21262d;border-top:2px solid #0891b2;border-radius:6px;padding:10px 12px;position:relative">
+                  <div style="position:absolute;top:-1px;right:8px;background:#0891b2;color:#0d1117;font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;letter-spacing:.3px">DATA</div>
+                  <div style="font-size:20px;line-height:1;margin-bottom:5px">📊</div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">Growth Analyst</div>
+                  <div style="font-size:10px;color:#6b7280;line-height:1.55">Owns memory/: writes 08_pitfalls.md on every new API trap, updates 14_learning_patterns.md after every action outcome. One analyst for everything: 8-step loop on live BQ, period comparisons, CRO A/B results, monthly forecasts via forecaster.py. Never reports without a live BQ query.</div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </div>
 
     </div><!-- /office-room -->
