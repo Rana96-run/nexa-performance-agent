@@ -875,11 +875,17 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
   for the Ingestion API data source (`4983284`). The Custom Metric builder only works for
   native integrations (HubSpot, Google Ads, etc.) — NOT for Ingestion API datasets.
   `POST /analytics-backend-api.databox.com/datasets` → 404 (no registration endpoint).
-- **Fix:** Use the Databox **Push API** (`push.databox.com`) instead.
+- **Fix:** Use the Databox **Push API** (`push.databox.com`) instead, BUT it requires a
+  **push connector token** — NOT the PAK (`DATABOX_TOKEN`). The PAK returns 401 "Invalid token"
+  on `push.databox.com`. The push connector token is a 32-char hex string obtained by:
+  1. app.databox.com → Connect Data → Custom → Push Custom Data → create connector
+  2. Copy the connector token, store it in Railway as `DATABOX_PUSH_TOKEN`
+  Then run: `railway run python scripts/run_databox_push.py 90`
   `push_custom_metrics()` in `collectors/databox_pusher.py` pushes `$spend`, `$leads`,
-  `$sqls`, `$cpl`, `$cpql` as named time-series metrics. These appear directly in the
-  Metric Library without any UI step. Run: `railway run python collectors/databox_pusher.py push 90`
-  (needs Railway login: `railway login`).
+  `$sqls`, `$cpl`, `$cpql`, `$spend_<channel>` per day. Reads env var `DATABOX_PUSH_TOKEN`.
+- **Two separate Databox tokens** (easy to confuse):
+  - `DATABOX_TOKEN` = PAK (`pak_617cd2b7…`) — used for Ingestion/Dataset API (`api.databox.com`)
+  - `DATABOX_PUSH_TOKEN` = push connector token (hex) — used for Push API (`push.databox.com`)
 - **The Ingestion API dataset (`eff4621e`) is write-only** — data cannot be read back
   via the REST API, so you can't use it as an intermediate BQ substitute.
 - **Data source IDs**: parent `4983171` = "Qoyod BQ" PAK connection; child `4983284` =
