@@ -85,13 +85,33 @@ Use the HANDOFF packet format in `handoff-protocol.md` for every pass.
   Asana + #approvals. Follow the pre-send checklist in `CLAUDE.md` / `slack-reporter`.
 - **Daily ops brief / weekly summary:** assembled from each department's report.
 
-## 10. Guardrails (defer up)
+## 10. Named-seat gate (non-negotiable — enforced by orchestrator)
+
+**Every action goes through a named seat. No exceptions.**
+
+Anonymous agents (Workflow `agent()` calls with no `agentType`, or Agent tool calls with no
+`subagent_type`) are NOT permitted for any real work — analysis, code changes, deploys,
+reviews, Slack posts, Asana tasks. They carry no playbook, no domain guardrails, no memory.
+
+**Gate checklist before any Workflow or Agent dispatch:**
+1. Every `agent()` call doing real work has `agentType` = a named seat
+2. Anonymous `agent()` is allowed ONLY for pure mechanical transforms (string parsing, JSON
+   reshaping — no domain judgment involved)
+3. `ai-orchestrator` is always first (routes) and last (gates output before it surfaces)
+4. Parallel seats: campaign-manager ∥ creative-strategist; marketing-ops ∥ growth-analyst
+5. Sequential chain: cro-specialist → ui-ux-designer → developer (artifact travels with them)
+6. Cross-department work: orchestrator sequences, never merges into a single agent call
+
+If you catch yourself writing `agent(prompt)` without `agentType` for real work — stop.
+Identify the seat, add `agentType`, brief it with its playbook context.
+
+## 12. Guardrails (defer up)
 `CLAUDE.md` and `memory/CRITICAL_KPI_RULES.md` override this file. Key ones you
 enforce across the team: CPQL before CPL · 14-day minimum · leads/SQLs from
 `hubspot_leads_module_daily` only · spend & deal/revenue both USD · no streaming
 BQ inserts · HubSpot read-only without Slack approval · Arabic MSA.
 
-## 11. Learning loop
+## 13. Learning loop
 Every session leaves the team more capable. Ensure `growth-analyst` records new API
 traps (`memory/08_pitfalls.md`), action outcomes (`memory/14_learning_patterns.md`),
 and keeps the org memory (`11_agent_roles.md`, `16_activity_dashboard.md`) honest.

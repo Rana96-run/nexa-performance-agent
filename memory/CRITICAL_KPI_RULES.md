@@ -160,7 +160,39 @@ in URLs if they re-state what's already in account-level template.
 Google's pattern, but that touches all 13 active campaigns and risks breaking
 any per-campaign customization. Document the decision before doing it.
 
-## 5. Self-check after writing a script — before running
+## 5. No anonymous agents — every action is seat-owned (non-negotiable)
+
+**Rule:** Every task — analysis, code change, review, deploy, Slack post, Asana task — must
+be performed by a **named seat agent** (growth-analyst, developer, marketing-ops,
+performance-lead, campaign-manager, creative-strategist, cro-specialist, ui-ux-designer)
+routed by `ai-orchestrator`. Anonymous agents (workflow task workers with no `agentType`)
+are **never** the execution layer for real work.
+
+**Why this matters:** Anonymous workers have no persona, no playbook, no memory, no domain
+guardrails. They will invent field names, skip pre-aggregation checks, miss KPI rules, and
+produce output the team can't trust. Named seats bring accumulated domain knowledge and are
+accountable by role.
+
+**How to apply:**
+- In `Workflow()` scripts: always set `agentType` on `agent()` calls that do real work.
+  Use anonymous `agent()` only for mechanical transforms (parse a file, build a string).
+- In direct `Agent` tool calls: always specify `subagent_type` matching the seat owner.
+- `ai-orchestrator` routes first, then seats execute in parallel or in the defined
+  handoff chain (`cro-specialist → ui-ux-designer → developer`).
+- If a task spans two seats, the orchestrator **sequences** them — never merges into one
+  anonymous blob.
+
+**Gate check (pre-workflow):** Before launching any Workflow, confirm:
+1. Every `agent()` call that reads/writes/analyses real data has `agentType` set to a named seat.
+2. Anonymous `agent()` calls are limited to pure data transforms with no domain judgment.
+3. `ai-orchestrator` is the first and last agent — routes in, gates out.
+
+**Caught violation (2026-06-09):** Codebase review was launched with 5 anonymous scan workers
+labelled by "dimension" (dead-refs, views-correctness, schedulers, adset-fanout, general-stale).
+No seat ownership, no playbook context, no accountability. Rebuilt correctly with
+growth-analyst + developer + marketing-ops as named seats, routed by ai-orchestrator.
+
+## 6. Self-check after writing a script — before running
 
 Before executing any new analysis script, scan the SQL for:
 - `SELECT .* leads .* FROM .* campaigns_daily` → VIOLATION
