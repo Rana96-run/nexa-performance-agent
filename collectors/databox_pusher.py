@@ -18,6 +18,7 @@ Auth: x-api-key header with DATABOX_TOKEN (pak_ personal API key).
 Max 100 records per request per Databox docs.
 """
 import os
+import json
 import time
 import math
 import requests
@@ -49,25 +50,32 @@ def _headers():
 
 
 def _flush(grain: str, records: list) -> int:
-    """Send all records in ≤100-item batches with retry on rate-limit (403/429)."""
+    """Send all records in ≤100-item batches with retry on transient 429.
+
+    Serialises as raw UTF-8 bytes (ensure_ascii=False) to avoid WAF blocks
+    that trigger on \\uXXXX Unicode escape sequences in the request body.
+    """
     dataset_id = _DATASET[grain]
-    url  = f"{_BASE}/v1/datasets/{dataset_id}/data"
-    sent = 0
+    url     = f"{_BASE}/v1/datasets/{dataset_id}/data"
+    # Content-Type must declare charset so Databox parses UTF-8 correctly
+    headers = {**_headers(), "Content-Type": "application/json; charset=utf-8"}
+    sent    = 0
     for i in range(0, len(records), _BATCH):
-        batch   = records[i : i + _BATCH]
-        backoff = 5
-        for attempt in range(5):
-            resp = requests.post(url, headers=_headers(), json={"records": batch}, timeout=30)
-            if resp.status_code in (403, 429):
-                print(f"[databox] rate-limited on {grain} batch {i//100+1}, "
-                      f"waiting {backoff}s (attempt {attempt+1}/5)")
+        batch      = records[i : i + _BATCH]
+        body_bytes = json.dumps({"records": batch}, ensure_ascii=False).encode("utf-8")
+        backoff    = 5
+        for attempt in range(4):
+            resp = requests.post(url, headers=headers, data=body_bytes, timeout=30)
+            if resp.status_code == 429:
+                print(f"[databox] 429 on {grain} batch {i//100+1}, "
+                      f"waiting {backoff}s (attempt {attempt+1}/4)")
                 time.sleep(backoff)
                 backoff *= 2
                 continue
             resp.raise_for_status()
             break
         else:
-            resp.raise_for_status()   # exhaust retries — surface the error
+            resp.raise_for_status()
         sent += len(batch)
         if i + _BATCH < len(records):
             time.sleep(_BATCH_DELAY)
