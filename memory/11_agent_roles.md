@@ -39,13 +39,22 @@ is the bridge so a change in one is traceable to the others.
 
 | 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py` → `md_files/`) | Activity-log label(s) |
 |---|---|---|
-| `ai-orchestrator` | `daily_report` (qoyod-daily-report.md) + manager-os | `ops_scheduler`, `daily_digest` |
-| `performance-lead` | `paid_media_strategist` (nexa-strategist.md) | `performance_audit` |
-| `campaign-manager` | `media_buyer` (qoyod-paid-media-agent.md) | `campaign_creator`, `keyword_management`, `performance_audit` |
-| `creative-strategist` | — (brand-identity shared) | — |
-| `cro-specialist` / `ui-ux-designer` / `developer` | — (CRO was external in the runtime era) | — |
-| `marketing-ops` | — | `bq_refresh`, `collector`, `health_monitor` (tracking/infra) |
-| `growth-analyst` | `paid_media_analyst` (qoyod-analyst-agent.md) | `spike_detector`, `bq_refresh`, `llm_cadence` |
+| `ai-orchestrator` | `daily_report` (qoyod-daily-report.md) + manager-os | `ops_scheduler`, `daily_digest`, `task_creator` |
+| `performance-lead` | `paid_media_strategist` (nexa-strategist.md) | `performance_audit`, `paid_media_strategist` |
+| `campaign-manager` | `media_buyer` (qoyod-paid-media-agent.md) | `campaign_creator`, `keyword_management` |
+| `creative-strategist` | — (brand-identity shared) | — (creative work isn't logged) |
+| `cro-specialist` / `ui-ux-designer` / `developer` | — (CRO was external in the runtime era) | — (LP work isn't logged) |
+| `marketing-ops` | — | `health_monitor`, `collector` |
+| `growth-analyst` | `paid_media_analyst` (qoyod-analyst-agent.md) | `bq_refresh`, `spike_detector`, `llm_cadence` |
+
+**Full coverage — all 13 log-roles owned 1:1 (no orphans, no double-claims).** `user`
+is the human (not a seat). If a NEW log-role appears unowned, that's a police
+finding — assign it before it runs unattended (see `docs/_shared/police-loop.md`).
+
+**Dashboard must mirror this.** `reports/app.py` team `roles` sets are the dashboard
+display of this mapping — they must match the column above, or activity shows as
+unattributed. (As of 2026-06-08 app.py had orphans: `task_creator`, `collector`,
+`paid_media_strategist`, `campaign_creator` unassigned — align to this table.)
 
 Shared runtime context: `qoyod-manager-os.md` ↔ `CLAUDE.manager.md`;
 `qoyod-brand-identity.md` ↔ `docs/landing-pages/reference/brand/`.

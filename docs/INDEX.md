@@ -26,6 +26,7 @@ The one front door to the whole system. Everything below is either **shared
 ## 4. How the team works together
 - `_shared/handoff-protocol.md` — handoff packet, who→whom, parallel vs sequential
 - `_shared/communication-rules.md` — behaviour rules
+- `_shared/police-loop.md` — autonomous detect→route→fix→verify→report for any stale/error/bug (+ the human-gate boundary)
 
 ## 5. CRO / Landing Page workspace
 - `landing-pages/README.md` — briefs → designs → specs flow

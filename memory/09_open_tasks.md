@@ -8,6 +8,21 @@ the bottom of the relevant section.
 > scheduler running at 08:00 Riyadh. Activity dashboard shows 6-member team roster.
 > Recommendation engine now includes alternatives-considered + pre-execution sanity checks.
 
+## P0 — Police findings open (detected 2026-06-08, not yet closed)
+
+Surfaced by `connector_health_log` + freshness check. Route via the police loop
+(`docs/_shared/police-loop.md`): owner fixes → growth-analyst verifies → orchestrator reports.
+- [ ] **LinkedIn — 95-day stale** (last data 2026-03-05). Only WARNING so it never
+      alerted. Likely expired token (60-day expiry, silent 0-row failure). Fix:
+      `scripts/linkedin_refresh.py` then re-run collector; if token dead → re-OAuth
+      (HUMAN-gated). Owner: `marketing-ops`.
+- [ ] **BROKEN connectors:** `bing`, `google`, `hubspot_deals`, `hubspot_leads`
+      (each has a `fix_command` in `connector_health_log`). First VERIFY root cause —
+      some may be legit "no activity" (e.g. paused MS account), not a bug — before
+      re-running. Owner: `marketing-ops` / `growth-analyst`.
+- [ ] **Persistent-WARNING escalation rule:** a WARNING unchanged 3+ days should
+      auto-escalate to BROKEN (so stale-95-days can't hide). Wire into `connector_tracker`.
+
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 
 Built on top of Option B from 2026-05-14:
