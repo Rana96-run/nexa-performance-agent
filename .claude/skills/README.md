@@ -96,17 +96,23 @@ Good: a skill that says "you are X, you think like Y, you always output Z, you n
 
 ## Multi-Agent Architecture
 
+**Current (the team):** 9 in-house Claude Code subagents — see
+`docs/_shared/org-chart.md` and `CLAUDE.manager.md`. CRO/Landing Page is now an
+**in-house** department (`cro-specialist → ui-ux-designer → developer`); Marketing
+Ops + Growth are in-house **Support** seats (`marketing-ops`, `growth-analyst`).
+
 ```
-Nexa Performance Agent (this repo)
-    ↓ writes agent_handoff_log (BQ)
-    ├── Marketing Ops Management Agent  ← reads daily_ops_brief
-    ├── Growth Marketing Agent          ← reads growth_signals (weekly)
-    └── CRO Paid Specialist             ← reads CPQL from BQ, writes LP specs
-            ↕ references D:\Landing Page Agent\ (pages, prompts, brand docs)
+ai-orchestrator (mgr, gates ✅)
+    ├── Performance : performance-lead → campaign-manager ∥ creative-strategist
+    ├── CRO / LP    : cro-specialist → ui-ux-designer → developer
+    └── Support     : marketing-ops ∥ growth-analyst   (growth-analyst owns memory/)
+            ↕ docs/landing-pages/reference/  (local snapshot of D:\Landing Page Agent)
 ```
 
-See `agent-handoff.md` for the BQ protocol.
-See `cro-paid-specialist.md` for the LP ↔ CPQL feedback loop.
+**Aspirational (not wired):** the `growth-marketing-dept.md` / `marketing-ops-dept.md`
+skills describe EXTERNAL strategic agents fed by an `agent_handoff_log` BQ table —
+**that table does not exist and no code writes it.** Treat those skills as specs,
+not live integrations (each carries a status header). Same for `agent-handoff.md`.
 
 ---
 

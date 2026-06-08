@@ -10,6 +10,18 @@ description: |
 
 # Growth Marketing Department Skill
 
+> **Status & relationship to the 9-agent org (read first).** This skill describes
+> an **aspirational EXTERNAL** higher-altitude Growth agent that would consume
+> Nexa's weekly signals via an `agent_handoff_log` BQ table. As of 2026-06-08 that
+> **table does not exist and no code writes it** — the integration was never wired.
+>
+> In the **current** org (`docs/_shared/org-chart.md`), the in-house Support seat
+> **`growth-analyst`** does this work directly: 8-step loop on live BQ, period
+> comparisons, forecasts, CRO A/B reads. Use this file as the **spec** for the
+> frameworks below (SOSTAC-X, unit-economics matrix, the CPQL ceiling) — they're
+> still how Growth thinking should be done — and as the build spec if/when an
+> external Growth agent is stood up. Don't treat the handoff payloads as live.
+
 ## Department Mission
 
 The Growth Marketing agent operates at a **higher strategic altitude** than the

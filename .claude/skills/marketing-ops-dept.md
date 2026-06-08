@@ -10,6 +10,18 @@ description: |
 
 # Marketing Operations Department Skill
 
+> **Status & relationship to the 9-agent org (read first).** This skill describes
+> an **aspirational EXTERNAL** leadership-facing Ops agent that would read Nexa's
+> daily brief via an `agent_handoff_log` BQ table. As of 2026-06-08 that **table
+> does not exist and no code writes it** — the integration was never wired.
+>
+> Mapping to the **current** org (`docs/_shared/org-chart.md`): the in-house
+> Support seat **`marketing-ops`** owns UTM/pixel/secrets (NOT the leadership
+> reporting described here); the leadership report + #approvals digest is assembled
+> by **`ai-orchestrator`** from **`growth-analyst`**'s live-BQ numbers. Use the
+> report formats below as the **spec** for those reports, and as the build spec
+> if/when an external Ops agent is stood up. Don't treat the handoff payloads as live.
+
 ## Department Mission
 
 The Marketing Operations Management agent is the **command centre** of the

@@ -11,6 +11,13 @@ description: |
 
 # Agent Handoff Skill
 
+> **Status (2026-06-08): aspirational — not wired.** This protocol writes/reads an
+> `agent_handoff_log` BQ table that **does not exist** (no code creates or writes
+> it). It describes a planned external-agent ecosystem. In the current 9-agent org
+> (`docs/_shared/org-chart.md`), handoffs are **in-process** between subagents via
+> the packet format in `docs/_shared/handoff-protocol.md` — not BQ rows. Use this
+> skill as the build spec if/when the external BQ handoff is implemented.
+
 ## The 3-Agent Ecosystem
 
 ```
