@@ -3,6 +3,21 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## Period windows must end at the last COMPLETE spend day, not "yesterday" (found 2026-06-09)
+
+**Symptom:** Running the 7d-vs-prior period compare on 2026-06-09 with a yesterday-
+anchored window (CUR 06-02..06-08) showed Meta CPQL spiking and a wild FORECAST pace
+of spend −72% MoM. **Cause:** `campaigns_daily` had NO spend rows for 2026-06-08 yet —
+the nightly collector hadn't landed before 08:00 Riyadh (same "data legitimately 2 days
+old" reason behind the health_check ≥3-day freshness threshold). The window's last day
+was spend=$0 but leads were present, deflating spend/CPQL and exaggerating the MoM gap.
+**Fix:** Before fixing window bounds, query `SELECT date, SUM(spend) FROM campaigns_daily
+GROUP BY date ORDER BY date` for the tail and set the window END to the last date with
+non-trivial spend (here 06-07), not `CURRENT_DATE()-1`. Re-running on 06-01..06-07 vs
+05-25..05-31 gave coherent, trustworthy numbers (total CPQL $58.6 cur vs $81.4 prior,
+−28%). **Rule:** anchor period windows to the last complete spend day; never trust a
+window whose final day shows $0 spend with non-zero leads.
+
 ## v_adset_performance — spend fan-out inflates CPQL (found 2026-06-09)
 
 **Symptom:** Meta "CPQL +25% regression" (reported $37→$46 last-7d vs prior-7d)
