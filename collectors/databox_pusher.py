@@ -1,26 +1,20 @@
 """
 collectors/databox_pusher.py
 
-Pushes merged performance metrics from BigQuery to Databox via the Push API.
+Pushes spend (+ impressions, clicks) to Databox broken down by the same
+attribution names HubSpot uses — so Databox can join them to your existing
+channel-level CPL/CPQL/won-amount custom metrics.
 
-Five grains pushed — all attribution logic is pre-computed in BQ views:
-  1. channel         — paid_channel_daily
-  2. campaign        — paid_channel_campaign_daily
-  3. adset/adgroup   — v_adset_performance
-  4. ad/creative     — v_ad_performance
-  5. keyword         — v_keyword_performance
+Grains: campaign, adset, ad, keyword, asset_group (PMax).
+
+Attribution logic is pre-computed in BQ views (ID-sync for Meta/Snap/TikTok,
+UTM name-match for Google/LinkedIn/Microsoft). Names here match
+lead_utm_campaign / lead_utm_audience / lead_utm_content in HubSpot.
 
 Databox Push API:
   POST https://push.databox.com/
   Authorization: Token <DATABOX_TOKEN>
-  Body: {"data": [{$key, $value, date, ...attrs}, ...]}
-
-Each metric is pushed as a separate data point with a `grain` attribute so
-Databox dashboards can filter to one grain at a time (avoids double-counting
-spend when multiple grains carry the same metric key).
-
-Idempotent: Databox replaces existing values for the same (date, $key, attrs)
-combination on each push, so running with a lookback window is safe.
+  Body: {"data": [{$key, $value, date, ...attrs}]}
 """
 import os
 import time
@@ -30,13 +24,13 @@ from datetime import date, timedelta
 
 DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
 _ENDPOINT     = "https://push.databox.com/"
-_BATCH        = 1000      # Databox max per request
-_BATCH_DELAY  = 0.4       # seconds between batches — polite pacing
+_BATCH        = 1000
+_BATCH_DELAY  = 0.4
 
 
 def _push_batch(points: list) -> None:
     if not DATABOX_TOKEN:
-        raise RuntimeError("DATABOX_TOKEN not set — add it to Railway env vars")
+        raise RuntimeError("DATABOX_TOKEN not set")
     resp = requests.post(
         _ENDPOINT,
         json={"data": points},
@@ -51,7 +45,6 @@ def _push_batch(points: list) -> None:
 
 
 def _flush(points: list) -> int:
-    """Send all points in ≤1000-item batches. Returns count sent."""
     sent = 0
     for i in range(0, len(points), _BATCH):
         batch = points[i : i + _BATCH]
@@ -63,79 +56,26 @@ def _flush(points: list) -> int:
 
 
 def _v(val):
-    """Return float or None; discard NaN/Inf/None so Databox doesn't choke."""
     if val is None:
         return None
     try:
         f = float(val)
-        if math.isnan(f) or math.isinf(f):
-            return None
-        return f
+        return None if (math.isnan(f) or math.isinf(f)) else f
     except (TypeError, ValueError):
         return None
 
 
-def _dp(key: str, value, date_str: str, **attrs):
-    """Build one data point dict, or None when value is empty/zero."""
+def _add(pts: list, key: str, value, date_str: str, **attrs) -> None:
     v = _v(value)
     if v is None:
-        return None
-    return {"$key": key, "$value": v, "date": f"{date_str}T00:00:00", **attrs}
+        return
+    pts.append({"$key": key, "$value": v, "date": f"{date_str}T00:00:00", **attrs})
 
 
-def _add(pts: list, key: str, value, date_str: str, **attrs) -> None:
-    """Append a data point if value is non-null."""
-    dp = _dp(key, value, date_str, **attrs)
-    if dp:
-        pts.append(dp)
-
-
-# ── 1. Channel grain ────────────────────────────────────────────────────────
-
-def _push_channel(days: int) -> int:
-    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
-    client = get_client()
-    since  = (date.today() - timedelta(days=days)).isoformat()
-    rows = client.query(f"""
-        SELECT date, channel,
-               spend, impressions, clicks,
-               leads_total  AS leads,
-               qualified    AS sqls,
-               disqualified,
-               cpl, cpql, qual_rate_pct,
-               roas, new_biz_roas,
-               new_biz_deals_won,
-               new_biz_revenue_won
-        FROM `{PROJECT_ID}.{DATASET}.paid_channel_daily`
-        WHERE date >= '{since}'
-        ORDER BY date, channel
-    """).result()
-
-    pts = []
-    for r in rows:
-        ds   = str(r.date)
-        base = {"grain": "channel", "channel": r.channel}
-        for key, val in [
-            ("spend",               r.spend),
-            ("impressions",         r.impressions),
-            ("clicks",              r.clicks),
-            ("leads",               r.leads),
-            ("sqls",                r.sqls),
-            ("disqualified",        r.disqualified),
-            ("cpl",                 r.cpl),
-            ("cpql",                r.cpql),
-            ("qual_rate_pct",       r.qual_rate_pct),
-            ("roas",                r.roas),
-            ("new_biz_roas",        r.new_biz_roas),
-            ("new_biz_deals_won",   r.new_biz_deals_won),
-            ("new_biz_revenue_won", r.new_biz_revenue_won),
-        ]:
-            _add(pts, key, val, ds, **base)
-
-    return _flush(pts)
-
-
-# ── 2. Campaign grain ────────────────────────────────────────────────────────
+# ── Campaign grain ────────────────────────────────────────────────────────────
+# Source: paid_channel_campaign_daily
+# campaign_name here is normalized (latest name per campaign_id) and matches
+# lead_utm_campaign in HubSpot.
 
 def _push_campaign(days: int) -> int:
     from collectors.bq_writer import get_client, PROJECT_ID, DATASET
@@ -145,15 +85,7 @@ def _push_campaign(days: int) -> int:
         SELECT date, channel,
                CAST(campaign_id AS STRING) AS campaign_id,
                campaign_name,
-               spend, impressions, clicks,
-               leads,
-               qualified    AS sqls,
-               disqualified,
-               cpl, cpql,
-               qual_rate_pct, ctr_pct, cvr_pct,
-               new_biz_roas,
-               new_biz_deals_won,
-               new_biz_revenue_won
+               spend, impressions, clicks
         FROM `{PROJECT_ID}.{DATASET}.paid_channel_campaign_daily`
         WHERE date >= '{since}'
         ORDER BY date, channel, campaign_id
@@ -163,33 +95,21 @@ def _push_campaign(days: int) -> int:
     for r in rows:
         ds   = str(r.date)
         base = {
-            "grain":         "campaign",
-            "channel":       r.channel,
-            "campaign_id":   r.campaign_id or "",
-            "campaign":      r.campaign_name or "",
+            "grain":       "campaign",
+            "channel":     r.channel,
+            "campaign_id": r.campaign_id or "",
+            "campaign":    r.campaign_name or "",
         }
-        for key, val in [
-            ("spend",               r.spend),
-            ("impressions",         r.impressions),
-            ("clicks",              r.clicks),
-            ("leads",               r.leads),
-            ("sqls",                r.sqls),
-            ("disqualified",        r.disqualified),
-            ("cpl",                 r.cpl),
-            ("cpql",                r.cpql),
-            ("qual_rate_pct",       r.qual_rate_pct),
-            ("ctr_pct",             r.ctr_pct),
-            ("cvr_pct",             r.cvr_pct),
-            ("new_biz_roas",        r.new_biz_roas),
-            ("new_biz_deals_won",   r.new_biz_deals_won),
-            ("new_biz_revenue_won", r.new_biz_revenue_won),
-        ]:
-            _add(pts, key, val, ds, **base)
+        _add(pts, "spend",       r.spend,       ds, **base)
+        _add(pts, "impressions", r.impressions, ds, **base)
+        _add(pts, "clicks",      r.clicks,      ds, **base)
 
     return _flush(pts)
 
 
-# ── 3. Adset / adgroup grain ─────────────────────────────────────────────────
+# ── Adset / adgroup grain ─────────────────────────────────────────────────────
+# Source: v_adset_performance
+# utm_audience matches lead_utm_audience in HubSpot.
 
 def _push_adset(days: int) -> int:
     from collectors.bq_writer import get_client, PROJECT_ID, DATASET
@@ -198,20 +118,10 @@ def _push_adset(days: int) -> int:
     rows = client.query(f"""
         SELECT date, channel,
                CAST(campaign_id AS STRING) AS campaign_id,
-               utm_campaign      AS campaign,
-               CAST(adset_id    AS STRING) AS adset_id,
-               utm_audience      AS adset_name,
-               spend, impressions, clicks,
-               leads,
-               leads_qualified   AS sqls,
-               leads_disqualified AS disqualified,
-               CPL               AS cpl,
-               CPQL              AS cpql,
-               ROUND(IFNULL(qual_rate, 0) * 100, 2) AS qual_rate_pct,
-               ROUND(IFNULL(disq_rate,  0) * 100, 2) AS disq_rate_pct,
-               new_biz_roas,
-               new_biz_deals_won,
-               new_biz_revenue_won
+               utm_campaign   AS campaign,
+               CAST(adset_id  AS STRING)   AS adset_id,
+               utm_audience   AS adset,
+               spend, impressions, clicks
         FROM `{PROJECT_ID}.{DATASET}.v_adset_performance`
         WHERE date >= '{since}'
         ORDER BY date, channel, campaign_id, adset_id
@@ -226,29 +136,18 @@ def _push_adset(days: int) -> int:
             "campaign_id": r.campaign_id or "",
             "campaign":    r.campaign or "",
             "adset_id":    r.adset_id or "",
-            "adset":       r.adset_name or "",
+            "adset":       r.adset or "",
         }
-        for key, val in [
-            ("spend",               r.spend),
-            ("impressions",         r.impressions),
-            ("clicks",              r.clicks),
-            ("leads",               r.leads),
-            ("sqls",                r.sqls),
-            ("disqualified",        r.disqualified),
-            ("cpl",                 r.cpl),
-            ("cpql",                r.cpql),
-            ("qual_rate_pct",       r.qual_rate_pct),
-            ("disq_rate_pct",       r.disq_rate_pct),
-            ("new_biz_roas",        r.new_biz_roas),
-            ("new_biz_deals_won",   r.new_biz_deals_won),
-            ("new_biz_revenue_won", r.new_biz_revenue_won),
-        ]:
-            _add(pts, key, val, ds, **base)
+        _add(pts, "spend",       r.spend,       ds, **base)
+        _add(pts, "impressions", r.impressions, ds, **base)
+        _add(pts, "clicks",      r.clicks,      ds, **base)
 
     return _flush(pts)
 
 
-# ── 4. Ad / creative grain ───────────────────────────────────────────────────
+# ── Ad / creative grain ───────────────────────────────────────────────────────
+# Source: v_ad_performance
+# utm_content matches lead_utm_content in HubSpot.
 
 def _push_ad(days: int) -> int:
     from collectors.bq_writer import get_client, PROJECT_ID, DATASET
@@ -257,23 +156,13 @@ def _push_ad(days: int) -> int:
     rows = client.query(f"""
         SELECT date, channel,
                CAST(platform_campaign_id AS STRING) AS campaign_id,
-               utm_campaign          AS campaign,
-               CAST(platform_adset_id AS STRING)   AS adset_id,
-               utm_audience          AS adset_name,
-               CAST(platform_ad_id   AS STRING)    AS ad_id,
-               utm_content           AS ad_name,
+               utm_campaign              AS campaign,
+               CAST(platform_adset_id   AS STRING)  AS adset_id,
+               utm_audience              AS adset,
+               CAST(platform_ad_id      AS STRING)  AS ad_id,
+               utm_content               AS ad,
                creative_type,
-               spend, impressions, clicks,
-               leads,
-               leads_qualified       AS sqls,
-               leads_disqualified    AS disqualified,
-               CPL                   AS cpl,
-               CPQL                  AS cpql,
-               ROUND(IFNULL(qual_rate, 0) * 100, 2) AS qual_rate_pct,
-               ROUND(IFNULL(disq_rate,  0) * 100, 2) AS disq_rate_pct,
-               new_biz_roas,
-               new_biz_deals_won,
-               new_biz_revenue_won
+               spend, impressions, clicks
         FROM `{PROJECT_ID}.{DATASET}.v_ad_performance`
         WHERE date >= '{since}'
         ORDER BY date, channel, platform_campaign_id, platform_ad_id
@@ -288,32 +177,21 @@ def _push_ad(days: int) -> int:
             "campaign_id":   r.campaign_id or "",
             "campaign":      r.campaign or "",
             "adset_id":      r.adset_id or "",
-            "adset":         r.adset_name or "",
+            "adset":         r.adset or "",
             "ad_id":         r.ad_id or "",
-            "ad":            r.ad_name or "",
+            "ad":            r.ad or "",
             "creative_type": r.creative_type or "",
         }
-        for key, val in [
-            ("spend",               r.spend),
-            ("impressions",         r.impressions),
-            ("clicks",              r.clicks),
-            ("leads",               r.leads),
-            ("sqls",                r.sqls),
-            ("disqualified",        r.disqualified),
-            ("cpl",                 r.cpl),
-            ("cpql",                r.cpql),
-            ("qual_rate_pct",       r.qual_rate_pct),
-            ("disq_rate_pct",       r.disq_rate_pct),
-            ("new_biz_roas",        r.new_biz_roas),
-            ("new_biz_deals_won",   r.new_biz_deals_won),
-            ("new_biz_revenue_won", r.new_biz_revenue_won),
-        ]:
-            _add(pts, key, val, ds, **base)
+        _add(pts, "spend",       r.spend,       ds, **base)
+        _add(pts, "impressions", r.impressions, ds, **base)
+        _add(pts, "clicks",      r.clicks,      ds, **base)
 
     return _flush(pts)
 
 
-# ── 5. Keyword grain (Google Ads + Microsoft Ads only) ───────────────────────
+# ── Keyword grain (Google Ads + Microsoft Ads) ────────────────────────────────
+# Source: v_keyword_performance
+# utm_term matches lead_utm_term in HubSpot.
 
 def _push_keyword(days: int) -> int:
     from collectors.bq_writer import get_client, PROJECT_ID, DATASET
@@ -321,21 +199,12 @@ def _push_keyword(days: int) -> int:
     since  = (date.today() - timedelta(days=days)).isoformat()
     rows = client.query(f"""
         SELECT date, channel,
-               utm_campaign     AS campaign,
-               utm_audience     AS adgroup,
-               utm_term         AS keyword,
+               utm_campaign  AS campaign,
+               utm_audience  AS adgroup,
+               utm_term      AS keyword,
                match_type,
-               quality_score,
                spend, impressions, clicks,
-               ROUND(ctr * 100, 4) AS ctr_pct,
-               leads,
-               leads_qualified  AS sqls,
-               leads_disqualified AS disqualified,
-               CPL              AS cpl,
-               CPQL             AS cpql,
-               ROAS             AS roas,
-               ROUND(IFNULL(qual_rate, 0) * 100, 2) AS qual_rate_pct,
-               revenue_won
+               quality_score
         FROM `{PROJECT_ID}.{DATASET}.v_keyword_performance`
         WHERE date >= '{since}'
         ORDER BY date, channel, utm_campaign, utm_term
@@ -345,29 +214,59 @@ def _push_keyword(days: int) -> int:
     for r in rows:
         ds   = str(r.date)
         base = {
-            "grain":       "keyword",
-            "channel":     r.channel,
-            "campaign":    r.campaign or "",
-            "adgroup":     r.adgroup or "",
-            "keyword":     r.keyword or "",
-            "match_type":  r.match_type or "",
+            "grain":      "keyword",
+            "channel":    r.channel,
+            "campaign":   r.campaign or "",
+            "adgroup":    r.adgroup or "",
+            "keyword":    r.keyword or "",
+            "match_type": r.match_type or "",
         }
-        for key, val in [
-            ("spend",         r.spend),
-            ("impressions",   r.impressions),
-            ("clicks",        r.clicks),
-            ("ctr_pct",       r.ctr_pct),
-            ("leads",         r.leads),
-            ("sqls",          r.sqls),
-            ("disqualified",  r.disqualified),
-            ("cpl",           r.cpl),
-            ("cpql",          r.cpql),
-            ("roas",          r.roas),
-            ("qual_rate_pct", r.qual_rate_pct),
-            ("quality_score", r.quality_score),
-            ("revenue_won",   r.revenue_won),
-        ]:
-            _add(pts, key, val, ds, **base)
+        _add(pts, "spend",         r.spend,         ds, **base)
+        _add(pts, "impressions",   r.impressions,   ds, **base)
+        _add(pts, "clicks",        r.clicks,        ds, **base)
+        _add(pts, "quality_score", r.quality_score, ds, **base)
+
+    return _flush(pts)
+
+
+# ── Asset group grain (Google PMax) ───────────────────────────────────────────
+# Source: google_ads_pmax_asset_groups (if populated)
+
+def _push_asset_group(days: int) -> int:
+    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+    client = get_client()
+    since  = (date.today() - timedelta(days=days)).isoformat()
+
+    # Check table exists before querying — PMax may not be set up yet
+    try:
+        rows = client.query(f"""
+            SELECT date, channel,
+                   CAST(campaign_id   AS STRING) AS campaign_id,
+                   campaign_name,
+                   CAST(asset_group_id AS STRING) AS asset_group_id,
+                   asset_group_name,
+                   spend, impressions, clicks
+            FROM `{PROJECT_ID}.{DATASET}.google_ads_pmax_asset_groups`
+            WHERE date >= '{since}'
+            ORDER BY date, campaign_id, asset_group_id
+        """).result()
+    except Exception:
+        return 0   # table not ready yet — skip silently
+
+    pts = []
+    for r in rows:
+        ds   = str(r.date)
+        base = {
+            "grain":           "asset_group",
+            "channel":         r.channel,
+            "campaign_id":     r.campaign_id or "",
+            "campaign":        r.campaign_name or "",
+            "asset_group_id":  r.asset_group_id or "",
+            "asset_group":     r.asset_group_name or "",
+        }
+        _add(pts, "spend",       r.spend,       ds, **base)
+        _add(pts, "impressions", r.impressions, ds, **base)
+        _add(pts, "clicks",      r.clicks,      ds, **base)
 
     return _flush(pts)
 
@@ -376,25 +275,24 @@ def _push_keyword(days: int) -> int:
 
 def run_push(days: int = 7) -> int:
     """
-    Push all 5 grains to Databox for the last `days` days.
+    Push spend / impressions / clicks at 5 sub-channel grains to Databox.
 
     Args:
-        days: Lookback window. Default 7 for daily incremental. Use 365 for
-              a one-time historical backfill.
+        days: Lookback window. Default 7. Use 365 for one-time backfill.
 
     Returns:
-        Total data points pushed across all grains.
+        Total data points pushed.
     """
     if not DATABOX_TOKEN:
         raise RuntimeError("DATABOX_TOKEN not set")
 
-    total = 0
+    total  = 0
     grains = [
-        ("channel",  _push_channel),
-        ("campaign", _push_campaign),
-        ("adset",    _push_adset),
-        ("ad",       _push_ad),
-        ("keyword",  _push_keyword),
+        ("campaign",    _push_campaign),
+        ("adset",       _push_adset),
+        ("ad",          _push_ad),
+        ("keyword",     _push_keyword),
+        ("asset_group", _push_asset_group),
     ]
     for name, fn in grains:
         try:
