@@ -22,13 +22,16 @@ widgets to filter to the desired level.
     utm_medium    = form name / placement (from hubspot_leads_module_daily)
 
 Dataset:
-  "Qoyod Spend - All Grains"  →  739cde4e-3ba5-4ba9-98e8-701fa33111b7
-  Data source: 4983171 "Qoyod BQ"  (account 756469, Mohammad Irsheid's company)
+  "Qoyod Spend - All Grains"  →  9ec1816a-f7a6-4ba5-b898-349718242d96
+  Data source: 4983171 "Qoyod BQ"  (dataSourceId in API = 4983278 after creation)
+  Numeric fields (spend/impressions/clicks/cpl/cpql/qual_rate_pct/ctr_pct/quality_score)
+  set to Number type via Databox UI — use SUM for volume fields, AVG for ratio fields.
 
 Auth: x-api-key header with DATABOX_TOKEN (pak_ personal API key).
 Max 100 records per request per Databox docs.
 
-Superseded per-grain dataset IDs (kept for reference / rollback):
+Superseded dataset IDs (kept for rollback reference):
+  v1 all-grains (wrong types, wrong names) → 739cde4e-3ba5-4ba9-98e8-701fa33111b7
   campaign    → 6dbbd9df-4554-4c58-9fe4-9009c43e6e06
   adset       → eec43dfb-fb3b-4f4c-8b71-e39bc9704ebd
   ad          → 73151fba-f7c7-4aaf-a695-2df41ad34833
@@ -51,7 +54,7 @@ except Exception:
 
 DATABOX_TOKEN = os.getenv("DATABOX_TOKEN", "")
 _BASE         = "https://api.databox.com"
-_DATASET_ID   = "739cde4e-3ba5-4ba9-98e8-701fa33111b7"   # "Qoyod Spend - All Grains"
+_DATASET_ID   = "9ec1816a-f7a6-4ba5-b898-349718242d96"   # "Qoyod Spend - All Grains" (v2 — numeric fields set correctly)
 _BATCH        = 100     # Databox max per ingestion request
 _BATCH_DELAY  = 0.5     # seconds between batches (0.5s = ~120 req/min, well within Databox limits)
 _TIMEOUT      = 60      # seconds — SSL handshake + response
