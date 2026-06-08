@@ -12,16 +12,20 @@ the bottom of the relevant section.
 
 Surfaced by `connector_health_log` + freshness check. Route via the police loop
 (`docs/_shared/police-loop.md`): owner fixes → growth-analyst verifies → orchestrator reports.
-- [ ] **LinkedIn — 95-day stale** (last data 2026-03-05). Only WARNING so it never
-      alerted. Likely expired token (60-day expiry, silent 0-row failure). Fix:
-      `scripts/linkedin_refresh.py` then re-run collector; if token dead → re-OAuth
-      (HUMAN-gated). Owner: `marketing-ops`.
+- [x] **LinkedIn — 95-day stale → NOT A BUG (resolved 2026-06-08).** There are **no
+      active LinkedIn campaigns** and haven't been for ~95 days, so zero data is
+      CORRECT (idle, not broken). No fix needed. The real defect is that the police
+      *flagged* an idle channel — fixed by the idle-aware rule below.
 - [ ] **BROKEN connectors:** `bing`, `google`, `hubspot_deals`, `hubspot_leads`
       (each has a `fix_command` in `connector_health_log`). First VERIFY root cause —
-      some may be legit "no activity" (e.g. paused MS account), not a bug — before
-      re-running. Owner: `marketing-ops` / `growth-analyst`.
-- [ ] **Persistent-WARNING escalation rule:** a WARNING unchanged 3+ days should
-      auto-escalate to BROKEN (so stale-95-days can't hide). Wire into `connector_tracker`.
+      may be legit "no activity"/idle (NOT a bug). Note google/bing show fresh data in
+      `campaigns_daily` (last 06-07), so their BROKEN is from a non-freshness check —
+      investigate which check before re-running. Owner: `marketing-ops` / `growth-analyst`.
+- [ ] **Idle-aware police (the real fix):** `connector_tracker` must classify a
+      channel with **no active campaigns / no recent spend** as **HEALTHY-IDLE**, not
+      WARNING/BROKEN. And the persistent-WARNING→BROKEN escalation must ONLY apply to
+      channels that are *expected* to have activity (active campaigns or recent spend).
+      Mirrors the MS Ads "Success + null = no activity" pitfall.
 
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 

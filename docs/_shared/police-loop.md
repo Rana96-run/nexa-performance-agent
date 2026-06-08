@@ -13,7 +13,14 @@ DETECT ─► ROUTE ─► FIX ─► VERIFY ─► REPORT
 
 | Stage | Owner | What happens |
 |---|---|---|
-| **DETECT** | `marketing-ops` | Surfaces every signal: `connector_health_log` (BROKEN/WARNING + fix_command), `collector_failures`, the QA gate blocks, `dashboard_violations.jsonl`, and `self_healer` scans. Fires #nexa-health on RED. **Also escalate WARNING that persists** (e.g. a stale-warning unchanged for 3+ days → treat as BROKEN). |
+| **DETECT** | `marketing-ops` | Surfaces every signal: `connector_health_log` (BROKEN/WARNING + fix_command), `collector_failures`, the QA gate blocks, `dashboard_violations.jsonl`, and `self_healer` scans. Fires #nexa-health on RED. Escalate a WARNING unchanged 3+ days to BROKEN — **but only for channels expected to have activity** (see idle rule). |
+
+> **⚠️ Idle ≠ broken (the cry-wolf guard).** A channel with **no active campaigns /
+> no recent spend** that shows zero/stale data is **HEALTHY-IDLE, not a fault** —
+> zero data is correct. Do NOT flag it stale/BROKEN or escalate it. (LinkedIn was
+> stale 95 days simply because there are no active LinkedIn campaigns — not a bug.)
+> Mirrors the MS Ads "Success + null = no activity" pitfall. The police must check
+> *is activity expected here?* before raising any stale/broken flag.
 | **ROUTE** | `ai-orchestrator` | Reads the detected issue, classifies it, hands a HANDOFF packet to the owning seat (below). |
 | **FIX** | the owning seat | Applies the fix. **Autonomy depends on the class — see the boundary.** |
 | **VERIFY** | `growth-analyst` | Re-runs the exact check (re-query freshness / re-run the audit). "Done = the symptom is gone, observed." |
