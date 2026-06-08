@@ -290,28 +290,43 @@ def _push_asset_group(days: int) -> int:
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
-def run_push(days: int = 7) -> int:
+_GRAIN_FNS = {
+    "campaign":    _push_campaign,
+    "adset":       _push_adset,
+    "ad":          _push_ad,
+    "keyword":     _push_keyword,
+    "asset_group": _push_asset_group,
+}
+
+
+def run_push(days: int = 7, grains: list = None) -> int:
     """
-    Push spend data at 5 sub-channel grains to Databox.
+    Push spend data to Databox.
 
     Args:
-        days: Lookback window. Default 7. Use 365 for one-time backfill.
+        days:   Lookback window. Default 7. Use 365 for one-time backfill.
+        grains: Which grains to push. Default = all. Use a single grain to
+                work around Databox's per-session request quota (~85 batches).
+                e.g. grains=["ad"] runs only the ad grain in a fresh session.
 
     Returns:
         Total records pushed.
+
+    Backfill strategy (quota workaround):
+        Run each grain separately:
+          python collectors/databox_pusher.py 365 campaign
+          python collectors/databox_pusher.py 365 adset
+          python collectors/databox_pusher.py 365 ad
+          python collectors/databox_pusher.py 365 keyword
+          python collectors/databox_pusher.py 365 asset_group
     """
     if not DATABOX_TOKEN:
         raise RuntimeError("DATABOX_TOKEN not set")
 
-    total  = 0
-    grains = [
-        ("campaign",    _push_campaign),
-        ("adset",       _push_adset),
-        ("ad",          _push_ad),
-        ("keyword",     _push_keyword),
-        ("asset_group", _push_asset_group),
-    ]
-    for name, fn in grains:
+    targets = grains or list(_GRAIN_FNS.keys())
+    total   = 0
+    for name in targets:
+        fn = _GRAIN_FNS[name]
         try:
             n = fn(days)
             total += n
@@ -320,11 +335,14 @@ def run_push(days: int = 7) -> int:
             print(f"[databox] {name} FAILED: {e}")
             raise
 
-    print(f"[databox] total: {total:,} records across {len(grains)} grains")
+    print(f"[databox] total: {total:,} records")
     return total
 
 
 if __name__ == "__main__":
     import sys
+    # Usage: python collectors/databox_pusher.py [days] [grain]
+    # e.g.:  python collectors/databox_pusher.py 365 campaign
     d = int(sys.argv[1]) if len(sys.argv) > 1 else 7
-    run_push(days=d)
+    g = [sys.argv[2]] if len(sys.argv) > 2 else None
+    run_push(days=d, grains=g)
