@@ -6,12 +6,20 @@ Pushes spend / CPL / CPQL from BigQuery to Databox REST API.
 One unified dataset, four grains. Use the `grain` dimension in Databox
 widgets to filter to the desired level.
 
-  grain=campaign    → campaign level       → lead_utm_campaign
-  grain=adset       → adset/adgroup/adsquad/asset_group level → lead_utm_audience
-                       (Meta adsets, Google adgroups + PMax asset groups,
-                        Snapchat adsquads, TikTok adgroups — all via utm_audience)
-  grain=ad          → ad/creative level    → lead_utm_content
-  grain=keyword     → keyword level        → lead_utm_term  (Google + Microsoft only)
+  grain=campaign  → utm_campaign  (lead_utm_campaign in HubSpot)
+  grain=adset     → utm_audience  (Meta adsets, Google adgroups + PMax asset groups,
+                                   Snapchat adsquads, TikTok adgroups — all via utm_audience)
+  grain=ad        → utm_content   (lead_utm_content in HubSpot)
+  grain=keyword   → utm_term      (lead_utm_term — Google + Microsoft only)
+
+  Dimension naming follows UTM convention throughout:
+    channel       = utm_source (BQ slug: google_ads, meta, snapchat …)
+    qoyod_source  = HubSpot qoyod_source label (Google Ads, Meta Ads …)
+    utm_campaign  = campaign name
+    utm_audience  = adset / adgroup / adsquad / asset group name
+    utm_content   = ad / creative name
+    utm_term      = keyword text
+    utm_medium    = form name / placement (from hubspot_leads_module_daily)
 
 Dataset:
   "Qoyod Spend - All Grains"  →  739cde4e-3ba5-4ba9-98e8-701fa33111b7
@@ -323,29 +331,33 @@ def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
 
 
 def _build_records(grain: str, rows) -> list:
-    """Convert BQ rows to Databox record dicts with grain + source fields.
+    """Convert BQ rows to Databox record dicts.
 
-    Every record carries:
-      channel  — BQ internal slug (google_ads, meta, snapchat …)
-      source   — HubSpot-compatible label (Google Ads, Meta Ads, Snapchat Ads …)
-                 matches qoyod_source / lead_utm_source in hubspot_leads_module_daily
-      grain    — campaign | adset | ad | keyword
+    All dimension names follow UTM convention:
+      channel      = utm_source (BQ slug)
+      qoyod_source = HubSpot qoyod_source label
+      utm_campaign = campaign name
+      utm_audience = adset / adgroup / adsquad / asset group name
+      utm_content  = ad / creative name
+      utm_term     = keyword text
+      utm_medium   = form name / placement
+      grain        = campaign | adset | ad | keyword
     """
     records = []
     for r in rows:
         utm_medium = getattr(r, "utm_medium", None) or None
         base = {
-            "date":        str(r.date),
-            "channel":     r.channel,                    # utm_source equivalent (BQ slug)
+            "date":         str(r.date),
+            "channel":      r.channel,                       # utm_source (BQ slug)
             "qoyod_source": _channel_to_source(r.channel),  # HubSpot qoyod_source label
-            "utm_medium":  utm_medium,                   # form name / placement (if set)
-            "grain":       grain,
+            "utm_medium":   utm_medium,                      # form name / placement
+            "grain":        grain,
         }
 
         if grain == "campaign":
             rec = _row(base,
                 campaign_id  = r.campaign_id or None,
-                campaign     = r.campaign_name or None,
+                utm_campaign = r.campaign_name or None,
                 spend        = _v(r.spend),
                 impressions  = _v(r.impressions),
                 clicks       = _v(r.clicks),
@@ -358,9 +370,9 @@ def _build_records(grain: str, rows) -> list:
         elif grain == "adset":
             rec = _row(base,
                 campaign_id  = r.campaign_id or None,
-                campaign     = r.campaign_name or None,
+                utm_campaign = r.campaign_name or None,
                 adset_id     = r.adset_id or None,
-                adset        = r.adset_name or None,
+                utm_audience = r.adset_name or None,
                 spend        = _v(r.spend),
                 impressions  = _v(r.impressions),
                 clicks       = _v(r.clicks),
@@ -372,11 +384,11 @@ def _build_records(grain: str, rows) -> list:
         elif grain == "ad":
             rec = _row(base,
                 campaign_id  = r.campaign_id or None,
-                campaign     = r.campaign_name or None,
+                utm_campaign = r.campaign_name or None,
                 adset_id     = r.adset_id or None,
-                adset        = r.adset_name or None,
+                utm_audience = r.adset_name or None,
                 ad_id        = r.ad_id or None,
-                ad           = r.ad_name or None,
+                utm_content  = r.ad_name or None,
                 creative_type= r.creative_type or None,
                 spend        = _v(r.spend),
                 impressions  = _v(r.impressions),
@@ -387,11 +399,10 @@ def _build_records(grain: str, rows) -> list:
             )
 
         elif grain == "keyword":
-            # Keywords have no numeric IDs — attribution is text-based via utm_term
             rec = _row(base,
-                campaign     = r.campaign_name or None,
-                adset        = r.adset_name or None,
-                keyword      = r.keyword or None,
+                utm_campaign = r.campaign_name or None,
+                utm_audience = r.adset_name or None,
+                utm_term     = r.keyword or None,
                 match_type   = r.match_type or None,
                 quality_score= _v(r.quality_score),
                 spend        = _v(r.spend),
