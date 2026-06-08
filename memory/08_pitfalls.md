@@ -564,6 +564,17 @@ IG insights:
 - Always verify with `railway status` before deploying — must show
   `nexa-performance-agent / production / nexa-web`.
 
+## Landing page mobile CSS (lp.qoyod.com)
+
+- **RTL nav CTA scrolls off-screen:** When `<a class="qnav-cta">` is the last `<li>` inside `.qnav-links` (which has `overflow-x:auto`), it scrolls off the left edge in RTL on mobile. Fix: move it outside `</ul>` as a direct sibling, then use `order:2` + `justify-content:flex-start!important` in the 767px block.
+- **`cta-band` false positive:** After deleting a cta-band widget, checking `'cta-band' in html` still returns True because orphaned CSS rules (`.cta-band{...}`) remain in the global style widget. Always check for the HTML section specifically: `re.search(r'<section[^>]*class="[^"]*cta-band', html)`.
+- **Hero padding asymmetry in RTL:** Adding padding to `.hero-inner` instead of `.hero` behaves differently in RTL flex — left side appears clipped. Always put mobile padding on `.hero` directly: `padding:40px 16px!important`. The shorthand gives symmetric 16px L+R regardless of RTL.
+- **Elementor cache outlives REST API upload:** After `PUT /wp-json/wp/v2/pages/{id}`, ALWAYS run: (1) `DELETE /wp-json/elementor/v1/cache`, (2) fetch the slug with `X-LiteSpeed-Purge: *` header. Without both steps the old rendered HTML is served.
+- **Browser cache vs server:** User's phone showing old version ≠ server is wrong. Verify with `curl` + Android user-agent and check `x-cache-nxaccel: BYPASS`. If server is correct, the device needs incognito or cache clear.
+- **Local JSON drift:** Local `el-data-{id}.json` can diverge from live if a session uploaded a different version. Always `GET /wp-json/wp/v2/pages/{id}?context=edit` and re-save before editing in a new session.
+- **Single mega-widget pages (773):** All sections live in one widget. Nav, hero, cta-band, and all CSS are surgical HTML edits on one `html` field — no separate widget IDs.
+- Full patterns: `memory/agents/cro/developer/lp-mobile-css-patterns.md`
+
 ## Landing page A/B test
 
 - **Test start date: 2026-05-04.** HubSpot LP (`campaigns.qoyod.com`) has been live ~1 year. WordPress LP (`lp.qoyod.com`) launched for testing starting this date.
