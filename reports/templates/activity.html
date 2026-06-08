@@ -1878,53 +1878,18 @@ a:hover{text-decoration:underline}
     </div>
 
     <!-- Office room container -->
-    <div style="background:#0d1117;border:1px solid #21262d;border-radius:12px;overflow:hidden;margin-bottom:24px;position:relative;padding:32px 24px 36px">
+    <div style="background:#0d1117;border:1px solid #21262d;border-radius:12px;overflow:hidden;margin-bottom:24px;position:relative;padding:28px 20px 32px">
 
       <!-- Floor grid texture -->
       <div style="position:absolute;inset:0;background-image:radial-gradient(circle,#1c2028 1px,transparent 1px);background-size:26px 26px;pointer-events:none"></div>
 
-      <!-- All 6 desks in one open-plan grid -->
-      <div style="position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:36px 20px">
-
-        {# Specialists first/last — manager at position 4 (middle of 6, centre of row 2) #}
-        {% set team = [
-          ("👩‍💻","Paid Media Analyst","#059669",False,"08:30 Riyadh","📊",
-           "Compares current 7d vs prior 7d across Meta, Google, Snap, LinkedIn. Flags CPQL regressions, silent ad deaths, and launch-wave distortions. Outputs CEO paragraph + BQ-verified channel table. Never states a number without a live query via verify-before-reporting."),
-          ("🕵️","Connector Police","#0891b2",False,"08:30 Riyadh","🔍",
-           "Nightly 5-check sweep: last row date ≤1d, daily row count vs 7d avg, spend within ±30% of prior week, UTM attribution rate ≥90%, credential validity. Silent on green — fires to #nexa-health only on RED. Never posts an all-clear message."),
-          ("👨‍💻","Data Engineer","#7c3aed",False,"On demand","⚙️",
-           "Owns qoyod_marketing schema in BQ. No streaming inserts — always load_table_from_file(BytesIO(ndjson)). Runs view rebuilds (v_ad_performance, paid_channel_daily, channel_roas_daily). Requires 7-day BQ↔HubSpot row reconciliation before any change is declared done."),
-          ("🧑‍💼","AI Orchestrator","#f59e0b",True,"08:00 Riyadh","📋",
-           "Runs the 8-stage loop daily at 08:00 Riyadh: Observe BQ → Compare 7d/prior-7d → Investigate root cause → Decide with full setup → Queue in #approvals → Execute on ✅ → Monitor at 7d+14d → Write outcome to memory. Manages all 5 specialists."),
-          ("👩‍💼","Media Buyer","#dc2626",False,"On demand","💰",
-           "Builds campaigns to exact spec: {Channel}_{Type}_{Language}_{Product}_{Audience}, both Meta pixels (CRM 1782671302631317 + Web 3036579196577051), UTM passthrough mandatory, LP assigned before launch. Audience = Interests or Lookalike only — 'Prospecting' raises ValueError."),
-          ("👨‍🎨","CRO Specialist","#d97706",False,"On demand","🎯",
-           "Joins 14-day CPQL from campaigns_daily + hubspot_leads_module_daily to destination_url to surface underperforming LPs. Writes 8-section briefs (Hero → Problem → Features → How it Works → Proof → Trust → FAQ → CTA) for the LP Agent. UTM passthrough non-negotiable — without it CPQL is null.")
-        ] %}
-
-        {% for person, role, color, is_mgr, cadence, mon_icon, desc in team %}
-        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;
-                    {% if is_mgr %}grid-column:1 / -1;max-width:340px;margin:0 auto;width:100%;{% endif %}">
-
-          <!-- Character sitting behind the desk -->
-          <div style="font-size:{% if is_mgr %}56px{% else %}40px{% endif %};line-height:1;
-                      margin-bottom:{% if is_mgr %}-24px{% else %}-18px{% endif %};
-                      position:relative;z-index:2;filter:drop-shadow(0 -2px 6px rgba(0,0,0,.7))">
-            {{ person }}
-          </div>
-
-          <!-- Desk -->
+      <!-- ── Manager — centred, full width ───────────────────────────────── -->
+      <div style="position:relative;z-index:1;display:flex;justify-content:center;margin-bottom:28px">
+        <div style="max-width:420px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center">
+          <div style="font-size:56px;line-height:1;margin-bottom:-24px;position:relative;z-index:2;filter:drop-shadow(0 -2px 6px rgba(0,0,0,.7))">🧑‍💼</div>
           <div style="width:100%;position:relative;z-index:1">
-
-            <!-- Desk surface -->
-            <div style="background:#1e1409;border:1px solid #2d1c08;
-                        border-top:{% if is_mgr %}4px{% else %}3px{% endif %} solid {{ color }};
-                        border-bottom:none;border-radius:8px 8px 0 0;
-                        padding:{% if is_mgr %}28px 20px 16px{% else %}22px 12px 12px{% endif %}">
-
-              <!-- Monitor on desk -->
+            <div style="background:#1e1409;border:1px solid #2d1c08;border-top:4px solid #f59e0b;border-bottom:none;border-radius:8px 8px 0 0;padding:28px 20px 16px">
               <div style="background:#0d1117;border:1.5px solid #30363d;border-radius:4px 4px 2px 2px;display:inline-block;margin-bottom:2px;box-shadow:0 0 10px rgba(0,0,0,.6)">
-                {% if is_mgr %}
                 <div style="padding:6px 16px">
                   <div style="display:flex;gap:5px;justify-content:center;margin-bottom:4px">
                     <span style="width:6px;height:6px;border-radius:50%;background:#3fb950;display:inline-block"></span>
@@ -1933,42 +1898,115 @@ a:hover{text-decoration:underline}
                   </div>
                   <div style="font-size:9px;color:#3fb950;font-family:monospace;white-space:nowrap;letter-spacing:.5px">8-step loop: ON · BQ: LIVE</div>
                 </div>
-                {% else %}
-                <div style="padding:7px 14px;font-size:18px;line-height:1">{{ mon_icon }}</div>
-                {% endif %}
               </div>
-
-              <!-- Monitor stand -->
-              <div style="width:{% if is_mgr %}14px{% else %}12px{% endif %};height:4px;background:#100c06;margin:1px auto 0;border-radius:0 0 2px 2px"></div>
-              <div style="width:{% if is_mgr %}26px{% else %}22px{% endif %};height:2px;background:#100c06;margin:0 auto {% if is_mgr %}12px{% else %}10px{% endif %};border-radius:1px"></div>
-
-              <!-- Nameplate on desk -->
-              <div style="background:#2d1c08;border:1px solid #3d2810;border-radius:3px;
-                          padding:{% if is_mgr %}6px 18px{% else %}5px 12px{% endif %};display:inline-block">
-                <div style="font-size:{% if is_mgr %}12px{% else %}10px{% endif %};font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.6px;white-space:nowrap">{{ role }}</div>
-                {% if is_mgr %}<div style="font-size:9px;color:#92400e;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Manager · All Channels</div>{% endif %}
+              <div style="width:14px;height:4px;background:#100c06;margin:1px auto 0;border-radius:0 0 2px 2px"></div>
+              <div style="width:26px;height:2px;background:#100c06;margin:0 auto 12px;border-radius:1px"></div>
+              <div style="background:#2d1c08;border:1px solid #3d2810;border-radius:3px;padding:6px 18px;display:inline-block">
+                <div style="font-size:12px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:.6px">AI Orchestrator</div>
+                <div style="font-size:9px;color:#92400e;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Manager · All Departments</div>
               </div>
-
             </div>
-
-            <!-- Desk front panel -->
-            <div style="background:#271709;height:{% if is_mgr %}18px{% else %}15px{% endif %};border:1px solid #1a0a02;border-top:2px solid #3d2810;border-radius:0 0 7px 7px;box-shadow:0 6px 16px rgba(0,0,0,.6)"></div>
-
+            <div style="background:#271709;height:18px;border:1px solid #1a0a02;border-top:2px solid #3d2810;border-radius:0 0 7px 7px;box-shadow:0 6px 16px rgba(0,0,0,.6)"></div>
           </div>
-
-          <!-- Role info below desk -->
-          <div style="margin-top:{% if is_mgr %}18px{% else %}14px{% endif %};padding:0 4px">
-            <div style="font-size:{% if is_mgr %}14px{% else %}12px{% endif %};font-weight:700;color:#e6edf3;margin-bottom:5px">{{ role }}</div>
-            <div style="font-size:11px;color:#6b7280;line-height:1.65">{{ desc }}</div>
+          <div style="margin-top:14px;padding:0 8px">
+            <div style="font-size:12px;color:#6b7280;line-height:1.65">Runs the 8-stage loop daily at 08:00 Riyadh. Receives reports from all departments, queues decisions in #approvals, and gates every write action on ✅. Manages handoffs across all 5 departments below.</div>
             <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:9px">
               <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
-              <span style="font-size:9px;color:#484f58">{{ cadence }}</span>
+              <span style="font-size:9px;color:#484f58">08:00 Riyadh · daily</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 5 Department strips ────────────────────────────────────────────── -->
+      {% set departments = [
+        ("👩‍💻","Paid Media Performance","#059669",
+         [
+           ("📊","Senior Paid Media Strategist","Defines CPQL targets, 7d vs prior-7d comparison windows, channel mix, and budget allocation. Sets the brief for every campaign launch."),
+           ("📋","Campaign Manager","Builds campaigns to the 12-field naming spec, configures both Meta pixels, assigns LP before launch. Audience must be Interests or Lookalike — never Prospecting."),
+           ("🎨","Creative Strategist","Briefs ad copy and creatives using OCEAN persona mapping. Scopes A/B creative variants and assigns them to the right audience segment per channel."),
+           ("🔬","Performance Analyst","Runs the 8-step loop on live BQ data. Writes verified Slack digest. Flags CPQL regressions, silent ad deaths, and launch-wave distortions to manager.")
+         ]),
+        ("🕵️","Data Infrastructure","#0891b2",
+         [
+           ("⚙️","Data Pipeline Engineer","Builds and maintains all channel collectors: Meta, Google, Snap, LinkedIn, HubSpot. Ensures every BQ load job completes clean using load_table_from_file."),
+           ("🔍","Data Quality Analyst","Runs the nightly 5-check sweep per connector: freshness ≤1d, row counts vs 7d avg, spend within ±30%, UTM attribution ≥90%, credential validity."),
+           ("🛡️","Infrastructure Monitor","Manages Railway env vars and credential rotation. Fires #nexa-health only on RED — never posts an all-clear. Watches deploy health and API rate limits.")
+         ]),
+        ("👨‍💻","Data Architecture","#7c3aed",
+         [
+           ("🏗️","Data Architect","Designs qoyod_marketing schema, owns all table structure decisions, governs field naming conventions across campaigns_daily and hubspot_leads_module_daily."),
+           ("📐","Analytics Engineer","Builds and owns BQ views: v_ad_performance, paid_channel_daily, channel_roas_daily. Manages all view dependencies and breaking-change migrations."),
+           ("🔧","BQ Developer","Writes collectors using load_table_from_file(BytesIO(ndjson)) — no streaming inserts ever. Handles backfills, UPSERT logic, and schema evolution."),
+           ("✅","Data Validator","Runs 7-day BQ↔HubSpot row reconciliation after every schema or view change. Blocks the 'done' call until counts match within 1% tolerance.")
+         ]),
+        ("👩‍💼","Campaign Execution","#dc2626",
+         [
+           ("🎯","Campaign Strategist","Designs audience architecture per product: Interests, Lookalike, Retargeting, Broad. Owns product-audience fit rules. 'Prospecting' as audience raises ValueError."),
+           ("💰","Media Buyer","Executes ad builds with both Meta pixels (CRM 1782671302631317 + Web 3036579196577051). Sets bid strategies, daily budgets, and schedule. Never executes without ✅."),
+           ("🔗","Tracking Specialist","Verifies UTM passthrough on every LP before launch. Validates pixel fires in Events Manager. Confirms HubSpot lead attribution via lead_utm_campaign field."),
+           ("🎬","Creative Coordinator","Manages the ad asset pipeline and enforces creative naming conventions. Coordinates with CRO department on LP variants and asset alignment.")
+         ]),
+        ("👨‍🎨","CRO & Conversion","#d97706",
+         [
+           ("🎯","CRO Senior","Defines test goal and hypothesis from 14-day CPQL + destination_url data. Creates the 8-section LP brief and scopes the A/B test with clear success criteria."),
+           ("🖌️","UI/UX Designer","Designs page variants and wireframes aligned to OCEAN persona mapping. ZATCA compliance badge above fold is non-negotiable. Hands off annotated design to Developer."),
+           ("💻","Developer","Builds LP variant, implements UTM passthrough, wires conversion tracking, deploys to production. Verifies pixel fires before handoff to QA."),
+           ("🧪","QA Engineer","Tests all variants across every mobile and desktop breakpoint. Validates HubSpot form submissions pass correctly. Checks tracking behaviour and brand guideline compliance."),
+           ("📊","Data Analyst","Analyses A/B test results using real BQ numbers. Makes the variant decision. Recommends next iteration steps based on CPQL delta and qualification rate.")
+         ])
+      ] %}
+
+      <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:14px">
+      {% for person, dept, color, chain in departments %}
+      <div style="background:#161b22;border:1px solid #21262d;border-left:3px solid {{ color }};border-radius:10px;overflow:hidden">
+        <div style="display:flex;align-items:stretch;flex-wrap:wrap">
+
+          <!-- Compact desk (left sidebar) -->
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                      padding:18px 14px;border-right:1px solid #21262d;flex-shrink:0;
+                      min-width:100px;text-align:center;background:#1a1009">
+            <div style="font-size:30px;line-height:1;margin-bottom:-12px;position:relative;z-index:2;filter:drop-shadow(0 -1px 4px rgba(0,0,0,.6))">{{ person }}</div>
+            <div style="width:72px;position:relative;z-index:1">
+              <div style="background:#1e1409;border:1px solid #2d1c08;border-top:2px solid {{ color }};border-bottom:none;border-radius:4px 4px 0 0;padding:10px 6px 8px">
+                <div style="background:#2d1c08;border-radius:2px;padding:3px 5px">
+                  <div style="font-size:7px;font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.3px;line-height:1.3">{{ dept }}</div>
+                </div>
+              </div>
+              <div style="background:#271709;height:7px;border-radius:0 0 3px 3px;border:1px solid #1a0a02;border-top:none;box-shadow:0 3px 8px rgba(0,0,0,.5)"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;margin-top:10px">
+              <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
+              <span style="font-size:8px;color:#484f58">{{ chain|length }} roles</span>
+            </div>
+          </div>
+
+          <!-- Handoff chain -->
+          <div style="flex:1;min-width:260px;padding:16px 14px;display:flex;gap:0;flex-wrap:wrap;align-items:flex-start">
+            {% for step_emoji, step_title, step_desc in chain %}
+            <div style="display:flex;align-items:flex-start;flex-shrink:0;margin-bottom:8px">
+              <!-- Step card -->
+              <div style="background:#0d1117;border:1px solid #21262d;border-top:2px solid {{ color }};
+                          border-radius:6px;padding:10px 12px;width:155px;position:relative">
+                <!-- Step number -->
+                <div style="position:absolute;top:-1px;right:8px;background:{{ color }};color:#0d1117;
+                            font-size:8px;font-weight:800;padding:1px 5px;border-radius:0 0 3px 3px;
+                            letter-spacing:.3px">{{ loop.index }}</div>
+                <div style="font-size:20px;line-height:1;margin-bottom:5px">{{ step_emoji }}</div>
+                <div style="font-size:11px;font-weight:700;color:#e6edf3;margin-bottom:4px;line-height:1.3">{{ step_title }}</div>
+                <div style="font-size:10px;color:#6b7280;line-height:1.55">{{ step_desc }}</div>
+              </div>
+              <!-- Arrow connector -->
+              {% if not loop.last %}
+              <div style="display:flex;align-items:center;padding:0 5px;margin-top:28px;color:#2d1c08;font-size:16px;flex-shrink:0">→</div>
+              {% endif %}
+            </div>
+            {% endfor %}
           </div>
 
         </div>
-        {% endfor %}
-
+      </div>
+      {% endfor %}
       </div>
 
     </div><!-- /office-room -->
