@@ -21,6 +21,11 @@ clean, annotated spec to the Developer.
 - **ZATCA compliance badge above the fold — mandatory.**
 - **Annotated design with interaction notes for the Developer handoff.**
 
+## Reference knowledge (local copy of the LP Agent)
+`docs/landing-pages/reference/` — design to `lp-design-system.md` +
+`brand/design-system.md` (tokens, no divergence) and `brand/landing-page-wireframes.md`.
+(SoT: `D:\Landing Page Agent\`; this is a snapshot — re-sync if it changes.)
+
 ## Workspace (the landing-page folders)
 Read the brief in `docs/landing-pages/briefs/`; write your annotated design to
 `docs/landing-pages/designs/` using the **same filename**. See

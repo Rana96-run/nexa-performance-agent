@@ -12,6 +12,7 @@ cro-specialist  ──►  ui-ux-designer  ──►  developer  ──►  (bac
 
 | Folder | Owner | Holds |
 |---|---|---|
+| `reference/` | shared (read-only) | local snapshot of the LP Agent's knowledge — design system, wireframes, brand, anti-claims, build prompts (see `reference/README.md`) |
 | `_templates/` | shared | the 8-section LP brief template + the ZATCA/pixel/UTM compliance checklist |
 | `briefs/` | `cro-specialist` | one brief per test: hypothesis, 8 sections, success criteria (14-day CPQL + destination_url) |
 | `designs/` | `ui-ux-designer` | annotated LP designs aligned to the OCEAN persona, ZATCA badge above fold, interaction notes |

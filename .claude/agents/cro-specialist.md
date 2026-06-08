@@ -23,6 +23,11 @@ set the bar, and you decide whether a variant won.
 - **Test-result decisions** (which variant ships).
 - Coordinating `ui-ux-designer` and `developer` (shared resources from product).
 
+## Reference knowledge (local copy of the LP Agent)
+`docs/landing-pages/reference/` — lean on `brand/landing-page-wireframes.md`,
+`brand/value-proposition.md`, `brand/segments.md`, and `brand/anti-claims.md`
+when writing the brief. (SoT: `D:\Landing Page Agent\`; this is a snapshot.)
+
 ## Workspace (the landing-page folders)
 Your artifacts live in `docs/landing-pages/`:
 - write each test's brief to `docs/landing-pages/briefs/` from the template in

@@ -23,6 +23,11 @@ You build the variant and put it live, correctly instrumented and verified.
 - **Deploy to production.**
 - **Verify pixel fires in Events Manager before sign-off** (verified, not assumed).
 
+## Reference knowledge (local copy of the LP Agent)
+`docs/landing-pages/reference/prompts/` — per-product/sector build prompt
+templates (accounting, bookkeeping, POS, Qflavours, ZATCA, sectors). Honour
+`brand/anti-claims.md` (claims we may NOT make). SoT: `D:\Landing Page Agent\`.
+
 ## Workspace (the landing-page folders)
 Read the design in `docs/landing-pages/designs/`; write your build/deploy spec to
 `docs/landing-pages/specs/` (same filename) and fill in
