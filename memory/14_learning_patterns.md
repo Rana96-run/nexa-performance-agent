@@ -121,6 +121,23 @@ constants in `executors/hubspot_lists.py`).
 
 ---
 
+## 2026-06-08 — Runtime/subagent unification (deferred, by design)
+
+**Trigger:** After building the 9 dev-time subagents + their playbooks, the
+question arose whether to point `claude/roles.py` (the Railway runtime) at those
+playbooks so dev-time and production share one source of truth.
+**Recommendation:** Do NOT blind-repoint. Runtime personas (`md_files/qoyod-*.md`)
+are rich ~23KB operating prompts; the dev playbooks are tight procedures.
+Repointing would shrink the runtime prompts and degrade production. Unify instead
+by cross-reference (the 3-taxonomy bridge table in `11_agent_roles.md`), or grow
+the playbooks to runtime depth first, then repoint.
+**Decision:** deferred — left for an explicit go (touches live code).
+**Outcome (after Nd):** n/a (not executed).
+**Learned:** "one source of truth" ≠ "one file" when two consumers need different
+depth. Bridge with a mapping table before merging prompts.
+
+---
+
 ## (template for future entries)
 
 ## YYYY-MM-DD — <pattern name>

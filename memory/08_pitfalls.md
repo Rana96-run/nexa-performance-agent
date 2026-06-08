@@ -830,3 +830,59 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
 - Caught and re-documented 2026-05-19 (Rana flagged: "you still override the
   qa gate layer and take the conversions from the channels while these are
   page views not leads — we said 100 times leads come only from hubspot").
+
+
+## Databox — schema type inference always gives STRING/COUNT
+
+- **Symptom:** Numeric fields (spend, cpl, cpql) show "COUNT" as the only aggregation
+  option in Databox widget builder even when you push JSON numbers.
+- **Root cause:** Databox infers STRING for ALL fields regardless of JSON value type.
+  There is no schema-update endpoint (PUT/PATCH both return 405).
+- **Fix:** Include a `schema` array in `POST /v1/datasets` at CREATION TIME:
+  ```json
+  {"name": "...", "dataSourceId": 4983171, "schema": [
+    {"name": "spend", "type": "NUMBER"},
+    {"name": "cpl",   "type": "NUMBER"}, ...
+  ]}
+  ```
+  Use `dataSourceId: 4983171` (PAK-linked source) for creation — NOT the `dataSourceId`
+  returned by GET on an existing dataset (that value is `4983278` and returns 400).
+  After creation the stored `dataSourceId` becomes `4983278` — that's read-only metadata.
+- **Dataset IDs (history):**
+  - v1 `739cde4e` → deleted (wrong field names + all-string)
+  - v2 `9ec1816a` → deleted (correct names + all-string)
+  - v3 `eff4621e` → ACTIVE (correct names + NUMBER schema)
+
+## Databox — BQ CTE alias scope in `_medium_cte()`
+
+- **Symptom:** `Unrecognized name: hs at [30:42]` — BQ BadRequest during medium CTE build.
+- **Root cause:** `hs` alias defined in `medium_raw` CTE was referenced in the PARTITION BY
+  clause of `medium_cte` CTE where it's out of scope.
+- **Fix:** Split `group_cols` (with `hs.` prefix, used in medium_raw SELECT) from
+  `partition_cols` (bare column names, used in PARTITION BY):
+  ```python
+  group_cols     = ", ".join(f"hs.{c}" for c in hs_cols)   # for medium_raw SELECT
+  partition_cols = ", ".join(hs_cols)                        # for PARTITION BY
+  ```
+
+## 2026-06-08 — Agent-system rebuild (critical gates)
+
+- **The team is 9 agents (org chart), NOT the 13 `agent_activity_log` roles.** The
+  log table is a *logging* taxonomy (infra: health_monitor/bq_refresh/collector/
+  ops_scheduler; human: user; function buckets). Build/verify the roster from
+  `docs/_shared/org-chart.md`, never the log table. Cost a full wrong rebuild first.
+- **`md_files/` is LIVE runtime — never move/delete the 6 files** `claude/roles.py`
+  loads (qoyod-manager-os, qoyod-brand-identity, qoyod-paid-media-agent,
+  qoyod-analyst-agent, nexa-strategist, qoyod-daily-report). Moving them breaks Railway.
+- **`agent_handoff_log` does NOT exist** (no BQ table, no code). The
+  growth-marketing-dept / marketing-ops-dept / agent-handoff skills assuming it are
+  aspirational specs — don't treat their payloads as live.
+- **Don't blind-repoint `claude/roles.py` at the dev playbooks.** Runtime personas
+  are rich (~23KB); dev playbooks are tight. Repointing shrinks prompts and degrades
+  production. Unify by cross-reference, or grow-then-repoint. (Deferred, by design.)
+- **New `.claude/agents/*.md` aren't dispatchable by name until `/agents` reload**
+  (or restart) — Claude Code discovers agents at session start.
+- **`secrets/` and `node_modules/` were unignored** (nothing committed). Now in
+  `.gitignore`. Always confirm `git ls-files secrets/` is empty before committing.
+- **Concurrent sessions edit this repo.** Commit with explicit pathspecs
+  (`git commit -- <path>`) so you don't sweep another session's staged files.
