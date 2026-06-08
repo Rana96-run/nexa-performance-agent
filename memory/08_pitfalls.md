@@ -632,6 +632,30 @@ IG insights:
 - **Single mega-widget pages (773):** All sections live in one widget. Nav, hero, cta-band, and all CSS are surgical HTML edits on one `html` field — no separate widget IDs.
 - Full patterns: `memory/agents/cro/developer/lp-mobile-css-patterns.md`
 
+## Google Search negative keyword policy — informational modifiers that are NOT negatives (2026-06-09)
+
+**Trap:** Proposing `طريقة` ("method / how-to") and `متطلبات` ("requirements") as phrase
+negatives in ZATCA / e-invoice Google Search campaigns.
+
+**Why they are NOT negatives:**
+- `متطلبات` — "ZATCA requirements", "e-invoice requirements" = businesses being legally
+  forced to comply. This is *exactly* our ICP. A search like `متطلبات الفاتورة الإلكترونية`
+  is from a buyer in the compliance-mandate funnel, not an informational researcher.
+- `طريقة` — "how to issue an e-invoice", "method for e-invoicing" = learning-intent queries
+  that pair with our product keywords. The searcher needs a solution. Adding `طريقة` as
+  negative would block this traffic everywhere it co-occurs with our target keywords.
+- `كيفية` ("how to") — same logic as `طريقة`. Do NOT negate.
+
+**What IS worth negating (fatoora terms):**
+- `fatoora`, `fatoora platform`, `fatoora portal`, `ZATCA portal` — these route to the
+  Saudi government's free compliance portal, not a paid SaaS. Intent is to use the
+  government tool, not buy ours. Direct-execute as phrase negatives.
+
+**Rule:** Only negate informational modifiers that lead to content consumption (دورة / كورس /
+تحميل / نموذج مجاني) or to a specific competing free product (fatoora/ZATCA portal). Modifiers
+that describe the buyer's **problem** (requirements, method, how-to) stay open — they bring us
+the compliance-mandate audience we want. Corrected by Amar 2026-06-09.
+
 ## Landing page A/B test
 
 - **Test start date: 2026-05-04.** HubSpot LP (`campaigns.qoyod.com`) has been live ~1 year. WordPress LP (`lp.qoyod.com`) launched for testing starting this date.
