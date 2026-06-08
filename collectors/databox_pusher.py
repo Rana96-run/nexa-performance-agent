@@ -57,6 +57,33 @@ ALL_GRAINS = ["campaign", "adset", "ad", "keyword"]
 # Note: asset_group is NOT a separate grain — PMax asset groups appear in the
 # adset grain (v_adset_performance includes them via utm_audience).
 
+# BQ channel slug → HubSpot qoyod_source / lead_utm_source label.
+# Must match hubspot_leads_module_daily.qoyod_source exactly (case-sensitive).
+# "Tiktok Ads" has lowercase 'i' — matches HubSpot property editor value.
+_SOURCE_NAME = {
+    "google_ads":    "Google Ads",
+    "meta":          "Meta Ads",
+    "snapchat":      "Snapchat Ads",
+    "tiktok":        "Tiktok Ads",
+    "microsoft_ads": "Microsoft Ads",
+    "linkedin":      "LinkedIn Ads",
+}
+
+def _channel_to_source(channel: str) -> str:
+    """Map BQ channel slug to HubSpot source label, case/space/underscore insensitive.
+
+    Normalises the lookup key (lowercase, strip spaces + underscores) so that
+    variants like 'Google_Ads', 'GOOGLE ADS', 'google ads' all resolve correctly.
+    Falls back to the raw channel value if no match found.
+    """
+    if not channel:
+        return channel
+    # Build normalised lookup on first call (cached in closure)
+    norm_map = {"".join(k.lower().split("_")).replace(" ", ""): v
+                for k, v in _SOURCE_NAME.items()}
+    key = "".join(channel.lower().split("_")).replace(" ", "")
+    return norm_map.get(key, channel)
+
 
 def _session() -> requests.Session:
     """Session with automatic retry on connection errors and 429."""
@@ -186,10 +213,22 @@ def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
 
 
 def _build_records(grain: str, rows) -> list:
-    """Convert BQ rows to Databox record dicts with a `grain` field."""
+    """Convert BQ rows to Databox record dicts with grain + source fields.
+
+    Every record carries:
+      channel  — BQ internal slug (google_ads, meta, snapchat …)
+      source   — HubSpot-compatible label (Google Ads, Meta Ads, Snapchat Ads …)
+                 matches qoyod_source / lead_utm_source in hubspot_leads_module_daily
+      grain    — campaign | adset | ad | keyword
+    """
     records = []
     for r in rows:
-        base = {"date": str(r.date), "channel": r.channel, "grain": grain}
+        base = {
+            "date":    str(r.date),
+            "channel": r.channel,
+            "source":  _channel_to_source(r.channel),   # HubSpot-compatible label
+            "grain":   grain,
+        }
 
         if grain == "campaign":
             rec = _row(base,
