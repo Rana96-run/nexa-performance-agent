@@ -4,6 +4,7 @@ The one front door to the whole system. Everything below is either **shared
 (one-for-all)** or **per-role**. Start at the top; drill into a role as needed.
 
 ## 0. Read-first (shared rules)
+- `OVERVIEW.md` — **generic system reference**: what it is, why, how it works, what it fixes/contains/solves, how we built it
 - `../CLAUDE.md` — project non-negotiables (always win)
 - `../CLAUDE.manager.md` — Manager OS: the 8-step loop, routing, the ✅ gate
 - `memory/CRITICAL_KPI_RULES.md` — KPI rules (hook-enforced)

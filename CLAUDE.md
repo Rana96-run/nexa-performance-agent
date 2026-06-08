@@ -21,6 +21,9 @@ before doing anything else:
    departments), the daily loop, routing, the ✅ gate, and handoff orchestration.
    Read it to understand who does what and how to dispatch a teammate. Agents
    live in `.claude/agents/`; how-to in `docs/_shared/how-to-use-the-team.md`.
+6. **`docs/OVERVIEW.md`** — the generic system reference: what the whole system
+   is, why it exists, how it works, what it fixes/contains/solves, how it was
+   built. The single explainer. Navigation map: `docs/INDEX.md`.
 
 ## Session start — always resume from latest state (non-negotiable)
 

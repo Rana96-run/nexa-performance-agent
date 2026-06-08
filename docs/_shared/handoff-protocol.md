@@ -4,6 +4,17 @@ A handoff is how one agent passes work to another without doing that other
 agent's job. This is what stops "talking to myself": each seat finishes its
 piece and hands a clean packet onward.
 
+> **Two properties every agent has:**
+> 1. **Self-contained** — each agent has its full operating data to work
+>    *independently*: its own playbook (`docs/playbooks/<dept>/<role>.md`), its own
+>    memory (`memory/agents/<dept>/<role>/`), and the shared playbook
+>    (`docs/playbooks/_shared.md`). It never needs another agent's internals to do
+>    its own job.
+> 2. **Linkable to ANY other agent** — the map below is the *default* flow, not a
+>    wall. Any agent can hand a packet to any other agent when the work calls for
+>    it (directly, or routed by `ai-orchestrator`). The packet format is the same
+>    regardless of who → whom.
+
 ## The standard handoff packet
 ```
 HANDOFF
