@@ -1,12 +1,35 @@
 # Agent Roles — What Lives Here vs Elsewhere
 
-## In this repo (3 roles)
+> **Canonical roster is now `docs/_shared/org-chart.md`.** As of 2026-06-08 the
+> team is **15 separate Claude Code subagents** in `.claude/agents/`, across 3
+> departments (Performance Marketing, Growth Marketing, Marketing Operations),
+> each with its own playbook (`docs/playbooks/<dept>/<role>.md`) and private
+> memory (`memory/agents/<dept>/<role>/`). This file is kept as a quick map; the
+> org-chart is the source of truth.
 
-| Role | File | Job |
+## Two layers — don't confuse them
+- **Dev-time subagents** (`.claude/agents/*.md`) — the team you and Claude work
+  with in Claude Code. Isolated context per role → less hallucination. This is
+  the new structure.
+- **Production runtime** (`claude/roles.py` + `claude/manager.py`) — the
+  autonomous Railway product; makes one Anthropic API call per role at cadence.
+  Still live, untouched by the subagent revamp. Phase 2 will point it at the
+  same playbooks so there's one source of truth.
+
+## In this repo (the 3 departments)
+
+| Dept | Manager | Roles |
 |---|---|---|
-| **Paid Media** | `md_files/qoyod-paid-media-agent.md` | Propose pause/scale/budget/bid changes; execute on Slack ✅ |
-| **Analyst / Strategist** | `md_files/qoyod-analyst-agent.md` | Continuous + periodic analysis — LPs, bounce, traffic, converters, ads behavior, **scaling signals**, **lead-quality monitoring** |
-| **Project Manager** | `md_files/qoyod-task-flow.md` | Classifies signals → routes → tasks → chases → closes |
+| **Performance Marketing** | `performance-lead` | media-buyer · paid-media-analyst · paid-media-strategist · data-engineer · connector-police · cro-paid-specialist · keyword-strategist |
+| **Growth Marketing** | `growth-lead` | growth-strategist · market-expansion-analyst |
+| **Marketing Operations** | `ops-manager` | ops-reporter · approval-coordinator |
+| _routing above all_ | `cmo-orchestrator` | — |
+
+### Legacy persona files (superseded)
+The old `md_files/qoyod-*.md` personas (paid-media, analyst, strategist, daily-report,
+creative, hubspot-cro, manager-os) are the **runtime's** prompt sources, loaded by
+`claude/roles.py`. They are NOT the dev-time agents. Don't edit them to change a
+subagent — edit `.claude/agents/` + `docs/playbooks/`.
 
 ## Separate agents (NOT in this repo)
 

@@ -32,6 +32,24 @@ single concern. Read only what you need.
 | `14_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
 | `utm_template.md` | Canonical Google Ads UTM `final_url_suffix` template + custom-param convention. Read BEFORE proposing any UTM string. |
 
+## The team (agents) — NEW
+
+The marketing org is now **15 separate Claude Code subagents** across 3
+departments, each with its own playbook and memory. Start here:
+
+| Where | What |
+|---|---|
+| `.claude/agents/README.md` | The roster + how to talk to a teammate |
+| `../docs/_shared/org-chart.md` | Who exists, who manages whom, who owns what |
+| `../docs/_shared/handoff-protocol.md` | How agents pass work to each other |
+| `../docs/_shared/communication-rules.md` | How the team behaves |
+| `../docs/playbooks/_index.md` | Every agent's operational playbook |
+| `agents/<dept>/<role>/` | Each agent's **private memory** (see `agents/README.md`) |
+
+The flat `NN_*.md` files in this folder are **shared org memory** — every agent
+may read them; several are referenced by exact path in `CLAUDE.md` and the
+production runtime, so they don't move.
+
 ## External references (not in repo)
 
 - Google Drive: https://drive.google.com/drive/folders/1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74

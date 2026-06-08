@@ -29,6 +29,7 @@ venv/
 !.claude/hooks/
 !.claude/settings.example.json
 !.claude/skills/
+!.claude/agents/
 *.swp
 .DS_Store
 Thumbs.db
