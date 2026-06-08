@@ -912,3 +912,17 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
   `.gitignore`. Always confirm `git ls-files secrets/` is empty before committing.
 - **Concurrent sessions edit this repo.** Commit with explicit pathspecs
   (`git commit -- <path>`) so you don't sweep another session's staged files.
+
+## Connector Police (connector_tracker.py) — 3 false-positive bugs (fixed 2026-06-08)
+
+The "Connector Police" flagged 4 connectors BROKEN that were all healthy. Root
+cause was the tracker itself, not the connectors. If it cries wolf again, check:
+- **Channel labels:** it queries `campaigns_daily.channel` — must use `google_ads`/
+  `microsoft_ads`, NOT display names `google`/`bing`. Map via `_BQ_CHANNEL`.
+- **Channel-less tables:** `hubspot_leads_module_daily` / `hubspot_deals_daily` /
+  `gclid_attribution` have **no `channel` column** — freshness/row checks must gate
+  the `WHERE channel=` filter on `table == "campaigns_daily"`, else `400 Unrecognized name: channel`.
+- **Freshness threshold:** `_STALE_HOURS` must be ≥72h (3d). 1-day-old data is
+  ~28–48h old and normal (collector lags up to 2d pre-08:00) → tighter = daily false WARNING.
+- **Idle ≠ broken:** a channel with no active campaigns / no spend (or `known_paused`)
+  is HEALTHY-IDLE, not stale/BROKEN (LinkedIn). Suppressed in `run_connector_check`.

@@ -29,8 +29,10 @@ from typing import Any
 from collectors.bq_writer import get_client
 
 _RIYADH = timezone(timedelta(hours=3))
-_STALE_HOURS = 28          # > this → STALE warning
-_BROKEN_HOURS = 76         # > this → BROKEN
+_STALE_HOURS = 72          # > this (3d) → STALE warning. <3d is normal: the nightly
+                           # collector legitimately lags up to 2 days before 08:00 Riyadh
+                           # (per memory/08_pitfalls.md "freshness threshold must be ≥3 days").
+_BROKEN_HOURS = 96         # > this (4d) → BROKEN
 _SPIKE_MULTIPLIER = 5.0    # spend > N×7d avg → WARNING
 _MIN_ATTRIBUTION_RATE = 0.5  # < 50% leads joined → WARNING
 _LI_TOKEN_WARN_DAYS = 45   # LinkedIn token warn threshold
@@ -66,6 +68,11 @@ COLLECTOR_SCRIPTS = {
 
 # ── BQ helpers ────────────────────────────────────────────────────────────────
 
+# campaigns_daily stores channels as google_ads / microsoft_ads; the police labels
+# them google / bing for display. Map display label -> BQ channel for WHERE filters.
+_BQ_CHANNEL = {"google": "google_ads", "bing": "microsoft_ads"}
+
+
 def _bq_query(sql: str) -> list:
     c = get_client()
     return list(c.query(sql).result())
@@ -81,8 +88,8 @@ def check_freshness(channel: str, table: str) -> dict:
     """Hours since last successful row for this channel in its BQ table."""
     proj, ds = _proj_ds()
 
-    # gclid_attribution has no channel column — use table-level max date
-    if channel == "gclid":
+    # Only campaigns_daily has a `channel` column; gclid + hubspot tables don't.
+    if table != "campaigns_daily":
         sql = f"""
             SELECT TIMESTAMP_DIFF(CURRENT_TIMESTAMP(),
                    TIMESTAMP(MAX(date)), HOUR) AS hours_old
@@ -93,7 +100,7 @@ def check_freshness(channel: str, table: str) -> dict:
             SELECT TIMESTAMP_DIFF(CURRENT_TIMESTAMP(),
                    TIMESTAMP(MAX(date)), HOUR) AS hours_old
             FROM `{proj}.{ds}.{table}`
-            WHERE LOWER(channel) = LOWER('{channel}')
+            WHERE LOWER(channel) = LOWER('{_BQ_CHANNEL.get(channel, channel)}')
         """
     try:
         rows = _bq_query(sql)
@@ -117,7 +124,7 @@ def check_row_integrity(channel: str, table: str) -> dict:
     """Yesterday must have rows if the prior 7 days consistently did."""
     proj, ds = _proj_ds()
 
-    channel_filter = f"AND LOWER(channel) = LOWER('{channel}')" if channel not in ("gclid",) else ""
+    channel_filter = f"AND LOWER(channel) = LOWER('{_BQ_CHANNEL.get(channel, channel)}')" if table == "campaigns_daily" else ""
 
     sql = f"""
         WITH daily AS (
@@ -165,7 +172,7 @@ def check_spend_sanity(channel: str) -> dict:
         WITH daily AS (
           SELECT date, SUM(spend) AS total_spend
           FROM `{proj}.{ds}.campaigns_daily`
-          WHERE LOWER(channel) = LOWER('{channel}')
+          WHERE LOWER(channel) = LOWER('{_BQ_CHANNEL.get(channel, channel)}')
             AND date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 8 DAY)
             AND date < CURRENT_DATE('Asia/Riyadh')
           GROUP BY date
@@ -207,7 +214,7 @@ def check_attribution(channel: str) -> dict:
         WITH spend AS (
           SELECT LOWER(campaign_name) AS camp, SUM(spend) AS total_spend
           FROM `{proj}.{ds}.campaigns_daily`
-          WHERE LOWER(channel) = LOWER('{channel}')
+          WHERE LOWER(channel) = LOWER('{_BQ_CHANNEL.get(channel, channel)}')
             AND date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
           GROUP BY 1
           HAVING total_spend > 0
@@ -296,23 +303,29 @@ def run_connector_check(connector: dict) -> dict:
     results["checks"]["attribution"] = check_attribution(channel)
     results["checks"]["credentials"] = check_credentials(connector)
 
+    # Idle-aware: a channel with no active campaigns / no spend is HEALTHY-IDLE,
+    # not stale/broken (e.g. LinkedIn with no live campaigns). Suppress freshness +
+    # row staleness flags for idle channels. Mirrors MS "Success+null = no activity".
+    ss = results["checks"].get("spend_sanity", {})
+    no_spend = (ss.get("yesterday_spend_usd", 0) or 0) == 0 and (ss.get("avg_7d_usd", 0) or 0) == 0
+    is_idle = known_paused or (table == "campaigns_daily" and no_spend)
+    if is_idle:
+        for cn in ("freshness", "row_integrity"):
+            if results["checks"].get(cn, {}).get("status") in ("BROKEN", "WARNING"):
+                results["checks"][cn]["status"] = "HEALTHY"
+                results["checks"][cn]["note"] = "IDLE — no active campaigns / no spend (not a fault)"
+    results["is_idle"] = is_idle
+
     # Aggregate status: BROKEN > WARNING > HEALTHY
-    # known_paused connectors: downgrade BROKEN freshness to WARNING
     for check_name, check_result in results["checks"].items():
         check_status = check_result.get("status", "HEALTHY")
         if check_status == "BROKEN":
-            if known_paused and check_name == "freshness":
-                results["checks"][check_name]["status"] = "WARNING"
-                results["checks"][check_name]["note"] = "KNOWN_PAUSED — freshness downgraded"
-                check_status = "WARNING"
-            else:
-                results["status"] = "BROKEN"
-                # Set fix command from check result or default
-                results["fix_command"] = (
-                    check_result.get("fix")
-                    or f"railway run python {COLLECTOR_SCRIPTS.get(channel, 'unknown')} 3"
-                )
-                break
+            results["status"] = "BROKEN"
+            results["fix_command"] = (
+                check_result.get("fix")
+                or f"railway run python {COLLECTOR_SCRIPTS.get(channel, 'unknown')} 3"
+            )
+            break
         elif check_status == "WARNING" and results["status"] == "HEALTHY":
             results["status"] = "WARNING"
 

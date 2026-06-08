@@ -16,16 +16,17 @@ Surfaced by `connector_health_log` + freshness check. Route via the police loop
       active LinkedIn campaigns** and haven't been for ~95 days, so zero data is
       CORRECT (idle, not broken). No fix needed. The real defect is that the police
       *flagged* an idle channel — fixed by the idle-aware rule below.
-- [ ] **BROKEN connectors:** `bing`, `google`, `hubspot_deals`, `hubspot_leads`
-      (each has a `fix_command` in `connector_health_log`). First VERIFY root cause —
-      may be legit "no activity"/idle (NOT a bug). Note google/bing show fresh data in
-      `campaigns_daily` (last 06-07), so their BROKEN is from a non-freshness check —
-      investigate which check before re-running. Owner: `marketing-ops` / `growth-analyst`.
-- [ ] **Idle-aware police (the real fix):** `connector_tracker` must classify a
-      channel with **no active campaigns / no recent spend** as **HEALTHY-IDLE**, not
-      WARNING/BROKEN. And the persistent-WARNING→BROKEN escalation must ONLY apply to
-      channels that are *expected* to have activity (active campaigns or recent spend).
-      Mirrors the MS Ads "Success + null = no activity" pitfall.
+- [x] **"BROKEN" google/bing/hubspot_leads → FALSE POSITIVES, FIXED 2026-06-08.**
+      Root cause was 3 bugs IN `connector_tracker.py` (not the connectors):
+      (1) it queried channel `google`/`bing` but `campaigns_daily` stores
+      `google_ads`/`microsoft_ads` → 0 rows → false BROKEN; (2) freshness/row SQL
+      hardcoded a `channel` column that HubSpot tables lack → `400 Unrecognized name`;
+      (3) `_STALE_HOURS=28` false-WARNED 1-day-old data daily. Fixed all three +
+      idle-aware (LinkedIn now HEALTHY-IDLE). After fix: 1 BROKEN, 2 WARNING, 6 HEALTHY.
+- [ ] **`hubspot_deals` — REAL: ~10-day stale** (freshness 258h, MAX(date) ~2026-05-28).
+      The one genuine police catch. VERIFY: is the deals collector lagging, or is the
+      `date` column legitimately sparse (few recent deals)? Owner: `growth-analyst` →
+      if collector lag, `railway run python collectors/hubspot_deals_bq.py`.
 
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 
