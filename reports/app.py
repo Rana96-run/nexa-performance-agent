@@ -307,7 +307,7 @@ def _load_code_health() -> dict:
     from pathlib import Path as _P
     base  = _P(__file__).resolve().parent.parent
     queue = base / "memory" / "dashboard_violations.jsonl"
-    log   = base / "memory" / "14_activity_dashboard.md"
+    log   = base / "memory" / "16_activity_dashboard.md"
 
     violations: list[dict] = []
     if queue.exists():

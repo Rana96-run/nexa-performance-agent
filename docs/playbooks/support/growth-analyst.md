@@ -18,7 +18,7 @@ written by you.
 ## Memory ownership (non-negotiable)
 - Write `memory/08_pitfalls.md` on **every new API trap** (one line + fix).
 - Update `memory/14_learning_patterns.md` **after every action outcome**.
-- Keep `memory/14_activity_dashboard.md` and the org memory honest.
+- Keep `memory/16_activity_dashboard.md` and the org memory honest.
 
 ## Hard rules
 Never report without live BQ. HubSpot deal amounts in BQ are already USD.

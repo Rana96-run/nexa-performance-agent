@@ -419,6 +419,13 @@ Before building anything new, ask: does a tool already in use solve this?
 - **If two options exist**, pick the one with fewer moving parts, fewer credentials to manage, and fewer things that can break.
 - **Consolidate, don't duplicate** — if a folder already has a sibling file doing related work (e.g. `audit_active_keywords.py`), extend the unified CLI (`scripts/audit.py`) with a subcommand instead of adding a third top-level script. Same rule for env vars, Slack channels, and config keys: pick one canonical name, add a fallback for the legacy. See `.claude/skills/consolidate-no-duplicates.md`.
 - **Don't delete env vars based on "no Python import" alone.** Before removing any env var from `.env`, Railway, or GitHub Secrets, ask: (1) is it reserved for a feature currently disabled but expected to be re-enabled (e.g. `EMAIL_*` for the future Slack-→-email switch)? (2) does it hold real human/entity metadata (e.g. `ASANA_ASSIGNEE_<NAME>`)? (3) is it consumed by a different runtime than the one I'm grepping (GH Actions YAML, not Railway Python)? If any answer is yes-or-unsure, keep it. Env vars are free; surprise outages aren't.
+- **Folder & naming discipline (lean structure).** When adding a file, put it in the
+  **right existing folder** — don't spawn a new folder unless a concept genuinely has
+  no home. Keep the **repo root lean** (only entrypoints + config + top-level docs belong
+  there; everything else lives in a package/folder). **Don't mirror another project's
+  folder tree** as empty scaffolding — match conventions, not folder-for-folder. Names:
+  **clean and consistent** — kebab-case for docs (`how-to-use-the-team.md`), numbered
+  `NN_topic.md` for shared memory (no duplicate numbers), no spaces in filenames.
 - **Call it out** — if asked to build something that already exists elsewhere in the stack, say so and propose the simpler path instead.
 
 ## Memory is the one store — lean of clutter, rich in knowledge (non-negotiable mindset)

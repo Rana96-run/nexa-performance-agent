@@ -94,5 +94,5 @@ BQ inserts · HubSpot read-only without Slack approval · Arabic MSA.
 ## 11. Learning loop
 Every session leaves the team more capable. Ensure `growth-analyst` records new API
 traps (`memory/08_pitfalls.md`), action outcomes (`memory/14_learning_patterns.md`),
-and keeps the org memory (`11_agent_roles.md`, `14_activity_dashboard.md`) honest.
+and keeps the org memory (`11_agent_roles.md`, `16_activity_dashboard.md`) honest.
 Retired agents move to `.claude/agents/_archived/`.

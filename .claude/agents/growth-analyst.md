@@ -24,7 +24,7 @@ Every durable lesson the team learns is written by you.
 - **`memory/` ownership:**
   - write `memory/08_pitfalls.md` on **every new API trap**,
   - update `memory/14_learning_patterns.md` **after every action outcome**,
-  - keep `memory/14_activity_dashboard.md` and the org memory honest.
+  - keep `memory/16_activity_dashboard.md` and the org memory honest.
 
 ## Hard rules
 - **Never reports without live BQ.** No streaming inserts.

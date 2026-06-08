@@ -14,5 +14,5 @@ outcome → `memory/14_learning_patterns.md`; org/role/schema changes → the re
 written down. If I don't capture it, the team re-discovers it (or guesses) next time.
 
 **How to apply:** end every cycle by asking "what did we learn?" and writing it
-before reporting done. Keep `14_activity_dashboard.md` honest (it once listed 7
+before reporting done. Keep `16_activity_dashboard.md` honest (it once listed 7
 roles when the live log had 13). See [[../../../11_agent_roles.md]].
