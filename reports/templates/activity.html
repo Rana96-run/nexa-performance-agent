@@ -1909,7 +1909,7 @@ a:hover{text-decoration:underline}
             <div style="background:#271709;height:18px;border:1px solid #1a0a02;border-top:2px solid #3d2810;border-radius:0 0 7px 7px;box-shadow:0 6px 16px rgba(0,0,0,.6)"></div>
           </div>
           <div style="margin-top:14px;padding:0 8px">
-            <div style="font-size:12px;color:#6b7280;line-height:1.65">Runs the 8-stage loop daily at 08:00 Riyadh. Receives reports from all departments, queues decisions in #approvals, and gates every write action on ✅. Manages handoffs across all 5 departments below.</div>
+            <div style="font-size:12px;color:#6b7280;line-height:1.65">Runs the 8-stage loop daily at 08:00 Riyadh. Receives reports from all departments, queues decisions in #approvals, and gates every write action on ✅. Manages handoffs across all 3 departments below.</div>
             <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:9px">
               <span style="width:5px;height:5px;border-radius:50%;background:#3fb950;display:inline-block"></span>
               <span style="font-size:9px;color:#484f58">08:00 Riyadh · daily</span>
@@ -1918,42 +1918,24 @@ a:hover{text-decoration:underline}
         </div>
       </div>
 
-      <!-- ── 5 Department strips ────────────────────────────────────────────── -->
+      <!-- ── 3 Department strips ────────────────────────────────────────────── -->
       {% set departments = [
         ("👩‍💻","Paid Media Performance","#059669",
          [
-           ("📊","Senior Paid Media Strategist","Defines CPQL targets, 7d vs prior-7d comparison windows, channel mix, and budget allocation. Sets the brief for every campaign launch."),
-           ("📋","Campaign Manager","Builds campaigns to the 12-field naming spec, configures both Meta pixels, assigns LP before launch. Audience must be Interests or Lookalike — never Prospecting."),
-           ("🎨","Creative Strategist","Briefs ad copy and creatives using OCEAN persona mapping. Scopes A/B creative variants and assigns them to the right audience segment per channel."),
-           ("🔬","Performance Analyst","Runs the 8-step loop on live BQ data. Writes verified Slack digest. Flags CPQL regressions, silent ad deaths, and launch-wave distortions to manager.")
-         ]),
-        ("🕵️","Data Infrastructure","#0891b2",
-         [
-           ("⚙️","Data Pipeline Engineer","Builds and maintains all channel collectors: Meta, Google, Snap, LinkedIn, HubSpot. Ensures every BQ load job completes clean using load_table_from_file."),
-           ("🔍","Data Quality Analyst","Runs the nightly 5-check sweep per connector: freshness ≤1d, row counts vs 7d avg, spend within ±30%, UTM attribution ≥90%, credential validity."),
-           ("🛡️","Infrastructure Monitor","Manages Railway env vars and credential rotation. Fires #nexa-health only on RED — never posts an all-clear. Watches deploy health and API rate limits.")
-         ]),
-        ("👨‍💻","Data Architecture","#7c3aed",
-         [
-           ("🏗️","Data Architect","Designs qoyod_marketing schema, owns all table structure decisions, governs field naming conventions across campaigns_daily and hubspot_leads_module_daily."),
-           ("📐","Analytics Engineer","Builds and owns BQ views: v_ad_performance, paid_channel_daily, channel_roas_daily. Manages all view dependencies and breaking-change migrations."),
-           ("🔧","BQ Developer","Writes collectors using load_table_from_file(BytesIO(ndjson)) — no streaming inserts ever. Handles backfills, UPSERT logic, and schema evolution."),
-           ("✅","Data Validator","Runs 7-day BQ↔HubSpot row reconciliation after every schema or view change. Blocks the 'done' call until counts match within 1% tolerance.")
-         ]),
-        ("👩‍💼","Campaign Execution","#dc2626",
-         [
-           ("🎯","Campaign Strategist","Designs audience architecture per product: Interests, Lookalike, Retargeting, Broad. Owns product-audience fit rules. 'Prospecting' as audience raises ValueError."),
-           ("💰","Media Buyer","Executes ad builds with both Meta pixels (CRM 1782671302631317 + Web 3036579196577051). Sets bid strategies, daily budgets, and schedule. Never executes without ✅."),
-           ("🔗","Tracking Specialist","Verifies UTM passthrough on every LP before launch. Validates pixel fires in Events Manager. Confirms HubSpot lead attribution via lead_utm_campaign field."),
-           ("🎬","Creative Coordinator","Manages the ad asset pipeline and enforces creative naming conventions. Coordinates with CRO department on LP variants and asset alignment.")
+           ("📊","Performance Lead","Owns CPQL targets, 7d vs prior-7d comparison windows, channel mix, and budget allocation. Sets the brief for every campaign launch and signs off on scale/pause decisions."),
+           ("📋","Campaign Manager","Builds campaigns to the 12-field naming spec. Executes ad builds with both Meta pixels (CRM 1782671302631317 + Web 3036579196577051). Audience is Interests or Lookalike — never Prospecting. Never executes without ✅."),
+           ("🎨","Creative Strategist","Briefs copy and creatives using OCEAN persona mapping. Scopes A/B variants, assigns to the right audience per channel, and coordinates LP asset alignment with CRO.")
          ]),
         ("👨‍🎨","CRO & Conversion","#d97706",
          [
-           ("🎯","CRO Senior","Defines test goal and hypothesis from 14-day CPQL + destination_url data. Creates the 8-section LP brief and scopes the A/B test with clear success criteria."),
-           ("🖌️","UI/UX Designer","Designs page variants and wireframes aligned to OCEAN persona mapping. ZATCA compliance badge above fold is non-negotiable. Hands off annotated design to Developer."),
-           ("💻","Developer","Builds LP variant, implements UTM passthrough, wires conversion tracking, deploys to production. Verifies pixel fires before handoff to QA."),
-           ("🧪","QA Engineer","Tests all variants across every mobile and desktop breakpoint. Validates HubSpot form submissions pass correctly. Checks tracking behaviour and brand guideline compliance."),
-           ("📊","Data Analyst","Analyses A/B test results using real BQ numbers. Makes the variant decision. Recommends next iteration steps based on CPQL delta and qualification rate.")
+           ("🎯","CRO Specialist","Defines test hypothesis from 14-day CPQL + destination_url data. Writes the 8-section LP brief with clear success criteria. Coordinates design and dev resources from product team."),
+           ("🖌️","UI/UX Designer","Designs LP variants aligned to OCEAN persona mapping. ZATCA compliance badge above fold is non-negotiable. Hands off annotated design with interaction notes to Developer. Shared resource from product."),
+           ("💻","Developer","Builds LP variant, implements UTM passthrough, wires pixel and conversion tracking, deploys to production. Verifies all pixel fires before sign-off. Shared resource from product.")
+         ]),
+        ("🔧","Marketing Ops & Analytics","#0891b2",
+         [
+           ("🔗","Marketing Ops","Owns UTM hygiene, pixel health (both Meta pixels), HubSpot field mapping, and connector freshness. Manages Railway env vars and credential rotation. Fires #nexa-health on RED only."),
+           ("📊","Growth Analyst","One analyst for everything: 8-step loop on live BQ data, CRO A/B results, CPQL regressions, silent-death flags, and monthly forecasts. Writes the verified Slack digest. Never reports without querying BQ first.")
          ])
       ] %}
 
