@@ -908,7 +908,7 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
   log table is a *logging* taxonomy (infra: health_monitor/bq_refresh/collector/
   ops_scheduler; human: user; function buckets). Build/verify the roster from
   `docs/_shared/org-chart.md`, never the log table. Cost a full wrong rebuild first.
-- **`md_files/` is LIVE runtime — never move/delete the 6 files** `claude/roles.py`
+- **`runtime_personas/` is LIVE runtime — never move/delete the 6 files** `claude/roles.py`
   loads (qoyod-manager-os, qoyod-brand-identity, qoyod-paid-media-agent,
   qoyod-analyst-agent, nexa-strategist, qoyod-daily-report). Moving them breaks Railway.
 - **`agent_handoff_log` does NOT exist** (no BQ table, no code). The

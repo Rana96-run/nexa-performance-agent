@@ -126,7 +126,7 @@ constants in `executors/hubspot_lists.py`).
 **Trigger:** After building the 9 dev-time subagents + their playbooks, the
 question arose whether to point `claude/roles.py` (the Railway runtime) at those
 playbooks so dev-time and production share one source of truth.
-**Recommendation:** Do NOT blind-repoint. Runtime personas (`md_files/qoyod-*.md`)
+**Recommendation:** Do NOT blind-repoint. Runtime personas (`runtime_personas/qoyod-*.md`)
 are rich ~23KB operating prompts; the dev playbooks are tight procedures.
 Repointing would shrink the runtime prompts and degrade production. Unify instead
 by cross-reference (the 3-taxonomy bridge table in `11_agent_roles.md`), or grow

@@ -198,7 +198,7 @@ The team is **9 Claude Code subagents** = 1 manager + 3 departments (see
 - **Support** (parallel): `marketing-ops` ∥ `growth-analyst` (owns `memory/`).
 
 > **Two layers:** these dev-time subagents are separate from the **production
-> runtime** (`claude/roles.py`), which loads `md_files/qoyod-*.md` personas at
+> runtime** (`claude/roles.py`), which loads `runtime_personas/qoyod-*.md` personas at
 > cadence on Railway. The PM/task-flow step is code, not an md file
 > (`main._extract_tasks` + `executors/asana`). Don't confuse them — see
 > `memory/11_agent_roles.md`.

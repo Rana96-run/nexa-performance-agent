@@ -1,6 +1,6 @@
 # Looker Studio → BigQuery Replication Map
 
-Source: user's 3 Looker dashboards (PDFs in `md_files/looker_reports/`).
+Source: user's 3 Looker dashboards (PDFs in `runtime_personas/looker_reports/`).
 Goal: every tile / chart / table below is reproduced as a BQ view so we can regenerate these reports from a single source of truth (and serve them to both Looker Studio AND our own web dashboard).
 
 ---

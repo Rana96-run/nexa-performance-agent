@@ -49,7 +49,7 @@ linked to any other (default flow is structured; the orchestrator can wire any p
 | CRO workspace | `docs/landing-pages/` | briefs → designs → specs + LP reference (snapshot of `D:\Landing Page Agent`) |
 | Creative reference | `docs/creative/reference/` | design knowledge (snapshot of `D:\Design Agent`) |
 | Indexes | `docs/INDEX.md` (master) + `playbooks/_index.md` + `memory/00_index.md` | navigation |
-| Production runtime | `claude/roles.py`, `md_files/`, `operational_scheduler.py` | the Railway agent (separate layer) |
+| Production runtime | `claude/roles.py`, `runtime_personas/`, `operational_scheduler.py` | the Railway agent (separate layer) |
 
 ## 5. What it fixes / what it can solve
 - **Hallucination** → isolated per-role context (each agent loads only its files).
@@ -87,7 +87,7 @@ the daily loop + the gate (`ai-orchestrator`).
 
 ## 8. Two layers (don't confuse them)
 - **Dev-time** (this system): the 9 subagents you work with in Claude Code.
-- **Production runtime**: `claude/roles.py` + `md_files/` personas running on Railway.
+- **Production runtime**: `claude/roles.py` + `runtime_personas/` personas running on Railway.
   Editing an agent here does NOT change Railway. Unifying them is deferred by design
   (see `14_learning_patterns.md`).
 

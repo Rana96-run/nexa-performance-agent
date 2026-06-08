@@ -37,7 +37,7 @@
 There are three vocabularies in this repo. They are NOT the same axis; this table
 is the bridge so a change in one is traceable to the others.
 
-| 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py` → `md_files/`) | Activity-log label(s) |
+| 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py` → `runtime_personas/`) | Activity-log label(s) |
 |---|---|---|
 | `ai-orchestrator` | `daily_report` (qoyod-daily-report.md) + manager-os | `ops_scheduler`, `daily_digest`, `task_creator` |
 | `performance-lead` | `paid_media_strategist` (nexa-strategist.md) | `performance_audit`, `paid_media_strategist` |
@@ -62,7 +62,7 @@ Shared runtime context: `qoyod-manager-os.md` ↔ `CLAUDE.manager.md`;
 ### Phase-2 unification (NOT done — deliberate)
 Pointing `claude/roles.py` directly at the dev playbooks would shrink the runtime
 prompts (rich ~23KB personas → tight procedures) and **degrade production**. The
-correct unify is to (a) keep `md_files/` as the runtime's rich source, and (b)
+correct unify is to (a) keep `runtime_personas/` as the runtime's rich source, and (b)
 have each persona and its dev playbook cross-reference this table so neither
 drifts — or, if we want true single-source, *grow* the playbooks to runtime depth
 first, then repoint. Either way it's a reviewed change to live code, not a blind
