@@ -421,6 +421,23 @@ Before building anything new, ask: does a tool already in use solve this?
 - **Don't delete env vars based on "no Python import" alone.** Before removing any env var from `.env`, Railway, or GitHub Secrets, ask: (1) is it reserved for a feature currently disabled but expected to be re-enabled (e.g. `EMAIL_*` for the future Slack-→-email switch)? (2) does it hold real human/entity metadata (e.g. `ASANA_ASSIGNEE_<NAME>`)? (3) is it consumed by a different runtime than the one I'm grepping (GH Actions YAML, not Railway Python)? If any answer is yes-or-unsure, keep it. Env vars are free; surprise outages aren't.
 - **Call it out** — if asked to build something that already exists elsewhere in the stack, say so and propose the simpler path instead.
 
+## Lean knowledge, not archives (non-negotiable mindset)
+
+We work to **learn, gain experience, evolve, and become unbreakable** — NOT to be
+an archive full of files and crowded data. The system's strength is its **distilled
+knowledge** (memory, playbooks, learnings), not a hoard of leftover artifacts.
+
+- **Capture the learning, then drop the file.** A one-off script, a probe, a
+  migration, raw reference material — once its *finding/outcome* is in `memory/`,
+  the file is clutter. Remove it (untrack if recoverable matters; delete if the
+  knowledge is fully captured).
+- **Before keeping any file, ask: "is the knowledge already captured?"** If yes,
+  keeping the file makes us heavier, not stronger.
+- **Recoverability ≠ reason to hoard.** Git history + memory hold what matters;
+  the working tree should stay lean.
+- This is why `scripts/_*` one-offs became `memory/15_operational_history.md`, and
+  why we don't accumulate dead folders. Evolve by distilling, not by storing.
+
 ## When unsure
 
 - **Ask Amar in Slack** rather than invent data or guess a field name — **only after searching memory/ first**
