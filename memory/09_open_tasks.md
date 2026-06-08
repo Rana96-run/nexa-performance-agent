@@ -23,10 +23,16 @@ Surfaced by `connector_health_log` + freshness check. Route via the police loop
       hardcoded a `channel` column that HubSpot tables lack → `400 Unrecognized name`;
       (3) `_STALE_HOURS=28` false-WARNED 1-day-old data daily. Fixed all three +
       idle-aware (LinkedIn now HEALTHY-IDLE). After fix: 1 BROKEN, 2 WARNING, 6 HEALTHY.
-- [ ] **`hubspot_deals` — REAL: ~10-day stale** (freshness 258h, MAX(date) ~2026-05-28).
-      The one genuine police catch. VERIFY: is the deals collector lagging, or is the
-      `date` column legitimately sparse (few recent deals)? Owner: `growth-analyst` →
-      if collector lag, `railway run python collectors/hubspot_deals_bq.py`.
+- [x] **`hubspot_deals` ~10-day stale → self-resolved.** VERIFY (2026-06-08) showed
+      the collector caught up: MAX(date)=2026-06-08, continuous daily rows since
+      2026-05-28. Was a transient incremental-window lag, now fresh. No action.
+- [ ] **🔴 CORRUPT DEAL AMOUNT (found during the deals verify, HUMAN fix needed):**
+      `2026-06-08` Bookkeeping / Google Ads / **3 open deals = $257,734,508,522 USD
+      (≈966B SAR)** — vs a normal 90-day daily *max* of $95k (≈2.7M× normal). A
+      fat-finger/corrupt deal amount inflating pipeline value. **HubSpot is read-only**
+      → a human must find the outlier deal (Bookkeeping pipeline, Google Ads source,
+      open stage, ~$257B/966B SAR) and correct its amount, then re-run
+      `collectors/hubspot_deals_bq.py`. Police now auto-catches this (amount_sanity check).
 
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 

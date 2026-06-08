@@ -937,3 +937,7 @@ cause was the tracker itself, not the connectors. If it cries wolf again, check:
   ~28–48h old and normal (collector lags up to 2d pre-08:00) → tighter = daily false WARNING.
 - **Idle ≠ broken:** a channel with no active campaigns / no spend (or `known_paused`)
   is HEALTHY-IDLE, not stale/BROKEN (LinkedIn). Suppressed in `run_connector_check`.
+- **No deal-amount check existed → a $257.7B (966B SAR) corrupt deal slipped through.**
+  Added `check_amount_sanity` (deals only): daily `amount_total` > 50× the 90d median →
+  BROKEN. Found a fat-finger Bookkeeping deal 2026-06-08 (2.7M× normal). The police now
+  watches deal amounts, not just spend. Source deal fix is HUMAN-gated (HubSpot read-only).

@@ -34,6 +34,7 @@ _STALE_HOURS = 72          # > this (3d) → STALE warning. <3d is normal: the n
                            # (per memory/08_pitfalls.md "freshness threshold must be ≥3 days").
 _BROKEN_HOURS = 96         # > this (4d) → BROKEN
 _SPIKE_MULTIPLIER = 5.0    # spend > N×7d avg → WARNING
+_DEAL_AMOUNT_SPIKE = 50.0  # daily deal amount_total > N×90d-median → BROKEN (corrupt/fat-finger amount)
 _MIN_ATTRIBUTION_RATE = 0.5  # < 50% leads joined → WARNING
 _LI_TOKEN_WARN_DAYS = 45   # LinkedIn token warn threshold
 _LI_TOKEN_BREAK_DAYS = 60  # LinkedIn token expiry
@@ -202,6 +203,34 @@ def check_spend_sanity(channel: str) -> dict:
     return {"status": "HEALTHY", "yesterday_spend_usd": round(yesterday_spend, 2), "avg_7d_usd": round(avg_7d, 2)}
 
 
+def check_amount_sanity(table: str) -> dict:
+    """Flag corrupt/implausible deal amounts (e.g. a fat-finger 257B deal). Deals only."""
+    proj, ds = _proj_ds()
+    sql = f"""
+        WITH daily AS (
+          SELECT date, SUM(amount_total) AS amt
+          FROM `{proj}.{ds}.{table}`
+          WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 90 DAY)
+          GROUP BY date
+        )
+        SELECT
+          MAX(IF(date = CURRENT_DATE('Asia/Riyadh'), amt, NULL))                       AS today_amt,
+          APPROX_QUANTILES(IF(date < CURRENT_DATE('Asia/Riyadh'), amt, NULL), 100)[OFFSET(50)] AS median_amt
+        FROM daily
+    """
+    try:
+        rows = _bq_query(sql)
+        today = float(rows[0].today_amt or 0) if rows else 0
+        median = float(rows[0].median_amt or 0) if rows else 0
+    except Exception as e:
+        return {"status": "HEALTHY", "note": f"amount check skipped: {str(e)[:60]}"}
+    if median > 0 and today > median * _DEAL_AMOUNT_SPIKE:
+        return {"status": "BROKEN",
+                "reason": f"deal amount_total ${today:,.0f} is {today/median:.0f}x the 90d median (${median:,.0f}) — likely a corrupt/fat-finger deal amount",
+                "fix": "Find the outlier deal in HubSpot (read-only here → human) and correct its amount; then re-run collectors/hubspot_deals_bq.py"}
+    return {"status": "HEALTHY", "today_amount_usd": round(today, 0), "median_90d_usd": round(median, 0)}
+
+
 # ── Check 4: Attribution Health ───────────────────────────────────────────────
 
 def check_attribution(channel: str) -> dict:
@@ -300,6 +329,8 @@ def run_connector_check(connector: dict) -> dict:
     results["checks"]["freshness"] = check_freshness(channel, table)
     results["checks"]["row_integrity"] = check_row_integrity(channel, table)
     results["checks"]["spend_sanity"] = check_spend_sanity(channel)
+    if channel == "hubspot_deals":
+        results["checks"]["amount_sanity"] = check_amount_sanity(table)
     results["checks"]["attribution"] = check_attribution(channel)
     results["checks"]["credentials"] = check_credentials(connector)
 
