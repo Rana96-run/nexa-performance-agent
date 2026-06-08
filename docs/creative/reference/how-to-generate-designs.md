@@ -23,14 +23,13 @@ response · design-brief-only · headlines-only · AI-image-prompt-only · gener
 Post 1080×1080 (1:1) · Story/Reel/Snap 1080×1920 (9:16) · Portrait 1080×1350 (4:5) ·
 Banner 1920×1080 (16:9).
 
-## Image generation — HiggsField
-1. Assemble the prompt (8-block skeleton, English, no text inside the image).
-2. `POST /v1/images/generate` with prompt + dimensions (HiggsField MCP/API).
-3. Overlay logos / pricing / Arabic text in the design tool afterward.
-> **Credentials:** HiggsField needs `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET`
-> (and `ANTHROPIC_API_KEY`). These live in `D:\Design Agent\.env` today — move them to
-> a gitignored env / `secrets/`, NEVER commit them. (The folder's `.mcp.json` currently
-> has the key in plaintext — rotate it if it was ever shared.)
+## Image generation — tool-agnostic (HiggsField RETIRED 2026-06-08)
+We no longer use HiggsField. Your deliverable is the **8-block English image
+prompt** (no text inside the image) + the design brief — ready to paste into
+whatever image tool is in use. Then overlay logos / pricing / Arabic text in the
+design tool afterward.
+> The old HiggsField API/MCP and its keys are no longer needed. If you find the
+> key still in `D:\Design Agent\.mcp.json`/`.env`, treat it as dead — rotate/revoke it.
 
 ## Key rules (never break)
 1. Exact hex codes always (`#F26522`, `#021544` — never "orange").
@@ -40,9 +39,9 @@ Banner 1920×1080 (16:9).
 5. Logo placement fixed: sub-brand bottom-right, qoyod.com bottom-left.
 6. Gradient 45° top-right → bottom-left.
 
-## What still lives only in `D:\Design Agent\` (needed to actually render)
-- **Lama Sans font** family (required for on-brand compositing).
-- Optional **PIL compositor** (`generate_designs.py`, `compositor.py`, `presets.py`)
-  if you want programmatic image assembly rather than prompt-only.
-- Visual **benchmark samples** (`Social media design samples/`).
-The brief/prompt/analysis work needs none of these — only the docs in this folder.
+## What still lives only in `D:\Design Agent\`
+- **Lama Sans font** family (only needed if you composite on-brand artwork yourself).
+- Visual **benchmark samples** (`Social media design samples/`) — nice-to-have reference.
+The brief / prompt / analysis work — the core of this role — needs **none** of these;
+only the docs in this folder. With HiggsField retired, the folder's generator
+pipeline is obsolete.

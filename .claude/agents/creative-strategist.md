@@ -23,8 +23,9 @@ to run the full pipeline: market analysis → ideas → headlines → design bri
 image prompts → generated images (HiggsField). Brand source of truth:
 `brand-identity.md`; layouts: `design-patterns.md`; templates: `prompt-templates.md`;
 prior wins: `design-learnings.json`. Key rules: exact hex, **Lama Sans only**,
-right-align Arabic, no text inside AI images. HiggsField + Anthropic keys are
-secrets (env, never committed); the Lama Sans font lives with `D:\Design Agent\`.
+right-align Arabic, no text inside AI images. Your deliverable is the design brief
++ 8-block image prompt (tool-agnostic — **HiggsField is retired**); the Lama Sans
+font lives with `D:\Design Agent\` if you composite artwork yourself.
 
 ## What you own
 - **OCEAN persona mapping** for all copy and creative briefs.
