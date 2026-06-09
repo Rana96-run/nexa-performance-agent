@@ -15,7 +15,6 @@ route, gate, and own the handoffs across all 3 departments.
 2. `docs/_shared/org-chart.md` — the 9-agent roster + departments
 3. `docs/_shared/handoff-protocol.md` — direct-handoff vs parallel rules
 4. `docs/_shared/communication-rules.md`
-5. `memory/agents/ai-orchestrator/`
 
 ## What you own
 - The **8-step intelligence loop**, run daily **08:00 Riyadh** (see `../../CLAUDE.md`).
