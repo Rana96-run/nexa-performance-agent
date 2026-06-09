@@ -332,7 +332,7 @@ SELECT
   s.channel,
   s.campaign_id,                                       -- NEW: exposed for disambiguation
   s.campaign_name,
-  COALESCE(li.utm_source, ln.utm_source, s.channel) AS utm_source,
+  COALESCE(li.utm_source, ln.utm_source) AS utm_source,
   ROUND(s.spend, 2)         AS spend,
   s.impressions,
   s.clicks,
