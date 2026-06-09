@@ -1256,3 +1256,34 @@ cause was the tracker itself, not the connectors. If it cries wolf again, check:
   with `yaml.safe_load` on the frontmatter (one-liner in `.claude/agents/README.md`);
   then run `/agents` (or restart). **Rule:** agent `description` must be valid YAML — never
   an unquoted colon-space. A subagent that can't load on its own = a frontmatter bug.
+
+## Non-paid-source leak audit across all HubSpot-joined surfaces (2026-06-09)
+
+After the `utm_paid_attribution_daily` fix (commit 9c758c7) dropped 38 NULL-channel orphan
+rows, audited every other surface for the same leak (non-paid `qoyod_source` carrying a
+stale paid UTM → NULL/mis-attributed channel). Live BQ, last-7d, per surface:
+NULL-channel-with-leads count + distinct channel values present.
+
+- **paid_channel_campaign_daily — CLEAN.** Resolves channel via INNER JOIN on inline
+  paid-only `channel_map` keyed on `qoyod_source`; non-paid sources (Direct Traffic /
+  Offline / Organic Social / etc.) have no map row and are dropped. 0 NULL-channel rows,
+  only paid channels present. No fix.
+- **paid_channel_daily — CLEAN.** Same INNER-join-on-`channel_map` structure. 0 NULL-channel
+  rows, only paid channels. No fix.
+- **channel_roas_daily — CLEAN.** INNER JOIN on `v_channel_key_map` (includes
+  `organic_search` by design). 0 NULL-channel rows; only paid + `organic_search` present —
+  the latter is intentional, not a leak. No fix.
+- **utm_paid_attribution_daily — CLEAN (confirm).** 0 NULL-channel rows post-fix; channels =
+  paid + `organic_search` (in the fix allow-list). Fix verified holding.
+- **v_adset_performance — CLEAN (confirm).** Leads sourced only from
+  `utm_paid_attribution_daily` (no direct `hubspot_leads_module_daily` join since 2026-06-09);
+  inherits the fix. 0 NULL-channel rows.
+- **v_ad_performance — CLEAN (confirm).** Same — leads only from `utm_paid_attribution_daily`.
+  0 NULL-channel rows (2 organic_search leads, intentional).
+- **Why the qoyod_source surfaces are structurally immune:** they map channel via an INNER
+  JOIN on `qoyod_source` against a paid-only (or paid+organic) map, so a non-paid source is
+  dropped at the join — it can never become NULL or a non-paid label. Different mechanism
+  from `utm_paid_attribution_daily`, which matched on UTM and COALESCE-resolved channel
+  (allowed NULLs). **The 9c758c7 source-filter pattern only needs to live in the one UTM-grain
+  view; the channel-grain views already filter implicitly via the INNER join.** No fixes
+  applied, no materialize needed.
