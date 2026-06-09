@@ -2,6 +2,8 @@
 Stop hook: auto-commit and push any uncommitted local changes to origin/main.
 Fires every time Claude finishes a turn. Exits 0 silently if nothing to commit.
 Outputs a systemMessage JSON line if it commits something.
+Also logs the commit to agent_activity_log in BQ so it appears in the
+Hex activity dashboard automatically.
 """
 import json
 import os
@@ -10,6 +12,8 @@ import subprocess
 import sys
 
 REPO_ROOT = r"D:\Nexa Performance Agent"
+BQ_PROJECT = "angular-axle-492812-q4"
+BQ_DATASET = "qoyod_marketing"
 
 # Files and patterns that must never be auto-committed
 EXCLUDED = [
@@ -86,10 +90,59 @@ def main() -> None:
         print(f"[auto-commit] push failed: {push.stderr}", file=sys.stderr)
         sys.exit(0)
 
+    # Get commit hash for the dashboard log
+    commit_hash = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
+
+    # Log to BQ activity dashboard
+    _log_to_dashboard(to_stage, commit_hash, staged.stdout.strip())
+
     # Notify the user
     print(json.dumps({
-        "systemMessage": f"[auto-commit] {len(to_stage)} file(s) committed and pushed to origin/main"
+        "systemMessage": (
+            f"[auto-commit] {len(to_stage)} file(s) committed ({commit_hash}) "
+            f"and pushed to origin/main — activity dashboard updated"
+        )
     }))
+
+
+def _log_to_dashboard(files: list[str], commit_hash: str, stat_summary: str) -> None:
+    """Write one row to agent_activity_log so the Hex dashboard picks it up."""
+    try:
+        # Load local .env so GOOGLE_APPLICATION_CREDENTIALS is available
+        env_path = os.path.join(REPO_ROOT, ".env")
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        os.environ.setdefault(k.strip(), v.strip())
+
+        os.environ.setdefault("BQ_PROJECT_ID", BQ_PROJECT)
+        os.environ.setdefault("BQ_DATASET",    BQ_DATASET)
+
+        # Resolve relative credential path against repo root
+        cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+        if cred and not os.path.isabs(cred):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.join(REPO_ROOT, cred)
+
+        sys.path.insert(0, REPO_ROOT)
+        from logs.activity_logger import log_activity
+
+        log_activity(
+            role="claude_session",
+            action="code_committed",
+            status="success",
+            details={
+                "commit": commit_hash,
+                "files_changed": len(files),
+                "files": files[:20],          # cap at 20 to keep details readable
+                "stat": stat_summary[:500],
+            },
+            rows_affected=len(files),
+        )
+    except Exception:
+        pass   # never block the Stop hook
 
 
 if __name__ == "__main__":

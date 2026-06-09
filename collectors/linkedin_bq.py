@@ -2,7 +2,9 @@
 LinkedIn Ads -> BigQuery collector.
 Pulls per-day per-campaign stats -> campaigns_daily.
 
-Auth: LI_ACCESS_TOKEN in .env (expires every 60 days — refresh manually).
+Auth: LI_ACCESS_TOKEN rotated automatically — reads from BQ platform_tokens
+      (written by scripts/linkedin_refresh.py, called nightly by operational_scheduler).
+      Falls back to env var LI_ACCESS_TOKEN if BQ has no valid token.
       LI_AD_ACCOUNT_URN e.g. urn:li:sponsoredAccount:506171805
 """
 import os
@@ -15,8 +17,20 @@ from collectors.currency import to_usd, normalize_currency
 load_dotenv(override=True)
 
 BASE        = "https://api.linkedin.com/rest"
-TOKEN       = os.getenv("LI_ACCESS_TOKEN", "")
 AD_ACCT_URN = os.getenv("LI_AD_ACCOUNT_URN", "")
+
+# Read token from BQ (auto-refreshed nightly) or fall back to env
+def _get_token() -> str:
+    try:
+        from scripts.linkedin_refresh import get_active_token
+        t = get_active_token()
+        if t:
+            return t
+    except Exception:
+        pass
+    return os.getenv("LI_ACCESS_TOKEN", "")
+
+TOKEN = _get_token()
 
 
 def _headers() -> dict:

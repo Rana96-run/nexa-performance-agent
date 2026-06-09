@@ -379,6 +379,178 @@ def _mark_scale_pause_ran() -> None:
     p.write_text(date.today().isoformat())
 
 
+def _check_monitor_dates() -> None:
+    """
+    Auto-follow-up on approved pause/scale actions at +7 and +14 days.
+
+    Reads agent_activity_log for actions with status='approved' that were
+    logged 7 or 14 days ago. Posts a Slack check-in to #approvals asking
+    the team to re-evaluate. Prevents approved actions from disappearing
+    into Asana and never being measured.
+    """
+    try:
+        from google.cloud import bigquery
+        from slack_sdk import WebClient
+        from config import BQ_PROJECT, BQ_DATASET, SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
+
+        bq  = bigquery.Client(project=BQ_PROJECT)
+        today = date.today()
+
+        sql = f"""
+            SELECT action, details, ts, role
+            FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+            WHERE status = 'approved'
+              AND action IN ('scale_campaign','pause_keyword','pause_ad','budget_increase')
+              AND DATE(ts, 'Asia/Riyadh') IN (
+                  DATE_SUB('{today}', INTERVAL 7 DAY),
+                  DATE_SUB('{today}', INTERVAL 14 DAY)
+              )
+            ORDER BY ts DESC
+            LIMIT 20
+        """
+        rows = list(bq.query(sql).result())
+        if not rows:
+            print("[ops-scheduler] Monitor dates: nothing due today")
+            return
+
+        # Group by interval
+        due_7d, due_14d = [], []
+        for r in rows:
+            action_date = r.ts.date() if hasattr(r.ts, 'date') else today
+            delta = (today - action_date).days
+            (due_7d if delta <= 7 else due_14d).append(r)
+
+        lines = []
+        if due_7d:
+            lines.append(f"*7-day check-in ({today}) — {len(due_7d)} action(s) approved on "
+                         f"{today - __import__('datetime').timedelta(days=7)}:*")
+            for r in due_7d:
+                d = r.details if isinstance(r.details, dict) else {}
+                lines.append(f"  • {r.action}: {d.get('campaign','') or d.get('keyword','') or str(d)[:80]}")
+        if due_14d:
+            lines.append(f"*14-day check-in ({today}) — {len(due_14d)} action(s) approved on "
+                         f"{today - __import__('datetime').timedelta(days=14)}:*")
+            for r in due_14d:
+                d = r.details if isinstance(r.details, dict) else {}
+                lines.append(f"  • {r.action}: {d.get('campaign','') or d.get('keyword','') or str(d)[:80]}")
+
+        msg = (
+            "*Automated monitor check — approved actions due for review*\n"
+            + "\n".join(lines)
+            + "\n\nPull the period-compare on each campaign above and reply here "
+            "with the outcome (working / not working / reversed). "
+            "No ✅ needed — this is a review prompt only."
+        )
+        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+            channel=SLACK_CHANNEL_APPROVAL, text=msg
+        )
+        print(f"[ops-scheduler] Monitor dates: posted {len(rows)} check-in(s) to #approvals")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Monitor dates check failed (non-fatal): {e}")
+
+
+def _run_budget_redeployment_proposal() -> None:
+    """
+    Automatically propose budget redeployment when:
+      - One or more campaigns are in PAUSE zone (CPQL > $100, 14d window)
+      - One or more campaigns are in SCALE zone (CPQL < $60, 14d window)
+      - The wasted spend is > $50/day
+
+    Generates a $/day reallocation table and posts it to #approvals as part
+    of the nightly digest. No execution — ✅/❌ gate applies.
+    Runs only when _should_run_scale_pause() is True (cadence: every 4 days).
+    """
+    try:
+        from google.cloud import bigquery
+        from slack_sdk import WebClient
+        from config import (BQ_PROJECT, BQ_DATASET, SLACK_BOT_TOKEN,
+                            SLACK_CHANNEL_APPROVAL, CPQL_PAUSE, CPQL_SCALE)
+
+        bq = bigquery.Client(project=BQ_PROJECT)
+
+        # Pre-aggregate HubSpot before joining (no fan-out)
+        sql = f"""
+        WITH last_complete AS (
+          SELECT MAX(date) AS d FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
+          WHERE spend > 0
+        ),
+        hs AS (
+          SELECT date, lead_utm_campaign,
+                 SUM(leads_qualified) AS sqls
+          FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_leads_module_daily`
+          WHERE date >= DATE_SUB((SELECT d FROM last_complete), INTERVAL 14 DAY)
+          GROUP BY date, lead_utm_campaign
+        ),
+        perf AS (
+          SELECT c.channel, c.campaign_name,
+                 SUM(c.spend)               AS spend_14d,
+                 COALESCE(SUM(hs.sqls), 0)  AS sqls_14d,
+                 SUM(c.spend) / 14.0        AS daily_avg,
+                 SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
+          FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily` c
+          LEFT JOIN hs
+            ON c.date = hs.date
+           AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+          WHERE c.date >= DATE_SUB((SELECT d FROM last_complete), INTERVAL 14 DAY)
+          GROUP BY c.channel, c.campaign_name
+        )
+        SELECT * FROM perf
+        WHERE spend_14d > 50
+        ORDER BY cpql ASC
+        """
+
+        rows = list(bq.query(sql).result())
+        if not rows:
+            return
+
+        pause_zone  = [r for r in rows if r.cpql and r.cpql > CPQL_PAUSE]
+        scale_zone  = [r for r in rows if r.cpql and r.cpql < CPQL_SCALE]
+
+        if not pause_zone or not scale_zone:
+            print("[ops-scheduler] Budget redeployment: no clear drain→scaler pair found")
+            return
+
+        wasted_per_day = sum(r.daily_avg for r in pause_zone)
+        if wasted_per_day < 50:
+            print(f"[ops-scheduler] Budget redeployment: ${wasted_per_day:.0f}/day below threshold")
+            return
+
+        # Sort scalers by CPQL ascending (most efficient first)
+        # Distribute freed budget proportionally to headroom
+        freed = wasted_per_day
+        allocation = []
+        for r in sorted(scale_zone, key=lambda x: x.cpql or 999)[:4]:
+            share = round(freed / min(len(scale_zone), 4), 0)
+            allocation.append((r.campaign_name, r.cpql, r.daily_avg, share))
+
+        lines = ["*Budget redeployment proposal (automated — needs your ✅)*\n"]
+        lines.append("*Drain campaigns (PAUSE zone — move budget away):*")
+        for r in pause_zone[:5]:
+            lines.append(f"  • {r.campaign_name}: ${r.cpql:.0f} CPQL, "
+                         f"${r.daily_avg:.0f}/day — reduce budget")
+
+        lines.append(f"\n*Freed: ~${freed:.0f}/day*\n")
+        lines.append("*Destination campaigns (SCALE zone — absorb freed budget):*")
+        for name, cpql, cur, add in allocation:
+            lines.append(f"  • {name}: ${cpql:.0f} CPQL, "
+                         f"${cur:.0f} -> ${cur + add:.0f}/day (+${add:.0f})")
+
+        lines.append(
+            "\n✅ = execute all budget changes | ❌ = skip\n"
+            "_This proposal is generated automatically every 4 days when CPQL zones diverge._"
+        )
+
+        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+            channel=SLACK_CHANNEL_APPROVAL, text="\n".join(lines)
+        )
+        print(f"[ops-scheduler] Budget redeployment: posted proposal "
+              f"(${freed:.0f}/day freed, {len(allocation)} destinations)")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[ops-scheduler] Budget redeployment proposal failed (non-fatal): {e}")
+
+
 def _run_campaign_health() -> tuple[list, list]:
     """Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause.
     Returns (tasks, findings) so findings can be used in the Slack recommendations message.
