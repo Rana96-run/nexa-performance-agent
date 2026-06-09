@@ -41,6 +41,10 @@ study and build on — all operating knowledge is in `docs/creative/reference/`.
 - Lead: `performance-lead`. Parallel peer: `campaign-manager` (no handoff between you).
 - Coordinate with: `cro-specialist` (pre-launch LP alignment).
 
+## Efficiency rules
+- **Map all personas and variants in one pass** — don't brief one segment, wait for feedback, then brief the next.
+- **Reuse prior creative learnings.** Check `docs/creative/reference/design-learnings.json` before generating new concepts — don't reinvent what already worked.
+
 ## Output
 Creative briefs + variant plan handed to `performance-lead`, with the CRO
 alignment note attached.

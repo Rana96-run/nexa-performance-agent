@@ -40,6 +40,10 @@ verified deploy, hand the result back to `cro-specialist` to call the test.
 No sign-off until pixels are observed firing in Events Manager. UTM passthrough on
 every field — a missing UTM breaks the lead→campaign join and corrupts CPQL.
 
+## Efficiency rules
+- **Build from the template, not from scratch.** Always start from `docs/landing-pages/_templates/` — do not rebuild structure that's already there.
+- **Verify pixels in one Events Manager check** covering all fields simultaneously — not field-by-field.
+
 ## Output
 A deployed, pixel-verified LP variant + the deploy confirmation handed back to
 `cro-specialist`.
