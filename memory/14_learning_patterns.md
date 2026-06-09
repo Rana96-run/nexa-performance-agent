@@ -17,6 +17,41 @@ Format per entry:
 
 ---
 
+## 2026-06-09 — v_adset_performance "complete split" report was a FALSE PREMISE
+
+**Trigger:** Report that `v_adset_performance` shows a complete split — platform
+rows with spend/0 leads, HubSpot rows with leads/0 spend, "nothing matching."
+
+**Investigation (live BQ, 2026-06-02..2026-06-08):** The join is NOT broken.
+The join key `date+channel+LOWER(TRIM(utm_audience))` matches substantial volume on
+every channel: matched_spend google $4,742 / snap $3,704 / tiktok $1,589 / meta $685.
+Top-5 adsets by spend ALL match HubSpot (8/6/3/1/5 rows). In the final view, the
+top snapchat adset shows spend=250 AND leads=15 AND leads_qualified=11 on one row —
+the join works. Check-2 `both`-counts (66 google, 34 snap, 21 meta) confirm matches.
+
+**Real root cause of the spend-only rows that DO exist:**
+1. **Snapchat audience-name collision (biggest):** descriptive, non-UTM adset names
+   ("Saudi Arabia, All Genders, 25+", "Broad Audience", "Core Audience", "Open
+   Targeting") map to 4–12 distinct adset_ids each. These adsets never carried a
+   UTM, so they have no HubSpot counterpart and correctly land as spend-only. They
+   inflate Snapchat `total` to 2,255 rows (1,596 plat_only in the sim) while only 18
+   are flagged spend_only>0 in the view because most are $0 historical rows.
+2. **Adsets with no leads in-window** (genuine): e.g. `Snapchat_Behavior_iPhone_Instantform`
+   $430/0 leads, google `E-Invoice Core` $308/0, `ZATCA` $141/0, `قيود_traffic` $246/0
+   (traffic-objective). These are real spend-with-no-leads, not a join failure.
+3. **`channel IS NULL` HubSpot rows** (75 rows, 61 null utm_audience): these never
+   join (NULL channel) and surface as leads-only. Includes `organic_search` (20 rows,
+   all null utm_audience) — correctly excluded by `utm_audience IS NOT NULL` filter
+   but the NULL-channel ones with populated audience (14) still leak through as leads-only.
+
+**Learned:** Before accepting a "complete split / nothing matches" report, SIMULATE the
+join match rate by channel — do not trust the framing. Here the join works; the
+spend-only rows are (a) Snapchat non-UTM descriptive audiences with no HubSpot side by
+design, (b) genuine no-lead spend, and (c) NULL-channel HubSpot rows. The fix, if any,
+is Snapchat UTM hygiene + handling NULL-channel HS rows — NOT the FULL OUTER JOIN key.
+
+---
+
 ## 2026-06-09 — Post-fix recon: v_ad_performance leads fan-out only PARTIALLY fixed
 
 **Trigger:** Ran the 7-day BQ↔HubSpot reconciliation (2026-06-02..2026-06-08) on
