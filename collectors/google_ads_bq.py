@@ -136,7 +136,6 @@ def collect_and_write(days: int = None, incremental: bool = False):
             segments.date
         FROM campaign
         WHERE segments.date BETWEEN '{start}' AND '{end}'
-          AND (metrics.cost_micros > 0 OR metrics.impressions > 0)
     """
 
     now  = datetime.now(timezone.utc).isoformat()
@@ -221,7 +220,6 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
             segments.date
         FROM ad_group
         WHERE segments.date BETWEEN '{start}' AND '{end}'
-          AND (metrics.cost_micros > 0 OR metrics.impressions > 0)
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
     """
@@ -445,7 +443,6 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False):
             segments.date
         FROM keyword_view
         WHERE segments.date BETWEEN '{start}' AND '{end}'
-          AND (metrics.cost_micros > 0 OR metrics.impressions > 0)
           AND ad_group_criterion.type = 'KEYWORD'
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
@@ -529,7 +526,6 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
             segments.date
         FROM ad_group_ad
         WHERE segments.date BETWEEN '{start}' AND '{end}'
-          AND (metrics.cost_micros > 0 OR metrics.impressions > 0)
           AND campaign.status != 'REMOVED'
           AND ad_group.status != 'REMOVED'
           AND ad_group_ad.status != 'REMOVED'

@@ -783,6 +783,7 @@ WITH platform AS (
     -- channels that don't populate utm_audience still show up.
     ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
     ANY_VALUE(adset_name) AS adset_name,
+    ANY_VALUE(status) AS status,
     adset_id              AS platform_adset_id,
     ANY_VALUE(campaign_id) AS platform_campaign_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
@@ -866,6 +867,7 @@ joined AS (
     COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
     COALESCE(p.utm_audience, h.utm_audience)  AS utm_audience,
     p.adset_name                              AS adset_name,
+    p.status                                  AS status,
     p.platform_campaign_id                    AS campaign_id,
     p.platform_adset_id                       AS adset_id,
     COALESCE(p.spend, u.spend) AS spend, p.impressions, p.clicks,
@@ -924,6 +926,7 @@ SELECT
   utm_campaign, utm_audience,
   COALESCE(adset_name, utm_audience) AS adset_name,
   utm_source,
+  status,
   campaign_id, adset_id,
   -- Fan-out guard: each platform row already carries its own adset_id's spend.
   -- The utm_audience->hubspot join still fans a platform row across multiple
@@ -1199,6 +1202,7 @@ CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_keyword_performance` AS
 WITH platform AS (
   SELECT date, channel, campaign_name, adgroup_name, keyword_text AS utm_term,
     match_type,
+    ANY_VALUE(status) AS status,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
     SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr,
     AVG(quality_score) AS quality_score
@@ -1247,6 +1251,7 @@ SELECT
   COALESCE(p.adgroup_name, h.utm_audience)   AS adgroup_name,
   COALESCE(p.utm_term, h.utm_term)           AS utm_term,
   h.utm_source,
+  p.status,
   p.match_type,
   p.quality_score,
   COALESCE(p.spend, u.spend, 0)              AS spend,

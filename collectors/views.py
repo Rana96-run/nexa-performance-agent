@@ -248,6 +248,7 @@ WITH
   spend AS (
     SELECT date, channel, campaign_id,
            ANY_VALUE(campaign_name) AS campaign_name,   -- latest name for display
+           ANY_VALUE(status)  AS status,
            SUM(spend)        AS spend,
            SUM(impressions)  AS impressions,
            SUM(clicks)       AS clicks
@@ -332,6 +333,7 @@ SELECT
   s.channel,
   s.campaign_id,                                       -- NEW: exposed for disambiguation
   s.campaign_name,
+  s.status,
   COALESCE(li.utm_source, ln.utm_source) AS utm_source,
   ROUND(s.spend, 2)         AS spend,
   s.impressions,
