@@ -56,6 +56,7 @@ role labels — those are how work is *logged*, not who the team *is*.) Start he
 | `../docs/_shared/communication-rules.md` | How the team behaves |
 | `../docs/playbooks/_index.md` | Every agent's operational playbook |
 | `agents/<dept>/<role>/` | Each agent's **private memory** (see `agents/README.md`) |
+| `agents/cro/developer/lp-mobile-css-patterns.md` | LP page inventory, template types (qnav/qnav-dark/old-nav), all 7 mobile CSS fix patterns, WP REST API snippets, verification checklist |
 
 The flat `NN_*.md` files in this folder are **shared org memory** — every agent
 may read them; several are referenced by exact path in `CLAUDE.md` and the
