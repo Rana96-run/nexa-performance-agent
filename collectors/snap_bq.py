@@ -256,6 +256,8 @@ def collect_and_write(days: int = None, incremental: bool = False):
                 d           = (pt.get("start_time") or "")[:10]
                 if not d:
                     continue
+                if spend == 0 and impressions == 0:
+                    continue  # skip zero-activity rows — old/paused campaigns
                 rows.append({
                     "date":             d,
                     "channel":          "snapchat",
@@ -421,6 +423,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 d   = (pt.get("start_time") or "")[:10]
                 if not d:
                     continue
+                if spend == 0 and impressions == 0:
+                    continue  # skip zero-activity rows — old/paused ad squads
                 _adset_name = sq.get("name")
                 rows.append({
                     "date":          d,
@@ -628,6 +632,8 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 d   = (pt.get("start_time") or "")[:10]
                 if not d:
                     continue
+                if spend == 0 and impressions == 0:
+                    continue  # skip zero-activity rows — old/paused ads
                 _ad_name = ad_meta.get("name")
                 rows.append({
                     "date":          d,
