@@ -772,6 +772,7 @@ WITH platform AS (
     -- Microsoft, adset_name for Meta/TikTok/Snap). Fall back to adset_name so
     -- channels that don't populate utm_audience still show up.
     ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
+    ANY_VALUE(adset_name) AS adset_name,
     adset_id              AS platform_adset_id,
     ANY_VALUE(campaign_id) AS platform_campaign_id,
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
@@ -853,6 +854,7 @@ joined AS (
     COALESCE(p.channel, h.channel)          AS channel,
     COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
     COALESCE(p.utm_audience, h.utm_audience)  AS utm_audience,
+    p.adset_name                              AS adset_name,
     p.platform_campaign_id                    AS campaign_id,
     p.platform_adset_id                       AS adset_id,
     COALESCE(p.spend, u.spend) AS spend, p.impressions, p.clicks,
@@ -908,6 +910,7 @@ SELECT
     ELSE channel
   END                                      AS channel_name,
   utm_campaign, utm_audience,
+  COALESCE(adset_name, utm_audience) AS adset_name,
   campaign_id, adset_id,
   -- Fan-out guard: each platform row already carries its own adset_id's spend.
   -- The utm_audience->hubspot join still fans a platform row across multiple
@@ -974,6 +977,7 @@ WITH platform AS (
     -- utm_content column holds the resolved _adname custom-param value.
     -- Fall back to ad_name for channels without custom params.
     ANY_VALUE(COALESCE(utm_content, ad_name)) AS utm_content,
+    ANY_VALUE(ad_name) AS ad_name,
     ad_id                  AS platform_ad_id,
     ANY_VALUE(adset_id)    AS platform_adset_id,
     ANY_VALUE(campaign_id) AS platform_campaign_id,
@@ -1057,6 +1061,7 @@ joined AS (
     COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
     COALESCE(p.adset_name, h.utm_audience)    AS utm_audience,
     COALESCE(p.utm_content, h.utm_content)    AS utm_content,
+    p.ad_name                                 AS ad_name,
     p.platform_campaign_id                    AS campaign_id,
     p.platform_adset_id                       AS adset_id,
     p.platform_ad_id                          AS ad_id,
@@ -1114,6 +1119,7 @@ SELECT
     ELSE channel
   END                                        AS channel_name,
   utm_campaign, utm_audience, utm_content,
+  COALESCE(ad_name, utm_content) AS ad_name,
   campaign_id, adset_id, ad_id,
   -- spend/impr/clicks: each platform row already carries its own ad_id's spend.
   -- The utm_content->hubspot join still fans a platform row across multiple
