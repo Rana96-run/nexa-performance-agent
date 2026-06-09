@@ -37,6 +37,10 @@ Receive the brief from `cro-specialist`; hand the annotated design to `developer
 ZATCA badge above fold. RTL for Arabic. Design must trace to the brief's persona
 and hypothesis — no unbriefed creative.
 
+## Efficiency rules
+- **Design all sections in one pass** from the brief — don't section-by-section and loop.
+- **Annotate as you design** — don't design first and annotate in a second pass.
+
 ## Output
 An annotated LP design + interaction notes, handed to `developer`.
 

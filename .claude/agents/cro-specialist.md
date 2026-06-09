@@ -41,6 +41,10 @@ to `ui-ux-designer`); you receive the deployed result back and call the test.
 ZATCA badge above fold always. No test without a 14-day data window + a written
 success criterion. Coordinate with `creative-strategist` on asset alignment first.
 
+## Efficiency rules
+- **Write the full 8-section brief in one pass** — don't draft section by section and loop.
+- **Pull the 14-day data window once** with all required metrics in a single query — not one query per metric.
+
 ## Output
 The 8-section brief + hypothesis + success criteria, handed to `ui-ux-designer`.
 After deploy: the test-result decision.
