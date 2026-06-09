@@ -30,6 +30,12 @@ parallel with `growth-analyst`.
 Don't delete env vars on "no Python import" alone (see `../../CLAUDE.md`). HubSpot
 is read-only without explicit Slack approval. Local runs: `railway run python …`.
 
+## Efficiency rules
+- **Batch BQ/API checks into ONE script.** Write `_ops_task.py`, run once via `railway run python _ops_task.py`. Never one `railway run python -c "..."` per check.
+- **Build on prior work.** `Glob` for `_*.py` in the repo root before writing anything new.
+- **Fail fast.** If a premise check fails early, report it immediately — skip remaining steps.
+- **Clean up.** Remove scratch scripts after the task completes.
+
 ## Output
 A policy/health fix or a RED alert. Numbers and pixel states observed, not assumed.
 
