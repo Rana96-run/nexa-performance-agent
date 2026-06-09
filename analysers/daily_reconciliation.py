@@ -322,7 +322,8 @@ def reconcile_daily(post_slack: bool = True) -> dict:
             if abs(deals_pct) > TOTAL_DELTA_PCT_THRESHOLD:
                 bits.append(f"sales deals {deals_pct:+.1f}%")
             headline = f"BQ↔HubSpot drift ({results['window']}): {', '.join(bits)}"
-            post_ping(channel=SLACK_CHANNEL_HEALTH, status="warn", headline=headline)
+            post_ping(channel=SLACK_CHANNEL_HEALTH, status="warn", headline=headline,
+                      role="health_monitor")
         except Exception as e:
             print(f"[reconcile] Slack ping failed (non-fatal): {e}")
 

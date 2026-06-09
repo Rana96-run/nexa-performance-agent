@@ -333,6 +333,29 @@ def create_task(
 
     Returns the task GID (new or existing), or None on failure.
     """
+    # Auto-infer log_role from the calling module name when caller passes "default".
+    # This means legacy callers in google_ads_audit_tasks.py / microsoft_ads_audit_tasks.py
+    # /display_audit_tasks.py get the right agent identity without needing code changes.
+    if log_role == "default":
+        import traceback as _tb, sys as _sys
+        for frame in _tb.extract_stack():
+            mod = frame.filename.replace("\\", "/").split("/")[-1].replace(".py", "")
+            if mod in ("google_ads_audit_tasks", "microsoft_ads_audit_tasks"):
+                log_role = "keyword_management"   # Campaign Manager
+                break
+            if mod in ("display_audit_tasks", "creative_performance"):
+                log_role = "performance_audit"    # Performance Lead
+                break
+            if mod in ("collector_failures", "connector_tracker", "daily_reconciliation"):
+                log_role = "health_monitor"        # Marketing Ops
+                break
+            if mod in ("spike_detector", "period_compare", "forecaster"):
+                log_role = "spike_detector"        # Growth Analyst
+                break
+            if mod == "operational_scheduler":
+                log_role = "ops_scheduler"         # AI Orchestrator
+                break
+
     # Title format: "[task_type | action] title"
     parts = [task_type]
     if action:

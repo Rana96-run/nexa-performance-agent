@@ -47,8 +47,9 @@ def _dashboard_url() -> str:
 
 
 def post_ping(channel: str, status: Literal["ok", "info", "warn", "alert"],
-              headline: str, link: str | None = None) -> bool:
-    """Post a single-line ping to Slack.
+              headline: str, link: str | None = None,
+              role: str = "health_monitor") -> bool:
+    """Post a single-line ping to Slack as the named agent role.
 
     Args:
         channel:  Slack channel ID or #name
@@ -56,6 +57,9 @@ def post_ping(channel: str, status: Literal["ok", "info", "warn", "alert"],
         headline: ONE short sentence — NEVER multi-line. No data tables. No JSON.
                   Soft cap: 120 chars. Anything longer goes to the dashboard.
         link:     URL where the detail lives. Defaults to ACTIVITY_DASHBOARD_URL.
+        role:     activity-log role of the agent posting this ping.
+                  Controls the Slack username + icon_emoji shown on the message.
+                  Default: "health_monitor" (Marketing Ops).
 
     Returns True on success.
     """
@@ -72,10 +76,13 @@ def post_ping(channel: str, status: Literal["ok", "info", "warn", "alert"],
     text = f"{ICON.get(status, 'ℹ️')} {headline} → {link or _dashboard_url()}"
 
     try:
+        from config import agent_identity, SLACK_BOT_TOKEN
         from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN
+        identity = agent_identity(role)
         WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
             channel=channel, text=text, unfurl_links=False, unfurl_media=False,
+            username=identity["slack_name"],
+            icon_emoji=identity["slack_emoji"],
         )
         return True
     except Exception as e:

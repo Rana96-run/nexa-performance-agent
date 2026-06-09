@@ -441,9 +441,8 @@ def _check_monitor_dates() -> None:
             "with the outcome (working / not working / reversed). "
             "No ✅ needed — this is a review prompt only."
         )
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
-            channel=SLACK_CHANNEL_APPROVAL, text=msg
-        )
+        from notifications.slack import post_as_role
+        post_as_role("ops_scheduler", SLACK_CHANNEL_APPROVAL, msg)
         print(f"[ops-scheduler] Monitor dates: posted {len(rows)} check-in(s) to #approvals")
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -585,6 +584,7 @@ def _run_budget_redeployment_proposal() -> None:
                 asset_level="campaign",
                 action="scale",
                 campaign_name=r.campaign_name,
+                log_role="campaign_creator",
             )
             log_activity_async(
                 role="performance_audit", action="budget_redeployment_scale_task_created",
@@ -639,6 +639,7 @@ def _run_budget_redeployment_proposal() -> None:
                 asset_level="campaign",
                 action="review",
                 campaign_name=r.campaign_name,
+                log_role="performance_audit",
             )
             log_activity_async(
                 role="performance_audit", action="budget_redeployment_drain_task_created",
@@ -675,13 +676,16 @@ def _run_budget_redeployment_proposal() -> None:
             "_Drain-campaign tasks are review-only — no auto-execution._"
         )
 
-        slack = WebClient(token=SLACK_BOT_TOKEN)
-        resp  = slack.chat_postMessage(
-            channel=SLACK_CHANNEL_APPROVAL, text="\n".join(lines)
-        )
-        ts = resp["ts"]
+        from notifications.slack import post_as_role
+        resp = post_as_role("campaign_creator", SLACK_CHANNEL_APPROVAL,
+                            "\n".join(lines)) or {}
+        ts   = resp.get("ts", "")
+        if not ts:
+            print("[ops-scheduler] Budget redeployment: Slack post failed")
+            return
 
         # Pre-add ✅/❌ reactions (same as post_nightly_approvals_digest)
+        slack = WebClient(token=SLACK_BOT_TOKEN)
         for emoji in ("white_check_mark", "x"):
             try:
                 slack.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)

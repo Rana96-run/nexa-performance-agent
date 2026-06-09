@@ -453,6 +453,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 asset_level="campaign",
                 action="scale",
                 campaign_name=f["campaign"],
+                log_role="performance_audit",
             )
             out.append((f"scale-pending {f['campaign']}", gid))
             log_activity_async(
@@ -526,6 +527,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 asset_level="campaign",
                 action="pause",
                 campaign_name=f["campaign"],
+                log_role="performance_audit",
             )
             out.append((f"pause-pending {f['campaign']}", gid))
             log_activity_async(
@@ -603,6 +605,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 asset_level="ad" if ch_type == "social" else "keyword",
                 action="optimize",
                 campaign_name=f["campaign"],
+                log_role="performance_audit",
             )
             out.append((f"drilldown {channel} {f['campaign']}", gid))
             log_activity_async(
@@ -679,6 +682,7 @@ def create_health_tasks(days: int = DAYS_FOR_PAUSE_DECISION,
                 asset_level="campaign",
                 action="optimize",
                 campaign_name=f["campaign"],
+                log_role="performance_audit",
             )
             out.append((f"optimize {channel} {f['campaign']}", gid))
             log_activity_async(

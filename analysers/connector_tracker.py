@@ -740,7 +740,7 @@ def post_status_board(results: list[dict], overall: str) -> None:
 
     try:
         post_ping(channel=health_channel, status="alert", headline=headline,
-                  link=activity_url)
+                  link=activity_url, role="health_monitor")
     except Exception as e:
         print(f"[connector_tracker] Slack post failed: {e}")
 
