@@ -17,6 +17,30 @@ Format per entry:
 
 ---
 
+## 2026-06-09 — Fixed name-grain collapse + leads fan-out in v_ad / v_adset_performance
+
+**Trigger:** Code review flagged the `platform` CTE grouping by name with
+`ANY_VALUE(ad_id)`. Live BQ confirmed 370 spend-bearing same-name/diff-ID merged
+groups ($7.8k/30d) at ad level, 63 ($4.8k) at adset. Investigation also surfaced a
+latent leads fan-out: v_ad_performance reported 5111 leads (14d) vs HubSpot truth
+1433 = 3.57x over-count, because the name-keyed platform↔HubSpot FULL OUTER JOIN
+repeated `h.leads` across every matching name-row and the old guard only deduped spend.
+
+**Recommendation:** group platform CTE by ID (ad_id/adset_id); restructure SELECT into
+joined CTE + outer SELECT with leads-once-per-HubSpot-source-row and deals-once-per-bucket
+window guards alongside the existing spend guard.
+
+**Decision:** approved (DATA-owned view fix, no ad-account write).
+
+**Outcome (immediate, verified live):** Check A 370→0 collapse (819 distinct ad_id rows
+now kept). Leads 5111→1585, ≤ HubSpot 1843 — fan-out eliminated. Spend held exact
+(18270.01 == ads_daily). Materialized + committed 13c76e4.
+
+**Learned:** When auditing any platform↔HubSpot view, check BOTH (a) ID carried via
+ANY_VALUE on a name grain (silent entity merge) and (b) leads/deals fan-out from the
+name-keyed join — spend being correct does NOT imply leads are. Reconcile view leads
+against `hubspot_leads_module_daily` for the window; view total must be ≤ source.
+
 ## 2026-05-17 — Mass-pause + LP-repoint after May 4–10 launch wave
 
 **Trigger:** May 1–16 vs Apr 1–16 audit showed CPQL +44%, 4 flags

@@ -3,6 +3,34 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## v_ad/v_adset platform CTE grouped by NAME, lost ad_id + fanned leads 3.5x (fixed 2026-06-09)
+
+- **Symptom:** Two ads sharing a `utm_content`/`ad_name` but with different `ad_id`s
+  collapsed into ONE row in `v_ad_performance` — `ANY_VALUE(ad_id)` kept one ID and merged
+  both ads' spend. Live BQ: 370 spend-bearing merged groups, $7.8k/30d. `v_adset_performance`
+  had the same trap on `adset_id` (63 groups, $4.8k/30d).
+- **Worse, hidden second bug:** the `platform`↔`hubspot` FULL OUTER JOIN keys on
+  `utm_content` (resp. `utm_audience`), so one HubSpot row matched MANY platform name-rows
+  and `COALESCE(h.leads,…)` repeated on each → leads over-counted **3.57x** (v_ad_performance
+  14d = 5111 leads vs HubSpot truth 1433). The old spend window guard only deduped
+  spend/impr/clicks, never leads or deals.
+- **Fix:** add `ad_id` (resp. `adset_id`) to the `platform` GROUP BY so each distinct ID
+  keeps its own row + spend. Then restructure the final SELECT into a `joined` CTE + outer
+  SELECT with THREE window guards: (1) spend/impr/clicks once per ID (existing), (2) **leads
+  once per HubSpot source-row** via `lead_src_key` = a string encoding which bucket won
+  (`AB|date|channel|campaign|audience|content`, `C|date|channel|id`, `D|date|campaign_id`),
+  (3) **deals once per deal-bucket grain** (ID bucket = date×channel×sync_id; name bucket =
+  date×channel×utm_campaign×utm_content). Ratios/CPL/CPQL use the RAW (un-zeroed) lead/spend
+  so per-row metrics stay correct; only SUM-able columns are zeroed on duplicate rows.
+- **Verified:** Check A 370→0 (collapse structurally impossible, ad_id now in grain; the
+  370 groups surfaced as 819 distinct ad_id rows). Leads 5111→1585 ≤ HubSpot 1843 (no
+  fan-out). Spend held to the penny: v_ad 18270.01 == ads_daily 18270.01.
+- **Trap to remember:** any view that GROUP BYs platform data by a NAME column while carrying
+  the ID via `ANY_VALUE` will silently merge same-name distinct-ID entities. Always group by
+  the ID. And any FULL OUTER JOIN of platform→HubSpot on a name fans HubSpot metrics — guard
+  leads AND deals, not just spend. `materialize_heavy_views` lives in `collectors/views.py`
+  (NOT `bq_writer`).
+
 ## Period windows must end at the last COMPLETE spend day, not "yesterday" (found 2026-06-09)
 
 **Symptom:** Running the 7d-vs-prior period compare on 2026-06-09 with a yesterday-
