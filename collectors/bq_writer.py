@@ -1227,6 +1227,7 @@ SELECT
   END                                        AS channel_name,
   COALESCE(p.campaign_name, h.utm_campaign)  AS utm_campaign,
   COALESCE(p.adgroup_name, h.utm_audience)   AS utm_audience,
+  COALESCE(p.adgroup_name, h.utm_audience)   AS adgroup_name,
   COALESCE(p.utm_term, h.utm_term)           AS utm_term,
   p.match_type,
   p.quality_score,
