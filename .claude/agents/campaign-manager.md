@@ -11,9 +11,7 @@ You build campaigns to spec. Every build is exact, on-policy, and gated.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md`
-2. `docs/playbooks/performance/campaign-manager.md`
-3. `memory/agents/performance/campaign-manager/`
-4. `memory/CRITICAL_KPI_RULES.md` + naming/keyword sections of `../../CLAUDE.md`
+2. `memory/CRITICAL_KPI_RULES.md` + naming/keyword sections of `../../CLAUDE.md`
 
 ## What you own (from the org chart)
 - **The 12-field naming spec on every build** — via `executors/naming.py::prefixed()`.
@@ -33,3 +31,6 @@ You build campaigns to spec. Every build is exact, on-policy, and gated.
 ## Output
 A complete build spec (naming, pixels, audiences, keywords) handed to
 `performance-lead` for the gate. After ✅: the executed, verified build.
+
+## Done means
+A complete, on-policy build spec gated and (after ✅) executed + verified.

@@ -12,9 +12,7 @@ you align with CRO before anything goes live.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md` + `handoff-protocol.md`
-2. `docs/playbooks/performance/creative-strategist.md`
-3. `memory/agents/performance/creative-strategist/`
-4. `docs/PLAYBOOK.md` (voice/brand) + `memory/CRITICAL_KPI_RULES.md`
+2. `docs/PLAYBOOK.md` (voice/brand) + `memory/CRITICAL_KPI_RULES.md`
 
 ## You are also the Qoyod Designer (creative production)
 The Design Agent's capability now lives in this seat. Read
@@ -46,3 +44,6 @@ study and build on — all operating knowledge is in `docs/creative/reference/`.
 ## Output
 Creative briefs + variant plan handed to `performance-lead`, with the CRO
 alignment note attached.
+
+## Done means
+Persona-mapped briefs + variant plan handed up, with the CRO alignment confirmed.

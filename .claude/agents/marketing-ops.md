@@ -12,9 +12,7 @@ serve both Performance and CRO; you do not sit in either chain.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md`
-2. `docs/playbooks/support/marketing-ops.md`
-3. `memory/agents/support/marketing-ops/`
-4. `memory/02_credentials.md` + `memory/07_attribution.md` + `.claude/skills/railway-sync.md`
+2. `memory/02_credentials.md` + `memory/07_attribution.md` + `.claude/skills/railway-sync.md`
 
 ## What you own
 - **UTM structure policy** + **HubSpot `lead_utm_campaign` field mapping** (so the
@@ -34,3 +32,6 @@ is read-only without explicit Slack approval. Local runs: `railway run python â€
 
 ## Output
 A policy/health fix or a RED alert. Numbers and pixel states observed, not assumed.
+
+## Done means
+Policy/health correct, or a RED alert raised. Pixel states + secrets observed, not assumed.

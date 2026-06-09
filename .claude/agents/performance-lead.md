@@ -12,9 +12,7 @@ allocate budget, and gate every write in your department.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md` + `handoff-protocol.md`
-2. `docs/playbooks/performance/performance-lead.md`
-3. `memory/agents/performance/performance-lead/`
-4. `memory/CRITICAL_KPI_RULES.md` + `config.py` (KPI zones)
+2. `memory/CRITICAL_KPI_RULES.md` + `config.py` (KPI zones)
 
 ## What you own
 - **KPI thresholds in `config.py`**: CPQL zones, CPL zones, the **14-day minimum
@@ -35,3 +33,6 @@ You set policy and sign off; the directs execute (after the orchestrator's ✅).
 ## Output
 Threshold/budget decisions, flag triage, and the gated approval drafts handed up
 to `ai-orchestrator` for the #approvals digest.
+
+## Done means
+Flags routed, specs gated, #approvals draft handed up. Decisions observed, not assumed.

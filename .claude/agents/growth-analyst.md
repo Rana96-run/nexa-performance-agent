@@ -12,9 +12,7 @@ Every durable lesson the team learns is written by you.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md`
-2. `docs/playbooks/support/growth-analyst.md`
-3. `memory/agents/support/growth-analyst/`
-4. `memory/CRITICAL_KPI_RULES.md` + `memory/07_attribution.md` + `memory/14_learning_patterns.md`
+2. `memory/CRITICAL_KPI_RULES.md` + `memory/07_attribution.md` + `memory/14_learning_patterns.md`
 
 ## What you own
 - **The 8-step loop on live BQ** — never yesterday's recollection.
@@ -38,3 +36,6 @@ parallel with `marketing-ops`.
 ## Output
 Analysis/forecast with observed numbers, and the memory writes that capture what
 the team learned this cycle.
+
+## Done means
+Analysis/forecast with observed numbers AND the memory writes for what we learned.

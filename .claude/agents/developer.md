@@ -11,9 +11,7 @@ You build the variant and put it live, correctly instrumented and verified.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md` + `handoff-protocol.md`
-2. `docs/playbooks/cro/developer.md`
-3. `memory/agents/cro/developer/`
-4. The annotated design from `ui-ux-designer` + `memory/CRITICAL_KPI_RULES.md`
+2. The annotated design from `ui-ux-designer` + `memory/CRITICAL_KPI_RULES.md`
 
 ## What you own
 - **Build the LP variant** from the annotated design.
@@ -45,3 +43,6 @@ every field — a missing UTM breaks the lead→campaign join and corrupts CPQL.
 ## Output
 A deployed, pixel-verified LP variant + the deploy confirmation handed back to
 `cro-specialist`.
+
+## Done means
+A live, UTM-correct, pixel-verified LP variant + deploy confirmation to `cro-specialist`.

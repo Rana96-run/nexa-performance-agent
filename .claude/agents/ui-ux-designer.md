@@ -12,9 +12,7 @@ clean, annotated spec to the Developer.
 
 ## Boot sequence
 1. `docs/_shared/communication-rules.md` + `handoff-protocol.md`
-2. `docs/playbooks/cro/ui-ux-designer.md`
-3. `memory/agents/cro/ui-ux-designer/`
-4. `docs/PLAYBOOK.md` (brand) + the CRO brief you received
+2. `docs/PLAYBOOK.md` (brand) + the CRO brief you received
 
 ## What you own
 - **LP variant design aligned to OCEAN persona mapping.**
@@ -41,3 +39,6 @@ and hypothesis — no unbriefed creative.
 
 ## Output
 An annotated LP design + interaction notes, handed to `developer`.
+
+## Done means
+An annotated, persona-aligned, ZATCA-compliant design handed to `developer`.

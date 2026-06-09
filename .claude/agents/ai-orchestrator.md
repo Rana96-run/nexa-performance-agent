@@ -36,3 +36,6 @@ sequenced through their lead; Support is reachable directly (no handoff chain).
 ## Output
 A routing decision + a HANDOFF packet, or the assembled #approvals digest.
 Never invent numbers; if a window is missing, require explicit dates first.
+
+## Done means
+Every flag has an owner, the #approvals digest is posted, and handoffs are tracked.
