@@ -8,17 +8,24 @@ import these patterns + helpers so the rules stay in lockstep.
 
 Buckets:
   1. ALWAYS_NEGATIVE  — direct-execute as negative, never proposed as a keyword.
-  2. BRAND_ONLY       — only allowed in campaigns whose name contains "Brand"
-                         (with an exception for the Arabic accounting noun
-                         "قيود محاسبية" / "قيود المحاسبة" — see QIYUD_FEATURE_MODIFIERS).
+                         Patterns are bilingual (Arabic + English) — both scripts
+                         must be covered so the rule fires regardless of query language.
+  2. BRAND_ONLY       — قيود/qoyod terms only allowed in campaigns whose name contains
+                         "Brand". Examples of brand-only terms (blocked in generic):
+                           برنامج قيود, قيود المحاسبي, تجربة قيود, نظام قيود
+                         Exception: "قيود" + accounting modifier (محاسبية / اليومية / etc.)
+                         is the Arabic accounting noun "journal entries" — allowed anywhere.
+                         See QIYUD_FEATURE_MODIFIERS.
   3. COMPETITOR       — competitor brand names; ONLY allowed in campaigns
                          whose name contains "Competitor". Never excluded.
                          In any other campaign → pause-watch (move or pause).
 
 Cross-cutting rules:
   4. Language match — AR keyword cannot live in `_EN_` campaign (and vice versa).
-  5. Never remove a keyword with non-zero historical spend — only pause.
-  6. Wasted spend ≥ $80 in 7 days → pause the keyword (don't add as negative).
+  5. NEVER delete a keyword — only pause. Zero-spend keywords are paused, not deleted.
+  6. Wasted spend ≥ $80 in 7 days → pause the keyword (not as negative).
+     Exception: impression-share / website-traffic campaigns with SIS > 50% are skipped
+     (config.KEYWORD_PAUSE_SIS_THRESHOLD) — traffic is the goal, not conversions.
 """
 from __future__ import annotations
 
@@ -27,22 +34,29 @@ import re
 
 # ── 1. ALWAYS NEGATIVE ────────────────────────────────────────────────────────
 ALWAYS_NEGATIVE_PATTERNS: list[str] = [
-    # Free / promo seekers — won't pay for SaaS
+    # ── Free / promo seekers — won't pay for SaaS ────────────────────────────
     "مجاني", "مجانا", "مجانية", "مجانى",
-    # Login / existing account — already a customer
+    "free",                             # EN: "free accounting software"
+    # ── Login / existing account — already a customer ────────────────────────
     "تسجيل الدخول", "تسجيل دخول", "تسجل دخول",
     "sign in", "signin", "login", "log in",
-    # Account / store creation — wrong intent (not SaaS buyer)
+    # ── Account / store creation — wrong intent ──────────────────────────────
     "انشاء حساب", "فتح حساب", "انشاء متجر",
-    # Job / work seekers — not SMB owners
-    "عمل", "وظيفة", "وظائف", "توظيف",
-    # Finance / banking — wrong intent
+    # ── Download intent — want a file, not a SaaS subscription ──────────────
+    "تحميل", "تنزيل",                  # AR: download
+    "download",                         # EN
+    # ── Job / work seekers — not SMB owners ─────────────────────────────────
+    "عمل", "وظيفة", "وظائف", "توظيف", "فرص عمل",
+    "job", "jobs", "career", "careers", "hiring", "vacancy", "vacancies",
+    # ── Finance / loan seekers — wrong intent ────────────────────────────────
     "تمويل", "قرض", "قروض", "بنك",
-    # Dropshipping / ecom setup — different product category
+    "loan", "loans", "financing",       # EN
+    # ── Education intent — want to learn, not buy ────────────────────────────
+    "دورة", "دورات", "كورس", "كورسات", "تعلم", "تعليم",
+    "course", "courses", "training",    # EN
+    # ── Dropshipping / e-com setup — different product ───────────────────────
     "دروب شيبنج", "دروب شيبينج",
-    # Education intent — want to learn, not buy software
-    "دورة", "كورس", "تعلم", "تعليم",
-    # Marketing / AI tools — not SaaS accounting
+    # ── Marketing / AI tools — not SaaS accounting ───────────────────────────
     "التسويق", "chatgpt",
 ]
 

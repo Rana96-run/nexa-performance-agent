@@ -257,8 +257,8 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 - **Keywords are NEVER posted to Slack.** Keyword expansion candidates go to Asana
   only. Negatives are direct-executed silently. The single source of truth for
   keyword policy is `executors/keyword_policy.py` — all call sites import from it.
-- **Never remove a keyword unless its all-time spend = $0.** Only delete when zero
-  cost ever. Low QS, low CTR, or poor performance = pause, not remove.
+- **Never delete a keyword — only pause.** Regardless of spend history. Low QS,
+  low CTR, poor performance, or zero spend → always pause, never delete.
 - **QS < 5 pause rule — converting keyword exception:**
   - If QS < 5 AND >80% lost-IS BUT conv > 4 AND $10 ≤ CPA ≤ $70 → **leave ENABLED** (keyword is converting despite low QS)
   - If QS < 5 AND >80% lost-IS AND (conv ≤ 4 OR CPA > $70 OR CPA < $10) → **PAUSE** (after approval)
@@ -269,16 +269,18 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 ### Keyword policy buckets (enforced by `executors/keyword_policy.py`)
 
 1. **ALWAYS_NEGATIVE** — direct-execute as negative, never proposed as a keyword,
-   even if the term converted. Patterns:
+   even if the term converted. Patterns are **bilingual (Arabic + English)**:
    - login / sign in / signin / log in / تسجيل الدخول / تسجيل دخول
    - free / مجاني / مجانا / مجانية
-   - course / training / دورة / دورات / كورس / كورسات
+   - course / courses / training / دورة / دورات / كورس / كورسات
    - download / تحميل / تنزيل
    - loan / loans / financing / قرض / قروض / تمويل / تمويلات
-   - job / jobs / career / hiring / وظيفة / وظائف / فرص عمل / توظيف
-2. **BRAND_ONLY** — قيود / qoyod variants only allowed in campaigns whose name
+   - job / jobs / career / careers / hiring / vacancy / وظيفة / وظائف / فرص عمل / توظيف
+2. **BRAND_ONLY** — قيود / qoyod terms only allowed in campaigns whose name
    contains `Brand`. In any other campaign they are dropped from `add_kw` and
    routed to pause-watch for human review. They are NEVER added as negatives.
+   **Examples of brand-only terms (blocked in generic campaigns):**
+   `برنامج قيود`, `قيود المحاسبي`, `تجربة قيود`, `نظام قيود`, `qoyod`
    **Exception (Arabic ambiguity):** "قيود" + accounting modifier (`محاسبية` /
    `المحاسبة` / `يومية` / `اليومية`) is the accounting NOUN ("journal entries"),
    NOT the brand name. Terms like `قيود محاسبية`, `قيود المحاسبة`, `قيود يومية`
@@ -303,7 +305,7 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
   (still daily — no spend at risk).
 - **Sunday auto-fix is silent.** On Sunday Riyadh, `_run_weekly_keyword_autofix`
   in the operational scheduler scans + applies the rule-mandated action
-  (pause / delete / remove-negative) without creating per-violation Asana
+  (pause / remove-negative — never delete) without creating per-violation Asana
   tasks. Counts get logged to BQ; Monday's weekly Slack summary surfaces them
   as a "🔧 Auto-fixed this week" block.
 - **Minimum age: 10 days before pausing for performance.** A non-converting
@@ -324,10 +326,8 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
   if it's in our candidate list, drop it. (Applies to existing keywords too —
   see next rule.)
 - **EXISTING keyword with QS<5 AND >80% lost-IS:**
-  - If all-time spend = 0 → **DELETE** (zero cost, safe to remove cleanly).
-  - If all-time spend > 0 → **PAUSE** (per "never delete with cost" rule).
-  - Detection: `scripts/audit_active_keywords.py`, lookback window 180 days
-    for "all-time spend".
+  - All cases → **PAUSE** (never delete — updated 2026-06-09).
+  - Detection: `scripts/audit_active_keywords.py`, lookback window 180 days.
 - **Language match (non-negotiable).** A keyword's script must match its
   campaign's language token (`_AR_` / `_EN_`). Latin keyword in Arabic campaign
   or vice versa → pause-watch. Mixed-script terms (transliterated brand inside
@@ -335,8 +335,11 @@ Exception: adding **negative keywords** can be direct-executed (no spend at risk
 - **Wasted-spend KEYWORDS are paused, not negated.** A keyword that has
   burnt $80+ in 7 days with 0 conversions gets PAUSED (not added as negative
   — the keyword itself is the problem, not just one matched query). Threshold
-  in `config.KEYWORD_PAUSE_SPEND` / `KEYWORD_PAUSE_DAYS`. Pausing also runs
-  WEEKLY only.
+  in `config.KEYWORD_PAUSE_SPEND` / `KEYWORD_PAUSE_DAYS`. Pausing runs WEEKLY only.
+  **Exception:** if the campaign matches `AWARENESS_PATTERNS` (impression-share /
+  website-traffic objective) AND search impression share ≥ 50% → **leave enabled**.
+  Those campaigns optimise for traffic, not conversions — zero-conv spend is expected.
+  Threshold: `config.KEYWORD_PAUSE_SIS_THRESHOLD` (= 0.50).
 - **Never add competitor terms as negatives.** Competitors live in Competitor
   campaigns; negating them in other campaigns blocks the right traffic too.
 
@@ -374,9 +377,9 @@ Applied to `ads_daily` joined to `hubspot_leads_module_daily` on `lead_utm_conte
 - CPL: under $30 scale | $30–35 acceptable | $36–50 warning | over $50 pause
 - CPQL: under $60 scale | $60–75 acceptable | $76–85 warning | over $90 pause
 
-**Campaign-level KPI zones** (from `config.py` — `CPL_*` / `CPQL_*`):
-- CPL: under $25 scale | $25–35 acceptable | $36–40 warning | over $45 pause
-- CPQL: under $60 scale | $65–80 acceptable | $85–95 warning | over $100 pause
+**Campaign-level KPI zones** (from `config.py` — `CPL_*` / `CPQL_*`, updated 2026-06-09):
+- CPL: under $25 scale | $25–38 acceptable | $40–49 warning | over $50 pause
+- CPQL: under $85 scale | $80–85 acceptable | $95–130 warning | over $160 pause
 
 ## Two runtimes (don't confuse them)
 

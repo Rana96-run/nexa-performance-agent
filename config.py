@@ -236,16 +236,18 @@ USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 # scaling because the dashboard led with CPL.
 
 # CPQL (cost per qualified lead) zones, USD — campaign level — PRIMARY KPI
-CPQL_SCALE      = 60.00   # < this  -> scale up
-CPQL_ACCEPTABLE = 80.00   # ≤ this  -> acceptable
-CPQL_WARNING    = 95.00   # ≤ this  -> warning
-CPQL_PAUSE      = 100.00  # > this  -> pause candidate
+# Updated 2026-06-09: thresholds raised to reflect actual account performance.
+CPQL_SCALE      = 85.00   # < this  -> scale up
+CPQL_ACCEPTABLE = 85.00   # ≤ this  -> acceptable  ($80–$85 zone)
+CPQL_WARNING    = 130.00  # ≤ this  -> warning      ($95–$130 zone)
+CPQL_PAUSE      = 160.00  # > this  -> pause candidate
 
 # CPL (cost per lead) zones, USD — campaign level — SECONDARY support metric
+# Updated 2026-06-09.
 CPL_SCALE      = 25.00  # < this  -> scale up
-CPL_ACCEPTABLE = 35.00  # ≤ this  -> acceptable
-CPL_WARNING    = 40.00  # ≤ this  -> warning
-CPL_PAUSE      = 45.00  # > this  -> pause candidate
+CPL_ACCEPTABLE = 38.00  # ≤ this  -> acceptable  ($25–$38 zone)
+CPL_WARNING    = 49.00  # ≤ this  -> warning      ($40–$49 zone)
+CPL_PAUSE      = 50.00  # > this  -> pause candidate
 # backwards-compat alias (some callers check CPL_PAUSE as the single trigger)
 
 # Lag-aware CPQL reporting — see analysers/lag_aware.py.
@@ -328,15 +330,22 @@ ZERO_CONV_SPEND_THRESHOLD  = 8     # pause ad if spend > $8 with zero conv
 ZERO_CONV_DAYS_THRESHOLD   = 7
 # Keyword pause rules (Google Ads + Microsoft Ads) — three independent triggers:
 #   Rule A: spend > $80, 0 conversions, active ≥ 10 days        → pause
+#            Exception: skip if campaign matches AWARENESS_PATTERNS AND
+#            search impression share ≥ KEYWORD_PAUSE_SIS_THRESHOLD — those
+#            campaigns optimise for traffic/IS, not conversions.
 #   Rule B: converting keyword but CPA > $90, active ≥ 10 days  → pause
 #   Rule C: QS < 5 AND lost IS (rank) > 70%, 0 conv for 7 days  → pause
 # Note: wasted-spend KEYWORDS are paused, NOT added as negatives.
-KEYWORD_PAUSE_SPEND        = 80.00   # Rule A: zero-conv spend threshold
-KEYWORD_PAUSE_CPA          = 90.00   # Rule B: high-CPA threshold (converting keywords)
-KEYWORD_PAUSE_DAYS         = 10      # Rules A+B window (days)
-KEYWORD_QS_PAUSE_THRESHOLD = 5       # Rule C: QS < 5
-KEYWORD_IS_LOST_THRESHOLD  = 0.70    # Rule C: lost search IS (rank) > 70%
-KEYWORD_QS_PAUSE_DAYS      = 7       # Rule C window (days)
+# Note: NEVER delete a keyword — only pause (even zero-spend keywords).
+KEYWORD_PAUSE_SPEND           = 80.00   # Rule A: zero-conv spend threshold
+KEYWORD_PAUSE_CPA             = 90.00   # Rule B: high-CPA threshold (converting keywords)
+KEYWORD_PAUSE_DAYS            = 10      # Rules A+B window (days)
+KEYWORD_QS_PAUSE_THRESHOLD    = 5       # Rule C: QS < 5
+KEYWORD_IS_LOST_THRESHOLD     = 0.70    # Rule C: lost search IS (rank) > 70%
+KEYWORD_QS_PAUSE_DAYS         = 7       # Rule C window (days)
+KEYWORD_ALLOW_DELETE          = False   # NEVER delete — only pause (updated 2026-06-09)
+KEYWORD_PAUSE_SIS_THRESHOLD   = 0.50    # Rule A exception: skip pause if SIS ≥ 50%
+                                        # in awareness/IS/traffic campaigns
 
 # Minimum age before a NON-CONVERTING keyword can be paused. A 3-day-old
 # keyword with $0 spend and 0 conv shouldn't be paused — it hasn't had time
