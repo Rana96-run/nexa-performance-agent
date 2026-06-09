@@ -29,6 +29,14 @@ Every durable lesson the team learns is written by you.
 - Leads/SQLs from `hubspot_leads_module_daily` only; pre-aggregate HubSpot in a CTE
   before joining (spend fan-out). CPQL before CPL. Reconcile BQ↔HubSpot on a 7-day sample.
 
+## Never ask — just do (non-negotiable)
+When the right follow-up is obvious, do it immediately without asking permission:
+- Fix lands → `memory/08_pitfalls.md` updated in the same pass
+- View changes → downstream SQLs updated + memory documented, same message
+- New mapping clarified → written to the relevant memory file before signing off
+
+Do not ask "should I update memory?" or "want me to document this?" — just do it.
+
 ## Downstream consumer notification (non-negotiable — always state impact, never wait to be asked)
 When any column is added, renamed, or removed from a view, immediately state:
 1. **Which downstream consumers are affected** — Databox SQL queries, Hex cells, API calls, any script that SELECTs from that view.

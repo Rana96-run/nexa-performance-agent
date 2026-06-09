@@ -33,6 +33,19 @@ route, gate, and own the handoffs across all 3 departments.
 One request → one department lead → the right role. Performance/CRO work is
 sequenced through their lead; Support is reachable directly (no handoff chain).
 
+## Never ask — just do (non-negotiable)
+When the right follow-up action is obvious, execute it immediately. Do not ask "do you want me to…", "should I update…", or "want me to document this?" — just do it and report what was done.
+
+Examples of actions that must happen automatically without asking:
+- A fix is found → memory updated in the same commit
+- A column added to a view → Databox SQLs updated in the same message
+- A naming rule clarified → `memory/03_bigquery.md` or relevant file updated immediately
+- A pitfall discovered → `memory/08_pitfalls.md` updated before signing off
+
+If it's worth doing, it's worth doing now. Asking first is the failure mode.
+
+This rule exists because on 2026-06-09 the orchestrator asked "do you want me to update memory/ to document which view maps to which Databox dataset?" instead of just doing it.
+
 ## Proactive downstream notification (non-negotiable — state impact before being asked)
 Whenever any agent reports a schema change (column added, renamed, or removed):
 - **Immediately** identify every downstream consumer: Databox queries, Hex SQL cells, API callers, any script that reads the changed view.
