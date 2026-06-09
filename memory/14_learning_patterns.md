@@ -4,6 +4,27 @@ This file is the agent's outcome library. Every time a recommended action
 is executed and observed for 7–14 days, record the pattern + outcome here.
 The next session reads this file before recommending a similar action.
 
+## 2026-06-09 — NULL-channel orphans in adset view = non-paid sources, not a map gap
+
+**Trigger:** `v_adset_performance` had 38 leads-only orphan rows (40 leads),
+`channel IS NULL` + populated `utm_audience`. Initial hypothesis (per the task):
+a channel missing from `channel_name_map`, or a display-name variant.
+**Investigation:** reproduced the view's exact-then-slug channel mapping against all
+distinct `qoyod_source` values. Every PAID source mapped cleanly (including
+`Tiktok Ads` lowercase-k). The unmapped sources were all non-paid: `Offline`,
+`Direct Traffic`, `Organic Social`, `Other`, `Email Marketing`,
+`Direct In-app Purchase` — leads with a stale paid UTM but a non-paid last-touch source.
+**Recommendation/Decision:** Step-3 option 3 (exclude via WHERE filter), NOT add to map.
+Filtered `hs_full` to sources resolving to a known channel.
+**Outcome (immediate):** NULL-channel-with-audience 38 → 0, all NULL-channel → 0,
+v_adset_performance NULL-channel → 0; per-channel paid leads unchanged
+(Meta 7d view 55 == hubspot_leads_module 55). Pushed `9c758c7`.
+**Learned:** When orphan rows have a paid-looking UTM but NULL channel, check the
+**source side** (`qoyod_source`) before assuming the map is incomplete. HubSpot
+last-touch keeps a paid UTM on contacts whose converting touch is non-paid — those
+are not paid leads and must be filtered by source, not patched into the channel map.
+Filter logic must mirror the channel-resolution logic exactly to avoid drift.
+
 Format per entry:
 
 ```

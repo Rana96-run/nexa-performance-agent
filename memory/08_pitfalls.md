@@ -1,5 +1,28 @@
 # Pitfalls & Known Traps
 
+## utm_paid_attribution_daily — non-paid sources leak in as NULL-channel orphans (2026-06-09)
+
+- **Symptom:** `v_adset_performance` showed 38 leads-only orphan rows (40 leads) with
+  `channel IS NULL` but a populated `utm_audience`. They never matched
+  `p.channel = h.channel` so always surfaced as leads-only.
+- **Root cause:** the `hs_full` CTE in `collectors/bq_writer.py` (feeds
+  `utm_paid_attribution_daily`) kept HubSpot leads whose `qoyod_source` was **non-paid**
+  (`Offline` 24, `Direct Traffic` 8, `Organic Social` 5, `Other`/`Email Marketing`/
+  `Direct In-app Purchase` 1 each) but which still carried a paid `utm_campaign`/
+  `utm_audience` on the contact. HubSpot last-touch attribution keeps the stale paid UTM
+  even when the converting touch is non-paid. Those sources map to NO slug in
+  `channel_name_map`, so `COALESCE(cnm_exact,cnm_slug)` → NULL channel.
+- **NOT a missing-channel-in-map bug.** `Tiktok Ads` (lowercase k) and all paid sources
+  map fine via the LOWER/slug logic. Only genuinely non-paid sources fail to map — by design.
+- **Fix:** filter `hs_full` to `qoyod_source` values that resolve to a known channel
+  (paid + `organic_search`) using the SAME exact-then-slug match the channel join uses, so
+  filter and channel resolution stay in lock-step. Then `materialize_heavy_views()`.
+  Verified: NULL-channel-with-audience 38 → 0, all NULL-channel → 0,
+  v_adset_performance NULL-channel → 0, per-channel paid leads unchanged
+  (Meta 7d view 55 == hubspot_leads_module 55). Commit `9c758c7`.
+- **Rule:** any view scoped to PAID attribution must filter HubSpot leads by `qoyod_source`,
+  not just by "has a UTM". A stale paid UTM on a non-paid-source lead is the trap.
+
 ## ImpressionShare_ campaign prefix = awareness campaign — NEVER apply CPQL or CPA targets (found 2026-06-09)
 
 - **Symptom:** Flagged `ImpressionShare_Search_AR_Invoice` as a "drain" based on CPQL, recommended keyword pauses AND a tCPA $120 bid strategy change. Both were wrong.
