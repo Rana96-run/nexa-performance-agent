@@ -5,6 +5,22 @@ API decision, or naming rule. Do not wait to be asked.
 
 ---
 
+## 0. Where knowledge lives (read this first)
+
+**Two separate stores — never mix them:**
+
+| Type | Goes to |
+|---|---|
+| Behavior corrections ("do X", "stop Y", "always verify Z") | `C:\Users\qoyod\.claude\projects\D--Nexa-Performance-Agent\memory\feedback_*.md` |
+| API traps, schema facts, bug root causes, technical discoveries | `docs/knowledge/findings/` |
+| Task outcomes, what worked / didn't | `docs/knowledge/learnings/` |
+| Executed decisions + outcomes | `docs/knowledge/actions/` |
+| Architecture, table names, view names | `memory/01_architecture.md` (project memory) |
+| Open / closed tasks | `memory/09_open_tasks.md` (project memory) |
+
+The auto-memory folder (`memory/` under `.claude/projects/`) contains **ONLY** `feedback_*.md` files.
+Everything else is reference knowledge and belongs in the project.
+
 ## 1. After any code change
 
 | What changed | What to update |
@@ -13,19 +29,21 @@ API decision, or naming rule. Do not wait to be asked.
 | New collector / scheduler | `memory/05_scheduler.md` — add job name, frequency, trigger |
 | New channel added | `memory/01_architecture.md` + `memory/03_channels.md` + `looker/setup.py` views |
 | Naming rule changed | `CLAUDE.md` Campaign naming section + `executors/naming.py` + `memory/08_pitfalls.md` |
-| API trap discovered | `memory/08_pitfalls.md` — one line, include the fix |
+| API trap discovered | `memory/08_pitfalls.md` — one line; then also `docs/knowledge/findings/finding_<slug>.md` if it's complex |
 | Executor changed | `memory/09_open_tasks.md` — close the task, note what shipped |
 | Dashboard page added | `dashboard/app.py` navigation hint + `memory/01_architecture.md` |
+| Behavior correction received | `C:\Users\qoyod\.claude\projects\...\memory\feedback_<slug>.md` |
 
 ## 2. After any discussion / decision with Amar
 
 Even if no code changed, if a **decision was made** (e.g. "always use Lookalike not Broad for Retargeting",
-"LinkedIn campaign level = utm_campaign"), write it to the right memory file immediately:
+"LinkedIn campaign level = utm_campaign"), write it to the right place immediately:
 
 - Naming / UTM decisions → `CLAUDE.md` naming section
 - KPI thresholds / zones → `CLAUDE.md` KPI section + `memory/06_kpis.md`
-- API / platform quirks → `memory/08_pitfalls.md`
+- API / platform quirks → `memory/08_pitfalls.md` (one-liner) + `docs/knowledge/findings/` (full detail)
 - Architecture decisions → `memory/01_architecture.md`
+- Behavior rule ("stop doing X") → auto-memory `feedback_*.md`
 - Open work → `memory/09_open_tasks.md`
 
 ## 3. Session close checklist
