@@ -42,13 +42,52 @@ NOTIFY_VIA = os.getenv("NOTIFY_VIA", "email").lower()
 
 # Asana
 ASANA_TOKEN        = os.getenv("ASANA_ACCESS_TOKEN")
-ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # legacy fallback (not used if channel-specific set)
+ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # legacy fallback
 
-# Per-channel assignees:
-#   Google Ads tasks → Rana Khalid (rana.khalid@qoyod.com)
-#   All other tasks  → Donia Mohamed (dmohamed@qoyod.com)
-ASANA_ASSIGNEE_GOOGLE_ADS_GID = os.getenv("ASANA_ASSIGNEE_GOOGLE_ADS_GID", "1208007704598388")
-ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1211896896006183")
+# Per-person Asana GIDs — sourced from Railway env vars
+# Add new team members here + in Railway; no code change needed
+ASANA_ASSIGNEE_GOOGLE_ADS_GID = os.getenv("ASANA_ASSIGNEE_GOOGLE_ADS_GID", "1208007704598388")  # Rana Khalid
+ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1211896896006183")  # Donia Mohamed
+ASANA_ASSIGNEE_DONIA_GID      = os.getenv("ASANA_ASSIGNEE_DONIA",          "1211896896006183")  # Donia Mohamed (explicit)
+ASANA_ASSIGNEE_RANA_GID       = os.getenv("ASANA_ASSIGNEE_RANA",           "1208007704598388")  # Rana Khalid (explicit)
+
+# ── Agent identity map ─────────────────────────────────────────────────────────
+# Single source of truth for every agent's display name, Slack persona, and
+# Asana assignee GID.  Add a new agent here; routing in asana.py + slack.py
+# reads from this dict — no other files need changing.
+#
+# log_role keys match agent_activity_log.role values.  Each entry has:
+#   display_name  — human-readable label shown in Asana task descriptions
+#   slack_name    — bot username used in chat_postMessage (visible in Slack)
+#   slack_emoji   — icon_emoji for that persona
+#   asana_gid     — Asana user GID to assign tasks to (None = unassigned)
+#
+# To override a GID without a code deploy: set ASANA_ASSIGNEE_<ROLE> in Railway.
+AGENT_IDENTITY: dict[str, dict] = {
+    # ── AI Orchestrator (manager) ─────────────────────────────────────────────
+    "ops_scheduler":   {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    "daily_digest":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    "task_creator":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    # ── Performance Lead ──────────────────────────────────────────────────────
+    "performance_audit":       {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_DEFAULT_GID)},
+    "paid_media_strategist":   {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_DEFAULT_GID)},
+    # ── Campaign Manager ──────────────────────────────────────────────────────
+    "campaign_creator":        {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_RANA_GID)},
+    "keyword_management":      {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_RANA_GID)},
+    # ── Marketing Ops ─────────────────────────────────────────────────────────
+    "health_monitor":          {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
+    "collector":               {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
+    # ── Growth Analyst ────────────────────────────────────────────────────────
+    "bq_refresh":              {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    "spike_detector":          {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    "llm_cadence":             {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    # ── fallback ──────────────────────────────────────────────────────────────
+    "default":                 {"display_name": "Nexa Agent",          "slack_name": "Nexa",                    "slack_emoji": ":sparkles:",         "asana_gid": ASANA_ASSIGNEE_DEFAULT_GID},
+}
+
+def agent_identity(log_role: str) -> dict:
+    """Return the identity dict for a log-role. Falls back to 'default'."""
+    return AGENT_IDENTITY.get(log_role) or AGENT_IDENTITY["default"]
 ASANA_PROJECTS = {
     "daily_activity": os.getenv("ASANA_PROJECT_DAILY_ACTIVITY") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY") or "1213280681364571",  # Daily Activity portfolio (confirmed 2026-05-11)
     "optimization":   os.getenv("ASANA_PROJECT_OPTIMIZATION")   or os.getenv("ASANA_PORTFOLIO_OPTIMIZATION")   or "1213239417965392",  # Optimization portfolio (confirmed 2026-05-11)

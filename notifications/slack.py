@@ -58,6 +58,35 @@ client = _GatedSlackClient(_raw_client)
 _PENDING_FILE = Path(os.getenv("DATA_DIR", str(Path(__file__).parent.parent / "memory"))) / "pending_approvals.json"
 
 
+def post_as_role(role: str, channel: str, text: str, **kwargs) -> dict | None:
+    """
+    Post a Slack message as the named agent role.
+
+    Sets username + icon_emoji from AGENT_IDENTITY so every message
+    shows which agent sent it — e.g. "Nexa · Campaign Manager" with :mega:.
+
+    Usage:
+        post_as_role("campaign_creator", SLACK_CHANNEL_APPROVAL, "My message")
+        post_as_role("health_monitor",   SLACK_CHANNEL_NOTIFY,   "Connector down", thread_ts=ts)
+
+    All extra kwargs are forwarded to chat_postMessage unchanged.
+    Returns the full Slack API response dict, or None on failure.
+    """
+    from config import agent_identity
+    identity = agent_identity(role)
+    try:
+        return client.chat_postMessage(
+            channel=channel,
+            text=text,
+            username=identity["slack_name"],
+            icon_emoji=identity["slack_emoji"],
+            **kwargs,
+        )
+    except SlackApiError as e:
+        print(f"[slack] post_as_role({role}) failed: {e}")
+        return None
+
+
 def _load_pending() -> dict:
     if _PENDING_FILE.exists():
         try:
@@ -194,8 +223,12 @@ def post_nightly_approvals_digest(
         return None
 
     try:
-        response = client.chat_postMessage(channel=SLACK_CHANNEL_APPROVAL, text=full_text)
-        ts = response["ts"]
+        response = post_as_role(
+            "performance_audit", SLACK_CHANNEL_APPROVAL, full_text
+        ) or {}
+        ts = response.get("ts", "")
+        if not ts:
+            return None
         for emoji in ("white_check_mark", "x"):
             try:
                 client.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)

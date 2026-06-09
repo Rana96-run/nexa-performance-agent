@@ -20,23 +20,42 @@ from config import (
 )
 
 
-_ASSIGNEE_NAMES = {
-    "google_ads": "Rana Khalid",
-}
-_ASSIGNEE_DEFAULT_NAME = "Donia Mohamed"
+def _assignee_for_role(log_role: str, channel: str = "") -> str:
+    """
+    Route to the correct Asana assignee GID using the central AGENT_IDENTITY map.
 
+    Priority:
+      1. log_role match in AGENT_IDENTITY (e.g. "campaign_creator" → Campaign Manager)
+      2. Channel override: google_ads always → Rana Khalid regardless of role
+      3. Fall back to DEFAULT_GID
 
-def _assignee_for_channel(channel: str) -> str:
-    """Google Ads tasks → Rana Khalid. Everything else → Donia Mohamed."""
+    Callers pass log_role from the function that's creating the task so the
+    assignment reflects WHO did the work, not just which channel it touched.
+    """
+    from config import agent_identity, ASANA_ASSIGNEE_GOOGLE_ADS_GID
     ch = (channel or "").lower().replace(" ", "_").replace("-", "_")
-    if ch in ("google_ads", "google ads"):
+    # Channel override: Google Ads is always Rana's domain
+    if ch in ("google_ads", "google ads", "microsoft_ads", "bing_ads"):
         return ASANA_ASSIGNEE_GOOGLE_ADS_GID
-    return ASANA_ASSIGNEE_DEFAULT_GID or ASANA_ASSIGNEE_GID
+    identity = agent_identity(log_role)
+    return identity.get("asana_gid") or ASANA_ASSIGNEE_DEFAULT_GID or ASANA_ASSIGNEE_GID
 
+
+def _assignee_name_for_role(log_role: str, channel: str = "") -> str:
+    """Human-readable name of the assignee (shown in task footer)."""
+    from config import agent_identity, ASANA_ASSIGNEE_GOOGLE_ADS_GID
+    ch = (channel or "").lower().replace(" ", "_").replace("-", "_")
+    if ch in ("google_ads", "google ads", "microsoft_ads", "bing_ads"):
+        return "Rana Khalid"
+    return agent_identity(log_role).get("display_name", "Donia Mohamed")
+
+
+# Legacy wrappers — kept so old call-sites don't break while migrating
+def _assignee_for_channel(channel: str) -> str:
+    return _assignee_for_role("default", channel)
 
 def _assignee_name_for_channel(channel: str) -> str:
-    ch = (channel or "").lower().replace(" ", "_").replace("-", "_")
-    return _ASSIGNEE_NAMES.get(ch, _ASSIGNEE_DEFAULT_NAME)
+    return _assignee_name_for_role("default", channel)
 from cache.cache_manager import task_is_new, record_task, get_task_gid
 
 # Action -> priority label (shown in task footer)
@@ -100,9 +119,11 @@ _PROJECTS_WITH_ESTIMATED_TIME = {
 }
 
 
-def _task_footer(channel: str, asset_level: str, action: str, task_type: str) -> str:
+def _task_footer(channel: str, asset_level: str, action: str, task_type: str,
+                 log_role: str = "default") -> str:
     """Structured metadata block appended to every task description."""
     from datetime import datetime, timedelta, timezone
+    from config import agent_identity
     riyadh      = timezone(timedelta(hours=3))
     now_str     = datetime.now(riyadh).strftime("%Y-%m-%d %H:%M Riyadh")
     due_str     = (datetime.now(riyadh) + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -111,14 +132,15 @@ def _task_footer(channel: str, asset_level: str, action: str, task_type: str) ->
                       (channel or "").lower().replace(" ", "_").replace("-", "_"),
                       channel or "—")
     lvl_label   = ASANA_ASSET_LEVEL_LABELS.get((asset_level or "").lower(), asset_level or "—")
-    assignee    = _assignee_name_for_channel(channel)
+    assignee    = _assignee_name_for_role(log_role, channel)
+    created_by  = agent_identity(log_role).get("display_name", "Nexa Agent")
     return (
         f"\n\n---\n"
         f"**Task Details**\n\n"
         f"| Field | Value |\n"
         f"|---|---|\n"
         f"| Created on | {now_str} |\n"
-        f"| Created by | Nexa Performance Agent |\n"
+        f"| Created by | {created_by} |\n"
         f"| Due | {due_str} |\n"
         f"| Completed on | — |\n"
         f"| Priority | {priority} |\n"
@@ -290,6 +312,8 @@ def create_task(
     asset_level:   str = "",           # campaign | adset | ad | audience | tracking | keyword
     action:        str = "",           # pause | scale | refresh | launch | optimize | fix
     campaign_name: str = "",           # if set, used for cross-day dedup against live Asana
+    log_role:      str = "default",    # agent log-role that is creating this task
+                                       # used to set assignee + "Created by" footer field
 ) -> str | None:
     """
     Create an Asana task in the correct project and per-channel/per-asset-level section.
@@ -302,6 +326,10 @@ def create_task(
                    in the target project whose title contains this string. If found and
                    the task is past-due, its due date is bumped to tomorrow. Either way
                    the existing GID is returned without creating a duplicate.
+    log_role:      the agent's activity-log role (e.g. "performance_audit",
+                   "keyword_management", "health_monitor"). Drives assignee selection
+                   and the "Created by" field in the task footer. Defaults to "default"
+                   for legacy callers that haven't been updated yet.
 
     Returns the task GID (new or existing), or None on failure.
     """
@@ -349,7 +377,9 @@ def create_task(
             return existing_gid
 
     # Append structured metadata footer to every description
-    full_description = description + _task_footer(channel, asset_level, action, task_type)
+    full_description = description + _task_footer(
+        channel, asset_level, action, task_type, log_role=log_role
+    )
 
     # Build task body
     task_data: dict = {
@@ -358,7 +388,7 @@ def create_task(
         "projects": [project_id],
         "due_on":   due_date,
     }
-    assignee_gid = _assignee_for_channel(channel)
+    assignee_gid = _assignee_for_role(log_role, channel)
     if assignee_gid:
         task_data["assignee"] = assignee_gid
 
