@@ -923,7 +923,7 @@ SELECT
   END                                      AS channel_name,
   utm_campaign, utm_audience,
   COALESCE(adset_name, utm_audience) AS adset_name,
-  COALESCE(utm_source, channel) AS utm_source,
+  utm_source,
   campaign_id, adset_id,
   -- Fan-out guard: each platform row already carries its own adset_id's spend.
   -- The utm_audience->hubspot join still fans a platform row across multiple
@@ -1135,7 +1135,7 @@ SELECT
   END                                        AS channel_name,
   utm_campaign, utm_audience, utm_content,
   COALESCE(ad_name, utm_content) AS ad_name,
-  COALESCE(utm_source, channel) AS utm_source,
+  utm_source,
   campaign_id, adset_id, ad_id,
   -- spend/impr/clicks: each platform row already carries its own ad_id's spend.
   -- The utm_content->hubspot join still fans a platform row across multiple
