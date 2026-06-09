@@ -280,7 +280,7 @@ WITH
       AND lead_campaign_id_sync IS NULL
     GROUP BY date, qoyod_source, lead_utm_campaign
   ),
-  -- Deals: ID-matched bucket (new_biz pipelines only)
+  -- Deals: ID-matched bucket (new_biz + all-pipeline)
   deals_by_id AS (
     SELECT date, qoyod_source, deal_campaign_id_sync AS campaign_id,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
@@ -298,13 +298,19 @@ WITH
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
                     THEN amount_open ELSE 0 END) AS new_biz_amount_open,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_total ELSE 0 END) AS new_biz_amount_total
+                    THEN amount_total ELSE 0 END) AS new_biz_amount_total,
+           -- All pipelines
+           SUM(deals_won)    AS all_deals_won,
+           SUM(amount_won)   AS all_revenue_won,
+           SUM(amount_lost)  AS all_amount_lost,
+           SUM(amount_open)  AS all_amount_open,
+           SUM(amount_total) AS all_amount_total
     FROM `{P}.{D}.hubspot_deals_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
       AND deal_campaign_id_sync IS NOT NULL
     GROUP BY date, qoyod_source, deal_campaign_id_sync
   ),
-  -- Deals: name-matched bucket (new_biz pipelines only — no sync ID)
+  -- Deals: name-matched bucket (new_biz + all-pipeline — no sync ID)
   deals_by_name AS (
     SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
@@ -322,7 +328,13 @@ WITH
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
                     THEN amount_open ELSE 0 END) AS new_biz_amount_open,
            SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_total ELSE 0 END) AS new_biz_amount_total
+                    THEN amount_total ELSE 0 END) AS new_biz_amount_total,
+           -- All pipelines
+           SUM(deals_won)    AS all_deals_won,
+           SUM(amount_won)   AS all_revenue_won,
+           SUM(amount_lost)  AS all_amount_lost,
+           SUM(amount_open)  AS all_amount_open,
+           SUM(amount_total) AS all_amount_total
     FROM `{P}.{D}.hubspot_deals_daily`
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
       AND deal_campaign_id_sync IS NULL
@@ -362,6 +374,15 @@ SELECT
   ROUND(SAFE_DIVIDE(
         IFNULL(di.new_biz_revenue_won,0) + IFNULL(dn.new_biz_revenue_won,0),
         NULLIF(s.spend, 0)), 2) AS new_biz_roas,
+  -- All-pipeline deals (all HubSpot pipelines, not just new_biz)
+  IFNULL(di.all_deals_won,    0) + IFNULL(dn.all_deals_won,    0) AS all_deals_won,
+  ROUND(IFNULL(di.all_revenue_won,  0) + IFNULL(dn.all_revenue_won,  0), 2) AS revenue_won,
+  ROUND(IFNULL(di.all_amount_lost,  0) + IFNULL(dn.all_amount_lost,  0), 2) AS amount_lost,
+  ROUND(IFNULL(di.all_amount_open,  0) + IFNULL(dn.all_amount_open,  0), 2) AS amount_open,
+  ROUND(IFNULL(di.all_amount_total, 0) + IFNULL(dn.all_amount_total, 0), 2) AS amount_total,
+  ROUND(SAFE_DIVIDE(
+        IFNULL(di.all_revenue_won,0) + IFNULL(dn.all_revenue_won,0),
+        NULLIF(s.spend, 0)), 2) AS roas,
   ROUND(SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
   ROUND(SAFE_DIVIDE(IFNULL(li.leads,0) + IFNULL(ln.leads,0),
         NULLIF(s.clicks, 0)) * 100, 4) AS cvr_pct,

@@ -824,7 +824,13 @@ deals_by_id AS (
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN amount_open ELSE 0 END) AS new_biz_amount_open,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
+    -- All pipelines
+    SUM(deals_won)    AS all_deals_won,
+    SUM(amount_won)   AS all_revenue_won,
+    SUM(amount_lost)  AS all_amount_lost,
+    SUM(amount_open)  AS all_amount_open,
+    SUM(amount_total) AS all_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_adgroup_id_sync IS NOT NULL
   GROUP BY 1, 2, 3
@@ -848,7 +854,13 @@ deals_by_name AS (
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN amount_open ELSE 0 END) AS new_biz_amount_open,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
+    -- All pipelines
+    SUM(deals_won)    AS all_deals_won,
+    SUM(amount_won)   AS all_revenue_won,
+    SUM(amount_lost)  AS all_amount_lost,
+    SUM(amount_open)  AS all_amount_open,
+    SUM(amount_total) AS all_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_adgroup_id_sync IS NULL
     AND deal_utm_audience IS NOT NULL
@@ -889,11 +901,15 @@ joined AS (
     di.new_biz_deals_open AS di_deals_open, di.new_biz_deals_total AS di_deals_total,
     di.new_biz_revenue_won AS di_rev_won,   di.new_biz_amount_lost AS di_amt_lost,
     di.new_biz_amount_open AS di_amt_open,  di.new_biz_amount_total AS di_amt_total,
+    di.all_revenue_won AS di_all_rev_won,   di.all_amount_lost AS di_all_amt_lost,
+    di.all_amount_open AS di_all_amt_open,  di.all_amount_total AS di_all_amt_total,
     di.adset_id AS di_adset_id,
     dn.new_biz_deals_won  AS dn_deals_won,  dn.new_biz_deals_lost  AS dn_deals_lost,
     dn.new_biz_deals_open AS dn_deals_open, dn.new_biz_deals_total AS dn_deals_total,
     dn.new_biz_revenue_won AS dn_rev_won,   dn.new_biz_amount_lost AS dn_amt_lost,
     dn.new_biz_amount_open AS dn_amt_open,  dn.new_biz_amount_total AS dn_amt_total,
+    dn.all_revenue_won AS dn_all_rev_won,   dn.all_amount_lost AS dn_all_amt_lost,
+    dn.all_amount_open AS dn_all_amt_open,  dn.all_amount_total AS dn_all_amt_total,
     dn.utm_campaign AS dn_utm_campaign, dn.utm_audience AS dn_utm_audience
   FROM platform p
   FULL OUTER JOIN hubspot h
@@ -973,6 +989,16 @@ SELECT
   SAFE_DIVIDE(spend, NULLIF(leads_raw, 0))           AS CPL,
   SAFE_DIVIDE(spend, NULLIF(leads_qualified_raw, 0)) AS CPQL,
   SAFE_DIVIDE(IFNULL(di_rev_won,0) + IFNULL(dn_rev_won,0), NULLIF(spend, 0)) AS new_biz_roas,
+  -- All-pipeline amounts (fan-out guard identical to new_biz pattern above)
+  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_rev_won,0), 0)
+    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_rev_won,0), 0) AS revenue_won,
+  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_amt_lost,0), 0)
+    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_amt_lost,0), 0) AS amount_lost,
+  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_amt_open,0), 0)
+    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_amt_open,0), 0) AS amount_open,
+  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_amt_total,0), 0)
+    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_amt_total,0), 0) AS amount_total,
+  SAFE_DIVIDE(IFNULL(di_all_rev_won,0) + IFNULL(dn_all_rev_won,0), NULLIF(spend, 0)) AS roas,
   IF(p_date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
 FROM joined
 """
@@ -1040,7 +1066,13 @@ deals_by_id AS (
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN amount_open ELSE 0 END) AS new_biz_amount_open,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
+    -- All pipelines
+    SUM(deals_won)    AS all_deals_won,
+    SUM(amount_won)   AS all_revenue_won,
+    SUM(amount_lost)  AS all_amount_lost,
+    SUM(amount_open)  AS all_amount_open,
+    SUM(amount_total) AS all_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_ad_id_sync IS NOT NULL
   GROUP BY 1, 2, 3
@@ -1065,7 +1097,13 @@ deals_by_name AS (
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN amount_open ELSE 0 END) AS new_biz_amount_open,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
+    -- All pipelines
+    SUM(deals_won)    AS all_deals_won,
+    SUM(amount_won)   AS all_revenue_won,
+    SUM(amount_lost)  AS all_amount_lost,
+    SUM(amount_open)  AS all_amount_open,
+    SUM(amount_total) AS all_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_ad_id_sync IS NULL
     AND deal_utm_content IS NOT NULL
@@ -1104,11 +1142,15 @@ joined AS (
     di.new_biz_deals_open AS di_deals_open, di.new_biz_deals_total AS di_deals_total,
     di.new_biz_revenue_won AS di_rev_won,   di.new_biz_amount_lost AS di_amt_lost,
     di.new_biz_amount_open AS di_amt_open,  di.new_biz_amount_total AS di_amt_total,
+    di.all_revenue_won AS di_all_rev_won,   di.all_amount_lost AS di_all_amt_lost,
+    di.all_amount_open AS di_all_amt_open,  di.all_amount_total AS di_all_amt_total,
     di.ad_id AS di_ad_id,
     dn.new_biz_deals_won  AS dn_deals_won,  dn.new_biz_deals_lost  AS dn_deals_lost,
     dn.new_biz_deals_open AS dn_deals_open, dn.new_biz_deals_total AS dn_deals_total,
     dn.new_biz_revenue_won AS dn_rev_won,   dn.new_biz_amount_lost AS dn_amt_lost,
     dn.new_biz_amount_open AS dn_amt_open,  dn.new_biz_amount_total AS dn_amt_total,
+    dn.all_revenue_won AS dn_all_rev_won,   dn.all_amount_lost AS dn_all_amt_lost,
+    dn.all_amount_open AS dn_all_amt_open,  dn.all_amount_total AS dn_all_amt_total,
     dn.utm_campaign AS dn_utm_campaign, dn.utm_content AS dn_utm_content
   FROM platform p
   FULL OUTER JOIN hubspot h
@@ -1189,6 +1231,16 @@ SELECT
   SAFE_DIVIDE(spend, NULLIF(leads_raw, 0))           AS CPL,
   SAFE_DIVIDE(spend, NULLIF(leads_qualified_raw, 0)) AS CPQL,
   SAFE_DIVIDE(IFNULL(di_rev_won,0) + IFNULL(dn_rev_won,0), NULLIF(spend, 0)) AS new_biz_roas,
+  -- All-pipeline amounts (fan-out guard identical to new_biz pattern above)
+  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_rev_won,0), 0)
+    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_rev_won,0), 0) AS revenue_won,
+  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_amt_lost,0), 0)
+    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_amt_lost,0), 0) AS amount_lost,
+  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_amt_open,0), 0)
+    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_amt_open,0), 0) AS amount_open,
+  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_amt_total,0), 0)
+    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_amt_total,0), 0) AS amount_total,
+  SAFE_DIVIDE(IFNULL(di_all_rev_won,0) + IFNULL(dn_all_rev_won,0), NULLIF(spend, 0)) AS roas,
   creative_type, status,
   IF(p_date IS NOT NULL, 'platform', 'utm_proxy')            AS data_source
 FROM joined
@@ -1225,9 +1277,24 @@ deals AS (
   SELECT date, qoyod_source AS channel,
     deal_utm_campaign AS utm_campaign,
     deal_utm_term AS utm_term,
+    -- All pipelines
     SUM(deals_total) AS deals,
-    SUM(deals_won) AS deals_won,
-    SUM(amount_won) AS revenue_won
+    SUM(deals_won)   AS deals_won,
+    SUM(amount_won)  AS revenue_won,
+    SUM(amount_lost) AS amount_lost,
+    SUM(amount_open) AS amount_open,
+    SUM(amount_total) AS amount_total,
+    -- New business pipelines (Sales Pipeline, Bookkeeping, Qflavours)
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
+    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+             THEN amount_total ELSE 0 END) AS new_biz_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
   WHERE deal_utm_term IS NOT NULL
   GROUP BY 1, 2, 3, 4
@@ -1261,14 +1328,25 @@ SELECT
   COALESCE(h.leads, 0)                       AS leads,
   COALESCE(h.leads_qualified, 0)             AS leads_qualified,
   COALESCE(h.leads_disqualified, 0)          AS leads_disqualified,
+  -- All-pipeline deal amounts
   COALESCE(d.deals, 0)                       AS deals,
   COALESCE(d.deals_won, 0)                   AS deals_won,
   COALESCE(d.revenue_won, 0)                 AS revenue_won,
+  COALESCE(d.amount_lost, 0)                 AS amount_lost,
+  COALESCE(d.amount_open, 0)                 AS amount_open,
+  COALESCE(d.amount_total, 0)                AS amount_total,
+  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS roas,
+  -- New business deal amounts (Sales Pipeline + Bookkeeping + Qflavours)
+  COALESCE(d.new_biz_deals_won, 0)           AS new_biz_deals_won,
+  COALESCE(d.new_biz_revenue_won, 0)         AS new_biz_revenue_won,
+  COALESCE(d.new_biz_amount_lost, 0)         AS new_biz_amount_lost,
+  COALESCE(d.new_biz_amount_open, 0)         AS new_biz_amount_open,
+  COALESCE(d.new_biz_amount_total, 0)        AS new_biz_amount_total,
+  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
   SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
   SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))           AS CPL,
   SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0)) AS CPQL,
-  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS ROAS,
   COALESCE(h.match_method, 'utm_proxy')      AS match_method,
   IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                        AS data_source
 FROM platform p

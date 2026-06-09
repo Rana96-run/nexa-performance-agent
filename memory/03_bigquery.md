@@ -36,7 +36,11 @@ Correct Databox SQL for each level (all include `utm_source`):
 SELECT
   date, channel, campaign_name, status, utm_source,
   spend, leads, qualified AS sqls,
-  cpl, cpql, qual_rate_pct AS qual_rate
+  cpl, cpql, qual_rate_pct AS qual_rate,
+  -- New business (Sales Pipeline + Bookkeeping + Qflavours)
+  new_biz_deals_won, new_biz_revenue_won, new_biz_amount_lost, new_biz_amount_open, new_biz_amount_total, new_biz_roas,
+  -- All pipelines
+  all_deals_won AS deals_won, revenue_won, amount_lost, amount_open, amount_total, roas
 FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_campaign_daily`
 ORDER BY date DESC
 ```
@@ -48,7 +52,20 @@ SELECT
   SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
   SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
-  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
+  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate,
+  -- New business
+  SUM(new_biz_deals_won) AS new_biz_deals_won,
+  SUM(new_biz_revenue_won) AS new_biz_revenue_won,
+  SUM(new_biz_amount_lost) AS new_biz_amount_lost,
+  SUM(new_biz_amount_open) AS new_biz_amount_open,
+  SUM(new_biz_amount_total) AS new_biz_amount_total,
+  SAFE_DIVIDE(SUM(new_biz_revenue_won), SUM(spend)) AS new_biz_roas,
+  -- All pipelines
+  SUM(revenue_won) AS revenue_won,
+  SUM(amount_lost) AS amount_lost,
+  SUM(amount_open) AS amount_open,
+  SUM(amount_total) AS amount_total,
+  SAFE_DIVIDE(SUM(revenue_won), SUM(spend)) AS roas
 FROM `angular-axle-492812-q4.qoyod_marketing.v_adset_performance`
 GROUP BY 1, 2, 3, 4, 5, 6
 ORDER BY date DESC
@@ -61,7 +78,20 @@ SELECT
   SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
   SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
-  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
+  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate,
+  -- New business
+  SUM(new_biz_deals_won) AS new_biz_deals_won,
+  SUM(new_biz_revenue_won) AS new_biz_revenue_won,
+  SUM(new_biz_amount_lost) AS new_biz_amount_lost,
+  SUM(new_biz_amount_open) AS new_biz_amount_open,
+  SUM(new_biz_amount_total) AS new_biz_amount_total,
+  SAFE_DIVIDE(SUM(new_biz_revenue_won), SUM(spend)) AS new_biz_roas,
+  -- All pipelines
+  SUM(revenue_won) AS revenue_won,
+  SUM(amount_lost) AS amount_lost,
+  SUM(amount_open) AS amount_open,
+  SUM(amount_total) AS amount_total,
+  SAFE_DIVIDE(SUM(revenue_won), SUM(spend)) AS roas
 FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
 GROUP BY 1, 2, 3, 4, 5, 6, 7
 ORDER BY date DESC
@@ -74,13 +104,27 @@ SELECT
   SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
   SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
-  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
+  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate,
+  -- New business
+  SUM(new_biz_deals_won) AS new_biz_deals_won,
+  SUM(new_biz_revenue_won) AS new_biz_revenue_won,
+  SUM(new_biz_amount_lost) AS new_biz_amount_lost,
+  SUM(new_biz_amount_open) AS new_biz_amount_open,
+  SUM(new_biz_amount_total) AS new_biz_amount_total,
+  SAFE_DIVIDE(SUM(new_biz_revenue_won), SUM(spend)) AS new_biz_roas,
+  -- All pipelines
+  SUM(revenue_won) AS revenue_won,
+  SUM(amount_lost) AS amount_lost,
+  SUM(amount_open) AS amount_open,
+  SUM(amount_total) AS amount_total,
+  SAFE_DIVIDE(SUM(revenue_won), SUM(spend)) AS roas
 FROM `angular-axle-492812-q4.qoyod_marketing.v_keyword_performance`
 GROUP BY 1, 2, 3, 4, 5, 6, 7
 ORDER BY date DESC
 ```
 
 ⚠️ Column is `leads_qualified` NOT `sqls` in all views. `status` = ACTIVE / PAUSED from the platform — use to filter in Databox.
+All deal amounts are in USD by deal createdate. New biz = Sales Pipeline + Bookkeeping + Qflavours. All pipelines = every HubSpot pipeline.
 
 ## Views (all `CREATE OR REPLACE`, rebuilt by `collectors/views.py`)
 
