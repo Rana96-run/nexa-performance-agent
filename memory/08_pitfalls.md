@@ -660,6 +660,26 @@ IG insights:
 - **Single mega-widget pages (773):** All sections live in one widget. Nav, hero, cta-band, and all CSS are surgical HTML edits on one `html` field — no separate widget IDs.
 - Full patterns: `memory/agents/cro/developer/lp-mobile-css-patterns.md`
 
+## Google Ads multi-account: always use account_id from BQ, not config customer_id (2026-06-09)
+
+**Trap:** `GOOGLE_ADS_CONFIG["customer_id"]` is one child account ID (1513020554), NOT the MCC.
+Campaigns in the second child account (5753494964) get `RESOURCE_NOT_FOUND` when you build
+`customers/{config_cid}/campaigns/{id}` — the campaign lives under a different CID.
+
+**Fix:** `campaigns_daily` has an `account_id` column storing the child CID that owns each campaign.
+Always query `SELECT campaign_name, campaign_id, account_id FROM campaigns_daily` and use
+`account_id` (not config) to build the resource name:
+```python
+child_cid   = str(row.account_id).replace("-", "")
+campaign_rn = f"customers/{child_cid}/campaigns/{row.campaign_id}"
+result = add_negative_keywords(campaign_rn, kws, customer_id=child_cid)
+```
+Confirmed: account 5753494964 holds ImpressionShare_Invoice + E-invoice_Test;
+account 1513020554 holds ZATCAPhase2 + Brand campaigns.
+
+**Second bug found same run:** `add_negative_keywords` returns a list, not int. Guard:
+`n = result if isinstance(result, int) else len(result)`
+
 ## Google Search negative keyword policy — informational modifiers that are NOT negatives (2026-06-09)
 
 **Trap:** Proposing `طريقة` ("method / how-to") and `متطلبات` ("requirements") as phrase
