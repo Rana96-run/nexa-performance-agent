@@ -141,8 +141,8 @@ def _log_to_dashboard(files: list[str], commit_hash: str, stat_summary: str) -> 
             },
             rows_affected=len(files),
         )
-    except Exception:
-        pass   # never block the Stop hook
+    except Exception as exc:
+        print(f"[auto-commit] dashboard log skipped: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":
