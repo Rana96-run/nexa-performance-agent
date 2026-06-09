@@ -486,6 +486,7 @@ hs_full AS (
     lead_utm_audience,
     lead_utm_content,
     lead_utm_term,
+    lead_utm_source,
     SUM(leads_total)        AS leads,
     SUM(leads_qualified)    AS leads_qualified,
     SUM(leads_disqualified) AS leads_disqualified
@@ -503,7 +504,7 @@ hs_full AS (
         'linkedin_ads','microsoft_ads','youtube_ads','organic_search'
       )
     )
-  GROUP BY 1, 2, 3, 4, 5, 6
+  GROUP BY 1, 2, 3, 4, 5, 6, 7
 ),
 
 -- 2. HubSpot: channel totals (authoritative, from qoyod_source)
@@ -583,6 +584,7 @@ attributed AS (
     hf.lead_utm_audience                                     AS utm_audience,
     hf.lead_utm_content                                      AS utm_content,
     hf.lead_utm_term                                         AS utm_term,
+    hf.lead_utm_source                                       AS utm_source,
     hf.leads,
     hf.leads_qualified,
     hf.leads_disqualified,
@@ -635,6 +637,7 @@ attributed_with_spend AS (
     utm_audience,
     utm_content,
     utm_term,
+    utm_source,
     leads,
     leads_qualified,
     leads_disqualified,
@@ -669,6 +672,7 @@ unattributed AS (
     CAST(NULL AS STRING)                                     AS utm_audience,
     CAST(NULL AS STRING)                                     AS utm_content,
     CAST(NULL AS STRING)                                     AS utm_term,
+    CAST(NULL AS STRING)                                     AS utm_source,
     GREATEST(0, hct.channel_leads_total - COALESCE(uct.utm_leads_total, 0)) AS leads,
     CAST(0 AS INT64)                                         AS leads_qualified,
     CAST(0 AS INT64)                                         AS leads_disqualified,
@@ -694,6 +698,7 @@ combined AS (
     utm_audience,
     utm_content,
     utm_term,
+    utm_source,
     leads,
     leads_qualified,
     leads_disqualified,
@@ -711,6 +716,7 @@ combined AS (
     utm_audience,
     utm_content,
     utm_term,
+    utm_source,
     leads,
     leads_qualified,
     leads_disqualified,
@@ -740,6 +746,7 @@ SELECT
   utm_audience,
   utm_content,
   utm_term,
+  utm_source,
   COALESCE(spend, 0.0)                                     AS spend,
   COALESCE(leads, 0)                                       AS leads,
   COALESCE(leads_qualified, 0)                             AS leads_qualified,
@@ -786,6 +793,7 @@ WITH platform AS (
 -- audience-grain leads. The upstream view is the single source of truth.
 hubspot AS (
   SELECT date, channel, utm_campaign, utm_audience,
+    ANY_VALUE(utm_source) AS utm_source,
     SUM(leads) AS leads,
     SUM(leads_qualified) AS leads_qualified,
     SUM(leads_disqualified) AS leads_disqualified
@@ -860,6 +868,7 @@ joined AS (
     COALESCE(p.spend, u.spend) AS spend, p.impressions, p.clicks,
     p.date AS p_date,
     h.utm_campaign AS h_utm_campaign,
+    h.utm_source,
     h.leads              AS leads_raw,
     h.leads_qualified    AS leads_qualified_raw,
     h.leads_disqualified AS leads_disqualified_raw,
@@ -911,6 +920,7 @@ SELECT
   END                                      AS channel_name,
   utm_campaign, utm_audience,
   COALESCE(adset_name, utm_audience) AS adset_name,
+  utm_source,
   campaign_id, adset_id,
   -- Fan-out guard: each platform row already carries its own adset_id's spend.
   -- The utm_audience->hubspot join still fans a platform row across multiple
@@ -997,6 +1007,7 @@ WITH platform AS (
 -- (snapchat 172 truth -> 316 in the view). The upstream view is the single source.
 hubspot AS (
   SELECT date, channel, utm_campaign, utm_audience, utm_content,
+    ANY_VALUE(utm_source) AS utm_source,
     SUM(leads) AS leads,
     SUM(leads_qualified) AS leads_qualified,
     SUM(leads_disqualified) AS leads_disqualified
@@ -1068,6 +1079,7 @@ joined AS (
     p.spend, p.impressions, p.clicks, p.creative_type, p.status,
     p.date AS p_date,
     h.utm_campaign AS h_utm_campaign,
+    h.utm_source,
     -- raw leads come straight from the authoritative upstream content-grain bucket
     h.leads              AS leads_raw,
     h.leads_qualified    AS leads_qualified_raw,
@@ -1120,6 +1132,7 @@ SELECT
   END                                        AS channel_name,
   utm_campaign, utm_audience, utm_content,
   COALESCE(ad_name, utm_content) AS ad_name,
+  utm_source,
   campaign_id, adset_id, ad_id,
   -- spend/impr/clicks: each platform row already carries its own ad_id's spend.
   -- The utm_content->hubspot join still fans a platform row across multiple
