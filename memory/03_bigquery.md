@@ -15,6 +15,54 @@ filter fields. All writes go through `collectors/bq_writer.upsert_rows()`.
 | `hubspot_deals_daily` | (date, qoyod_source, pipeline, stage_status, utm_campaign) | qoyod_source, pipeline, stage_status | hubspot_deals_bq |
 | `organic_page_daily` | (date, channel) | channel | meta_organic_bq, youtube_bq, linkedin_bq (organic) |
 
+## Databox view mapping (which view powers which Databox dataset)
+
+| Databox dataset | BQ view | Notes |
+|---|---|---|
+| Campaign | `paid_channel_campaign_daily` | ID-first attribution — spend + leads + deals stay together through renames. **Not** `utm_paid_attribution_daily`. |
+| Adset | `v_adset_performance` | UTM-grain, powered by `utm_paid_attribution_daily` |
+| Ad | `v_ad_performance` | UTM-grain, powered by `utm_paid_attribution_daily` |
+| Keyword | `v_keyword_performance` | Keyword grain |
+
+**Do not use `utm_paid_attribution_daily` for the campaign-level Databox dataset.**
+It is the internal attribution spine (UTM grain) that feeds `v_adset_performance`
+and `v_ad_performance`. Campaign reporting uses `paid_channel_campaign_daily`
+which uses ID-first attribution and includes deals + ROAS.
+
+Correct Databox SQL for each level:
+
+**Campaign:**
+```sql
+SELECT date, channel, campaign_name, spend, leads, qualified AS sqls,
+       cpl, cpql, qual_rate_pct AS qual_rate
+FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_campaign_daily`
+ORDER BY date DESC
+```
+
+**Adset:**
+```sql
+SELECT date, channel_name, adset_name, utm_source, spend, leads, sqls,
+       cpl, cpql, qual_rate
+FROM `angular-axle-492812-q4.qoyod_marketing.v_adset_performance`
+ORDER BY date DESC
+```
+
+**Ad:**
+```sql
+SELECT date, channel_name, ad_name, utm_source, spend, leads, sqls,
+       cpl, cpql, qual_rate
+FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
+ORDER BY date DESC
+```
+
+**Keyword:**
+```sql
+SELECT date, channel_name, adgroup_name, keyword, spend, leads, sqls,
+       cpl, cpql, qual_rate
+FROM `angular-axle-492812-q4.qoyod_marketing.v_keyword_performance`
+ORDER BY date DESC
+```
+
 ## Views (all `CREATE OR REPLACE`, rebuilt by `collectors/views.py`)
 
 ### Materialized tables (rematerialized every 6h via `materialize_heavy_views()`)
