@@ -341,10 +341,10 @@ def create_task(
         for frame in _tb.extract_stack():
             mod = frame.filename.replace("\\", "/").split("/")[-1].replace(".py", "")
             if mod in ("google_ads_audit_tasks", "microsoft_ads_audit_tasks"):
-                log_role = "keyword_management"   # Campaign Manager
+                log_role = "keyword_management"    # Campaign Manager
                 break
             if mod in ("display_audit_tasks", "creative_performance"):
-                log_role = "performance_audit"    # Performance Lead
+                log_role = "performance_audit"     # Performance Lead
                 break
             if mod in ("collector_failures", "connector_tracker", "daily_reconciliation"):
                 log_role = "health_monitor"        # Marketing Ops
@@ -354,6 +354,18 @@ def create_task(
                 break
             if mod == "operational_scheduler":
                 log_role = "ops_scheduler"         # AI Orchestrator
+                break
+            if mod in ("cro_tasks", "cro_specialist", "lp_brief"):
+                log_role = "cro_specialist"        # CRO Specialist → Rana
+                break
+            if mod in ("ui_ux_tasks", "design_handoff"):
+                log_role = "ui_ux_design"          # UI/UX Designer → Rana
+                break
+            if mod in ("lp_deploy", "lp_developer", "developer_tasks"):
+                log_role = "lp_developer"          # Developer → Tony Helmy + Rana follower
+                break
+            if mod in ("creative_brief", "creative_strategy_tasks"):
+                log_role = "creative_strategy"     # Creative Strategist → Donia
                 break
 
     # Title format: "[task_type | action] title"
@@ -415,9 +427,15 @@ def create_task(
     if assignee_gid:
         task_data["assignee"] = assignee_gid
 
-    # Both Rana and Donia follow every task so both show as collaborators.
-    follower_gids = list({ASANA_ASSIGNEE_GOOGLE_ADS_GID, ASANA_ASSIGNEE_DEFAULT_GID}
-                         - {assignee_gid or ""})
+    # Build follower set:
+    #   - Always: Rana + Donia (cross-visibility on all tasks)
+    #   - Additionally: co_assignee_gid from AGENT_IDENTITY (e.g. Rana on Developer tasks)
+    from config import agent_identity as _agent_identity
+    co_gid = _agent_identity(log_role).get("co_assignee_gid", "")
+    follower_gids = list(
+        {ASANA_ASSIGNEE_GOOGLE_ADS_GID, ASANA_ASSIGNEE_DEFAULT_GID, co_gid}
+        - {assignee_gid or "", ""}
+    )
     if follower_gids:
         task_data["followers"] = follower_gids
 

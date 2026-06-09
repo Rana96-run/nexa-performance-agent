@@ -37,19 +37,26 @@
 There are three vocabularies in this repo. They are NOT the same axis; this table
 is the bridge so a change in one is traceable to the others.
 
-| 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py` → `runtime_personas/`) | Activity-log label(s) |
-|---|---|---|
-| `ai-orchestrator` | `daily_report` (qoyod-daily-report.md) + manager-os | `ops_scheduler`, `daily_digest`, `task_creator` |
-| `performance-lead` | `paid_media_strategist` (nexa-strategist.md) | `performance_audit`, `paid_media_strategist` |
-| `campaign-manager` | `media_buyer` (qoyod-paid-media-agent.md) | `campaign_creator`, `keyword_management` |
-| `creative-strategist` | — (brand-identity shared) | — (creative work isn't logged) |
-| `cro-specialist` / `ui-ux-designer` / `developer` | — (CRO was external in the runtime era) | — (LP work isn't logged) |
-| `marketing-ops` | — | `health_monitor`, `collector` |
-| `growth-analyst` | `paid_media_analyst` (qoyod-analyst-agent.md) | `bq_refresh`, `spike_detector`, `llm_cadence` |
+| 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py`) | Activity-log label(s) | Asana assignee |
+|---|---|---|---|
+| `ai-orchestrator` | `daily_report` + manager-os | `ops_scheduler`, `daily_digest`, `task_creator` | Rana Khalid |
+| `performance-lead` | `paid_media_strategist` | `performance_audit`, `paid_media_strategist` | Donia Mohamed |
+| `campaign-manager` | `media_buyer` | `campaign_creator`, `keyword_management` | Rana Khalid |
+| `creative-strategist` | — (brand-identity shared) | `creative_strategy` | Donia Mohamed |
+| `cro-specialist` | — | `cro_specialist` | Rana Khalid |
+| `ui-ux-designer` | — | `ui_ux_design` | Rana Khalid |
+| `developer` | — | `lp_developer` | Tony Helmy (+ Rana follower) |
+| `marketing-ops` | — | `health_monitor`, `collector` | Donia Mohamed |
+| `growth-analyst` | `paid_media_analyst` | `bq_refresh`, `spike_detector`, `llm_cadence` | Rana Khalid |
 
-**Full coverage — all 13 log-roles owned 1:1 (no orphans, no double-claims).** `user`
+**Full coverage — all log-roles owned 1:1 (no orphans, no double-claims).** `user`
 is the human (not a seat). If a NEW log-role appears unowned, that's a police
 finding — assign it before it runs unattended (see `docs/_shared/police-loop.md`).
+
+**Asana GIDs (confirmed 2026-06-09 via API):**
+- Rana Khalid: `1208007704598388`
+- Donia Mohamed: `1211896896006183`
+- Tony Helmy (thelmy@qoyod.com): `1211659245827014`
 
 **Dashboard must mirror this.** `reports/app.py` team `roles` sets are the dashboard
 display of this mapping — they must match the column above, or activity shows as
