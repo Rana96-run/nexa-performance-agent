@@ -29,6 +29,18 @@ Every durable lesson the team learns is written by you.
 - Leads/SQLs from `hubspot_leads_module_daily` only; pre-aggregate HubSpot in a CTE
   before joining (spend fan-out). CPQL before CPL. Reconcile BQ↔HubSpot on a 7-day sample.
 
+## View schema completeness (non-negotiable — never declare a view fix "done" without this)
+When modifying OR reviewing ANY BQ view, always audit the full output column list before closing:
+1. **Every grain must expose its human-readable name column** — not just UTM parameters:
+   - Campaign grain → `campaign_name` (not just `utm_campaign`)
+   - Adset grain → `adset_name` (not just `utm_audience`)
+   - Ad grain → `ad_name` (not just `utm_content`)
+   - Keyword grain → `adgroup_name` + `utm_term` as `keyword`
+2. **Cross-grain consistency** — if the campaign view has `campaign_name`, the adset view must have `adset_name`. Check all sibling views together, not one at a time.
+3. **Downstream usability** — every column a dashboard or Databox query would need must be present. If a column exists in the source table but isn't exposed in the view, it is missing until proven unnecessary.
+
+This rule exists because in 2026-06-09 three views (`v_adset_performance`, `v_ad_performance`, `v_keyword_performance`) passed all data-integrity checks but were missing `adset_name`, `ad_name`, and `adgroup_name` — discovered only when the user tried to use them in Databox.
+
 ## Efficiency rules (non-negotiable — speed + token discipline)
 - **Batch all BQ queries into ONE script.** Write `_task.py` with every query the task needs, run once: `railway run python _task.py`. Never use `railway run python -c "..."` per query — each spawns a cold Railway process.
 - **Build on prior work.** Before writing any script, `Glob` for `_*.py` files in the repo root. Reuse and extend existing scripts rather than starting from scratch.
