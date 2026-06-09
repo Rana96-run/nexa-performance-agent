@@ -181,6 +181,28 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-06-09)
+
+- [x] **Knowledge base restructure — complete.** Swept all 18 session transcripts
+  and 44 project memory files. Extracted every finding/learning/action into typed
+  files under `docs/knowledge/` (52 findings, 15 learnings, 3 actions, 7 project
+  docs). Claude Code auto-memory (`C:\Users\qoyod\.claude\projects\...\memory\`)
+  now holds ONLY 13 `feedback_*.md` behavior-rule files + MEMORY.md index.
+  No knowledge or data lives in memory. No duplicates anywhere.
+
+- [x] **Agent consolidation — complete.** All 9 agent definitions now live ONLY
+  in `.claude/agents/<name>.md` (single source of truth per role). Removed stale
+  boot-sequence references to `docs/playbooks/` and `memory/agents/` from all 9
+  agents. Added `## Done means` to each agent (folded in from deleted playbooks).
+  Deleted `docs/playbooks/` (11 files) and `memory/agents/` (21 files). No agent
+  definition exists anywhere outside `.claude/agents/`.
+
+- [x] **memory/ clutter removed.** Moved `memory/knowledge_base/` → `docs/knowledge/`;
+  moved `memory/utm_template.md` → `.claude/skills/utm-template.md`; deleted
+  `memory/audit_findings.md` and `memory/dashboard_violations.jsonl` (data files
+  with no home in operational memory). Updated `memory/11_agent_roles.md` to
+  remove stale references to deleted paths.
+
 ## Done this session (2026-05-16)
 
 - [x] **Activity dashboard — 6-member agent team roster** — new "Agent Team" section
