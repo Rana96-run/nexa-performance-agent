@@ -306,7 +306,9 @@ def walk_widgets(elements):
 
 - [ ] On 320px viewport: nav CTA visible, no horizontal scroll
 - [ ] On 375px viewport: hero columns stack, h1 ≤ 24px, form fields compact
-- [ ] On 768px viewport: links visible, two-column hero intact
+- [ ] On 900px viewport: nav links HIDDEN (only logo + CTA), single-column hero
+- [ ] On 768px viewport: nav links HIDDEN (only logo + CTA) — NOT showing a cramped full row
+- [ ] On 961px viewport: links visible, two-column hero intact
 - [ ] On 1280px viewport: full desktop layout, no regressions
 - [ ] LiteSpeed cache purged (HTTP 200 from slug after purge)
 - [ ] Browser hard-refresh (Ctrl+Shift+R) confirms live changes
@@ -321,3 +323,4 @@ def walk_widgets(elements):
 4. **Mega-widget pages (773)** — all fixes go into one widget, don't navigate by `*_w` ID pattern.
 5. **Cache** — always purge after saving. LiteSpeed can serve a stale version for up to 10 minutes even after a correct WP API write.
 6. **`!important` everywhere** — Elementor injects its own inline styles with high specificity; you MUST use `!important` in mobile overrides or they won't apply.
+7. **`.qnav-links{display:none}` in the 960px breakpoint MUST have `!important`** — each widget's `<style>` block re-declares `.qnav-links{display:flex}` unconditionally (for desktop default). Since this re-declaration is LATER in the DOM than the 960px `display:none` rule in the nav widget, it overrides it via cascade order. Without `!important` on the `display:none`, links show at 768–960px, cramming the CTA to the left edge (the "left side cropped" bug). Fix: `.qnav-links{display:none!important}` in the `@media(max-width:960px)` block of the nav widget. The 767px mobile rule `display:flex!important` still wins because it comes later in the DOM AND has `!important`. Fixed on pages 683, 850, 851 on 2026-06-09.
