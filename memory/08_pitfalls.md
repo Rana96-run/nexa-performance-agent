@@ -3,6 +3,48 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## v_ad_performance leads fan-out NOT fully fixed — per-channel recon fails (found 2026-06-09, post-fix)
+
+- **Symptom:** After the name-grain/fan-out fix (commit 13c76e4), the 14d AGGREGATE
+  reconciliation passed (1585 ≤ HubSpot 1843) but **per-channel it still over-counts**.
+  Live recon 2026-06-02..2026-06-08 (`v_ad_performance` collapsed to canonical channel
+  vs `hubspot_leads_module_daily.qoyod_source`):
+  - Google Ads 308 vs 332 — **0.93 OK** (only clean channel)
+  - Meta 101 vs 54 — **1.87 OVER**
+  - Snapchat 316 vs 148 — **2.14 OVER**
+  - TikTok 128 vs 63 — **2.03 OVER**
+  - Microsoft 84 vs 21 — **4.00 OVER** (and see channel-label dup below)
+- **Why the aggregate "passed" and hid this:** Google Ads is the largest channel and is
+  clean, so it dominated the total and masked 2x over-counts on the 4 smaller channels.
+  **Rule: a reconciliation that only checks the org-wide total is worthless — ALWAYS
+  reconcile per-channel.** A clean total can hide compensating per-channel errors.
+- **Root cause (located):** The **upstream `utm_paid_attribution_daily` is CORRECT** at
+  source grain (snapchat 172, meta 54 EXACT, tiktok 63 EXACT, google_ads 332 EXACT vs
+  HubSpot truth). The over-count is introduced **downstream inside `v_ad_performance`'s
+  own platform↔HubSpot re-join**: the leads window guard partitions by `lead_src_key`
+  (AB-bucket = `AB|date|channel|utm_campaign|utm_audience|utm_content`, raw casing), but
+  the view produces MORE distinct AB-combos than HubSpot has buckets (Snapchat: view 101
+  AB-combos / 311 leads vs HubSpot 80 buckets / 148 leads), so the guard under-dedups —
+  one HubSpot lead bucket is split across multiple platform `(campaign × audience)` rows
+  that all share the same `ad_id`+`utm_content`, and each retains a slice of the leads.
+  Casing is NOT the cause here (101 raw == 101 lowered AB-combos).
+- **Fix needed (hand to developer):** Don't re-join HubSpot leads inside `v_ad_performance`
+  at all — `utm_paid_attribution_daily` already has correct per-(date,channel,campaign,
+  audience,content) leads. Pull leads/SQLs from the upstream view by its AB grain and let
+  the platform side supply only spend/impr/clicks/ids. OR: build `lead_src_key` from the
+  HubSpot row's OWN identity (its source primary grain), not from the joined platform
+  fields, so it is constant per HubSpot bucket regardless of how many platform rows it lands on.
+- **Channel-label duplication (separate bug, same view):** `v_ad_performance` emits BOTH
+  `channel='microsoft'` (utm_proxy rows, $0 spend, 42 leads) and `channel='microsoft_ads'`
+  (platform rows, $381 spend, 42 leads) for the SAME Microsoft leads (`Bing_AR_Brand_HubSpot`
+  = 20 leads under both labels). The utm_proxy CTE labels Microsoft as `microsoft` while the
+  platform side uses `microsoft_ads`; the dedup never collapses them → Microsoft double-counted.
+  Fix: normalize the proxy channel string to `microsoft_ads` (match `campaigns_daily.channel`)
+  before the union, same class as the `microsoft`/`microsoft_ads` map trap already documented.
+- **Verified clean reference:** HubSpot leads matching a platform utm_content (lowered, channel
+  grain): Snapchat 143, Meta 48, Google 264 — these track HubSpot's qoyod_source totals; the
+  view's inflated numbers do not.
+
 ## v_ad/v_adset platform CTE grouped by NAME, lost ad_id + fanned leads 3.5x (fixed 2026-06-09)
 
 - **Symptom:** Two ads sharing a `utm_content`/`ad_name` but with different `ad_id`s

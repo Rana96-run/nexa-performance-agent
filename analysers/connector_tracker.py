@@ -147,10 +147,24 @@ def check_freshness(channel: str, table: str) -> dict:
         """
     try:
         rows = _bq_query(sql)
-        hours_old = int(rows[0].hours_old or 9999) if rows else 9999
     except Exception as e:
-        return {"status": "BROKEN", "hours_old": None, "error": str(e)}
+        # (a) BQ query error — the check could not RUN (rate limit, timeout,
+        # transient internal error). This is NOT a data outage; surfacing it as
+        # BROKEN raises a false RED #nexa-health alert for channels that in fact
+        # have fresh data. Downgrade to WARNING and carry the error text so the
+        # operator can see the check failed to execute rather than the connector.
+        return {"status": "WARNING", "hours_old": None,
+                "error": f"freshness check failed to run: {e}"}
 
+    # An aggregate query (MAX(date)) always returns exactly one row. When the
+    # channel has zero rows, MAX(date) is NULL → hours_old is None.
+    # (b) Genuinely empty result — the channel truly has no data → real BROKEN.
+    raw = rows[0].hours_old if rows else None
+    if raw is None:
+        return {"status": "BROKEN", "hours_old": None, "error": None,
+                "reason": "no rows in BQ for this channel/table"}
+
+    hours_old = int(raw)
     if hours_old > _BROKEN_HOURS:
         status = "BROKEN"
     elif hours_old > _STALE_HOURS:
