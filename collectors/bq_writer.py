@@ -745,6 +745,11 @@ WITH platform AS (
   FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
   GROUP BY date, channel, campaign_name, adset_id
 ),
+-- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience)
+-- grain from utm_paid_attribution_daily. 2026-06-09: removed the adset-ID and
+-- campaign-ID re-joins to hubspot_leads_module_daily (Strategy C/D). They
+-- double-counted by spraying campaign-level leads across adsets ON TOP OF the
+-- audience-grain leads. The upstream view is the single source of truth.
 hubspot AS (
   SELECT date, channel, utm_campaign, utm_audience,
     SUM(leads) AS leads,
@@ -753,37 +758,6 @@ hubspot AS (
   FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
   WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
   GROUP BY 1, 2, 3, 4
-),
--- Strategy C: Exact adset-ID fallback — matches when UTM name changed but adset ID didn't.
--- Uses lead_adgroup_id_sync (confirmed populated for TikTok + Meta Instantform leads).
--- Only fires when the name match (hubspot A/B) returns NULL leads.
-hubspot_id_adset AS (
-  SELECT
-    date,
-    qoyod_source                         AS channel,
-    lead_adgroup_id_sync                 AS adset_id,
-    SUM(leads_total)                     AS leads,
-    SUM(leads_qualified)                 AS leads_qualified,
-    SUM(leads_disqualified)              AS leads_disqualified
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-  WHERE lead_adgroup_id_sync IS NOT NULL
-  GROUP BY 1, 2, 3
-),
--- Strategy D: Campaign-ID fallback — uses lead_campaign_id_sync. Fires when both
--- name match (A/B) AND exact adset-ID match (C) miss. Joins at campaign grain;
--- if multiple adsets share a campaign, all get the campaign-level leads (graceful
--- degradation — e.g. adset renamed AND adset ID not found in lead data).
--- Confirmed: TikTok + Meta numeric IDs match campaigns_daily.campaign_id exactly.
-hubspot_id_cam AS (
-  SELECT
-    date,
-    lead_campaign_id_sync                AS campaign_id,
-    SUM(leads_total)                     AS leads,
-    SUM(leads_qualified)                 AS leads_qualified,
-    SUM(leads_disqualified)              AS leads_disqualified
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-  WHERE lead_campaign_id_sync IS NOT NULL
-  GROUP BY 1, 2
 ),
 -- Deals: ID-matched bucket (Snap/Meta/TikTok Instantform — survives adset renames)
 deals_by_id AS (
@@ -851,14 +825,15 @@ joined AS (
     COALESCE(p.spend, u.spend) AS spend, p.impressions, p.clicks,
     p.date AS p_date,
     h.utm_campaign AS h_utm_campaign,
-    COALESCE(h.leads,              h_id.leads,              h_cam.leads)              AS leads_raw,
-    COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified)    AS leads_qualified_raw,
-    COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified) AS leads_disqualified_raw,
+    h.leads              AS leads_raw,
+    h.leads_qualified    AS leads_qualified_raw,
+    h.leads_disqualified AS leads_disqualified_raw,
+    -- dedup key = the upstream bucket's OWN identity (date, channel, utm_campaign,
+    -- utm_audience). Constant per upstream row → counted exactly once even when a
+    -- bucket fans across multiple platform adset_id rows. No ID fallbacks.
     CASE
-      WHEN h.leads     IS NOT NULL THEN CONCAT('AB|', CAST(IFNULL(h.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h.channel,''),
+      WHEN h.leads IS NOT NULL THEN CONCAT('AB|', CAST(IFNULL(h.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h.channel,''),
                                                 '|', IFNULL(h.utm_campaign,''), '|', IFNULL(h.utm_audience,''))
-      WHEN h_id.leads  IS NOT NULL THEN CONCAT('C|', CAST(IFNULL(h_id.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h_id.channel,''), '|', IFNULL(h_id.adset_id,''))
-      WHEN h_cam.leads IS NOT NULL THEN CONCAT('D|', CAST(IFNULL(h_cam.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h_cam.campaign_id,''))
       ELSE NULL
     END                                        AS lead_src_key,
     di.new_biz_deals_won  AS di_deals_won,  di.new_biz_deals_lost  AS di_deals_lost,
@@ -875,19 +850,6 @@ joined AS (
   FULL OUTER JOIN hubspot h
     ON p.date = h.date AND p.channel = h.channel
     AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
-  -- Strategy C: Adset-ID fallback — only activates when name match misses
-  LEFT JOIN hubspot_id_adset h_id
-    ON h.leads IS NULL
-    AND p.date = h_id.date
-    AND p.channel = h_id.channel
-    AND p.platform_adset_id = h_id.adset_id
-  -- Strategy D: Campaign-ID fallback (TikTok + Meta) — fires when both name AND adset-ID miss
-  LEFT JOIN hubspot_id_cam h_cam
-    ON h.leads IS NULL
-    AND h_id.leads IS NULL
-    AND p.date = h_cam.date
-    AND p.channel IN ('tiktok', 'meta', 'snapchat')
-    AND p.platform_campaign_id = h_cam.campaign_id
   LEFT JOIN utmproxy u
     ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
   -- Deals: ID-match (Snap/Meta/TikTok Instantform — survives adset renames)
@@ -989,6 +951,13 @@ WITH platform AS (
   FROM `{PROJECT_ID}.{DATASET}.ads_daily`
   GROUP BY date, channel, campaign_name, adset_name, ad_id
 ),
+-- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience,
+-- utm_content) grain. utm_paid_attribution_daily already resolves HubSpot leads
+-- to this exact grain (one row per bucket, no fan-out). 2026-06-09: this view no
+-- longer re-joins hubspot_leads_module_daily by ad_id / campaign_id sync. Those
+-- fallback (Strategy C/D) re-joins double-counted — they sprayed campaign-level
+-- leads across every ad in the campaign ON TOP OF the content-grain leads
+-- (snapchat 172 truth -> 316 in the view). The upstream view is the single source.
 hubspot AS (
   SELECT date, channel, utm_campaign, utm_audience, utm_content,
     SUM(leads) AS leads,
@@ -997,34 +966,6 @@ hubspot AS (
   FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
   WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
   GROUP BY 1, 2, 3, 4, 5
-),
--- Strategy C: Exact ad-ID fallback — matches when UTM name changed but ad ID didn't.
--- Uses lead_ad_id_sync (confirmed populated for TikTok + Meta Instantform leads).
--- Only fires when the name match (hubspot A/B) returns NULL leads.
-hubspot_id_ad AS (
-  SELECT
-    date,
-    qoyod_source                         AS channel,
-    lead_ad_id_sync                      AS ad_id,
-    SUM(leads_total)                     AS leads,
-    SUM(leads_qualified)                 AS leads_qualified,
-    SUM(leads_disqualified)              AS leads_disqualified
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-  WHERE lead_ad_id_sync IS NOT NULL
-  GROUP BY 1, 2, 3
-),
--- Strategy D: Campaign-ID fallback — uses lead_campaign_id_sync. Fires when both
--- name match (A/B) AND exact ad-ID match (C) miss. Joins at campaign grain.
-hubspot_id_cam AS (
-  SELECT
-    date,
-    lead_campaign_id_sync                AS campaign_id,
-    SUM(leads_total)                     AS leads,
-    SUM(leads_qualified)                 AS leads_qualified,
-    SUM(leads_disqualified)              AS leads_disqualified
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
-  WHERE lead_campaign_id_sync IS NOT NULL
-  GROUP BY 1, 2
 ),
 -- Deals: ID-matched bucket (survives ad renames)
 deals_by_id AS (
@@ -1089,16 +1030,17 @@ joined AS (
     p.spend, p.impressions, p.clicks, p.creative_type, p.status,
     p.date AS p_date,
     h.utm_campaign AS h_utm_campaign,
-    -- raw lead sources (chosen via COALESCE precedence A/B -> C -> D)
-    COALESCE(h.leads,              h_id.leads,              h_cam.leads)              AS leads_raw,
-    COALESCE(h.leads_qualified,    h_id.leads_qualified,    h_cam.leads_qualified)    AS leads_qualified_raw,
-    COALESCE(h.leads_disqualified, h_id.leads_disqualified, h_cam.leads_disqualified) AS leads_disqualified_raw,
-    -- which source won? used to build the dedup partition key for leads
+    -- raw leads come straight from the authoritative upstream content-grain bucket
+    h.leads              AS leads_raw,
+    h.leads_qualified    AS leads_qualified_raw,
+    h.leads_disqualified AS leads_disqualified_raw,
+    -- dedup key = the upstream bucket's OWN identity (date, channel, utm_campaign,
+    -- utm_audience, utm_content). Constant per upstream row, so a bucket that fans
+    -- across multiple platform ad_id rows (same utm_content, different campaign/
+    -- audience) is counted EXACTLY ONCE. No ID-based fallbacks anymore.
     CASE
-      WHEN h.leads     IS NOT NULL THEN CONCAT('AB|', CAST(IFNULL(h.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h.channel,''),
+      WHEN h.leads IS NOT NULL THEN CONCAT('AB|', CAST(IFNULL(h.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h.channel,''),
                                                 '|', IFNULL(h.utm_campaign,''), '|', IFNULL(h.utm_audience,''), '|', IFNULL(h.utm_content,''))
-      WHEN h_id.leads  IS NOT NULL THEN CONCAT('C|', CAST(IFNULL(h_id.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h_id.channel,''), '|', IFNULL(h_id.ad_id,''))
-      WHEN h_cam.leads IS NOT NULL THEN CONCAT('D|', CAST(IFNULL(h_cam.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h_cam.campaign_id,''))
       ELSE NULL
     END                                        AS lead_src_key,
     -- deals: ID + name buckets
@@ -1116,19 +1058,6 @@ joined AS (
   FULL OUTER JOIN hubspot h
     ON p.date = h.date AND p.channel = h.channel
     AND LOWER(TRIM(p.utm_content)) = LOWER(TRIM(h.utm_content))
-  -- Strategy C: Ad-ID fallback — only activates when name match misses
-  LEFT JOIN hubspot_id_ad h_id
-    ON h.leads IS NULL
-    AND p.date = h_id.date
-    AND p.channel = h_id.channel
-    AND p.platform_ad_id = h_id.ad_id
-  -- Strategy D: Campaign-ID fallback (TikTok + Meta) — fires when both name AND ad-ID miss
-  LEFT JOIN hubspot_id_cam h_cam
-    ON h.leads IS NULL
-    AND h_id.leads IS NULL
-    AND p.date = h_cam.date
-    AND p.channel IN ('tiktok', 'meta', 'snapchat')
-    AND p.platform_campaign_id = h_cam.campaign_id
   -- Deals: ID-match (survives ad renames)
   LEFT JOIN deals_by_id di
     ON p.date = di.date AND p.channel = di.channel

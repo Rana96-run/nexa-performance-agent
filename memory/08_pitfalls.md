@@ -1,16 +1,18 @@
 # Pitfalls & Known Traps
 
-## ImpressionShare_ campaign prefix = IS/brand campaign — NEVER apply CPQL as primary KPI (found 2026-06-09)
+## ImpressionShare_ campaign prefix = awareness campaign — NEVER apply CPQL or CPA targets (found 2026-06-09)
 
-- **Symptom:** Flagged `ImpressionShare_Search_AR_Invoice` as a "drain" based on CPQL, recommended keyword pauses and bid strategy fixes using leads metrics.
-- **Why it's wrong:** A campaign with `ImpressionShare_` prefix is an **impression-share / brand-awareness campaign**, not a lead-gen campaign. Its primary KPI is IS (impression share) and CPA, not CPQL. Applying CPQL to it is category error.
-- **Fix:** Before applying ANY KPI zone ($CPQL, $CPL, pause thresholds), read the campaign name prefix:
-  - `ImpressionShare_` → IS/brand campaign → KPI = IS% + CPA, NOT CPQL
-  - `Search_AR_Brand` / `ImpressionShare_Search_AR_Brand` → brand IS → KPI = branded IS%, CPC, brand conv rate
-  - `Search_*_Test` → test campaign → must have hard daily budget cap; regression = fix candidate, not pause
-  - `Search_AR_Generic` / `Google_Search_AREN_*` → lead-gen → KPI = CPQL, CPL, qualification rate
-- **Encoding:** This rule lives in campaign name, not in BQ — check name BEFORE pulling HubSpot CPQL data.
-- **Seat responsible for enforcement:** growth-analyst must classify campaign type from name BEFORE selecting KPI metric.
+- **Symptom:** Flagged `ImpressionShare_Search_AR_Invoice` as a "drain" based on CPQL, recommended keyword pauses AND a tCPA $120 bid strategy change. Both were wrong.
+- **Why it's wrong — two layers:**
+  1. `config.py::AWARENESS_PATTERNS = ["impressionshare", "impression_share", "websitetraffic", "reach"]` — the campaign matches this pattern. Config explicitly states: **zero leads is fine, primary KPI = IS% ≥ 25%**. Applying CPQL is a category error.
+  2. `config.py::CHANNEL_CPQL_ACCEPTABLE = {"google_ads": 130.00}` — Google Ads acceptable CPQL is **$130**, not $100. The "pause zone" cutoff for Google Ads is $130, not the generic $100.
+- **Fix — campaign type classification from name (check config.py AWARENESS_PATTERNS):**
+  - `ImpressionShare_` → awareness/IS campaign → KPI = IS% (target ≥ 25%) + daily budget control. Zero leads is acceptable. NEVER add tCPA. NEVER apply CPQL zones.
+  - `Search_AR_Brand` / `ImpressionShare_Search_AR_Brand` → brand IS → same as above.
+  - `Search_*_Test` → test lead-gen campaign → must have hard daily budget cap; prior CPQL determines if regression vs chronic drain.
+  - `Search_AR_Generic` / `Google_Search_AREN_*` → lead-gen → KPI = CPQL (Google Ads: pause >$130), CPL, qualification rate.
+- **Correct lever for IS campaign:** IS% below 25% target → increase daily budget. IS% fine but spend high → reduce daily budget cap. Do NOT change bid strategy, do NOT add tCPA.
+- **Seat responsible for enforcement:** growth-analyst classifies campaign type from name using AWARENESS_PATTERNS BEFORE selecting any KPI metric or recommending bid strategy changes.
 
 ## Prior-period CPQL determines whether a regressed campaign is a FIX or a PAUSE (found 2026-06-09)
 
