@@ -1,11 +1,11 @@
 # Pitfalls & Known Traps
 
-## utm_source NULL in v_adset/v_ad_performance — expected, not a bug (2026-06-09)
+## utm_source in v_adset/v_ad_performance — COALESCE fallback required for Databox filters (2026-06-09)
 
-- **Symptom:** Rows with 0 leads show `utm_source = NULL` in `v_adset_performance` / `v_ad_performance`.
-- **Root cause:** `utm_source` is a HubSpot field (`lead_utm_source`). It only populates when a lead exists with a captured UTM. Rows with spend but no leads have no HubSpot row to join — NULL is correct.
-- **Rule:** 95% of rows WITH leads and a campaign_name have utm_source populated. Do NOT add a COALESCE fallback to `channel` — that fabricates a value for rows with no HubSpot attribution.
-- **Wrong fix tried on 2026-06-09:** `COALESCE(utm_source, channel)` — reverted same day.
+- **utm_source** is a HubSpot field (`lead_utm_source`). Values differ from channel slugs ("fb" ≠ "meta") — that is expected and fine.
+- **Rows with leads:** utm_source comes from HubSpot (populated ~95% of the time when campaign_name exists).
+- **Rows with no leads:** utm_source would be NULL without a fallback. NULL rows are invisible in Databox filters, so `COALESCE(utm_source, channel)` is intentional — it uses the channel slug as a fallback so every row is filterable.
+- **Do NOT remove the COALESCE** — it was reverted once (wrongly) on 2026-06-09 and had to be restored.
 
 ## utm_paid_attribution_daily — non-paid sources leak in as NULL-channel orphans (2026-06-09)
 
