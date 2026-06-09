@@ -465,6 +465,19 @@ CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily` AS
 WITH
 
 -- 1. HubSpot: aggregate at full UTM grain (all 4 levels)
+--
+-- SOURCE FILTER (added 2026-06-09): only keep qoyod_source values that map to a
+-- known channel in channel_name_map (item 5). Leads from NON-mapped sources
+-- (Offline / Direct Traffic / Organic Social / Email Marketing / Other /
+-- Direct In-app Purchase / Referrals / Twitter Ads / 'youtube') carry a paid UTM
+-- on the contact (last-touch HubSpot attribution kept a stale UTM) but their
+-- qoyod_source is non-paid, so COALESCE(cnm_exact, cnm_slug) returned NULL channel.
+-- Those rows never satisfied `p.channel = h.channel` in v_adset_performance and
+-- surfaced as leads-only orphan rows (38 rows / 40 leads on 2026-06-09).
+-- They are genuinely non-paid touches that do not belong in the paid attribution
+-- view, so we drop them at the source grain. Sources kept = the display names in
+-- channel_name_map; matched with the SAME exact-then-slug logic the channel join
+-- uses, so the filter and the channel resolution stay perfectly in lock-step.
 hs_full AS (
   SELECT
     date,
@@ -479,6 +492,17 @@ hs_full AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE lead_utm_campaign IS NOT NULL
     AND TRIM(lead_utm_campaign) != ''
+    -- keep only sources that resolve to a known channel (paid + organic_search)
+    AND (
+      LOWER(TRIM(qoyod_source)) IN (
+        'google ads','meta ads','snapchat ads','tiktok ads',
+        'linkedin ads','microsoft ads','youtube ads','organic search'
+      )
+      OR REGEXP_REPLACE(REGEXP_REPLACE(LOWER(TRIM(qoyod_source)), r'[^a-z0-9]+', '_'), r'^_+|_+$', '') IN (
+        'google_ads','meta_ads','snapchat_ads','tiktok_ads',
+        'linkedin_ads','microsoft_ads','youtube_ads','organic_search'
+      )
+    )
   GROUP BY 1, 2, 3, 4, 5, 6
 ),
 
