@@ -1117,6 +1117,29 @@ cause was the tracker itself, not the connectors. If it cries wolf again, check:
   **native (SAR)** value, not USD — the USD conversion (÷3.75) destroys the 966 prefix.
   Source-deal fix is HUMAN-gated (HubSpot read-only). The police watches deal amounts now.
 
+### check_freshness — BQ query error wrongly raised false BROKEN (fixed 2026-06-09)
+
+- **Symptom:** intermittent `hours_old=9999` / BROKEN for `google_ads` and `microsoft_ads`
+  (bing) on #nexa-health, even when `campaigns_daily` had fresh rows for those channels.
+- **Root cause:** the `except Exception` path in `check_freshness` returned
+  `{"status": "BROKEN", "hours_old": None}`. A **BQ query error** (transient rate limit /
+  timeout / internal error — the check failed to RUN) was indistinguishable from a genuine
+  data outage, so a flaky query produced a hard RED alert for a connector with healthy data.
+  The old `int(rows[0].hours_old or 9999)` also masked the empty case behind the `9999`
+  sentinel, conflating "no rows" with "query failed".
+- **Fix:** split the two failure modes in `check_freshness`:
+  - **(a) exception → WARNING** with `error="freshness check failed to run: {e}"` (the check
+    couldn't execute; not a connector fault → no false RED).
+  - **(b) `MAX(date)` is NULL (zero rows for the channel) → real BROKEN** with
+    `reason="no rows in BQ for this channel/table"` — handled explicitly, no `9999` magic.
+  - Fresh data still flows through the `_BROKEN_HOURS`/`_STALE_HOURS` ladder unchanged.
+- **`_BQ_CHANNEL` confirmed correct:** `campaigns_daily.channel` distinct values are
+  `google_ads`/`microsoft_ads` (verified live), and `_BQ_CHANNEL = {"google":"google_ads",
+  "bing":"microsoft_ads"}` is applied consistently in both `check_freshness` and
+  `check_row_integrity`. The slug map was never the bug — the exception path was.
+- **Confirmation run (`run_connector_check` per channel):** google → freshness HEALTHY
+  hours_old=32; bing → freshness HEALTHY hours_old=32. No false BROKEN on either.
+
 ## Claude Code subagents — invalid YAML frontmatter silently drops the agent (2026-06-09)
 
 - **Symptom:** `Agent type 'growth-analyst' not found` mid-session, though the file looked
