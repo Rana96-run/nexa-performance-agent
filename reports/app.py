@@ -2422,6 +2422,17 @@ def _execute_approved_action(meta: dict) -> str:
             results.append(f"`{f.get('campaign', '?')}`: {sub}")
         return "\n".join(results) if results else "Nothing to execute."
 
+    elif action == "budget_redeployment":
+        # Each finding is a {action:"scale", channel, campaign, campaign_id,
+        # account_id, new_budget} dict — reuse the single-item scale path.
+        results = []
+        for f in meta.get("findings", []):
+            sub = _execute_approved_action(f)
+            results.append(f"`{f.get('campaign', '?')}`: {sub}")
+        freed = meta.get("freed_per_day", 0)
+        header = f"Budget redeployment executed (${freed:.0f}/day freed):\n"
+        return header + ("\n".join(results) if results else "Nothing to execute.")
+
     return "Acknowledged — Asana tasks updated."
 
 

@@ -541,9 +541,47 @@ def _run_budget_redeployment_proposal() -> None:
             "_This proposal is generated automatically every 4 days when CPQL zones diverge._"
         )
 
-        WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
+        slack = WebClient(token=SLACK_BOT_TOKEN)
+        resp  = slack.chat_postMessage(
             channel=SLACK_CHANNEL_APPROVAL, text="\n".join(lines)
         )
+        ts = resp["ts"]
+
+        # Persist structured metadata so _handle_reaction() in app.py can execute on ✅
+        changes = []
+        for name, cpql, cur_daily, add in allocation:
+            # Look up campaign_id + channel from BQ for each scaler
+            try:
+                cid_sql = f"""
+                    SELECT channel, campaign_id, account_id
+                    FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
+                    WHERE LOWER(campaign_name) = LOWER('{name.replace("'","''")}')
+                      AND channel != 'microsoft_ads'
+                    ORDER BY date DESC LIMIT 1
+                """
+                cid_rows = list(bq.query(cid_sql).result())
+                ch  = cid_rows[0].channel      if cid_rows else ""
+                cid = str(cid_rows[0].campaign_id) if cid_rows else ""
+                aid = str(cid_rows[0].account_id)  if cid_rows else ""
+            except Exception:
+                ch = cid = aid = ""
+            changes.append({
+                "action": "scale",
+                "channel": ch,
+                "campaign": name,
+                "campaign_id": cid,
+                "account_id": aid,
+                "new_budget": round(cur_daily + add, 2),
+            })
+        # Also record drain campaigns (action=pause — team decides, not auto-executed here)
+
+        from notifications.slack import save_pending_approval
+        save_pending_approval(ts, {
+            "action":   "budget_redeployment",
+            "findings": changes,
+            "freed_per_day": round(freed, 2),
+        })
+
         print(f"[ops-scheduler] Budget redeployment: posted proposal "
               f"(${freed:.0f}/day freed, {len(allocation)} destinations)")
     except Exception as e:
@@ -655,6 +693,10 @@ def _nightly():
     #     Tracked via .cache/last_scale_pause_run.txt; resets across restarts.
     if _should_run_scale_pause():
         health_tasks, health_findings = _run_campaign_health()
+        # 3c-bis. Budget redeployment proposal — when CPQL zones diverge,
+        #         auto-generate a $/day reallocation proposal to #approvals.
+        #         Same 4-day cadence as campaign health. No execution — ✅ gate applies.
+        _run_budget_redeployment_proposal()
         _mark_scale_pause_ran()
     else:
         from config import SCALE_PAUSE_DIGEST_INTERVAL_DAYS
@@ -687,7 +729,13 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] LinkedIn token refresh failed (non-fatal): {e}")
 
-    # 3g. WEEKLY KEYWORD AUTO-FIX — Sunday Riyadh only.
+    # 3g. Monitor date follow-ups — auto-check approved actions at +7 and +14 days.
+    #     Reads agent_activity_log for approved pause/scale/budget actions from
+    #     7 and 14 days ago. Posts a Slack re-evaluation prompt to #approvals.
+    #     No ✅ needed — review-only. Runs nightly (never misses a follow-up).
+    _check_monitor_dates()
+
+    # 3h. WEEKLY KEYWORD AUTO-FIX — Sunday Riyadh only.
     # Silently scans all ENABLED keywords + active negatives, applies the
     # rule-mandated action (pause / delete / remove-negative), and logs the
     # counts to BQ so Monday's weekly summary picks them up.
