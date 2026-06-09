@@ -5,7 +5,12 @@
 - **utm_source** is a HubSpot field (`lead_utm_source`). Values differ from channel slugs ("fb" ≠ "meta") — that is expected and fine.
 - **Rows with leads:** utm_source comes from HubSpot (populated ~95% of the time when campaign_name exists).
 - **Rows with no leads:** utm_source would be NULL without a fallback. NULL rows are invisible in Databox filters, so `COALESCE(utm_source, channel)` is intentional — it uses the channel slug as a fallback so every row is filterable.
-- **Do NOT remove the COALESCE** — it was reverted once (wrongly) on 2026-06-09 and had to be restored.
+- **utm_source, channel, and qoyod_source are THREE different things — never substitute one for another:**
+  - `utm_source` = UTM parameter captured by HubSpot ("fb", "google", "tiktok") — NULL when no lead
+  - `channel` = platform slug used internally ("meta", "google_ads", "tiktok")
+  - `qoyod_source` = HubSpot display name ("Meta Ads", "Google Ads", "Tiktok Ads")
+- **Do NOT COALESCE(utm_source, channel)** — "meta" ≠ "fb". Use `channel_name` for platform filtering on zero-lead rows.
+- Fallback was added and removed twice (2026-06-09) before this was understood.
 
 ## utm_paid_attribution_daily — non-paid sources leak in as NULL-channel orphans (2026-06-09)
 
