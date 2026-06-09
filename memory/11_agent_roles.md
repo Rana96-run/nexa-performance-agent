@@ -2,9 +2,8 @@
 
 > **Canonical roster is `docs/_shared/org-chart.md`.** As of 2026-06-08 the team
 > is **9 agents** (1 manager + 3 departments), matching the live "NEXA OPERATIONS
-> HQ — The Team" dashboard. Each is a Claude Code subagent in `.claude/agents/`
-> with its own playbook (`docs/playbooks/<dept>/<role>.md`) and memory
-> (`memory/agents/<dept>/<role>/`).
+> HQ — The Team" dashboard. Each is a Claude Code subagent defined in `.claude/agents/`
+> — that file is the single source of truth for each role (no external playbooks or memory folders).
 
 ## 9 agents ≠ 13 log-roles (the trap that caused a wrong rebuild)
 - **The team = 9 agents** (org chart, below). This is who exists.
