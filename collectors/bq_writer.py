@@ -1207,6 +1207,7 @@ WITH platform AS (
 ),
 hubspot AS (
   SELECT date, channel, utm_campaign, utm_audience, utm_term,
+    ANY_VALUE(utm_source) AS utm_source,
     SUM(leads) AS leads,
     SUM(leads_qualified) AS leads_qualified,
     SUM(leads_disqualified) AS leads_disqualified,
@@ -1245,6 +1246,7 @@ SELECT
   COALESCE(p.adgroup_name, h.utm_audience)   AS utm_audience,
   COALESCE(p.adgroup_name, h.utm_audience)   AS adgroup_name,
   COALESCE(p.utm_term, h.utm_term)           AS utm_term,
+  COALESCE(h.utm_source, COALESCE(p.channel, h.channel)) AS utm_source,
   p.match_type,
   p.quality_score,
   COALESCE(p.spend, u.spend, 0)              AS spend,

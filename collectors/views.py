@@ -258,6 +258,7 @@ WITH
   -- Leads: ID-matched bucket (Snap / Meta / TikTok Instantform)
   leads_by_id AS (
     SELECT date, qoyod_source, lead_campaign_id_sync AS campaign_id,
+           ANY_VALUE(lead_utm_source) AS utm_source,
            SUM(leads_total)        AS leads,
            SUM(leads_qualified)    AS qualified,
            SUM(leads_disqualified) AS disqualified
@@ -269,6 +270,7 @@ WITH
   -- Leads: name-matched bucket (Google / Microsoft / LinkedIn website forms — no sync ID)
   leads_by_name AS (
     SELECT date, qoyod_source, lead_utm_campaign AS campaign_name,
+           ANY_VALUE(lead_utm_source) AS utm_source,
            SUM(leads_total)        AS leads,
            SUM(leads_qualified)    AS qualified,
            SUM(leads_disqualified) AS disqualified
@@ -330,6 +332,7 @@ SELECT
   s.channel,
   s.campaign_id,                                       -- NEW: exposed for disambiguation
   s.campaign_name,
+  COALESCE(li.utm_source, ln.utm_source, s.channel) AS utm_source,
   ROUND(s.spend, 2)         AS spend,
   s.impressions,
   s.clicks,
