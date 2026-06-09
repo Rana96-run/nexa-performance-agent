@@ -37,6 +37,18 @@
 - **Correct lever for IS campaign:** IS% below 25% target → increase daily budget. IS% fine but spend high → reduce daily budget cap. Do NOT change bid strategy, do NOT add tCPA.
 - **Seat responsible for enforcement:** growth-analyst classifies campaign type from name using AWARENESS_PATTERNS BEFORE selecting any KPI metric or recommending bid strategy changes.
 
+## `rows` is a reserved keyword in BigQuery SQL — use `row_count` as alias (2026-06-09)
+
+- `SELECT COUNT(*) AS rows` throws `Syntax error: Unexpected keyword ROWS` in BQ.
+- Always use `row_count`, `cnt`, `n`, or any other non-reserved alias.
+
+## utm_source was already collected in hubspot_leads_bq.py but missing from views (2026-06-09)
+
+- `lead_utm_source` was in `PROPERTIES`, BQ schema, bucket key, and both `collect_and_write` and `sync_cursor_and_write` paths since before 2026-06-09.
+- The gap was only in `collectors/bq_writer.py`: the `hs_full` CTE in `UTM_PAID_ATTRIBUTION_VIEW_SQL` did not SELECT or GROUP BY `lead_utm_source`, so it never flowed to downstream views.
+- Fix: add `lead_utm_source` to `hs_full` GROUP BY (1..7), carry `utm_source` through `attributed`, `attributed_with_spend`, `unattributed`, `combined`, and the final SELECT. Then add `ANY_VALUE(utm_source)` to the `hubspot` CTEs in `V_ADSET_PERFORMANCE_SQL` and `V_AD_PERFORMANCE_SQL`, and expose it in both `joined` CTEs and final SELECTs.
+- Verified live: 346 leads with `utm_source='Google'`, 165 `'Snapchat'`, 64 `'Tiktok'` in last 7 days across all three materialized tables.
+
 ## Prior-period CPQL determines whether a regressed campaign is a FIX or a PAUSE (found 2026-06-09)
 
 - **Symptom:** Classified `Search_E-invoice_AR_Test` (prior CPQL $73.98, current $308.96) as a "drain" campaign requiring consideration for pause.
