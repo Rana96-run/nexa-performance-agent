@@ -29,12 +29,14 @@ It is the internal attribution spine (UTM grain) that feeds `v_adset_performance
 and `v_ad_performance`. Campaign reporting uses `paid_channel_campaign_daily`
 which uses ID-first attribution and includes deals + ROAS.
 
-Correct Databox SQL for each level:
+Correct Databox SQL for each level (all include `utm_source`):
 
 **Campaign:**
 ```sql
-SELECT date, channel, campaign_name, spend, leads, qualified AS sqls,
-       cpl, cpql, qual_rate_pct AS qual_rate
+SELECT
+  date, channel, campaign_name, utm_source,
+  spend, leads, qualified AS sqls,
+  cpl, cpql, qual_rate_pct AS qual_rate
 FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_campaign_daily`
 ORDER BY date DESC
 ```
@@ -51,7 +53,6 @@ FROM `angular-axle-492812-q4.qoyod_marketing.v_adset_performance`
 GROUP BY 1, 2, 3, 4
 ORDER BY date DESC
 ```
-⚠️ Column is `leads_qualified` NOT `sqls`. Pre-calc `CPL`/`CPQL` columns exist but use uppercase — safer to recalculate with SAFE_DIVIDE when grouping.
 
 **Ad:**
 ```sql
@@ -65,15 +66,21 @@ FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
 GROUP BY 1, 2, 3, 4
 ORDER BY date DESC
 ```
-⚠️ Same as adset: `leads_qualified` not `sqls`.
 
 **Keyword:**
 ```sql
-SELECT date, channel_name, adgroup_name, keyword, spend, leads, sqls,
-       cpl, cpql, qual_rate
+SELECT
+  date, channel_name, adgroup_name, utm_term AS keyword, utm_source,
+  SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
+  SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
+  SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
+  SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
 FROM `angular-axle-492812-q4.qoyod_marketing.v_keyword_performance`
+GROUP BY 1, 2, 3, 4, 5
 ORDER BY date DESC
 ```
+
+⚠️ Column is `leads_qualified` NOT `sqls` in all views. `utm_source` is always non-NULL (falls back to channel slug when no HubSpot lead exists).
 
 ## Views (all `CREATE OR REPLACE`, rebuilt by `collectors/views.py`)
 
