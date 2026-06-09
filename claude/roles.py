@@ -6,7 +6,7 @@ concatenating all MD files into one monolithic prompt.
 """
 from pathlib import Path
 
-MD_DIR = Path(__file__).parent.parent / "runtime_personas"
+MD_DIR = Path(__file__).parent / "personas"
 
 # Shared context loaded for every role
 SHARED = ["qoyod-manager-os.md", "qoyod-brand-identity.md"]

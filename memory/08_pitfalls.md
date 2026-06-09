@@ -1,5 +1,39 @@
 # Pitfalls & Known Traps
 
+## ImpressionShare_ campaign prefix = IS/brand campaign — NEVER apply CPQL as primary KPI (found 2026-06-09)
+
+- **Symptom:** Flagged `ImpressionShare_Search_AR_Invoice` as a "drain" based on CPQL, recommended keyword pauses and bid strategy fixes using leads metrics.
+- **Why it's wrong:** A campaign with `ImpressionShare_` prefix is an **impression-share / brand-awareness campaign**, not a lead-gen campaign. Its primary KPI is IS (impression share) and CPA, not CPQL. Applying CPQL to it is category error.
+- **Fix:** Before applying ANY KPI zone ($CPQL, $CPL, pause thresholds), read the campaign name prefix:
+  - `ImpressionShare_` → IS/brand campaign → KPI = IS% + CPA, NOT CPQL
+  - `Search_AR_Brand` / `ImpressionShare_Search_AR_Brand` → brand IS → KPI = branded IS%, CPC, brand conv rate
+  - `Search_*_Test` → test campaign → must have hard daily budget cap; regression = fix candidate, not pause
+  - `Search_AR_Generic` / `Google_Search_AREN_*` → lead-gen → KPI = CPQL, CPL, qualification rate
+- **Encoding:** This rule lives in campaign name, not in BQ — check name BEFORE pulling HubSpot CPQL data.
+- **Seat responsible for enforcement:** growth-analyst must classify campaign type from name BEFORE selecting KPI metric.
+
+## Prior-period CPQL determines whether a regressed campaign is a FIX or a PAUSE (found 2026-06-09)
+
+- **Symptom:** Classified `Search_E-invoice_AR_Test` (prior CPQL $73.98, current $308.96) as a "drain" campaign requiring consideration for pause.
+- **Why it's wrong:** Prior-period CPQL $73.98 is WITHIN the acceptable zone (<$80). A campaign with good prior-period performance that regressed is a **FIX candidate** (keyword cleanup, budget cap, LP review), not a pause candidate. Only campaigns with BOTH periods bad are true drains.
+- **Fix:** Period comparison rule:
+  - Prior CPQL good AND current CPQL bad → **REGRESSION → FIX** (root-cause + keyword/LP/cap fix)
+  - Prior CPQL bad AND current CPQL bad → **CHRONIC DRAIN → PAUSE** (keep paused until structural fix)
+  - Prior CPQL bad AND current CPQL worse → **ACCELERATING DRAIN → PAUSE IMMEDIATELY**
+- **Seat responsible:** growth-analyst classifies prior/current delta BEFORE performance-lead decides action.
+
+## Every recommendation must name the seat agent for each action (found 2026-06-09)
+
+- **Symptom:** Delivered a fix-with-full-setup recommendation that listed 7 action items with no seat ownership per item.
+- **Why it's wrong:** Per CRITICAL_KPI_RULES.md Rule #5, every action must be seat-owned. An ownerless action has no accountability and no playbook context.
+- **Fix:** For every action item in a recommendation, append `→ [seat]`. Standard routing:
+  - Keyword pauses / negatives / bid strategy changes → **campaign-manager** (executes after #approvals ✅)
+  - LP audit + CRO brief → **cro-specialist** (hands off to ui-ux-designer → developer if fixes needed)
+  - BQ verification / period comparison / CPQL calculation → **growth-analyst**
+  - Pause/scale decision + CPQL thresholds → **performance-lead**
+  - #approvals digest post + Asana tasks → **campaign-manager** or **marketing-ops**
+  - Code/script fixes (e.g. audit_active_keywords.py syntax error) → **developer**
+
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 

@@ -181,7 +181,7 @@ def scan_active_keywords() -> list[dict]:
                     ag_rn = r.ad_group.resource_name
                     if enabled_kw_per_adgroup.get(ag_rn, 0) <= 1:
                         print(f"[kw-audit] zero-kw guard: skipping sole keyword "
-                              f"{term!r!s} in {r.ad_group.name!r!s} "
+                              f"{term!r} in {r.ad_group.name!r} "
                               f"(would leave 0 active keywords)")
                         continue
 

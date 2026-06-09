@@ -845,7 +845,7 @@ def _self_heal():
     Healers: stale_views, failed_collectors, dashboard_errors, stuck_approvals, memory_update.
     All actions logged to agent_activity_log (action='self_heal')."""
     try:
-        from monitors.self_healer import run_self_heal
+        from analysers.self_healer import run_self_heal
         run_self_heal()
     except Exception as e:
         print(f"[ops-scheduler] self-heal failed (non-fatal): {e}")

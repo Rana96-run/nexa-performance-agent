@@ -528,8 +528,13 @@ channel_name_map AS (
     STRUCT('snapchat'      AS channel_slug, 'Snapchat Ads'   AS qoyod_source_name),
     STRUCT('tiktok'        AS channel_slug, 'TikTok Ads'     AS qoyod_source_name),
     STRUCT('linkedin'      AS channel_slug, 'LinkedIn Ads'   AS qoyod_source_name),
+    -- Microsoft: map qoyod_source 'Microsoft Ads' to the SINGLE canonical slug
+    -- 'microsoft_ads' (matches campaigns_daily.channel). The legacy 'microsoft'
+    -- slug row was REMOVED 2026-06-09 — having both rows made the cnm_exact /
+    -- cnm_slug joins fan one HubSpot Microsoft row across two slugs, so the view
+    -- emitted the SAME leads under both channel='microsoft' and 'microsoft_ads'
+    -- (per-channel recon double-counted Microsoft). One row = one slug.
     STRUCT('microsoft_ads' AS channel_slug, 'Microsoft Ads'  AS qoyod_source_name),
-    STRUCT('microsoft'     AS channel_slug, 'Microsoft Ads'  AS qoyod_source_name),
     STRUCT('youtube'       AS channel_slug, 'YouTube Ads'    AS qoyod_source_name),
     STRUCT('organic_search'AS channel_slug, 'Organic Search' AS qoyod_source_name)
   ])
