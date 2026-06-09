@@ -40,8 +40,8 @@ is the bridge so a change in one is traceable to the others.
 | 9-agent seat (dev-time) | Runtime LLM role (`claude/roles.py`) | Activity-log label(s) | Asana assignee |
 |---|---|---|---|
 | `ai-orchestrator` | `daily_report` + manager-os | `ops_scheduler`, `daily_digest`, `task_creator` | Rana Khalid |
-| `performance-lead` | `paid_media_strategist` | `performance_audit`, `paid_media_strategist` | Donia Mohamed |
-| `campaign-manager` | `media_buyer` | `campaign_creator`, `keyword_management` | Rana Khalid |
+| `performance-lead` | `paid_media_strategist` | `performance_audit`, `paid_media_strategist` | Rana Khalid |
+| `campaign-manager` | `media_buyer` | `campaign_creator`, `keyword_management` | Donia Mohamed |
 | `creative-strategist` | — (brand-identity shared) | `creative_strategy` | Donia Mohamed |
 | `cro-specialist` | — | `cro_specialist` | Rana Khalid |
 | `ui-ux-designer` | — | `ui_ux_design` | Rana Khalid |

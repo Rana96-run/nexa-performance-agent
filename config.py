@@ -70,11 +70,11 @@ AGENT_IDENTITY: dict[str, dict] = {
     "daily_digest":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_RANA_GID)},
     "task_creator":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_RANA_GID)},
     # ── Performance Lead ──────────────────────────────────────────────────────
-    "performance_audit":       {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_DEFAULT_GID)},
-    "paid_media_strategist":   {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_DEFAULT_GID)},
+    "performance_audit":       {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_RANA_GID)},
+    "paid_media_strategist":   {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_RANA_GID)},
     # ── Campaign Manager ──────────────────────────────────────────────────────
-    "campaign_creator":        {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_RANA_GID)},
-    "keyword_management":      {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_RANA_GID)},
+    "campaign_creator":        {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_DONIA_GID)},
+    "keyword_management":      {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_DONIA_GID)},
     # ── Marketing Ops ─────────────────────────────────────────────────────────
     "health_monitor":          {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
     "collector":               {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
