@@ -39,6 +39,50 @@
 Append one-liner entries as they're discovered. Every entry should include
 the fix, not just the symptom.
 
+## v_ad_performance leads fan-out — RESOLVED 2026-06-09 (real root cause: upstream spend-join casing fan + microsoft map fan)
+
+**Status: FIXED.** Per-channel recon 2026-06-02..2026-06-08 now passes on every paid
+channel (`v_ad_performance` leads vs `hubspot_leads_module_daily.qoyod_source`):
+google_ads 0.93, meta 0.96, snapchat **1.00 (148==148)**, tiktok 1.00, microsoft_ads 1.00.
+Spend held to the penny vs ads_daily on all channels. Three distinct fixes, all in
+`collectors/bq_writer.py`:
+
+1. **Real Bug 1 was UPSTREAM, in `utm_paid_attribution_daily.spend_campaign`, NOT the
+   downstream re-join.** `spend_campaign` grouped by RAW `campaign_name`, but the
+   `sp_exact`/`sp_slug` leads joins match on `LOWER(TRIM(...))`. Snapchat runs two casing
+   variants of the same campaign — `Snapchat_LeadGen_Retargeting_Instantform` vs
+   `Snapchat_Leadgen_Retargeting_Instantform` (capital-G vs g). Two raw spend rows →
+   one HubSpot lead bucket matched BOTH → its leads DOUBLED at the source (snapchat
+   148 truth → 172 in `utm_paid_attribution_daily` itself, before any view). Fix: group
+   `spend_campaign` by `LOWER(TRIM(campaign_name))` so casing variants collapse to one
+   spend row per normalised join key. After fix the upstream snapchat = 148 exactly.
+   **Rule: whenever a CTE is the RIGHT side of a `LOWER(TRIM())` join, that CTE MUST
+   pre-group by the same `LOWER(TRIM())` key — grouping by raw casing fans the LEFT side.**
+2. **The downstream Strategy C/D ID re-joins were ALSO double-counting** and are now
+   REMOVED from `v_ad_performance` and `v_adset_performance`. They re-joined
+   `hubspot_leads_module_daily` by `lead_ad_id_sync` / `lead_adgroup_id_sync` /
+   `lead_campaign_id_sync` when the content/audience name match returned NULL, then
+   sprayed campaign-level leads across every ad/adset in the campaign ON TOP OF the
+   content-grain leads (snapchat AB raw 1191 + D raw 1134; meta D 255; tiktok D 361).
+   **`utm_paid_attribution_daily` is the single authoritative leads source** at
+   `(date, channel, utm_campaign, utm_audience, utm_content)` grain — both views now
+   take leads from it ONLY, and the `lead_src_key` dedup key is the upstream bucket's
+   own identity so a bucket fanning across many platform ad_id/adset_id rows counts once.
+3. **Microsoft channel-label dup (Bug 2)** was rooted in `channel_name_map`: it had BOTH
+   a `microsoft` AND a `microsoft_ads` slug row mapping to qoyod_source 'Microsoft Ads'.
+   `cnm_exact`/`cnm_slug` joined `qoyod_source='Microsoft Ads'` to BOTH rows → the upstream
+   emitted the same Microsoft leads under channel='microsoft' AND 'microsoft_ads' (42 each).
+   Fix: removed the legacy `microsoft` slug row → one slug per qoyod_source.
+
+**Verification harness:** map qoyod_source→channel slug, sum `leads_total` per channel
+from `hubspot_leads_module_daily`, compare to per-channel `SUM(leads)` from the view for
+the SAME window; bar = ratio ≤ 1.05 on EVERY paid channel (google/meta/snapchat/tiktok/
+microsoft_ads), not just the org total. `organic_search` shows a stray ~1 lead (fractional
+proportional-spend rounding, not paid, HubSpot=0) — immaterial, out of paid scope.
+
+--- ORIGINAL DIAGNOSIS (kept for history; the "re-join" hypothesis was partially right —
+    the C/D re-joins did inflate, but the PRIMARY snapchat fan was the upstream casing) ---
+
 ## v_ad_performance leads fan-out NOT fully fixed — per-channel recon fails (found 2026-06-09, post-fix)
 
 - **Symptom:** After the name-grain/fan-out fix (commit 13c76e4), the 14d AGGREGATE
