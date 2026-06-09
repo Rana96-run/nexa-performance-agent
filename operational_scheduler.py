@@ -457,88 +457,222 @@ def _run_budget_redeployment_proposal() -> None:
       - One or more campaigns are in SCALE zone (CPQL < $60, 14d window)
       - The wasted spend is > $50/day
 
-    Generates a $/day reallocation table and posts it to #approvals as part
-    of the nightly digest. No execution — ✅/❌ gate applies.
+    For each destination (scale) campaign:
+      - Creates an Asana task with the full campaign card + date range
+      - Pre-adds ✅/❌ reactions to the Slack message
+      - Saves asana_gid in the pending_approvals metadata so execution
+        comments back to the task on approval
+
+    For each drain campaign:
+      - Creates a separate review-only Asana task (no ✅ execution)
+
     Runs only when _should_run_scale_pause() is True (cadence: every 4 days).
     """
     try:
         from google.cloud import bigquery
         from slack_sdk import WebClient
+        from slack_sdk.errors import SlackApiError
         from config import (BQ_PROJECT, BQ_DATASET, SLACK_BOT_TOKEN,
                             SLACK_CHANNEL_APPROVAL, CPQL_PAUSE, CPQL_SCALE)
+        from executors.asana import create_task
+        from logs.activity_logger import log_activity_async
 
-        bq = bigquery.Client(project=BQ_PROJECT)
+        bq    = bigquery.Client(project=BQ_PROJECT)
+        today = date.today()
+        date_from = (today - __import__("datetime").timedelta(days=14)).isoformat()
+        date_to   = (today - __import__("datetime").timedelta(days=1)).isoformat()
+        date_range_str = f"{date_from} to {date_to}"
 
-        # Pre-aggregate HubSpot before joining (no fan-out)
+        # Single query — fetches perf + most-recent campaign_id/account_id in one pass.
+        # Pre-aggregate HubSpot first to avoid spend fan-out.
         sql = f"""
         WITH last_complete AS (
-          SELECT MAX(date) AS d FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
+          SELECT MAX(date) AS d
+          FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
           WHERE spend > 0
+        ),
+        window_start AS (
+          SELECT DATE_SUB((SELECT d FROM last_complete), INTERVAL 14 DAY) AS d
         ),
         hs AS (
           SELECT date, lead_utm_campaign,
                  SUM(leads_qualified) AS sqls
           FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_leads_module_daily`
-          WHERE date >= DATE_SUB((SELECT d FROM last_complete), INTERVAL 14 DAY)
+          WHERE date >= (SELECT d FROM window_start)
           GROUP BY date, lead_utm_campaign
         ),
         perf AS (
-          SELECT c.channel, c.campaign_name,
-                 SUM(c.spend)               AS spend_14d,
-                 COALESCE(SUM(hs.sqls), 0)  AS sqls_14d,
-                 SUM(c.spend) / 14.0        AS daily_avg,
-                 SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
+          SELECT
+            c.channel,
+            c.campaign_name,
+            -- Grab most-recent campaign_id and account_id for this campaign name
+            MAX(c.campaign_id)               AS campaign_id,
+            MAX(c.account_id)                AS account_id,
+            MIN(c.date)                      AS date_from,
+            MAX(c.date)                      AS date_to,
+            SUM(c.spend)                     AS spend_14d,
+            COALESCE(SUM(hs.sqls), 0)        AS sqls_14d,
+            SAFE_DIVIDE(SUM(c.spend), 14.0)  AS daily_avg,
+            SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
           FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily` c
           LEFT JOIN hs
             ON c.date = hs.date
            AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
-          WHERE c.date >= DATE_SUB((SELECT d FROM last_complete), INTERVAL 14 DAY)
+          WHERE c.date >= (SELECT d FROM window_start)
+            AND c.channel != 'microsoft_ads'   -- MS Ads budget API not wired yet
           GROUP BY c.channel, c.campaign_name
         )
         SELECT * FROM perf
         WHERE spend_14d > 50
         ORDER BY cpql ASC
         """
-
         rows = list(bq.query(sql).result())
         if not rows:
+            print("[ops-scheduler] Budget redeployment: no campaigns with spend > $50 in 14d")
             return
 
-        pause_zone  = [r for r in rows if r.cpql and r.cpql > CPQL_PAUSE]
-        scale_zone  = [r for r in rows if r.cpql and r.cpql < CPQL_SCALE]
+        pause_zone = [r for r in rows if r.cpql and r.cpql > CPQL_PAUSE]
+        scale_zone = [r for r in rows if r.cpql and r.cpql < CPQL_SCALE]
 
         if not pause_zone or not scale_zone:
             print("[ops-scheduler] Budget redeployment: no clear drain→scaler pair found")
             return
 
-        wasted_per_day = sum(r.daily_avg for r in pause_zone)
+        wasted_per_day = sum(r.daily_avg or 0 for r in pause_zone)
         if wasted_per_day < 50:
-            print(f"[ops-scheduler] Budget redeployment: ${wasted_per_day:.0f}/day below threshold")
+            print(f"[ops-scheduler] Budget redeployment: ${wasted_per_day:.0f}/day freed — "
+                  "below $50 threshold, skipping")
             return
 
-        # Sort scalers by CPQL ascending (most efficient first)
-        # Distribute freed budget proportionally to headroom
-        freed = wasted_per_day
-        allocation = []
-        for r in sorted(scale_zone, key=lambda x: x.cpql or 999)[:4]:
-            share = round(freed / min(len(scale_zone), 4), 0)
-            allocation.append((r.campaign_name, r.cpql, r.daily_avg, share))
+        # ── Destination campaigns (scale) ──────────────────────────────────────
+        freed        = wasted_per_day
+        n_dest       = min(len(scale_zone), 4)
+        share_each   = round(freed / n_dest, 0)
+        dest_campaigns = sorted(scale_zone, key=lambda x: x.cpql or 999)[:4]
 
-        lines = ["*Budget redeployment proposal (automated — needs your ✅)*\n"]
-        lines.append("*Drain campaigns (PAUSE zone — move budget away):*")
+        scale_findings = []   # for Slack lines + Asana
+        for r in dest_campaigns:
+            new_budget = round((r.daily_avg or 0) + share_each, 2)
+            # Create Asana task for each scale destination
+            body = (
+                f"Budget redeployment — scale destination\n\n"
+                f"**Campaign:** {r.campaign_name}\n"
+                f"**Channel:** {r.channel}\n"
+                f"**Data window:** {date_range_str}\n\n"
+                f"**Current spend:** ${r.daily_avg:.0f}/day (14d avg)\n"
+                f"**Proposed budget:** ${new_budget:.0f}/day "
+                f"(+${share_each:.0f} freed from drain campaigns)\n"
+                f"**CPQL:** ${r.cpql:.0f}  ·  "
+                f"**SQLs in window:** {int(r.sqls_14d)}  ·  "
+                f"**Total spend:** ${r.spend_14d:.0f}\n\n"
+                f"**Why scale:** CPQL is in scale zone (< ${CPQL_SCALE:.0f}). "
+                f"Budget freed from drain campaigns (CPQL > ${CPQL_PAUSE:.0f}) is "
+                f"being reallocated here.\n\n"
+                f"React with ✅ in #approvals to execute this budget increase.\n\n"
+                f"---\n"
+                f"Created: {today.isoformat()}  ·  "
+                f"Due: {(today + __import__('datetime').timedelta(days=1)).isoformat()}  ·  "
+                f"Priority: High  ·  Type: Recommendation  ·  "
+                f"Channel: {r.channel}  ·  Asset level: Campaign  ·  Action: Scale"
+            )
+            gid = create_task(
+                title=f"PENDING APPROVAL: Budget Redeployment — Scale {r.campaign_name} "
+                      f"+${share_each:.0f}/day ({date_range_str})",
+                description=body,
+                project_key="optimization",
+                task_type="Recommendation",
+                channel=r.channel,
+                asset_level="campaign",
+                action="scale",
+                campaign_name=r.campaign_name,
+            )
+            log_activity_async(
+                role="performance_audit", action="budget_redeployment_scale_task_created",
+                status="pending_approval",
+                channel=r.channel, campaign_name=r.campaign_name,
+                details={
+                    "new_budget": new_budget, "freed_per_day": freed,
+                    "cpql": r.cpql, "date_from": date_from, "date_to": date_to,
+                    "asana_gid": gid,
+                },
+            )
+            scale_findings.append({
+                "action":      "scale",
+                "channel":     r.channel,
+                "campaign":    r.campaign_name,
+                "campaign_id": str(r.campaign_id) if r.campaign_id else "",
+                "account_id":  str(r.account_id)  if r.account_id  else "",
+                "new_budget":  new_budget,
+                "cpql":        r.cpql,
+                "avg_spend":   r.daily_avg,
+                "date_from":   date_from,
+                "date_to":     date_to,
+                "asana_gid":   gid or "",
+            })
+
+        # ── Drain campaigns (review-only Asana tasks, no auto-execution) ───────
         for r in pause_zone[:5]:
-            lines.append(f"  • {r.campaign_name}: ${r.cpql:.0f} CPQL, "
-                         f"${r.daily_avg:.0f}/day — reduce budget")
+            drain_body = (
+                f"Budget redeployment — drain campaign review\n\n"
+                f"**Campaign:** {r.campaign_name}\n"
+                f"**Channel:** {r.channel}\n"
+                f"**Data window:** {date_range_str}\n\n"
+                f"**CPQL:** ${r.cpql:.0f} (pause zone — threshold > ${CPQL_PAUSE:.0f})\n"
+                f"**Daily spend:** ${r.daily_avg:.0f}/day  ·  "
+                f"**SQLs in window:** {int(r.sqls_14d)}\n\n"
+                f"**Recommended action:** Reduce budget or pause this campaign. "
+                f"Freed budget has been redirected to higher-efficiency campaigns "
+                f"(see linked scale tasks).\n\n"
+                f"---\n"
+                f"Created: {today.isoformat()}  ·  "
+                f"Due: {(today + __import__('datetime').timedelta(days=2)).isoformat()}  ·  "
+                f"Priority: High  ·  Type: Review  ·  "
+                f"Channel: {r.channel}  ·  Asset level: Campaign  ·  Action: Review"
+            )
+            drain_gid = create_task(
+                title=f"Review: Drain Campaign — {r.campaign_name} "
+                      f"CPQL ${r.cpql:.0f} ({date_range_str})",
+                description=drain_body,
+                project_key="optimization",
+                task_type="Review",
+                channel=r.channel,
+                asset_level="campaign",
+                action="review",
+                campaign_name=r.campaign_name,
+            )
+            log_activity_async(
+                role="performance_audit", action="budget_redeployment_drain_task_created",
+                status="needs_review",
+                channel=r.channel, campaign_name=r.campaign_name,
+                details={"cpql": r.cpql, "daily_avg": r.daily_avg,
+                         "date_from": date_from, "date_to": date_to,
+                         "asana_gid": drain_gid},
+            )
+
+        # ── Build Slack message ─────────────────────────────────────────────────
+        lines = [
+            f"*Budget redeployment proposal — {today.isoformat()} · 14d window: "
+            f"{date_range_str}*\n",
+            "*Drain campaigns (CPQL > ${:.0f} — reduce budget):*".format(CPQL_PAUSE),
+        ]
+        for r in pause_zone[:5]:
+            lines.append(
+                f"  • `{r.campaign_name}`  CPQL ${r.cpql:.0f}  ·  "
+                f"${r.daily_avg:.0f}/day  →  cut budget"
+            )
 
         lines.append(f"\n*Freed: ~${freed:.0f}/day*\n")
-        lines.append("*Destination campaigns (SCALE zone — absorb freed budget):*")
-        for name, cpql, cur, add in allocation:
-            lines.append(f"  • {name}: ${cpql:.0f} CPQL, "
-                         f"${cur:.0f} -> ${cur + add:.0f}/day (+${add:.0f})")
-
+        lines.append("*Destination campaigns (CPQL < ${:.0f} — absorb freed budget):*".format(CPQL_SCALE))
+        for f in scale_findings:
+            lines.append(
+                f"  • `{f['campaign']}`  CPQL ${f['cpql']:.0f}  ·  "
+                f"${f['avg_spend']:.0f} → ${f['new_budget']:.0f}/day  (+${share_each:.0f})"
+            )
+        n_tasks = len(scale_findings) + min(len(pause_zone), 5)
         lines.append(
-            "\n✅ = execute all budget changes | ❌ = skip\n"
-            "_This proposal is generated automatically every 4 days when CPQL zones diverge._"
+            f"\n{n_tasks} Asana task(s) created.\n"
+            "React :white_check_mark: to execute all budget increases  ·  :x: to skip all\n"
+            "_Drain-campaign tasks are review-only — no auto-execution._"
         )
 
         slack = WebClient(token=SLACK_BOT_TOKEN)
@@ -547,43 +681,24 @@ def _run_budget_redeployment_proposal() -> None:
         )
         ts = resp["ts"]
 
-        # Persist structured metadata so _handle_reaction() in app.py can execute on ✅
-        changes = []
-        for name, cpql, cur_daily, add in allocation:
-            # Look up campaign_id + channel from BQ for each scaler
+        # Pre-add ✅/❌ reactions (same as post_nightly_approvals_digest)
+        for emoji in ("white_check_mark", "x"):
             try:
-                cid_sql = f"""
-                    SELECT channel, campaign_id, account_id
-                    FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
-                    WHERE LOWER(campaign_name) = LOWER('{name.replace("'","''")}')
-                      AND channel != 'microsoft_ads'
-                    ORDER BY date DESC LIMIT 1
-                """
-                cid_rows = list(bq.query(cid_sql).result())
-                ch  = cid_rows[0].channel      if cid_rows else ""
-                cid = str(cid_rows[0].campaign_id) if cid_rows else ""
-                aid = str(cid_rows[0].account_id)  if cid_rows else ""
-            except Exception:
-                ch = cid = aid = ""
-            changes.append({
-                "action": "scale",
-                "channel": ch,
-                "campaign": name,
-                "campaign_id": cid,
-                "account_id": aid,
-                "new_budget": round(cur_daily + add, 2),
-            })
-        # Also record drain campaigns (action=pause — team decides, not auto-executed here)
+                slack.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)
+            except SlackApiError:
+                pass
 
+        # Save structured metadata keyed by ts so _handle_reaction() can execute on ✅
         from notifications.slack import save_pending_approval
         save_pending_approval(ts, {
-            "action":   "budget_redeployment",
-            "findings": changes,
+            "action":        "budget_redeployment",
+            "findings":      scale_findings,   # only scale items are executed
             "freed_per_day": round(freed, 2),
         })
 
-        print(f"[ops-scheduler] Budget redeployment: posted proposal "
-              f"(${freed:.0f}/day freed, {len(allocation)} destinations)")
+        print(f"[ops-scheduler] Budget redeployment: posted to #approvals — "
+              f"${freed:.0f}/day freed, {len(scale_findings)} scale task(s), "
+              f"{min(len(pause_zone),5)} drain review task(s)")
     except Exception as e:
         import traceback; traceback.print_exc()
         print(f"[ops-scheduler] Budget redeployment proposal failed (non-fatal): {e}")
