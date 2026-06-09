@@ -65,9 +65,9 @@ ASANA_ASSIGNEE_RANA_GID       = os.getenv("ASANA_ASSIGNEE_RANA",           "1208
 # To override a GID without a code deploy: set ASANA_ASSIGNEE_<ROLE> in Railway.
 AGENT_IDENTITY: dict[str, dict] = {
     # ── AI Orchestrator (manager) ─────────────────────────────────────────────
-    "ops_scheduler":   {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_DEFAULT_GID)},
-    "daily_digest":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_DEFAULT_GID)},
-    "task_creator":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    "ops_scheduler":   {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_RANA_GID)},
+    "daily_digest":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_RANA_GID)},
+    "task_creator":    {"display_name": "AI Orchestrator",     "slack_name": "Nexa · Orchestrator",  "slack_emoji": ":robot_face:",      "asana_gid": os.getenv("ASANA_ASSIGNEE_ORCHESTRATOR",   ASANA_ASSIGNEE_RANA_GID)},
     # ── Performance Lead ──────────────────────────────────────────────────────
     "performance_audit":       {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_DEFAULT_GID)},
     "paid_media_strategist":   {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_DEFAULT_GID)},
@@ -78,9 +78,9 @@ AGENT_IDENTITY: dict[str, dict] = {
     "health_monitor":          {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
     "collector":               {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
     # ── Growth Analyst ────────────────────────────────────────────────────────
-    "bq_refresh":              {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_DEFAULT_GID)},
-    "spike_detector":          {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_DEFAULT_GID)},
-    "llm_cadence":             {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_DEFAULT_GID)},
+    "bq_refresh":              {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
+    "spike_detector":          {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
+    "llm_cadence":             {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     # ── fallback ──────────────────────────────────────────────────────────────
     "default":                 {"display_name": "Nexa Agent",          "slack_name": "Nexa",                    "slack_emoji": ":sparkles:",         "asana_gid": ASANA_ASSIGNEE_DEFAULT_GID},
 }
