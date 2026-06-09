@@ -44,39 +44,39 @@ ORDER BY date DESC
 **Adset:**
 ```sql
 SELECT
-  date, channel_name, adset_name, status, utm_source,
+  date, channel_name, utm_campaign AS campaign_name, adset_name, status, utm_source,
   SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
   SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
   SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
 FROM `angular-axle-492812-q4.qoyod_marketing.v_adset_performance`
-GROUP BY 1, 2, 3, 4, 5
+GROUP BY 1, 2, 3, 4, 5, 6
 ORDER BY date DESC
 ```
 
 **Ad:**
 ```sql
 SELECT
-  date, channel_name, ad_name, status, utm_source,
+  date, channel_name, utm_campaign AS campaign_name, utm_audience AS adset_name, ad_name, status, utm_source,
   SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
   SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
   SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
 FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
-GROUP BY 1, 2, 3, 4, 5
+GROUP BY 1, 2, 3, 4, 5, 6, 7
 ORDER BY date DESC
 ```
 
 **Keyword:**
 ```sql
 SELECT
-  date, channel_name, adgroup_name, utm_term AS keyword, status, utm_source,
+  date, channel_name, utm_campaign AS campaign_name, adgroup_name, utm_term AS keyword, status, utm_source,
   SUM(spend) AS spend, SUM(leads) AS leads, SUM(leads_qualified) AS sqls,
   SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
   SAFE_DIVIDE(SUM(spend), SUM(leads_qualified)) AS cpql,
   SAFE_DIVIDE(SUM(leads_qualified), SUM(leads)) AS qual_rate
 FROM `angular-axle-492812-q4.qoyod_marketing.v_keyword_performance`
-GROUP BY 1, 2, 3, 4, 5, 6
+GROUP BY 1, 2, 3, 4, 5, 6, 7
 ORDER BY date DESC
 ```
 
