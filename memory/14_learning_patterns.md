@@ -17,6 +17,37 @@ Format per entry:
 
 ---
 
+## 2026-06-09 — Post-fix recon: v_ad_performance leads fan-out only PARTIALLY fixed
+
+**Trigger:** Ran the 7-day BQ↔HubSpot reconciliation (2026-06-02..2026-06-08) on
+`v_ad_performance` after the name-grain/fan-out fix (13c76e4). Aggregate had passed
+at 14d, so the expectation was "clean."
+
+**Recommendation:** Reconcile PER-CHANNEL, not just total. Result: only Google Ads
+reconciles (308 vs HubSpot 332, ratio 0.93). Meta 1.87x, Snapchat 2.14x, TikTok 2.03x,
+Microsoft 4.00x — all OVER-COUNT. Root cause: the leads re-join inside `v_ad_performance`
+under-dedups (view produces 101 AB-combos / 311 Snapchat leads vs HubSpot 80 buckets /
+148); upstream `utm_paid_attribution_daily` is itself correct (meta/tiktok/google EXACT).
+Plus a `microsoft`/`microsoft_ads` channel-label dup double-counts Microsoft. Recommend
+developer: source leads from `utm_paid_attribution_daily` AB grain rather than re-joining
+HubSpot in `v_ad_performance`, and normalize the proxy channel string.
+
+**Decision:** flagged to developer — view-SQL fix, DATA-owned diagnosis, no ad-account write.
+
+**Outcome (immediate, verified live):** Reconciliation FAILED for 4/5 paid channels;
+documented in `08_pitfalls.md`. Numbers are live BQ, not recollection.
+
+**Learned:**
+- **A reconciliation on the org-wide TOTAL is worthless** — a large clean channel
+  (Google Ads) masks 2x over-counts on smaller channels. ALWAYS reconcile per-channel,
+  and per-channel is the bar for declaring a fan-out fix "done."
+- **"Total ≤ HubSpot truth" is necessary but NOT sufficient.** The earlier fix met
+  `1585 ≤ 1843` and was called verified; per-channel it was still 2x wrong. Verification
+  must match the grain of the claim — if the view is per-ad, reconcile per-channel minimum.
+- When a downstream view re-joins a source that an upstream view already attributed
+  correctly, suspect the downstream re-join first — check the upstream view's per-channel
+  leads before assuming the source data is wrong.
+
 ## 2026-06-09 — Fixed name-grain collapse + leads fan-out in v_ad / v_adset_performance
 
 **Trigger:** Code review flagged the `platform` CTE grouping by name with
