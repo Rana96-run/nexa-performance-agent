@@ -505,16 +505,25 @@ hs_campaign_total AS (
   GROUP BY 1, 2, 3
 ),
 
--- 4. Spend: sum to campaign grain (one row per date + channel + campaign_name)
+-- 4. Spend: sum to campaign grain. CRITICAL: group by the NORMALISED
+-- LOWER(TRIM()) campaign key, NOT the raw campaign_name. The downstream spend
+-- joins (sp_exact / sp_slug) match on LOWER(TRIM(...)); if this CTE keeps two
+-- casing variants of the same campaign as separate rows (e.g. Snapchat's
+-- 'Snapchat_LeadGen_Retargeting_Instantform' vs '..._Leadgen_...'), a single
+-- HubSpot lead bucket matches BOTH spend rows and its leads are DOUBLED. This
+-- fan propagated into v_ad/v_adset_performance (snapchat 148 truth -> 172).
+-- Fixed 2026-06-09: collapse casing variants to one spend row per normalised key.
 spend_campaign AS (
   SELECT
     date,
     channel,
-    -- LinkedIn: campaign_group_name is the utm_campaign level
-    CASE WHEN channel = 'linkedin'
-         THEN COALESCE(campaign_group_name, campaign_name)
-         ELSE campaign_name
-    END AS campaign_name,
+    -- normalised join key — one row per (date, channel, lowercased campaign)
+    LOWER(TRIM(
+      CASE WHEN channel = 'linkedin'
+           THEN COALESCE(campaign_group_name, campaign_name)
+           ELSE campaign_name
+      END
+    )) AS campaign_name,
     SUM(spend) AS spend
   FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
   GROUP BY 1, 2, 3

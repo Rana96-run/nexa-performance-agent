@@ -48,6 +48,50 @@ documented in `08_pitfalls.md`. Numbers are live BQ, not recollection.
   correctly, suspect the downstream re-join first — check the upstream view's per-channel
   leads before assuming the source data is wrong.
 
+## 2026-06-09 — RESOLVED the per-channel fan-out; the snapchat over-count was UPSTREAM, not the re-join
+
+**Trigger:** Acted on the partial-fix diagnosis above. Removed the Strategy C/D ID
+re-joins from `v_ad_performance` + `v_adset_performance` (source leads only from
+`utm_paid_attribution_daily`) and removed the legacy `microsoft` slug from
+`channel_name_map`. Re-materialized and re-ran the per-channel recon.
+
+**What the removals fixed:** meta 1.87→0.96, tiktok 2.03→1.00, microsoft_ads 2.00→1.00,
+microsoft-dup label gone. But **snapchat stayed at 1.16 (172 vs 148)** — so the C/D
+re-join was NOT the whole story for snapchat.
+
+**Root cause of the residual:** the snapchat over-count lived in the UPSTREAM
+`utm_paid_attribution_daily` itself. Its `spend_campaign` CTE grouped by RAW
+`campaign_name` while the leads spend-join matched on `LOWER(TRIM())`. Snapchat ran two
+casing variants of one campaign (`Snapchat_LeadGen_Retargeting_Instantform` vs
+`..._Leadgen_...`) → two spend rows → one HubSpot lead bucket matched BOTH → leads
+doubled at the source (148→172) before any downstream view touched it. Fix: group
+`spend_campaign` by `LOWER(TRIM(campaign_name))`.
+
+**Decision:** DATA-owned view-SQL fix; no ad-account write. Committed + pushed.
+
+**Outcome (immediate, verified live BQ 2026-06-02..2026-06-08):** EVERY paid channel
+passes ≤1.05 — google 0.93, meta 0.96, snapchat **1.00 (148==148 exact)**, tiktok 1.00,
+microsoft_ads 1.00. Spend reconciled to the penny vs ads_daily on all 5 channels
+(meta 927.81, snap 2689.85, tiktok 1826.02, ms 381.03, google 6094.12) — the leads fix
+did not disturb spend.
+
+**Learned:**
+- **A `LOWER(TRIM())` join demands a `LOWER(TRIM())`-grouped right side.** If the joined
+  CTE groups by raw casing, the case-insensitive join matches one left row to N casing
+  variants and fans the left metric. This is the same class as the documented
+  `LOWER()`-both-sides join trap, but on the GROUPING not the join predicate. Whenever
+  a campaign/audience/content key feeds a case-insensitive join, normalise it in the
+  GROUP BY too. Snapchat's running team produces casing variants of the same campaign —
+  treat any snapchat name match as case-fragile.
+- **One symptom can have stacked causes at different layers.** The 4 small channels were
+  over-counted by the downstream C/D re-join; snapchat was over-counted by BOTH that AND
+  an upstream spend-join casing fan. Removing the obvious downstream cause fixed 4/5 — the
+  5th forced a layer-up investigation. Don't stop at "ratios improved"; the bar is ≤1.05
+  on EVERY channel, and a channel still failing means a second, deeper cause remains.
+- **Trace a leads discrepancy to the most-upstream view that already over-reports.** Once
+  `utm_paid_attribution_daily.channel='snapchat'` itself showed 172 vs 148, the bug was
+  provably upstream of v_ad/v_adset — no amount of downstream dedup could fix it.
+
 ## 2026-06-09 — Fixed name-grain collapse + leads fan-out in v_ad / v_adset_performance
 
 **Trigger:** Code review flagged the `platform` CTE grouping by name with
