@@ -493,6 +493,7 @@ hs_full AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE lead_utm_campaign IS NOT NULL
     AND TRIM(lead_utm_campaign) != ''
+    AND LOWER(TRIM(lead_utm_campaign)) != '__none__'
     -- keep only sources that resolve to a known channel (paid + organic_search)
     AND (
       LOWER(TRIM(qoyod_source)) IN (
@@ -527,6 +528,7 @@ hs_campaign_total AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE lead_utm_campaign IS NOT NULL
     AND TRIM(lead_utm_campaign) != ''
+    AND LOWER(TRIM(lead_utm_campaign)) != '__none__'
   GROUP BY 1, 2, 3
 ),
 
@@ -659,6 +661,7 @@ hs_utm_channel_total AS (
   FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
   WHERE lead_utm_campaign IS NOT NULL
     AND TRIM(lead_utm_campaign) != ''
+    AND LOWER(TRIM(lead_utm_campaign)) != '__none__'
   GROUP BY 1, 2
 ),
 
