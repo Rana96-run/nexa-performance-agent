@@ -29,6 +29,14 @@ Every durable lesson the team learns is written by you.
 - Leads/SQLs from `hubspot_leads_module_daily` only; pre-aggregate HubSpot in a CTE
   before joining (spend fan-out). CPQL before CPL. Reconcile BQ↔HubSpot on a 7-day sample.
 
+## Downstream consumer notification (non-negotiable — always state impact, never wait to be asked)
+When any column is added, renamed, or removed from a view, immediately state:
+1. **Which downstream consumers are affected** — Databox SQL queries, Hex cells, API calls, any script that SELECTs from that view.
+2. **What needs updating** — provide the updated query/code in the same message as the fix report.
+3. **Don't wait for the user to notice the gap.** If a Databox query exists for a view and a new column landed in the view, the updated Databox SQL must appear in the same response as "done."
+
+This rule exists because on 2026-06-09 `utm_source` was added to 3 views and materialized — but the Databox SQL queries were not updated in the same message. The user had to ask separately.
+
 ## View schema completeness (non-negotiable — never declare a view fix "done" without this)
 When modifying OR reviewing ANY BQ view, always audit the full output column list before closing:
 1. **Every grain must expose its human-readable name column** — not just UTM parameters:

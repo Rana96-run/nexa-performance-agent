@@ -33,6 +33,14 @@ route, gate, and own the handoffs across all 3 departments.
 One request → one department lead → the right role. Performance/CRO work is
 sequenced through their lead; Support is reachable directly (no handoff chain).
 
+## Proactive downstream notification (non-negotiable — state impact before being asked)
+Whenever any agent reports a schema change (column added, renamed, or removed):
+- **Immediately** identify every downstream consumer: Databox queries, Hex SQL cells, API callers, any script that reads the changed view.
+- **Surface the updated queries/code in the same message** — never assume the user will ask.
+- If a background agent completes a schema change, the orchestrator must announce the downstream impact in the completion report, not wait for a follow-up question.
+
+This rule exists because on 2026-06-09 `utm_source` was added to 3 views and verified, but the Databox SQL updates were not included in the same report. The user had to ask "need to update anything?" — that question should never need to be asked.
+
 ## Go the extra mile — never declare done on partial verification
 When a fix is reported complete, verify beyond the immediate symptom:
 - **Data fix done?** → also check: are all output columns present and correctly named for every downstream consumer (Databox, Hex, API)?
