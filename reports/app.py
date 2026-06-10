@@ -3054,6 +3054,40 @@ def ondemand_lp_brief():
     return jsonify({"status": "started", "poll": "/api/ondemand/status/lp_brief"})
 
 
+@app.route("/api/ondemand/conversion-audit", methods=["POST"])
+def ondemand_conversion_audit():
+    """Run conversion recording health check across all platforms.
+
+    Checks:
+      - Google Ads: enabled conversion actions with 0 conversions in last 14d
+      - Microsoft Ads: UET tag tracking validation status (both accounts)
+      - Meta web pixel: Lead event fire count in last 7d
+      - GTM web container: Meta Lead tag + GA4 config tag live
+      - GA4: ga4_sessions_daily data freshness
+
+    Creates one consolidated Asana task (log_role=health_monitor → marketing-ops)
+    for any platform with issues.
+    """
+    def _run():
+        from analysers.conversion_health import run_all, create_tasks, format_summary
+        results    = run_all(days=14)
+        task_gids  = create_tasks(results)
+        summary    = format_summary(results)
+        has_issues = any(r["status"] in ("broken", "warning") and r.get("issues") for r in results)
+        return {
+            "summary":    summary,
+            "has_issues": has_issues,
+            "platforms":  len(results),
+            "broken":     sum(1 for r in results if r["status"] == "broken"),
+            "tasks_created": task_gids,
+        }
+
+    started = _run_ondemand_task("conv_audit", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/conv_audit"})
+
+
 @app.route("/api/search-duplicate-candidates", methods=["GET"])
 def search_duplicate_candidates():
     """

@@ -140,6 +140,11 @@ SYSTEM_MONITORS = [
         "type":  "slack_listener",
         "label": "Slack listener",
     },
+    {
+        "name":  "conversion_health",
+        "type":  "conversion_health",
+        "label": "Conversion recording",
+    },
 ]
 
 
@@ -854,6 +859,35 @@ def alert_consecutive_broken(all_results: list) -> None:
             print(f"[connector_tracker] activity log write failed for {channel}: {e}")
 
 
+# ── Check: Conversion recording health ───────────────────────────────────────
+
+def _check_conversion_health_summary() -> dict:
+    """Lightweight wrapper: run conversion_health.run_all(), return one status dict.
+    Only triggers Asana task creation for BROKEN results (not warning)."""
+    try:
+        from analysers.conversion_health import run_all as _conv_run_all
+        results = _conv_run_all(days=14)
+        broken  = [r for r in results if r["status"] == "broken" and r.get("issues")]
+        if broken:
+            details = "; ".join(r["summary"][:80] for r in broken)
+            return {
+                "status": "BROKEN",
+                "reason": f"{len(broken)} platform(s) not recording: {details}",
+                "fix":    "Run Conversion Recording Audit from the Activity dashboard → Asana task created",
+            }
+        warns = [r for r in results if r["status"] == "warning" and r.get("issues")]
+        if warns:
+            return {
+                "status": "WARNING",
+                "reason": "; ".join(r["summary"][:80] for r in warns[:2]),
+                "fix":    "Run Conversion Recording Audit from the Activity dashboard",
+            }
+        return {"status": "HEALTHY", "checked": len(results)}
+    except Exception as e:
+        return {"status": "WARNING", "reason": f"conversion_health check failed: {e}",
+                "fix": "Check analysers/conversion_health.py imports"}
+
+
 # ── Aggregate per system monitor ──────────────────────────────────────────────
 
 def run_system_check(monitor: dict) -> dict:
@@ -892,6 +926,8 @@ def run_system_check(monitor: dict) -> dict:
         result["checks"]["anomaly"] = check_cost_anomaly()
     elif mtype == "slack_listener":
         result["checks"]["heartbeat"] = check_slack_listener_heartbeat()
+    elif mtype == "conversion_health":
+        result["checks"]["recording"] = _check_conversion_health_summary()
     else:
         result["checks"]["unknown"] = {"status": "WARNING",
                                        "reason": f"Unknown monitor type: {mtype}"}

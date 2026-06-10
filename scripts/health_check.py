@@ -282,10 +282,8 @@ def check_hubspot_webhook() -> tuple[bool, str]:
 
 
 def check_conversion_tracking() -> tuple[bool, str]:
-    """
-    Verify at least one active Google Ads conversion action exists.
-    A missing or broken conversion action means the agent is optimising blind.
-    """
+    """Verify at least one active Google Ads conversion action exists (existence check).
+    Use check_conversion_recording() for the deeper "is it recording?" check."""
     try:
         from executors.google_ads import get_client
         from config import GOOGLE_ADS_CONFIG
@@ -304,6 +302,45 @@ def check_conversion_tracking() -> tuple[bool, str]:
         return False, "No active conversion actions in Google Ads — agent optimising blind"
     except Exception as e:
         return False, f"Conversion tracking check: {e}"
+
+
+def check_conversion_recording() -> tuple[bool, str]:
+    """Deep check: are all conversion actions actually recording data?
+    Runs full conversion_health.run_all() across Google, Microsoft, Meta, GTM, GA4."""
+    try:
+        from analysers.conversion_health import run_all
+        results  = run_all(days=14)
+        broken   = [r for r in results if r["status"] == "broken" and r.get("issues")]
+        warnings = [r for r in results if r["status"] == "warning" and r.get("issues")]
+        if broken:
+            details = "; ".join(r["summary"][:60] for r in broken)
+            return False, f"{len(broken)} platform(s) not recording: {details}"
+        if warnings:
+            details = "; ".join(r["summary"][:60] for r in warnings[:2])
+            return True, f"Warning on {len(warnings)} platform(s): {details}"
+        return True, f"All {len(results)} platforms recording conversions"
+    except Exception as e:
+        return False, f"Conversion recording check: {e}"
+
+
+def check_ga4_data() -> tuple[bool, str]:
+    """Verify ga4_sessions_daily has data from the last 2 days."""
+    try:
+        from datetime import date as _date
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+        rows = list(get_client().query(f"""
+            SELECT MAX(date) AS last_date, SUM(sessions) AS sessions_7d
+            FROM `{PROJECT_ID}.{DATASET}.ga4_sessions_daily`
+            WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+        """).result())
+        if not rows or rows[0].last_date is None:
+            return False, "GA4: ga4_sessions_daily empty — run: railway run python collectors/ga4_bq.py --days 30"
+        days_ago = (_date.today() - rows[0].last_date).days
+        if days_ago > 2:
+            return False, f"GA4 data {days_ago}d stale (last: {rows[0].last_date}) — check reporting_scheduler"
+        return True, f"GA4 OK — {int(rows[0].sessions_7d or 0):,} sessions last 7d, latest {rows[0].last_date}"
+    except Exception as e:
+        return False, f"GA4 data check: {e}"
 
 
 def check_railway_deployment() -> tuple[bool, str]:
@@ -389,42 +426,46 @@ def check_slack_listener() -> tuple[bool, str]:
 # ─── Runner ────────────────────────────────────────────────────────────────────
 
 CHECKS = [
-    ("Railway deployment",    check_railway_deployment),
-    ("Slack listener",        check_slack_listener),
-    ("Flask",                 check_flask),
-    ("BigQuery",              check_bigquery),
-    ("Data freshness",        check_data_freshness),
-    ("Google Ads",            check_google_ads),
-    ("Conversion tracking",   check_conversion_tracking),
-    ("Meta Ads",              check_meta),
-    ("Microsoft Ads",         check_microsoft_ads),
-    ("TikTok",                check_tiktok),
-    ("Snapchat",              check_snapchat),
-    ("LinkedIn",              check_linkedin),
-    ("HubSpot API",           check_hubspot),
-    ("HubSpot webhook",       check_hubspot_webhook),
-    ("Slack",                 check_slack),
-    ("Asana",                 check_asana),
+    ("Railway deployment",       check_railway_deployment),
+    ("Slack listener",           check_slack_listener),
+    ("Flask",                    check_flask),
+    ("BigQuery",                 check_bigquery),
+    ("Data freshness",           check_data_freshness),
+    ("GA4 data",                 check_ga4_data),
+    ("Google Ads",               check_google_ads),
+    ("Conversion tracking",      check_conversion_tracking),
+    ("Conversion recording",     check_conversion_recording),
+    ("Meta Ads",                 check_meta),
+    ("Microsoft Ads",            check_microsoft_ads),
+    ("TikTok",                   check_tiktok),
+    ("Snapchat",                 check_snapchat),
+    ("LinkedIn",                 check_linkedin),
+    ("HubSpot API",              check_hubspot),
+    ("HubSpot webhook",          check_hubspot_webhook),
+    ("Slack",                    check_slack),
+    ("Asana",                    check_asana),
 ]
 
 # Category grouping for dashboard display
 CHECK_CATEGORY = {
-    "Railway deployment":   "Infrastructure",
-    "Flask":                "Infrastructure",
-    "BigQuery":             "Infrastructure",
-    "Data freshness":       "Data",
-    "Slack":                "Infrastructure",
-    "Slack listener":       "Infrastructure",
-    "Google Ads":           "Connectors",
-    "Conversion tracking":  "Connectors",
-    "Meta Ads":             "Connectors",
-    "Microsoft Ads":        "Connectors",
-    "TikTok":               "Connectors",
-    "Snapchat":             "Connectors",
-    "LinkedIn":             "Connectors",
-    "HubSpot API":          "Connectors",
-    "HubSpot webhook":      "Connectors",
-    "Asana":                "Connectors",
+    "Railway deployment":    "Infrastructure",
+    "Flask":                 "Infrastructure",
+    "BigQuery":              "Infrastructure",
+    "Data freshness":        "Data",
+    "GA4 data":              "Data",
+    "Slack":                 "Infrastructure",
+    "Slack listener":        "Infrastructure",
+    "Google Ads":            "Connectors",
+    "Conversion tracking":   "Connectors",
+    "Conversion recording":  "Connectors",
+    "Meta Ads":              "Connectors",
+    "Microsoft Ads":         "Connectors",
+    "TikTok":                "Connectors",
+    "Snapchat":              "Connectors",
+    "LinkedIn":              "Connectors",
+    "HubSpot API":           "Connectors",
+    "HubSpot webhook":       "Connectors",
+    "Asana":                 "Connectors",
 }
 
 

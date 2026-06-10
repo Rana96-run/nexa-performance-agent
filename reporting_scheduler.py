@@ -322,6 +322,19 @@ def run_refresh(incremental: bool = True, days: int | None = None):
         print(f"[scheduler] asana_sync failed (non-fatal): {e}")
         results["asana_sync"] = (False, str(e), 0)
 
+    # ── GA4 WoW analysis — alerts for >20% session/conversion drops ───────────
+    try:
+        from analysers.ga4_analysis import analyse_wow, create_alert_tasks
+        ga4_analysis = analyse_wow(days_current=7)
+        if not ga4_analysis.get("error"):
+            gids = create_alert_tasks(ga4_analysis)
+            n_flags = len(ga4_analysis.get("flags", []))
+            results["ga4_analysis"] = (True, {"flags": n_flags, "tasks": gids}, 0)
+        else:
+            results["ga4_analysis"] = (False, ga4_analysis["error"], 0)
+    except Exception as e:
+        print(f"[scheduler] GA4 WoW analysis failed (non-fatal): {e}")
+
     # ── Trigger Hex notebook re-runs so dashboards reflect fresh BQ data ─────
     try:
         hex_results = refresh_hex(wait=False)   # fire-and-forget; Hex queues the run

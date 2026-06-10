@@ -2304,6 +2304,24 @@ a:hover{text-decoration:underline}
           <div id="lp-brief-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
         </div>
 
+        <!-- Conversion Recording Audit -->
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:6px">Conversion Recording Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px">
+            Checks Google Ads, Microsoft Ads (both accounts), Meta web pixel Lead event,
+            GTM tag status, and GA4 data freshness. Creates an Asana task for any platform
+            not recording — routed to Marketing Ops → Growth Analyst review chain.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <button id="conv-audit-btn" onclick="runConversionAudit()"
+                    style="background:none;border:1px solid #f78166;border-radius:6px;
+                           color:#ff7b72;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Audit
+            </button>
+          </div>
+          <div id="conv-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -3234,6 +3252,36 @@ function runLpBrief() {
       }, 3000);
     })
     .catch(function() { btn.disabled=false; btn.textContent='Create Brief'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Conversion Recording Audit ────────────────────────────────────
+function runConversionAudit() {
+  var btn  = document.getElementById('conv-audit-btn');
+  var stat = document.getElementById('conv-audit-status');
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Checking all platforms — takes ~45s…';
+  fetch('/api/ondemand/conversion-audit', {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~60s';
+        btn.disabled = false; btn.textContent = 'Run Audit'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/conv_audit';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Run Audit';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var res = s.result || {};
+            stat.style.color = res.has_issues ? '#f0883e' : '#3fb950';
+            stat.textContent = res.summary || 'Done — Asana task created';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
 }
 
 // ── Team Guide toggle ─────────────────────────────────────────────────────────
