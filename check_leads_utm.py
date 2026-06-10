@@ -9,7 +9,7 @@ SELECT
   lead_cta_source_url,
   COUNT(*) as cnt
 FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_individual`
-WHERE hs_createdate >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+WHERE hs_createdate >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
 GROUP BY 1,2,3,4
 ORDER BY cnt DESC
 LIMIT 30
@@ -36,7 +36,7 @@ SELECT
   COUNT(*) as cnt
 FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_individual`
 WHERE lead_cta_source_url LIKE '%lp.qoyod.com%'
-AND hs_createdate >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+AND hs_createdate >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
 GROUP BY 1,2,3
 ORDER BY cnt DESC
 LIMIT 20
