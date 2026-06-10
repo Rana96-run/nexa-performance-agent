@@ -1,31 +1,36 @@
 """
-Create the BI Tool Comparison table on the existing Miro board.
-
-Adds a new frame at the right of the board — does NOT delete existing content.
+BI Tool Comparison table on Miro — Databox vs Hex vs Funnel + Data Studio.
+Creates a fresh board in the Qoyod team and draws a clean, sharp table.
 
 Run:
-    railway run python scripts/_bi_comparison_miro.py
+    railway run --service nexa-web python scripts/_bi_comparison_miro.py
 """
 from __future__ import annotations
 import os, time, requests
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.getenv("MIRO_ACCESS_TOKEN")
-BOARD = os.getenv("MIRO_BOARD_ID")
-H     = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
-BASE  = f"https://api.miro.com/v2/boards/{BOARD}"
+TOKEN   = os.getenv("MIRO_ACCESS_TOKEN")
+TEAM_ID = "3074457345976989160"   # Qoyod team
+H       = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+BASE    = ""   # set after board is created
 
-# ── colours ──────────────────────────────────────────────────────────────────
-C_NAVY    = "#1E5FA4"
-C_CAT     = "#E8ECF2"
-C_GREEN   = "#D9F2E0"
-C_RED     = "#FCE0E0"
-C_AMBER   = "#FEF3CC"
-C_WHITE   = "#FFFFFF"
-C_GREY    = "#F8F9FA"
-C_TXT     = "#0F172A"
-C_SUBTXT  = "#64748B"
+# ── colours ───────────────────────────────────────────────────────────────────
+C_NAVY   = "#1E3A5F"   # header bg
+C_NAVYTX = "#FFFFFF"   # header text
+C_CAT    = "#EEF2FF"   # section header bg
+C_CATTX  = "#1E3A5F"   # section header text
+C_GREEN  = "#D1FAE5"   # yes fill
+C_GREENTX= "#065F46"   # yes text
+C_RED    = "#FEE2E2"   # no fill
+C_REDTX  = "#991B1B"   # no text
+C_AMBER  = "#FEF3C7"   # partial fill
+C_AMBERTX= "#92400E"   # partial text
+C_WHITE  = "#FFFFFF"
+C_ROW    = "#F8FAFC"   # alternating row
+C_BORDER = "#CBD5E1"   # cell border
+C_TXT    = "#1E293B"   # body text
+C_SUBTXT = "#64748B"
 
 YES  = "✓"
 NO   = "✗"
@@ -35,14 +40,14 @@ VER  = "⚠ verify"
 ROWS = [
     # (category, feature, databox, hex, funnel)
     ("DATA & CONNECTORS", "", "", "", ""),
-    ("", "Native ad platform connectors (Meta / Google / Snap / TikTok / LinkedIn / Microsoft)", YES, NO, YES),
+    ("", "Native ad platform connectors\n(Meta / Google / Snap / TikTok / LinkedIn / Microsoft)", YES, NO, YES),
     ("", "HubSpot Contact connector", YES, YES, YES),
     ("", "HubSpot Deals connector", YES, YES, YES),
     ("", "HubSpot Lead Module (object 0-136)", VER, YES, VER),
     ("", "BigQuery — raw SQL support", YES, YES, YES),
     ("", "Zero connector maintenance effort", YES, NO, YES),
     ("", "Cross-channel blended CPL / CPQL", PART, YES, YES),
-    ("", "Data refresh frequency", "15 min–24 h", "On-demand + 6 h", "6 h"),
+    ("", "Data refresh frequency", "15 min – 24 h", "On-demand + 6 h", "6 h"),
     ("", "Historical backfill", PART, YES, YES),
     ("", "Custom dimension definitions via code", NO, YES, NO),
     ("", "USD normalization across all channels", PART, YES, YES),
@@ -79,23 +84,32 @@ ROWS = [
 
     ("PRICING", "", "", "", ""),
     ("", "Free tier available", NO, YES, PART),
-    ("", "Approximate monthly cost", "~$59–$199", "~$24/user", "Funnel $1k–$3k+"),
+    ("", "Approximate monthly cost", "~$59 – $199", "~$24/user", "$1k – $3k+"),
     ("", "Cost scales with data volume", NO, PART, YES),
 
     ("DECISION", "", "", "", ""),
-    ("", "Verdict — what we keep", "PRIMARY ✓", "INTERNAL OPTIMIZATION ✓", "DROPPED ✗"),
+    ("", "Verdict — what we keep", "PRIMARY ✓", "INTERNAL\nOPTIMIZATION ✓", "DROPPED ✗"),
 ]
 
-# ── geometry ─────────────────────────────────────────────────────────────────
-COL_WIDTHS   = [420, 140, 140, 200]   # Feature | Databox | Hex | Funnel
-ROW_H        = 52
-FRAME_X      = 3400   # placed to the right of existing diagrams
-FRAME_Y      = 0
-FRAME_PAD    = 60
-TABLE_W      = sum(COL_WIDTHS)
-TABLE_H      = len(ROWS) * ROW_H
-FRAME_W      = TABLE_W + FRAME_PAD * 2
-FRAME_H      = TABLE_H + FRAME_PAD * 2 + 100  # +100 for title
+# ── geometry ──────────────────────────────────────────────────────────────────
+COL_W  = [440, 160, 160, 200]   # Feature | Databox | Hex | Funnel
+ROW_H  = 56
+HDR_H  = 64    # column header row height
+CAT_H  = 40    # section header row height
+TABLE_W = sum(COL_W)
+
+TITLE_H  = 90   # space above table for title
+PADDING  = 40   # frame padding on all sides
+
+# table top-left on the board
+TL_X = 0
+TL_Y = TITLE_H
+
+# total frame dimensions
+FRAME_W = TABLE_W + PADDING * 2
+FRAME_H = TITLE_H + HDR_H + sum(
+    CAT_H if r[0] else ROW_H for r in ROWS
+) + PADDING
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -104,7 +118,7 @@ def _post(path, payload, retries=3):
     for attempt in range(retries):
         r = requests.post(f"{BASE}{path}", headers=H, json=payload, timeout=20)
         if r.status_code == 429:
-            time.sleep(2 + attempt)
+            time.sleep(2 + attempt * 2)
             continue
         if not r.ok:
             print(f"  WARN {path}: {r.status_code} — {r.text[:120]}")
@@ -113,43 +127,36 @@ def _post(path, payload, retries=3):
     return None
 
 
-def _frame(title, x, y, w, h):
-    return _post("/frames", {
-        "data":     {"title": title, "format": "custom"},
-        "position": {"x": x, "y": y, "origin": "center"},
-        "geometry": {"width": w, "height": h},
-        "style":    {"fillColor": "#F0F4F8"},
-    })
-
-
-def _cell(text, x, y, w, h, fill=C_WHITE, border="#D0D5DD",
-          font_size=12, bold=False, font_color=C_TXT, align="center"):
+def _shape(text, x, y, w, h, fill, border_color, border_w,
+           font_size, font_color, h_align, v_align, bold=False):
+    """Post a rectangle cell using only fields the Miro API accepts."""
+    content = f"<b>{text}</b>" if bold else str(text)
     _post("/shapes", {
-        "data": {"content": f"<b>{text}</b>" if bold else str(text),
-                 "shape": "rectangle"},
+        "data": {"content": content, "shape": "rectangle"},
         "style": {
             "fillColor":   fill,
-            "borderColor": border,
-            "borderWidth": "1",
+            "borderColor": border_color,
+            **({ "borderWidth": str(border_w) } if border_w > 0 else {}),
             "fontFamily":  "open_sans",
             "fontSize":    str(font_size),
             "color":       font_color,
-            "textAlign":   align,
+            "textAlign":   h_align,
         },
         "position": {"x": x, "y": y, "origin": "center"},
         "geometry": {"width": w, "height": h},
     })
 
 
-def status_fill(val):
+def status_style(val):
+    """Return (fill, text_color) for a status value, or None if neutral."""
     s = str(val)
-    if s in (YES, "PRIMARY ✓", "INTERNAL OPTIMIZATION ✓"):
-        return C_GREEN
+    if s in (YES, "PRIMARY ✓") or s.startswith("INTERNAL"):
+        return C_GREEN, C_GREENTX
     if s in (NO, "DROPPED ✗"):
-        return C_RED
+        return C_RED, C_REDTX
     if s.startswith("⚠"):
-        return C_AMBER
-    return None
+        return C_AMBER, C_AMBERTX
+    return None, None
 
 
 def _make_board():
@@ -157,8 +164,8 @@ def _make_board():
         "https://api.miro.com/v2/boards",
         headers=H,
         json={
-            "name": "BI Tool Comparison — Databox vs Hex vs Funnel (2026-06-10)",
-            "description": "Qoyod Performance Agent — auto-generated",
+            "name": "BI Tool Comparison — Databox vs Hex vs Funnel",
+            "description": "Qoyod Performance Agent · 2026-06-10",
             "policy": {
                 "permissionsPolicy": {"collaborationToolsStartAccess": "all_editors"},
                 "sharingPolicy": {"access": "private", "teamAccess": "edit"},
@@ -167,7 +174,7 @@ def _make_board():
         timeout=15,
     )
     if not r.ok:
-        print(f"[miro] board create failed: {r.status_code} {r.text[:200]}")
+        print(f"[miro] board create failed: {r.status_code} {r.text[:300]}")
         return None, None
     d = r.json()
     return d["id"], d.get("viewLink", "")
@@ -184,90 +191,107 @@ def build():
 
     global BASE
     BASE = f"https://api.miro.com/v2/boards/{board_id}"
+    print(f"[miro] board created: {view_link}")
 
-    # ── frame ─────────────────────────────────────────────────────────────────
-    print(f"[miro] drawing on board {board_id}")
-    _frame(
-        "BI Tool Comparison — Databox vs Hex vs Funnel (2026-06-10)",
-        FRAME_X, FRAME_Y, FRAME_W, FRAME_H
-    )
-    time.sleep(0.5)
+    # ── title block ───────────────────────────────────────────────────────────
+    cx = TL_X + TABLE_W / 2
 
-    # origin of the table top-left
-    tl_x = FRAME_X - TABLE_W / 2
-    tl_y = FRAME_Y - FRAME_H / 2 + FRAME_PAD + 70  # skip title area
+    # Title background bar
+    _shape("", cx, TITLE_H / 2,
+           TABLE_W, TITLE_H,
+           fill=C_NAVY, border_color=C_NAVY, border_w=0,
+           font_size=14, font_color=C_NAVYTX, h_align="center", v_align="middle")
 
-    # ── column headers ────────────────────────────────────────────────────────
-    headers = ["Feature / Capability", "Databox", "Hex", "Funnel + Data Studio"]
-    cx = tl_x
-    for i, (hdr, cw) in enumerate(zip(headers, COL_WIDTHS)):
-        _cell(hdr, cx + cw / 2, tl_y + ROW_H / 2,
-              cw, ROW_H, fill=C_NAVY, border=C_NAVY,
-              font_size=13, bold=True, font_color="#FFFFFF",
-              align="center")
-        cx += cw
+    # Title text (posted as a text widget for cleaner rendering)
+    _post("/texts", {
+        "data": {"content": "<b>BI Tool Comparison — Databox vs Hex vs Funnel + Data Studio</b>"},
+        "style": {
+            "fontSize": "24",
+            "color": "#FFFFFF",
+            "textAlign": "center",
+            "fontFamily": "open_sans",
+        },
+        "position": {"x": cx, "y": 28, "origin": "center"},
+        "geometry": {"width": TABLE_W},
+    })
+    _post("/texts", {
+        "data": {"content": "Qoyod Performance Agent  ·  2026-06-10  ·  Green = ✓  Red = ✗  Amber = ⚠ partial"},
+        "style": {
+            "fontSize": "14",
+            "color": "#93C5FD",
+            "textAlign": "center",
+            "fontFamily": "open_sans",
+        },
+        "position": {"x": cx, "y": 66, "origin": "center"},
+        "geometry": {"width": TABLE_W},
+    })
+    time.sleep(0.3)
+
+    # ── column header row ─────────────────────────────────────────────────────
+    col_labels = ["Feature / Capability", "Databox", "Hex", "Funnel + Data Studio"]
+    cx_off = TL_X
+    for label, cw in zip(col_labels, COL_W):
+        _shape(label,
+               cx_off + cw / 2, TL_Y + HDR_H / 2,
+               cw, HDR_H,
+               fill="#162D4A", border_color="#0F1E30", border_w=1,
+               font_size=15, font_color="#FFFFFF",
+               h_align="center", v_align="middle", bold=True)
+        cx_off += cw
     time.sleep(0.3)
 
     # ── data rows ─────────────────────────────────────────────────────────────
+    cur_y = TL_Y + HDR_H
     row_num = 0
     data_row = 0
 
-    for r in ROWS:
-        cat, feature, db, hx, fn = r
-        row_y = tl_y + (row_num + 1) * ROW_H + ROW_H / 2
+    for rec in ROWS:
+        cat, feature, db, hx, fn = rec
 
         if cat:
-            # section header spanning full width
-            _cell(cat, tl_x + TABLE_W / 2, row_y,
-                  TABLE_W, ROW_H, fill=C_CAT, border="#B8C4D4",
-                  font_size=12, bold=True, font_color="#2C3E6B", align="left")
+            # section header — full width, shorter height
+            _shape(f"  {cat}",
+                   TL_X + TABLE_W / 2, cur_y + CAT_H / 2,
+                   TABLE_W, CAT_H,
+                   fill=C_CAT, border_color="#C7D2E8", border_w=1,
+                   font_size=13, font_color=C_CATTX,
+                   h_align="left", v_align="middle", bold=True)
+            cur_y += CAT_H
         else:
             data_row += 1
-            row_bg = C_WHITE if data_row % 2 else C_GREY
+            row_bg = C_WHITE if data_row % 2 else C_ROW
 
-            # col A: feature name
-            _cell(feature, tl_x + COL_WIDTHS[0] / 2, row_y,
-                  COL_WIDTHS[0], ROW_H, fill=row_bg, border="#E2E8F0",
-                  font_size=11, font_color=C_TXT, align="left")
+            # Feature cell
+            _shape(f"  {feature}",
+                   TL_X + COL_W[0] / 2, cur_y + ROW_H / 2,
+                   COL_W[0], ROW_H,
+                   fill=row_bg, border_color=C_BORDER, border_w=1,
+                   font_size=13, font_color=C_TXT,
+                   h_align="left", v_align="middle")
 
-            # cols B/C/D: status
-            vals  = [db, hx, fn]
-            x_off = tl_x + COL_WIDTHS[0]
-            for val, cw in zip(vals, COL_WIDTHS[1:]):
-                sf = status_fill(val)
-                _cell(val, x_off + cw / 2, row_y,
-                      cw, ROW_H,
-                      fill=sf or row_bg,
-                      border="#E2E8F0",
-                      font_size=12,
-                      bold=bool(sf),
-                      font_color=C_TXT,
-                      align="center")
+            # Status cells
+            x_off = TL_X + COL_W[0]
+            for val, cw in zip([db, hx, fn], COL_W[1:]):
+                sf, stx = status_style(val)
+                _shape(val,
+                       x_off + cw / 2, cur_y + ROW_H / 2,
+                       cw, ROW_H,
+                       fill=sf or row_bg,
+                       border_color=C_BORDER, border_w=1,
+                       font_size=13,
+                       font_color=stx or C_TXT,
+                       h_align="center", v_align="middle",
+                       bold=bool(sf))
                 x_off += cw
 
+            cur_y += ROW_H
+
         row_num += 1
-
-        # small sleep every 10 rows to avoid rate-limit
         if row_num % 10 == 0:
-            time.sleep(0.5)
+            time.sleep(0.4)
 
-    # ── title text above table ─────────────────────────────────────────────────
-    title_y = FRAME_Y - FRAME_H / 2 + FRAME_PAD + 25
-    _post("/texts", {
-        "data":     {"content": "<b>BI Tool Comparison — Databox vs Hex vs Funnel + Data Studio</b>"},
-        "style":    {"fontSize": "22", "color": C_TXT, "textAlign": "center"},
-        "position": {"x": FRAME_X, "y": title_y, "origin": "center"},
-        "geometry": {"width": TABLE_W},
-    })
-    _post("/texts", {
-        "data":     {"content": f"Qoyod Performance Agent · {FRAME_X and '2026-06-10'}  ·  Green = ✓  ·  Red = ✗  ·  Amber = ⚠ partial / needs verification"},
-        "style":    {"fontSize": "13", "color": C_SUBTXT, "textAlign": "center"},
-        "position": {"x": FRAME_X, "y": title_y + 30, "origin": "center"},
-        "geometry": {"width": TABLE_W},
-    })
-
-    print(f"[miro] Done! Board: {view_link}")
-    print(f"[miro] {row_num} rows drawn ({data_row} data rows + section headers)")
+    print(f"[miro] Done — {row_num} rows ({data_row} data + section headers)")
+    print(f"[miro] Board: {view_link}")
 
 
 if __name__ == "__main__":
