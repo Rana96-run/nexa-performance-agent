@@ -20,6 +20,7 @@ from collectors import google_ads_bq, meta_bq, snap_bq
 from collectors import meta_organic_bq, youtube_bq, linkedin_bq
 from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
+from collectors import ga4_bq
 from collectors.views import refresh_all_views
 from collectors.hex_refresh import refresh_all as refresh_hex
 from logs.logger import get_logger, setup_global_logging
@@ -106,6 +107,8 @@ COLLECTORS = [
     # All other runs: cursor-based CDC (fast, incremental).
     ("hubspot_leads",   _hubspot_leads_collector),
     ("hubspot_deals",   hubspot_deals_bq.collect_and_write),
+    # Website analytics
+    ("ga4",             ga4_bq.collect_and_write),
 
     # ── Sub-campaign collectors (adset / ad / keyword grain) ──────────────────
     # These use the same API credentials — no new infrastructure needed.

@@ -71,6 +71,7 @@ CONNECTORS = [
     {"channel": "hubspot_leads", "bq_table": "hubspot_leads_module_daily", "cred_key": "HUBSPOT_ACCESS_TOKEN",    "cred_type": "permanent"},
     {"channel": "hubspot_deals", "bq_table": "hubspot_deals_daily",    "cred_key": "HUBSPOT_ACCESS_TOKEN",        "cred_type": "permanent"},
     {"channel": "gclid",     "bq_table": "gclid_attribution",           "cred_key": "GOOGLE_ADS_REFRESH_TOKEN",  "cred_type": "permanent"},
+    {"channel": "ga4",       "bq_table": "ga4_sessions_daily",          "cred_key": "GA4_PROPERTY_ID",           "cred_type": "permanent"},
 ]
 
 COLLECTOR_SCRIPTS = {
@@ -83,6 +84,7 @@ COLLECTOR_SCRIPTS = {
     "hubspot_leads": "collectors/hubspot_leads_bq.py",
     "hubspot_deals": "collectors/hubspot_deals_bq.py",
     "gclid":         "collectors/gclid_clickview.py",
+    "ga4":           "collectors/ga4_bq.py",
 }
 
 # ── System monitor registry ───────────────────────────────────────────────────
@@ -132,6 +134,11 @@ SYSTEM_MONITORS = [
         "name":  "cost_anomaly",
         "type":  "cost_anomaly",
         "label": "Agent cost anomaly",
+    },
+    {
+        "name":  "slack_listener",
+        "type":  "slack_listener",
+        "label": "Slack listener",
     },
 ]
 
