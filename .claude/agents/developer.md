@@ -50,3 +50,12 @@ A deployed, pixel-verified LP variant + the deploy confirmation handed back to
 
 ## Done means
 A live, UTM-correct, pixel-verified LP variant + deploy confirmation to `cro-specialist`.
+
+**Log to BQ (mandatory last step):**
+```bash
+railway run python scripts/log_cro_work.py \
+    --role lp_deploy \
+    --action lp_deployed \
+    --details "<LP name> — deployed, UTM passthrough verified, pixels confirmed" \
+    --channel <channel>
+```

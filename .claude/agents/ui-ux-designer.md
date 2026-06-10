@@ -46,3 +46,11 @@ An annotated LP design + interaction notes, handed to `developer`.
 
 ## Done means
 An annotated, persona-aligned, ZATCA-compliant design handed to `developer`.
+
+**Log to BQ (mandatory last step):**
+```bash
+railway run python scripts/log_cro_work.py \
+    --role lp_design \
+    --action lp_design_complete \
+    --details "<LP name> — <persona> variant, ZATCA badge confirmed"
+```

@@ -51,3 +51,12 @@ After deploy: the test-result decision.
 
 ## Done means
 A briefed, ZATCA-compliant test with a decided result. Numbers observed on live BQ.
+
+**Log to BQ (mandatory last step):**
+```bash
+railway run python scripts/log_cro_work.py \
+    --role cro_analysis \
+    --action lp_brief_written \
+    --details "<LP name> — <hypothesis one-liner>"
+```
+Use `--action lp_test_called` when deciding a test result.

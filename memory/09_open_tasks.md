@@ -174,6 +174,14 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-06-11)
+
+- [x] **GTM: `MetaPixel_Lead_Event` tag created (Tag ID 331, workspace 60).** Client-side `fbq('track','Lead')` on trigger 279 (HS Thank You Page). Awaiting user to publish workspace in GTM-TFH26VC2.
+- [x] **GTM: Server-side CAPI chain fully verified.** `{{Stape | Server URL}}` resolves to `https://sig.qoyod.com`. `GA4|Configuration` (Tag 131) routes all GA4 events to server via `transport_url`. Elementor forms on both `www.qoyod.com` (tag 328) and `lp.qoyod.com` (tag 326) push `lead_generation_success` to dataLayer → GA4 `generate_lead` event (Tag 257) fires → server container `generate_lead` trigger → Meta CAPI. HubSpot forms (non-Elementor) covered by Tag 331 client-side only.
+- [x] **GTM audit false positives all fixed.** `[Stape]` legacy tags skipped, GA4 config detection restricted, pixel ID check Meta-only, GTM variable references not flagged as bad IDs, `_REQUIRED_SERVER_TAGS` updated with real Stape type codes. Committed `e3c6308`, `f347eaa`, `672d862`, `d441b57`.
+- [x] **GA4 WoW analysis column fix.** `avg_session_duration_s * sessions` replaces nonexistent `total_session_duration_s`. Committed `d97fca2`.
+- [x] **CRO department dashboard gap fixed.** Root cause: dev-time CRO subagents never called `log_activity()`. Created `scripts/log_cro_work.py` CLI logger. Updated `cro-specialist.md`, `ui-ux-designer.md`, `developer.md` — each now has a mandatory BQ log step in "Done means". All future CRO work will appear on the activity dashboard under `cro_analysis` / `lp_design` / `lp_deploy` roles.
+
 ## Done this session (2026-06-10, final)
 
 - [x] **Slack listener + LinkedIn connectors now HEALTHY.** Both were showing BROKEN in the activity dashboard — now resolved. Confirmed by user on 2026-06-10.
