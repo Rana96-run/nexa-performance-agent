@@ -12,6 +12,10 @@ Each stage creates an Asana task with the correct agent identity:
   design   → log_role="ui_ux_design"   → Rana Khalid
   build    → log_role="lp_developer"   → Tony Helmy + Rana follower
 
+Instantform campaigns (any channel with "instantform" in the name) skip this chain.
+Use create_instantform_audit() instead → log_role="campaign_creator" → Donia Mohamed.
+Instantform = embedded form inside the ad platform; no landing page is involved.
+
 Slack messages posted as the owning agent.
 """
 from __future__ import annotations
@@ -23,7 +27,7 @@ from pathlib import Path
 from executors.asana import create_task
 from logs.activity_logger import log_activity_async
 from notifications.slack import post_as_role
-from config import SLACK_CHANNEL_APPROVAL, SLACK_CHANNEL_NOTIFY
+from config import SLACK_CHANNEL_APPROVAL, SLACK_CHANNEL_NOTIFY, is_instantform_campaign
 
 # Root of the LP workspace
 _LP_ROOT = Path(__file__).parent.parent / "docs" / "landing-pages"
@@ -59,7 +63,17 @@ def create_lp_brief(
       - Slack message as Nexa · CRO in #approvals
 
     Returns dict with test_id, brief_path, asana_gid.
+
+    Raises ValueError if the channel campaign name contains "instantform" —
+    those use create_instantform_audit() instead (Campaign Manager, not CRO).
     """
+    if is_instantform_campaign(channel):
+        raise ValueError(
+            f"create_lp_brief() called for '{channel}' which looks like an Instantform campaign. "
+            "Use create_instantform_audit() instead — Instantform CVR is audited by the "
+            "Campaign Manager in Ads Manager, not by the CRO Specialist."
+        )
+
     today       = date.today()
     window_from = (today - timedelta(days=window_days)).isoformat()
     window_to   = (today - timedelta(days=1)).isoformat()
@@ -165,6 +179,101 @@ Lead event on submit.
 
     print(f"[lp-tasks] Brief created: {brief_path} | Asana gid={gid}")
     return {"test_id": test_id, "brief_path": str(brief_path), "asana_gid": gid}
+
+
+# ── Instantform audit (Campaign Manager) ─────────────────────────────────────
+# Instantform campaigns embed the lead form inside the ad platform.
+# There is no landing page. CVR improvement = auditing the form in Ads Manager.
+# Owner: Campaign Manager (Donia) via log_role="campaign_creator".
+
+def create_instantform_audit(
+    campaign_name: str,
+    channel: str,
+    cvr_pct: float,
+    spend_usd: float,
+    leads: int,
+    window_from: str,
+    window_to: str,
+    pixel_ids: list[str] | None = None,
+) -> dict:
+    """
+    Creates an Asana audit task for a low-CVR Instantform campaign.
+
+    Assigned to Campaign Manager (Donia) — log_role="campaign_creator".
+    Action items: audit intro screen, field count, prefill, thank-you screen,
+    and (for CRM-pixel campaigns) confirm pixel fires in Events Manager.
+
+    Returns dict with asana_gid.
+    """
+    today = date.today()
+
+    pixel_note = ""
+    if pixel_ids:
+        ids_str = ", ".join(str(p) for p in pixel_ids)
+        pixel_note = (
+            f"\n\nPixel check (before form changes): confirm both pixel IDs "
+            f"[{ids_str}] are firing on form submit in Events Manager."
+        )
+
+    body = (
+        f"Instantform CVR below 2% — audit the form setup in {channel} Ads Manager.\n\n"
+        f"Campaign: `{campaign_name}`\n"
+        f"Window: {window_from} to {window_to}\n"
+        f"CVR: {cvr_pct:.2f}%  ·  Spend: ${spend_usd:.0f}  ·  Leads: {leads}\n"
+        f"{pixel_note}\n\n"
+        f"Audit checklist:\n"
+        f"1. Intro screen — headline + description compelling for this audience?\n"
+        f"2. Field count — name + phone only (fewer = higher CVR)\n"
+        f"3. Prefill — is phone/email prefilled from platform profile?\n"
+        f"4. Privacy policy link — present and loading?\n"
+        f"5. Thank-you screen — clear next step shown?\n"
+        f"6. Compare CVR across variants if multiple forms exist\n\n"
+        f"Target CVR: >= 2%. If form audit doesn't move the needle within 14 days, "
+        f"consider switching to website conversion objective pointing to an LP.\n\n"
+        f"Flow after submit: Lead created in HubSpot → SDR qualifies → SQL.\n"
+        f"Primary KPI: CPQL (not just CVR).\n\n"
+        f"---\n"
+        f"Created: {today.isoformat()}  ·  "
+        f"Due: {(today + timedelta(days=2)).isoformat()}  ·  "
+        f"Priority: High  ·  Type: Recommendation  ·  "
+        f"Channel: {channel}  ·  Asset level: Ad Set  ·  Action: Optimize"
+    )
+
+    gid = create_task(
+        title=f"Instantform Audit: {campaign_name} — CVR {cvr_pct:.2f}% below 2%",
+        description=body,
+        project_key="cro",
+        task_type="Recommendation",
+        channel=channel.lower(),
+        asset_level="ad_set",
+        action="optimize",
+        log_role="campaign_creator",
+    )
+
+    log_activity_async(
+        role="campaign_creator", action="instantform_audit_created",
+        status="pending_review",
+        channel=channel.lower(),
+        details={
+            "campaign_name": campaign_name, "cvr_pct": cvr_pct,
+            "spend_usd": spend_usd, "leads": leads,
+            "window_from": window_from, "window_to": window_to,
+            "asana_gid": gid,
+        },
+    )
+
+    post_as_role(
+        "campaign_creator",
+        SLACK_CHANNEL_APPROVAL,
+        f"*Instantform CVR flag — {campaign_name}*\n"
+        f"Window: {window_from} to {window_to}  ·  CVR: {cvr_pct:.2f}%  ·  "
+        f"Spend: ${spend_usd:.0f}  ·  Leads: {leads}\n"
+        f"Action: audit form setup in {channel} Ads Manager.\n"
+        f"Asana: task `{gid or 'check Asana'}` assigned to Campaign Manager.",
+    )
+
+    print(f"[lp-tasks] Instantform audit created for {campaign_name} | Asana gid={gid}")
+    return {"asana_gid": gid, "campaign_name": campaign_name, "cvr_pct": cvr_pct}
 
 
 # ── Stage 2: UI/UX Designer creates annotated design ─────────────────────────
@@ -614,3 +723,4 @@ if __name__ == "__main__":
     elif cmd == "help":
         print("Usage: python analysers/lp_tasks.py <brief|help>")
         print("Functions: create_lp_brief, create_lp_design, create_lp_spec, call_lp_test_result")
+        print("           create_instantform_audit (Campaign Manager path — no LP involved)")

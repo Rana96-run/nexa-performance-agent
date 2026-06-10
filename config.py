@@ -356,3 +356,15 @@ KEYWORD_PAUSE_SIS_THRESHOLD   = 0.50    # Rule A exception: skip pause if SIS �
 # a keyword at any age.
 MIN_KEYWORD_AGE_DAYS       = 10      # rule from Amar 2026-05-06
 PLACEMENT_PAUSE_SPEND      = 3
+
+
+# ── Campaign type helpers ──────────────────────────────────────────────────────
+
+def is_instantform_campaign(campaign_name: str) -> bool:
+    """True if the campaign uses an embedded form on the ad platform (any channel).
+
+    Instantform campaigns never visit a landing page — CVR optimisation belongs
+    to the Campaign Manager (form audit in Ads Manager), NOT the CRO Specialist.
+    Detection: case-insensitive substring match on "instantform" in the name.
+    """
+    return "instantform" in (campaign_name or "").lower()
