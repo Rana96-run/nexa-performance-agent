@@ -90,16 +90,42 @@ SYSTEM_MONITORS = [
         "label":   "Railway /health",
     },
     {
-        "name":    "scheduler_daily",
-        "type":    "scheduler",
-        "label":   "Daily scheduler",
+        "name":     "scheduler_daily",
+        "type":     "scheduler",
+        "label":    "Daily scheduler",
         "job_role": "daily_digest",
+    },
+    {
+        "name":         "bq_refresh_ran",
+        "type":         "scheduler",
+        "label":        "BQ data refresh (6h)",
+        "job_role":     "bq_refresh",
+        "window_hours": 14,   # runs every 6h; 14h = 2 missed windows before warning
+    },
+    {
+        "name":         "slack_digest_posted",
+        "type":         "outbound_action",
+        "label":        "Slack approvals digest",
+        "action":       "posted_approvals_digest",
+        "window_hours": 26,
+    },
+    {
+        "name":         "asana_tasks_live",
+        "type":         "outbound_action",
+        "label":        "Asana task creation",
+        "action":       "asana_task_created",
+        "window_hours": 48,   # at least one task in 48h; weekly cadence produces many
     },
     {
         "name":      "databox_push",
         "type":      "databox",
         "label":     "Databox: All Grains push",
         "dataset_id": os.getenv("DATABOX_DATASET_ALL_GRAINS", "6158be78"),
+    },
+    {
+        "name":  "cost_anomaly",
+        "type":  "cost_anomaly",
+        "label": "Agent cost anomaly",
     },
 ]
 
@@ -499,6 +525,159 @@ def check_scheduler_ran(job_role: str = "daily_digest",
             "fix": "railway run python main.py daily",
         }
     return {"status": "HEALTHY", "runs_in_window": cnt, "latest_run": latest}
+
+
+# ── Check 9: Outbound action delivery ────────────────────────────────────────
+
+def check_outbound_action(action: str, label: str, window_hours: int) -> dict:
+    """Verify a named action was successfully logged in agent_activity_log within window_hours.
+
+    Covers: Slack digest posted, Asana tasks created — any write-side delivery
+    that should happen on a known cadence. A gap means the outbound path is broken
+    even though inbound connectors are healthy.
+    """
+    proj, ds = _proj_ds()
+    sql = f"""
+        SELECT COUNT(*) AS cnt, MAX(ts) AS latest
+        FROM `{proj}.{ds}.agent_activity_log`
+        WHERE action = '{action}'
+          AND status = 'success'
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {window_hours} HOUR)
+    """
+    try:
+        rows = _bq_query(sql)
+        cnt    = int(rows[0].cnt or 0)    if rows else 0
+        latest = str(rows[0].latest)      if rows and rows[0].latest else None
+    except Exception as e:
+        return {"status": "WARNING",
+                "reason": f"Could not query activity log for '{action}': {str(e)[:80]}"}
+
+    if cnt == 0:
+        return {
+            "status": "BROKEN",
+            "reason": f"{label}: no successful '{action}' in last {window_hours}h",
+            "fix": "railway run python main.py daily",
+        }
+    return {"status": "HEALTHY", "count_in_window": cnt, "latest": latest}
+
+
+# ── Check 10: Credential liveness (live API ping) ─────────────────────────────
+
+_LIVENESS_BROKEN_CODES = {401, 403}
+
+def check_credential_liveness(connector: dict) -> dict:
+    """Make a minimal API call to verify the token is still accepted (not just present).
+
+    Only fires for permanent-token and 60_day connectors that aren't idle.
+    Returns BROKEN on 401/403 (expired/revoked), WARNING on unexpected errors,
+    HEALTHY on 200/any success response.
+    """
+    import urllib.request
+    import urllib.error
+
+    channel   = connector["channel"]
+    cred_type = connector["cred_type"]
+
+    # Skip if env var missing (check_credentials already handles that)
+    if not os.getenv(connector["cred_key"]):
+        return {"status": "HEALTHY", "note": "skipped — cred_key absent (handled by credentials check)"}
+
+    def _ping(url: str, headers: dict | None = None) -> dict:
+        req = urllib.request.Request(url, headers=headers or {})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                return {"status": "HEALTHY", "http": resp.status}
+        except urllib.error.HTTPError as e:
+            if e.code in _LIVENESS_BROKEN_CODES:
+                return {
+                    "status": "BROKEN",
+                    "reason": f"Token rejected: HTTP {e.code} — expired or revoked",
+                    "fix": f"Refresh {connector['cred_key']} in Railway",
+                }
+            return {"status": "WARNING",
+                    "reason": f"Ping returned HTTP {e.code} (may be rate-limited — token likely alive)"}
+        except Exception as e:
+            return {"status": "WARNING",
+                    "reason": f"Ping failed: {str(e)[:80]} — connectivity issue"}
+
+    if channel == "meta":
+        token = os.getenv("META_ACCESS_TOKEN", "")
+        return _ping(f"https://graph.facebook.com/v19.0/me?fields=id&access_token={token}")
+
+    if channel == "tiktok":
+        token = os.getenv("TIKTOK_ACCESS_TOKEN", "")
+        return _ping(
+            "https://business-api.tiktok.com/open_api/v1.3/user/info/",
+            {"Access-Token": token},
+        )
+
+    if channel == "linkedin" and cred_type == "60_day":
+        token = os.getenv("LI_ACCESS_TOKEN", "")
+        return _ping("https://api.linkedin.com/v2/me", {"Authorization": f"Bearer {token}"})
+
+    if channel in ("hubspot_leads", "hubspot_deals"):
+        token = os.getenv("HUBSPOT_ACCESS_TOKEN", "")
+        return _ping(
+            "https://api.hubapi.com/crm/v3/owners?limit=1",
+            {"Authorization": f"Bearer {token}"},
+        )
+
+    # Google / Bing / Snapchat use refresh-token flows — a static ping isn't meaningful;
+    # the collector itself validates them at run time. Skip liveness for those.
+    return {"status": "HEALTHY", "note": f"liveness ping not applicable for {cred_type} flow"}
+
+
+# ── Check 11: Cost/consumption anomaly ───────────────────────────────────────
+
+_COST_SPIKE_MULTIPLIER = 3.0  # today's spend > 3× 7d avg → WARNING
+_COST_SPIKE_MIN_USD    = 0.10  # ignore if 7d avg is tiny (< $0.10/day)
+
+def check_cost_anomaly() -> dict:
+    """Compare today's agent token cost to the 7d daily average.
+
+    Reads cost_usd from agent_activity_log. A 3× spike may indicate a runaway
+    loop, an oversized LLM call, or accidental repeated execution.
+    """
+    proj, ds = _proj_ds()
+    sql = f"""
+        WITH daily AS (
+            SELECT DATE(ts, 'Asia/Riyadh') AS day,
+                   SUM(COALESCE(cost_usd, 0)) AS daily_cost
+            FROM `{proj}.{ds}.agent_activity_log`
+            WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 8 DAY)
+              AND cost_usd IS NOT NULL
+            GROUP BY 1
+        )
+        SELECT
+            SUM(CASE WHEN day = CURRENT_DATE('Asia/Riyadh') THEN daily_cost ELSE 0 END)  AS today_cost,
+            AVG(CASE WHEN day < CURRENT_DATE('Asia/Riyadh')  THEN daily_cost ELSE NULL END) AS avg_7d
+        FROM daily
+    """
+    try:
+        rows = _bq_query(sql)
+        today_cost = float(rows[0].today_cost or 0)
+        avg_7d     = float(rows[0].avg_7d     or 0)
+    except Exception as e:
+        return {"status": "WARNING",
+                "reason": f"Could not query agent_activity_log for cost: {str(e)[:80]}"}
+
+    if avg_7d < _COST_SPIKE_MIN_USD:
+        return {"status": "HEALTHY", "note": "insufficient cost history for spike detection",
+                "today_cost_usd": round(today_cost, 4)}
+
+    if today_cost > _COST_SPIKE_MULTIPLIER * avg_7d:
+        return {
+            "status": "WARNING",
+            "reason": (f"Today's agent cost ${today_cost:.2f} is "
+                       f"{today_cost / avg_7d:.1f}× the 7d avg ${avg_7d:.2f} — possible runaway loop"),
+            "today_cost_usd": round(today_cost, 4),
+            "avg_7d_usd":     round(avg_7d, 4),
+        }
+    return {
+        "status": "HEALTHY",
+        "today_cost_usd": round(today_cost, 4),
+        "avg_7d_usd":     round(avg_7d, 4),
+    }
 
 
 # ── Aggregate per system monitor ──────────────────────────────────────────────

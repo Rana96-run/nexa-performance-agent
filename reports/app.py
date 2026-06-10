@@ -1626,7 +1626,7 @@ def activity_dashboard():
             "dept_color":    None,
             "is_lead":       False,
             "is_main":       True,
-            "roles":         {"ops_scheduler"},
+            "roles":         {"ops_scheduler", "daily_digest", "task_creator"},
             "sprite":        "orchestrator",
             "charter":       [
                 "Routes every cross-dept request to the right agent",
@@ -1646,7 +1646,7 @@ def activity_dashboard():
             "dept":          "Performance",
             "dept_color":    "#dc2626",
             "is_lead":       True,
-            "roles":         {"performance_audit"},
+            "roles":         {"performance_audit", "paid_media_strategist"},
             "sprite":        "perf_lead",
             "charter":       [
                 "Sets CPL / CPQL KPI zones for all channels",
@@ -1664,7 +1664,7 @@ def activity_dashboard():
             "color":         "#f97316",
             "dept":          "Performance",
             "dept_color":    "#dc2626",
-            "roles":         {"keyword_management"},
+            "roles":         {"keyword_management", "campaign_creator"},
             "sprite":        "campaign_mgr",
             "charter":       [
                 "Applies 5-part naming: {Channel}_{Type}_{Language}_{Product}_{Audience}",
@@ -1757,7 +1757,7 @@ def activity_dashboard():
             "color":         "#6366f1",
             "dept":          "Support",
             "dept_color":    "#6366f1",
-            "roles":         {"health_monitor", "daily_digest", "slack_approval"},
+            "roles":         {"health_monitor", "collector", "slack_approval"},
             "sprite":        "ops",
             "charter":       [
                 "Single source of truth for UTM structure policy",
