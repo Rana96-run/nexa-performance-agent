@@ -152,6 +152,17 @@ def _post(path, payload, retries=3):
     return None
 
 
+def _create_frame(title, x, y, w, h):
+    """Create a Miro frame (slide) and return its id."""
+    r = _post("/frames", {
+        "data":     {"title": title, "format": "custom", "type": "freeform"},
+        "style":    {"fillColor": "#FFFFFF"},
+        "position": {"x": x, "y": y, "origin": "center"},
+        "geometry": {"width": w, "height": h},
+    })
+    return r["id"] if r else None
+
+
 def _shape(text, x, y, w, h, fill, border_color, font_size, font_color,
            h_align="center", bold=False, border_w=1):
     content = f"<b>{text}</b>" if bold else str(text)
@@ -194,17 +205,25 @@ def status_style(val):
     return None, None
 
 
-def _draw_table(rows, x_offset, title, subtitle):
-    """Draw one full comparison table starting at x_offset."""
+def _table_height(rows):
+    """Calculate total pixel height of a table."""
+    h = TITLE_H + HDR_H
+    for rec in rows:
+        h += CAT_H if rec[0] else ROW_H
+    return h
+
+
+def _draw_table(rows, x_offset, y_offset, title, subtitle):
+    """Draw one full comparison table starting at (x_offset, y_offset)."""
     cx = x_offset + TABLE_W / 2
-    TL_Y = TITLE_H
+    TL_Y = y_offset + TITLE_H
 
     # title bar
-    _shape("", cx, TITLE_H / 2, TABLE_W, TITLE_H,
+    _shape("", cx, y_offset + TITLE_H / 2, TABLE_W, TITLE_H,
            fill=C_NAVY, border_color=C_NAVY,
            font_size=14, font_color=C_NAVYTX, border_w=0)
-    _text(f"<b>{title}</b>", cx, 22, TABLE_W, 22, "#FFFFFF")
-    _text(subtitle, cx, 58, TABLE_W, 13, "#93C5FD")
+    _text(f"<b>{title}</b>", cx, y_offset + 22, TABLE_W, 22, "#FFFFFF")
+    _text(subtitle, cx, y_offset + 58, TABLE_W, 13, "#93C5FD")
     time.sleep(0.2)
 
     # column headers
@@ -275,41 +294,18 @@ def _get_existing_board():
     return None, None
 
 
+BOARD_ID = "uXjVHHXnHHM="   # existing board in Qoyod team
+
+
 def build():
     if not TOKEN:
         print("[miro] MIRO_ACCESS_TOKEN not set — aborting")
         return
 
-    # Copy an existing non-script board to avoid "Developer team" watermark
-    src_id, src_name = _get_existing_board()
-    if not src_id:
-        print("[miro] no suitable source board found")
-        return
-
-    TEAM_ID = "3074457345976989160"  # Qoyod team
-    print(f"[miro] creating board in Qoyod team ({TEAM_ID})")
-    r = requests.post(
-        "https://api.miro.com/v2/boards",
-        headers=H,
-        json={
-            "name": "BI Tool Comparison — Databox vs Hex vs Funnel (Qoyod & SaaS)",
-            "team": {"id": TEAM_ID},
-            "policy": {
-                "permissionsPolicy": {"collaborationToolsStartAccess": "all_editors"},
-                "sharingPolicy": {"access": "private", "teamAccess": "edit"},
-            },
-        },
-        timeout=15,
-    )
-    print(f"[miro] create response: {r.status_code} — {r.text[:120]}")
-    if not r.ok:
-        return
-    board_id = r.json()["id"]
-    view_link = r.json().get("viewLink", "")
-
     global BASE
-    BASE = f"https://api.miro.com/v2/boards/{board_id}"
-    print(f"[miro] board ready: {view_link}")
+    BASE = f"https://api.miro.com/v2/boards/{BOARD_ID}"
+    view_link = f"https://miro.com/app/board/{BOARD_ID}"
+    print(f"[miro] using existing board: {view_link}")
 
     # Clear any existing content from the copied board
     deleted = 0
@@ -333,18 +329,36 @@ def build():
         print(f"[miro] cleared {deleted} existing items")
         time.sleep(1)
 
-    # Draw Table 1 — Qoyod
+    FRAME_PAD = 40   # padding inside each frame
+    h1 = _table_height(ROWS_QOYOD)
+    h2 = _table_height(ROWS_SAAS)
+    frame_h = max(h1, h2) + FRAME_PAD * 2
+    frame_w = TABLE_W + FRAME_PAD * 2
+
+    # Slide 1 — Qoyod
+    f1_x = frame_w / 2
+    f1_y = frame_h / 2
+    _create_frame("BI Tool Comparison — Qoyod Performance", f1_x, f1_y, frame_w, frame_h)
+    print("[miro] Frame 1 created")
+    time.sleep(0.3)
+
     r1, d1 = _draw_table(
-        ROWS_QOYOD, 0,
+        ROWS_QOYOD, FRAME_PAD, FRAME_PAD,
         "BI Tool Comparison — Qoyod Performance",
         "Qoyod-specific  ·  CPQL / Lead Module / Writeback / Attribution  ·  2026-06-10",
     )
     print(f"[miro] Table 1 done: {r1} rows")
     time.sleep(0.5)
 
-    # Draw Table 2 — Generic SaaS (offset to the right)
+    # Slide 2 — Generic SaaS (offset to the right)
+    f2_x = frame_w + GAP + frame_w / 2
+    f2_y = frame_h / 2
+    _create_frame("BI Tool Comparison — Generic SaaS", f2_x, f2_y, frame_w, frame_h)
+    print("[miro] Frame 2 created")
+    time.sleep(0.3)
+
     r2, d2 = _draw_table(
-        ROWS_SAAS, OFFSET2,
+        ROWS_SAAS, frame_w + GAP + FRAME_PAD, FRAME_PAD,
         "BI Tool Comparison — Generic SaaS Business",
         "Applies to any B2B SaaS  ·  MRR / CAC / LTV / Churn / Pipeline  ·  2026-06-10",
     )
