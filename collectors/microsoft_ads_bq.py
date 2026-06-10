@@ -18,6 +18,8 @@ import zipfile
 import requests
 from datetime import date, timedelta, datetime, timezone
 from dotenv import load_dotenv
+
+_RIYADH = timezone(timedelta(hours=3))
 from collectors.bq_writer import upsert_rows
 from collectors.currency import to_usd, normalize_currency
 
@@ -238,7 +240,7 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
         except (TypeError, ValueError):
             return float(default)
 
-    end = date.today() - timedelta(days=1)
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -348,7 +350,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
         except (TypeError, ValueError):
             return float(default)
 
-    end = date.today() - timedelta(days=1)
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -477,7 +479,7 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
         except (TypeError, ValueError):
             return float(default)
 
-    end = date.today() - timedelta(days=1)
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -589,7 +591,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         except (TypeError, ValueError):
             return float(default)
 
-    end = date.today() - timedelta(days=1)
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:

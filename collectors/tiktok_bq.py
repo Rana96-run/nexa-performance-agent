@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from collectors.bq_writer import upsert_rows
 from collectors.currency import to_usd, normalize_currency
 
+_RIYADH = timezone(timedelta(hours=3))
+
 load_dotenv()
 
 BASE         = "https://business-api.tiktok.com/open_api/v1.3"
@@ -191,7 +193,7 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
         print("[tiktok-bq] TIKTOK_ACCESS_TOKEN not set — skipping")
         return 0
 
-    end = date.today() - timedelta(days=1)   # TikTok lags 1 day
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)   # TikTok lags 1 day
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -255,7 +257,7 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
         print("[tiktok-bq] TIKTOK_ACCESS_TOKEN not set — skipping adgroups")
         return 0
 
-    end = date.today() - timedelta(days=1)
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -323,7 +325,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         print("[tiktok-bq] TIKTOK_ACCESS_TOKEN not set — skipping ads")
         return 0
 
-    end = date.today() - timedelta(days=1)
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
         start = end - timedelta(days=2)
     elif days:

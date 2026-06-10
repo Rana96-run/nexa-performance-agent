@@ -97,8 +97,11 @@ def _customer_ids():
     return [c.strip().replace("-", "") for c in raw.split(",") if c.strip()]
 
 
+_RIYADH = timezone(timedelta(hours=3))
+
+
 def _date_window(days, incremental):
-    end = date.today() - timedelta(days=1)   # Google Ads is T-1
+    end = datetime.now(_RIYADH).date() - timedelta(days=1)   # Google Ads is T-1
     if incremental:
         start = end - timedelta(days=2)
     elif days:

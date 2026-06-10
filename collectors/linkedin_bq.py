@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from collectors.bq_writer import upsert_rows
 from collectors.currency import to_usd, normalize_currency
 
+_RIYADH = timezone(timedelta(hours=3))
+
 load_dotenv(override=True)
 
 BASE        = "https://api.linkedin.com/rest"
@@ -163,7 +165,7 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
         print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping")
         return 0
 
-    end = date.today()
+    end = datetime.now(_RIYADH).date()
     if incremental:
         start = end - timedelta(days=2)
     elif days:
@@ -256,7 +258,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
         print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping adsets")
         return 0
 
-    end = date.today()
+    end = datetime.now(_RIYADH).date()
     if incremental:
         start = end - timedelta(days=2)
     elif days:
