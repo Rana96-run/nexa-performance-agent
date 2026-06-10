@@ -52,7 +52,7 @@ but are scattered + have gaps. Aggregate all under one health view + close the �
       alerts on a spike. Add a sanity check (today's cost > N× 7d avg → flag). Owner: `growth-analyst`.
 - [ ] **Aggregate the detectors:** connector_tracker + self_healer + spike_detector +
       dashboard_guard + health.py + the new checks → one police status the orchestrator reads.
-- [ ] **Persistent-WARNING → BROKEN escalation** (active channels only) — still to code in connector_tracker.
+- [x] **Persistent-WARNING → BROKEN escalation** — DONE (2026-06-10). `check_persistent_warning()` added to `connector_tracker.py`: 3 consecutive WARNING rows in `connector_health_log` → escalates to BROKEN for that channel. Idle channels exempt.
 - [ ] **Align dashboard `reports/app.py` role-sets** to the canonical 11_agent_roles mapping
       (orphans: task_creator, collector, paid_media_strategist, campaign_creator).
 
@@ -180,6 +180,12 @@ Campaign IDs (customer 5753494964):
 - [ ] Snapchat organic (doubtful — no public page metrics API)
 
 ---
+
+## Done this session (2026-06-10, continued)
+
+- [x] **`/activity` UnboundLocalError resolved (`f7101e5`).** Cache read path was missing 8 variables added after the cache was designed (`user_rows`, `intel_rows`, `task_status_rows`, `executed_rows`, `followup_rows`, `new_ads_rows_raw`, `hc_rows`, `fresh_rows`) — caused `UnboundLocalError` on every request served from cache.
+- [x] **4xx requests no longer logged as `dashboard_error`.** `_handle_exception` in `reports/app.py` now skips BQ logging for `HTTPException` with code < 500. `/favicon.ico` 404s were flooding `agent_activity_log` with false dashboard errors.
+- [x] **Databox health check switched to BQ (`f7101e5`).** Old check hit `/v1/datasets/{id}/ingestions` which requires UUID format — short ID `6158be78` returns HTTP 400. New check reads `agent_activity_log WHERE role='databox_push'`. `databox_pusher.py` now logs each successful push. Collapsed two Databox monitors into one.
 
 ## Done this session (2026-06-10)
 
