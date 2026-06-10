@@ -789,6 +789,32 @@ WITH platform AS (
     SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
   FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
   GROUP BY date, channel, campaign_name, adset_id
+  UNION ALL
+  -- Stub rows: deals attributed to real adsets but with no spend row on deal create date
+  SELECT d.date, am.channel, am.campaign_name, am.utm_audience, am.adset_name,
+    CAST(NULL AS STRING) AS status,
+    d.adset_id AS platform_adset_id,
+    am.platform_campaign_id,
+    0.0 AS spend, 0 AS impressions, 0 AS clicks
+  FROM (
+    SELECT date, deal_adgroup_id_sync AS adset_id
+    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+    WHERE deal_adgroup_id_sync IS NOT NULL
+    GROUP BY 1, 2
+  ) d
+  JOIN (
+    SELECT adset_id, ANY_VALUE(channel) AS channel,
+      ANY_VALUE(campaign_name) AS campaign_name,
+      ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
+      ANY_VALUE(adset_name) AS adset_name,
+      ANY_VALUE(campaign_id) AS platform_campaign_id
+    FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
+    GROUP BY adset_id
+  ) am ON am.adset_id = d.adset_id
+  WHERE NOT EXISTS (
+    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.adsets_daily` a
+    WHERE a.date = d.date AND a.adset_id = d.adset_id
+  )
 ),
 -- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience)
 -- grain from utm_paid_attribution_daily. 2026-06-09: removed the adset-ID and
@@ -1029,6 +1055,37 @@ WITH platform AS (
     MAX(status)        AS status
   FROM `{PROJECT_ID}.{DATASET}.ads_daily`
   GROUP BY date, channel, campaign_name, adset_name, ad_id
+  UNION ALL
+  -- Stub rows: deals attributed to real ads but with no spend row on deal create date
+  SELECT d.date, am.channel, am.campaign_name, am.adset_name,
+    am.utm_content, am.ad_name,
+    d.ad_id AS platform_ad_id,
+    am.platform_adset_id,
+    am.platform_campaign_id,
+    0.0 AS spend, 0 AS impressions, 0 AS clicks,
+    CAST(NULL AS STRING) AS creative_type,
+    CAST(NULL AS STRING) AS status
+  FROM (
+    SELECT date, deal_ad_id_sync AS ad_id
+    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+    WHERE deal_ad_id_sync IS NOT NULL
+    GROUP BY 1, 2
+  ) d
+  JOIN (
+    SELECT ad_id, ANY_VALUE(channel) AS channel,
+      ANY_VALUE(campaign_name) AS campaign_name,
+      ANY_VALUE(adset_name) AS adset_name,
+      ANY_VALUE(COALESCE(utm_content, ad_name)) AS utm_content,
+      ANY_VALUE(ad_name) AS ad_name,
+      ANY_VALUE(adset_id) AS platform_adset_id,
+      ANY_VALUE(campaign_id) AS platform_campaign_id
+    FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+    GROUP BY ad_id
+  ) am ON am.ad_id = d.ad_id
+  WHERE NOT EXISTS (
+    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.ads_daily` a
+    WHERE a.date = d.date AND a.ad_id = d.ad_id
+  )
 ),
 -- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience,
 -- utm_content) grain. utm_paid_attribution_daily already resolves HubSpot leads
