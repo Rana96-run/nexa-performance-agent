@@ -491,15 +491,18 @@ def collect_and_write(days: int = None, start_date: date = None,
     # made two buckets that differed only in deal_utm_audience / *_content /
     # *_source / *_medium / *_term / *_id_sync look like duplicates to the QA
     # gate. Bucket key is the source of truth.
-    return upsert_rows("hubspot_deals_daily", rows,
-                       key_fields=["date", "qoyod_source", "pipeline",
-                                   "stage_status", "deal_utm_campaign",
-                                   "deal_utm_audience", "deal_utm_content",
-                                   "deal_utm_source", "deal_utm_medium",
-                                   "deal_utm_term",
-                                   "deal_campaign_id_sync",
-                                   "deal_adgroup_id_sync",
-                                   "deal_ad_id_sync"])
+    n = upsert_rows("hubspot_deals_daily", rows,
+                    key_fields=["date", "qoyod_source", "pipeline",
+                                "stage_status", "deal_utm_campaign",
+                                "deal_utm_audience", "deal_utm_content",
+                                "deal_utm_source", "deal_utm_medium",
+                                "deal_utm_term",
+                                "deal_campaign_id_sync",
+                                "deal_adgroup_id_sync",
+                                "deal_ad_id_sync"])
+    from collectors.views import materialize_heavy_views
+    materialize_heavy_views()
+    return n
 
 
 def _ensure_table_exists():

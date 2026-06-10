@@ -335,11 +335,14 @@ def collect_and_write(days: int = None, start_date: date = None,
     # that differed only in those fields looked like duplicates to the QA gate
     # and got their upsert blocked. The bucket key in line 301 is the source of
     # truth. Aligned 2026-05-18.
-    return upsert_rows("hubspot_leads_module_daily", rows,
-                       key_fields=["date", "qoyod_source", "pipeline", "stage",
-                                   "lead_utm_campaign", "lead_utm_audience",
-                                   "lead_utm_content", "lead_utm_source",
-                                   "lead_utm_medium", "lead_utm_term"])
+    n = upsert_rows("hubspot_leads_module_daily", rows,
+                    key_fields=["date", "qoyod_source", "pipeline", "stage",
+                                "lead_utm_campaign", "lead_utm_audience",
+                                "lead_utm_content", "lead_utm_source",
+                                "lead_utm_medium", "lead_utm_term"])
+    from collectors.views import materialize_heavy_views
+    materialize_heavy_views()
+    return n
 
 
 def _ensure_table_exists():
