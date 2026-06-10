@@ -347,25 +347,30 @@ WITH
     GROUP BY campaign_id
   ),
   -- Stub rows: ID-matched deals whose (date, campaign_id) has no spend row
+  -- INNER JOIN campaign_names ensures only real campaigns (ever in campaigns_daily)
   deal_id_stubs AS (
-    SELECT di.date, cm.channel, di.campaign_id,
-           COALESCE(cn.campaign_name, di.campaign_id) AS campaign_name
+    SELECT di.date, cm.channel, di.campaign_id, cn.campaign_name
     FROM deals_by_id di
     JOIN channel_map cm ON cm.qoyod_source = di.qoyod_source
-    LEFT JOIN campaign_names cn ON cn.campaign_id = di.campaign_id
+    JOIN campaign_names cn ON cn.campaign_id = di.campaign_id
     WHERE NOT EXISTS (
       SELECT 1 FROM spend s
       WHERE s.date = di.date AND s.campaign_id = di.campaign_id
     )
   ),
   -- Stub rows: name-matched deals whose (date, campaign_name) has no spend row
+  -- EXISTS guard ensures only real campaign names (never __none__, auto_social, etc.)
   deal_name_stubs AS (
     SELECT dn.date, cm.channel,
            CAST(NULL AS STRING) AS campaign_id,
            dn.campaign_name
     FROM deals_by_name dn
     JOIN channel_map cm ON cm.qoyod_source = dn.qoyod_source
-    WHERE NOT EXISTS (
+    WHERE EXISTS (
+      SELECT 1 FROM `{P}.{D}.campaigns_daily` cd
+      WHERE LOWER(cd.campaign_name) = LOWER(dn.campaign_name)
+    )
+    AND NOT EXISTS (
       SELECT 1 FROM spend s
       WHERE s.date = dn.date
         AND LOWER(s.campaign_name) = LOWER(dn.campaign_name)
