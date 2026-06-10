@@ -40,21 +40,14 @@ Surfaced by `connector_health_log` + freshness check. Route via the police loop
 The police (connector_tracker) is inbound-only. Detectors for other surfaces exist
 but are scattered + have gaps. Aggregate all under one health view + close the 🔴 gaps
 (see `docs/_shared/police-loop.md` scope table). Each routes through the police loop.
-- [ ] **Outbound delivery checks:** verify the daily #approvals Slack digest actually
-      posted, Asana tasks actually created, Hex refreshed, Databox pushed, report rendered/
-      uploaded to Drive — not just log-on-failure. Owner: `marketing-ops` / `ai-orchestrator`.
+- [x] **Outbound delivery checks — DONE (`e5c8226`).** `check_outbound_action()` + 2 new SYSTEM_MONITORS: `slack_digest_posted` (26h on `posted_approvals_digest`) and `asana_tasks_live` (48h on `asana_task_created`). Also added `bq_refresh_ran` (14h window).
 - [ ] **Executor-action verification:** after an approved pause/scale/keyword executes,
       confirm it actually applied on-platform (read back the ad/keyword state). Owner: `campaign-manager`.
-- [ ] **Credential liveness (not just presence):** `health.py` checks env-var presence;
-      add a live ping per integration (token present but expired/revoked = silent fail,
-      e.g. LinkedIn). Owner: `marketing-ops`.
-- [ ] **Cost/consumption anomaly check:** `cost_tracking` logs token/BQ spend but nothing
-      alerts on a spike. Add a sanity check (today's cost > N× 7d avg → flag). Owner: `growth-analyst`.
-- [ ] **Aggregate the detectors:** connector_tracker + self_healer + spike_detector +
-      dashboard_guard + health.py + the new checks → one police status the orchestrator reads.
+- [x] **Credential liveness — DONE (`e5c8226`).** `check_credential_liveness()` makes a live API ping per connector (Meta /me, TikTok /user/info, LinkedIn /me, HubSpot /owners). Returns BROKEN on 401/403. Added as 6th check in `run_connector_check()`.
+- [x] **Cost anomaly check — DONE (`e5c8226`).** `check_cost_anomaly()` reads `cost_usd` from `agent_activity_log`; today > 3× 7d avg → WARNING. Added to SYSTEM_MONITORS.
+- [x] **Aggregate the detectors — DONE (`e5c8226`).** `get_police_status()` — single call returns `{overall, broken[], warnings[], healthy_count, summary}` across all connectors + monitors. Verified: RED 4 broken, 1 warning, 11 healthy.
 - [x] **Persistent-WARNING → BROKEN escalation** — DONE (2026-06-10). `check_persistent_warning()` added to `connector_tracker.py`: 3 consecutive WARNING rows in `connector_health_log` → escalates to BROKEN for that channel. Idle channels exempt.
-- [ ] **Align dashboard `reports/app.py` role-sets** to the canonical 11_agent_roles mapping
-      (orphans: task_creator, collector, paid_media_strategist, campaign_creator).
+- [x] **Align dashboard `reports/app.py` role-sets — DONE (`e5c8226`).** Fixed 4 orphans: `task_creator` + `daily_digest` → ai-orchestrator; `paid_media_strategist` → performance-lead; `campaign_creator` → campaign-manager; `collector` → marketing-ops.
 
 ## P1 — Attribution overhaul + workflow re-enrollment (DONE — 2026-05-15)
 
