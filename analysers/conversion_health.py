@@ -574,6 +574,351 @@ def format_summary(results: list[dict]) -> str:
     """Return a one-paragraph text summary of all results."""
     lines = []
     for r in results:
-        icon = "✅" if r["status"] == "ok" else ("⚠️" if r["status"] == "warning" else "🔴")
-        lines.append(f"{icon} {r['platform']}: {r['summary']}")
+        icon = "OK" if r["status"] == "ok" else ("WARN" if r["status"] == "warning" else "BROKEN")
+        lines.append(f"[{icon}] {r['platform']}: {r['summary']}")
     return "\n".join(lines)
+
+
+# ── Full GTM audit (both containers) ──────────────────────────────────────────
+
+# Required tags per container — used to detect missing tags
+_REQUIRED_WEB_TAGS = [
+    ("GA4 Configuration",       ["gaawc", "googtag"],           "GA4 base tag — fires on All Pages"),
+    ("GA4 Lead event",          ["gaawc", "googtag"],           "GA4 event tag for lead form submission"),
+    ("Meta Pixel PageView",     ["html", "custhtml", "img"],    "Meta pixel base — fires on All Pages"),
+    ("Meta Pixel Lead",         ["html", "custhtml"],           "Meta fbq('track','Lead') — fires on Thank You page"),
+    ("Google Ads Conversion",   ["awct", "html", "custhtml"],   "Google Ads conversion action — fires on Thank You page"),
+    ("Microsoft UET base",      ["html", "custhtml"],           "Microsoft Universal Event Tracking base tag — All Pages"),
+    ("Microsoft UET conversion",["html", "custhtml"],           "Microsoft UET goal tag — fires on Thank You page"),
+]
+
+_REQUIRED_SERVER_TAGS = [
+    ("GA4 Client",              ["gaawc", "googtag", "html"],   "GA4 server-side client — receives GA4 hits"),
+    ("Meta CAPI",               ["html", "custhtml"],           "Meta Conversions API forwarding tag"),
+    ("Google Ads CAPI",         ["html", "custhtml"],           "Google Ads server-side conversion forwarding"),
+]
+
+
+def _gtm_svc():
+    """Return an authenticated GTM API v2 service object."""
+    from googleapiclient.discovery import build
+    from google.oauth2 import service_account
+    import google.auth
+
+    raw_key = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    scopes  = ["https://www.googleapis.com/auth/tagmanager.readonly"]
+
+    if raw_key and os.path.exists(raw_key):
+        creds = service_account.Credentials.from_service_account_file(raw_key, scopes=scopes)
+    else:
+        creds, _ = google.auth.default(scopes=scopes)
+
+    return build("tagmanager", "v2", credentials=creds, cache_discovery=False)
+
+
+def _find_container(svc, public_id: str):
+    """Return (account_id, container_id, container_obj) for the given public GTM ID."""
+    for acct in svc.accounts().list().execute().get("account", []):
+        aid = acct["accountId"]
+        for c in svc.accounts().containers().list(parent=f"accounts/{aid}").execute().get("container", []):
+            if c.get("publicId") == public_id:
+                return aid, c["containerId"], c
+    return None, None, None
+
+
+def _audit_container(svc, public_id: str, required_tags: list) -> dict:
+    """Full tag-by-tag audit for one container. Returns structured audit dict."""
+    aid, cid, c_obj = _find_container(svc, public_id)
+    if not aid:
+        return {
+            "container_id":   public_id,
+            "error":          f"{public_id} not found — check service account has read access",
+            "tags":           [],
+            "missing":        [],
+            "recommendations": [],
+        }
+
+    parent = f"accounts/{aid}/containers/{cid}"
+
+    # Prefer the live (published) version; fall back to latest workspace
+    try:
+        live    = svc.accounts().containers().versions().live(parent=parent).execute()
+        version = live.get("containerVersion", {}) or live
+        version_name = f"V{version.get('containerVersionId', '?')} — {version.get('name', 'unnamed')}"
+    except Exception:
+        live = {}
+        version_name = "latest workspace (no published version)"
+
+    tags      = live.get("tag", [])
+    triggers  = {t["triggerId"]: t for t in live.get("trigger", [])}
+    variables = {v["variableId"]: v for v in live.get("variable", [])}
+
+    if not tags:
+        # Fall back: workspace tags
+        try:
+            wss = svc.accounts().containers().workspaces().list(parent=parent).execute()
+            ws_id = (wss.get("workspace", [{}])[0]).get("workspaceId", "1")
+            ws_parent = f"{parent}/workspaces/{ws_id}"
+            tags     = svc.accounts().containers().workspaces().tags().list(parent=ws_parent).execute().get("tag", [])
+            triggers = {t["triggerId"]: t for t in svc.accounts().containers().workspaces().triggers().list(parent=ws_parent).execute().get("trigger", [])}
+            version_name += " (workspace)"
+        except Exception:
+            tags = []
+
+    tag_reports = []
+    live_types  = set()
+
+    for tag in tags:
+        name     = tag.get("name", "unnamed")
+        ttype    = (tag.get("type") or "").lower()
+        is_paused = tag.get("paused", False)
+        params   = {p["key"]: p.get("value", "") for p in tag.get("parameter", [])}
+        fire_ids = [ftr.get("triggerId") for ftr in tag.get("firingTriggerId", [])]
+        fire_names = [triggers.get(tid, {}).get("name", tid) for tid in fire_ids]
+        freq     = params.get("firingFrequency", "notOnce")
+
+        issues   = []
+        recs     = []
+
+        # Check firing frequency for conversion tags
+        name_lower = name.lower()
+        is_conversion = any(kw in name_lower for kw in ("lead", "conversion", "convert", "purchase", "goal", "thank"))
+        if is_conversion and is_paused:
+            issues.append("PAUSED — conversion tag not firing")
+            recs.append("Unpause immediately — this conversion is not being tracked")
+
+        if is_conversion and any("all pages" in fn.lower() for fn in fire_names):
+            issues.append("Fires on All Pages — conversion tags must fire on specific actions only")
+            recs.append("Change trigger to 'Thank You page URL contains /thank-you' or a form submission event")
+
+        if is_conversion and freq == "oncePerEvent" and "pageview" in " ".join(fire_names).lower():
+            issues.append("Firing on pageview with oncePerEvent — may double-count multi-page sessions")
+
+        # Check Meta pixel tags for correct event and pixel ID
+        if "meta" in name_lower or "facebook" in name_lower or "pixel" in name_lower:
+            tag_html = params.get("html", "") + str(params)
+            if META_WEB_PIXEL not in tag_html and META_CRM_PIXEL not in tag_html:
+                if tag_html:  # only flag if there IS HTML content (not empty template)
+                    issues.append(f"Pixel ID not found in tag — expected {META_WEB_PIXEL} or {META_CRM_PIXEL}")
+                    recs.append(f"Verify pixel ID is {META_WEB_PIXEL} (web) or {META_CRM_PIXEL} (CRM)")
+            if "lead" in name_lower and "fbq" in tag_html and "'lead'" not in tag_html.lower() and '"lead"' not in tag_html.lower():
+                issues.append("Tag named 'Lead' but fbq event is not 'Lead' — check the event name in the HTML")
+                recs.append("Change fbq('track', '...') to fbq('track', 'Lead') exactly (case-sensitive)")
+
+        # Check GA4 tags for measurement ID
+        if ttype in ("gaawc", "googtag") or "ga4" in name_lower:
+            mid = params.get("measurementId", "") or params.get("trackingId", "")
+            if mid and "G-" not in mid and "UA-" not in mid:
+                issues.append(f"Measurement ID looks wrong: '{mid}' — GA4 IDs start with G-")
+                recs.append("Update Measurement ID to the correct G-XXXXXXXX format from GA4 property settings")
+
+        status_label = "PAUSED" if is_paused else "LIVE"
+        live_types.add(ttype)
+
+        tag_reports.append({
+            "name":        name,
+            "type":        ttype,
+            "status":      status_label,
+            "triggers":    fire_names,
+            "issues":      issues,
+            "recommendation": recs[0] if recs else ("keep" if not issues else "fix"),
+        })
+
+    # Detect missing required tags
+    missing = []
+    for req_name, req_types, req_purpose in required_tags:
+        req_lower = req_name.lower()
+        # Check if any live tag's name or type matches
+        matched = any(
+            req_lower in t["name"].lower() or
+            any(rt in t["type"] for rt in req_types)
+            for t in tag_reports
+            if t["status"] == "LIVE"
+        )
+        if not matched:
+            # Also check paused tags — they exist but are disabled
+            paused_match = any(
+                req_lower in t["name"].lower()
+                for t in tag_reports
+                if t["status"] == "PAUSED"
+            )
+            if paused_match:
+                missing.append({
+                    "name":    req_name,
+                    "purpose": req_purpose,
+                    "note":    "Tag exists but is PAUSED — unpause to restore tracking",
+                })
+            else:
+                missing.append({
+                    "name":    req_name,
+                    "purpose": req_purpose,
+                    "note":    "Tag not found — needs to be created",
+                })
+
+    # Priority 1: paused conversion tags + tags with firing issues
+    # Priority 2: missing tags
+    # Priority 3: naming/frequency improvements
+    p1 = [t for t in tag_reports if t["issues"] and t["status"] == "PAUSED"]
+    p1_issues = [t for t in tag_reports if t["issues"] and t["status"] == "LIVE"]
+    p2 = missing
+    p3 = [t for t in tag_reports if not t["issues"] and t["status"] == "LIVE" and
+          any("pageview" in tr.lower() for tr in t["triggers"]) and
+          any(kw in t["name"].lower() for kw in ("conversion", "lead", "goal"))]
+
+    return {
+        "container_id":   public_id,
+        "version":        version_name,
+        "total_tags":     len(tags),
+        "live_count":     sum(1 for t in tag_reports if t["status"] == "LIVE"),
+        "paused_count":   sum(1 for t in tag_reports if t["status"] == "PAUSED"),
+        "missing_count":  len(missing),
+        "tags":           tag_reports,
+        "missing":        p2,
+        "priority_1":     [(t["name"], t["issues"][0]) for t in (p1 + p1_issues) if t["issues"]],
+        "priority_2":     [(m["name"], m["note"]) for m in p2],
+        "priority_3":     [(t["name"], "fires on pageview — verify trigger is correct for a conversion tag") for t in p3],
+    }
+
+
+def run_gtm_audit() -> dict:
+    """Full tag-by-tag audit for both GTM containers.
+
+    Returns:
+      {
+        "web":    { container audit dict for GTM-TFH26VC2 },
+        "server": { container audit dict for GTM-PK6924TJ },
+        "report": str,   # structured text report for Asana task body
+        "error":  str | None,
+      }
+    """
+    try:
+        svc    = _gtm_svc()
+        web    = _audit_container(svc, GTM_WEB_ID,    _REQUIRED_WEB_TAGS)
+        server = _audit_container(svc, GTM_SERVER_ID, _REQUIRED_SERVER_TAGS)
+    except Exception as e:
+        return {
+            "web": {}, "server": {},
+            "report": f"GTM audit failed: {e}",
+            "error":  str(e),
+        }
+
+    lines = []
+    for label, audit in [("Web", web), ("Server", server)]:
+        cid   = audit.get("container_id", "?")
+        lines.append(f"CONTAINER: {cid} ({label.lower()})")
+        lines.append(f"Published version: {audit.get('version', 'unknown')}")
+        lines.append(
+            f"Total tags: {audit.get('total_tags', 0)}  |  "
+            f"Live: {audit.get('live_count', 0)}  |  "
+            f"Paused: {audit.get('paused_count', 0)}  |  "
+            f"Missing: {audit.get('missing_count', 0)}"
+        )
+        if audit.get("error"):
+            lines.append(f"ERROR: {audit['error']}")
+            lines.append("")
+            continue
+
+        lines.append("")
+        lines.append("TAG REVIEW:")
+        for t in audit.get("tags", []):
+            status_str = "PAUSED" if t["status"] == "PAUSED" else "LIVE"
+            lines.append(f"  [{status_str}] {t['name']}  (type: {t['type']})")
+            if t["triggers"]:
+                lines.append(f"    Trigger: {', '.join(t['triggers'])}")
+            if t["issues"]:
+                for iss in t["issues"]:
+                    lines.append(f"    Issue: {iss}")
+                lines.append(f"    Recommendation: {t['recommendation']}")
+
+        if audit.get("missing"):
+            lines.append("")
+            lines.append("MISSING TAGS:")
+            for m in audit["missing"]:
+                lines.append(f"  - {m['name']}: {m['note']}")
+                lines.append(f"    Purpose: {m['purpose']}")
+
+        lines.append("")
+        lines.append("RECOMMENDATIONS:")
+        p1 = audit.get("priority_1", [])
+        p2 = audit.get("priority_2", [])
+        p3 = audit.get("priority_3", [])
+        if p1:
+            lines.append("  Priority 1 (fix now — blocking conversion tracking):")
+            for name, iss in p1:
+                lines.append(f"    - {name}: {iss}")
+        if p2:
+            lines.append("  Priority 2 (missing tags — create):")
+            for name, note in p2:
+                lines.append(f"    - {name}: {note}")
+        if p3:
+            lines.append("  Priority 3 (improve):")
+            for name, note in p3:
+                lines.append(f"    - {name}: {note}")
+        if not p1 and not p2 and not p3:
+            lines.append("  No recommendations — all tags healthy")
+        lines.append("")
+
+    report = "\n".join(lines)
+    return {"web": web, "server": server, "report": report, "error": None}
+
+
+def create_gtm_audit_tasks(audit: dict) -> list[str]:
+    """Create Asana tasks for GTM audit results. One task per container with issues.
+    Reports summary back to manager via the task description's MANAGER REPORT section."""
+    from executors.asana import create_task
+    from datetime import date as _date
+
+    today = _date.today().isoformat()
+    gids  = []
+
+    for label, key, cid in [("Web", "web", GTM_WEB_ID), ("Server", "server", GTM_SERVER_ID)]:
+        audit_data = audit.get(key, {})
+        if not audit_data or audit_data.get("error"):
+            continue
+
+        p1 = audit_data.get("priority_1", [])
+        p2 = audit_data.get("priority_2", [])
+
+        if not p1 and not p2:
+            continue  # container is clean — no task needed
+
+        # Build task description
+        desc_lines = [
+            f"GTM {label} Container Audit — {cid} — {today}",
+            f"Published version: {audit_data.get('version', 'unknown')}",
+            f"Tags: {audit_data.get('live_count', 0)} live, {audit_data.get('paused_count', 0)} paused, {audit_data.get('missing_count', 0)} missing",
+            "",
+            audit.get("report", ""),
+            "",
+            "REVIEW CHAIN:",
+            "1. [Marketing Ops] Apply Priority 1 fixes in GTM — publish a new version.",
+            "2. [Marketing Ops] Verify each fixed tag fires correctly using Tag Assistant.",
+            "3. [Marketing Ops] For missing tags: create them, test, publish.",
+            "4. [Growth Analyst] Re-run Conversion Recording Audit — confirm all platforms HEALTHY.",
+            "5. [Growth Analyst] Sign off — update memory/08_pitfalls.md with any new trap found.",
+            "",
+            "MANAGER REPORT (summary for ai-orchestrator):",
+            f"  Container: {cid} ({label})",
+            f"  Priority 1 blockers: {len(p1)}",
+            *[f"    - {name}: {iss}" for name, iss in p1],
+            f"  Priority 2 missing: {len(p2)}",
+            f"  Next audit: run Conversion Recording Audit from /activity in 7 days",
+            "",
+            f"Created: {today}\nDue: {today}\nPriority: {'High' if p1 else 'Medium'}",
+            f"Type: Audit\nChannel: gtm\nAsset level: infrastructure\nAction: fix → [Marketing Ops]",
+        ]
+
+        gid = create_task(
+            title=f"GTM {label} audit — {len(p1)} P1 blocker(s), {len(p2)} missing tag(s) — {today}",
+            description="\n".join(desc_lines),
+            project_key="daily_activity",
+            task_type="Audit",
+            channel="gtm",
+            asset_level="infrastructure",
+            action="fix",
+            log_role="health_monitor",
+        )
+        if gid:
+            gids.append(gid)
+
+    return gids

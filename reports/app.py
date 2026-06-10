@@ -3088,6 +3088,47 @@ def ondemand_conversion_audit():
     return jsonify({"status": "started", "poll": "/api/ondemand/status/conv_audit"})
 
 
+@app.route("/api/ondemand/gtm-audit", methods=["POST"])
+def ondemand_gtm_audit():
+    """Full tag-by-tag audit of both GTM containers (web + server).
+
+    Reads every tag in the live published version of GTM-TFH26VC2 and
+    GTM-PK6924TJ. Checks status, triggers, pixel IDs, event names, and
+    cross-references against the required tag list. Creates Asana tasks for
+    any Priority 1 blockers or missing tags — routed to marketing-ops with
+    a manager report section for ai-orchestrator.
+    """
+    def _run():
+        from analysers.conversion_health import run_gtm_audit, create_gtm_audit_tasks
+        audit     = run_gtm_audit()
+        task_gids = create_gtm_audit_tasks(audit)
+
+        web    = audit.get("web", {})
+        server = audit.get("server", {})
+        p1_total = len(web.get("priority_1", [])) + len(server.get("priority_1", []))
+        missing  = len(web.get("missing", [])) + len(server.get("missing", []))
+
+        summary = (
+            f"Web: {web.get('live_count', 0)} live / {web.get('paused_count', 0)} paused / "
+            f"{web.get('missing_count', 0)} missing  |  "
+            f"Server: {server.get('live_count', 0)} live / {server.get('paused_count', 0)} paused / "
+            f"{server.get('missing_count', 0)} missing  |  "
+            f"{p1_total} P1 blocker(s)"
+        )
+        return {
+            "summary":    summary,
+            "has_issues": p1_total > 0 or missing > 0,
+            "p1_blockers": p1_total,
+            "missing_tags": missing,
+            "tasks_created": task_gids,
+        }
+
+    started = _run_ondemand_task("gtm_audit", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/gtm_audit"})
+
+
 @app.route("/api/search-duplicate-candidates", methods=["GET"])
 def search_duplicate_candidates():
     """

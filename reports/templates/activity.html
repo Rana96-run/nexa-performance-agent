@@ -2322,6 +2322,24 @@ a:hover{text-decoration:underline}
           <div id="conv-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
         </div>
 
+        <!-- GTM Full Tag Audit -->
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:6px">GTM Tag Audit — Both Containers</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px">
+            Reviews every tag in GTM-TFH26VC2 (web) and GTM-PK6924TJ (server) line by line.
+            Checks status, triggers, pixel IDs, event names, and missing required tags.
+            Flags Priority 1 blockers. Creates Asana tasks — reported to manager.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <button id="gtm-audit-btn" onclick="runGtmAudit()"
+                    style="background:none;border:1px solid #f78166;border-radius:6px;
+                           color:#ff7b72;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Audit
+            </button>
+          </div>
+          <div id="gtm-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -3277,6 +3295,36 @@ function runConversionAudit() {
             var res = s.result || {};
             stat.style.color = res.has_issues ? '#f0883e' : '#3fb950';
             stat.textContent = res.summary || 'Done — Asana task created';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: GTM Tag Audit ──────────────────────────────────────────────────
+function runGtmAudit() {
+  var btn  = document.getElementById('gtm-audit-btn');
+  var stat = document.getElementById('gtm-audit-status');
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Reading both containers — takes ~60s…';
+  fetch('/api/ondemand/gtm-audit', {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~60s';
+        btn.disabled = false; btn.textContent = 'Run Audit'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/gtm_audit';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Run Audit';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var res = s.result || {};
+            stat.style.color = res.has_issues ? '#f0883e' : '#3fb950';
+            stat.textContent = res.summary || 'Done — Asana tasks created';
           }
         }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
       }, 3000);
