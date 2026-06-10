@@ -191,6 +191,10 @@ Campaign IDs (customer 5753494964):
       `hubspot_leads_bq.py` now call `create_views()` automatically after any `collect_and_write()`,
       so a manual re-pull rebuilds all materialized views immediately instead of waiting for
       the next 6h scheduler tick.
+- [x] **BQ vs HubSpot reconciliation — PASSED (2026-06-10, window 2026-06-03 to 2026-06-09):**
+      Leads: BQ 1,213 vs HS 1,205 = +0.66% delta ✓ (sync timing lag, expected).
+      Deals: BQ 1,613 vs HS 1,613 = exact match ✓. Amount: BQ $295,473 vs HS $298,572 = -1.04% ✓ (within 5% tolerance).
+      Daily lead volumes: 170 / 185 / 112 / 161 / 179 / 196 / 210 (Wed–Tue). Qualified rate ~39%.
 
 ## Done this session (2026-06-09)
 
