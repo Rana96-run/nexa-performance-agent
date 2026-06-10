@@ -11,9 +11,15 @@ Inbound connector checks (5 per connector, 9 connectors):
   5. credentials    — token expiry check (LinkedIn 60d window)
 
 Outbound / system monitors (1 check each, SYSTEM_MONITORS list):
-  6. databox push freshness — did we push to each Databox dataset within 28h?
-  7. railway health         — does /health return HTTP 200?
-  8. scheduler execution    — did the daily job fire within the last 26h?
+  6. databox push freshness  — did we push to each Databox dataset within 28h?
+  7. railway health          — does /health return HTTP 200?
+  8. scheduler execution     — did the daily job fire within the last 26h?
+  9. outbound action         — did Slack digest post / Asana tasks get created?
+ 10. credential liveness     — live API ping per connector (401/403 = BROKEN)
+ 11. cost anomaly            — today's token cost > 3× 7d avg?
+
+Unified entry point:
+  get_police_status() → overall GREEN/AMBER/RED + broken/warnings list for orchestrator
 
 Output:
   - Structured dict per connector/monitor: {status, checks_passed, checks_failed, fix_command}
@@ -680,6 +686,102 @@ def check_cost_anomaly() -> dict:
     }
 
 
+# ── Check: Slack listener heartbeat ──────────────────────────────────────────
+
+def check_slack_listener_heartbeat(window_hours: int = 2) -> dict:
+    """Return HEALTHY if slack_listener wrote to agent_activity_log in the last
+    *window_hours* hours. BROKEN otherwise — means the listener process is down."""
+    proj, ds = _proj_ds()
+    sql = f"""
+        SELECT MAX(ts) AS last_ts
+        FROM `{proj}.{ds}.agent_activity_log`
+        WHERE role = 'slack_listener'
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {window_hours} HOUR)
+    """
+    try:
+        rows = _bq_query(sql)
+        last_ts = rows[0].last_ts if rows else None
+    except Exception as e:
+        return {"status": "WARNING",
+                "reason": f"Could not query agent_activity_log: {str(e)[:80]}"}
+
+    if last_ts is None:
+        return {
+            "status":  "BROKEN",
+            "reason":  f"No slack_listener heartbeat in last {window_hours}h — process may be down",
+            "fix":     "railway logs --tail 100  # check for crash; restart if needed",
+        }
+    return {"status": "HEALTHY", "last_heartbeat": str(last_ts)[:19]}
+
+
+# ── Alert: 3 consecutive BROKEN ──────────────────────────────────────────────
+
+_CONSECUTIVE_BROKEN_THRESHOLD = 3
+
+
+def alert_consecutive_broken(all_results: list) -> None:
+    """For every channel/monitor that is currently BROKEN, check if the last
+    N consecutive health-log rows are also BROKEN. If so, post a one-line Slack
+    alert to #nexa-health. Runs after write_health_log so the current result is
+    already persisted."""
+    proj, ds = _proj_ds()
+    slack_token = os.getenv("SLACK_BOT_TOKEN", "")
+    health_channel = os.getenv("SLACK_HEALTH_CHANNEL", "#nexa-health")
+
+    broken_channels = [r["channel"] for r in all_results if r.get("status") == "BROKEN"]
+    if not broken_channels:
+        return
+
+    # Build a single query for all broken channels at once
+    channel_list = ", ".join(f"'{c}'" for c in broken_channels)
+    sql = f"""
+        SELECT channel, ARRAY_AGG(status ORDER BY check_ts DESC LIMIT {_CONSECUTIVE_BROKEN_THRESHOLD}) AS last_statuses
+        FROM `{proj}.{ds}.connector_health_log`
+        WHERE channel IN ({channel_list})
+        GROUP BY channel
+    """
+    try:
+        rows = _bq_query(sql)
+    except Exception as e:
+        print(f"[connector_tracker] alert_consecutive_broken query failed: {e}")
+        return
+
+    history = {r.channel: list(r.last_statuses) for r in rows}
+
+    for channel in broken_channels:
+        statuses = history.get(channel, [])
+        if len(statuses) < _CONSECUTIVE_BROKEN_THRESHOLD:
+            continue
+        if all(s == "BROKEN" for s in statuses[:_CONSECUTIVE_BROKEN_THRESHOLD]):
+            # Find the human-readable reason from the current result
+            result = next((r for r in all_results if r["channel"] == channel), {})
+            label  = result.get("label") or channel
+            reason = ""
+            for cr in result.get("checks", {}).values():
+                if cr.get("status") == "BROKEN":
+                    reason = cr.get("reason", "")
+                    break
+            msg = (
+                f":red_circle: *{label}* has been BROKEN for "
+                f"{_CONSECUTIVE_BROKEN_THRESHOLD}+ consecutive checks — {reason or 'no detail'}"
+            )
+            if slack_token:
+                try:
+                    import requests as _requests
+                    _requests.post(
+                        "https://slack.com/api/chat.postMessage",
+                        headers={"Authorization": f"Bearer {slack_token}",
+                                 "Content-Type": "application/json"},
+                        json={"channel": health_channel, "text": msg},
+                        timeout=10,
+                    )
+                    print(f"[connector_tracker] consecutive-BROKEN alert sent for {channel}")
+                except Exception as e:
+                    print(f"[connector_tracker] Slack alert failed for {channel}: {e}")
+            else:
+                print(f"[connector_tracker] ALERT (no token): {msg}")
+
+
 # ── Aggregate per system monitor ──────────────────────────────────────────────
 
 def run_system_check(monitor: dict) -> dict:
@@ -701,12 +803,23 @@ def run_system_check(monitor: dict) -> dict:
         result["checks"]["health"] = check_railway_health()
     elif mtype == "scheduler":
         result["checks"]["execution"] = check_scheduler_ran(
-            job_role=monitor.get("job_role", "daily_digest")
+            job_role=monitor.get("job_role", "daily_digest"),
+            window_hours=monitor.get("window_hours", _SCHEDULER_WINDOW_HOURS),
         )
     elif mtype == "databox":
         result["checks"]["push_freshness"] = check_databox_freshness(
             monitor["dataset_id"], label
         )
+    elif mtype == "outbound_action":
+        result["checks"]["delivery"] = check_outbound_action(
+            action=monitor["action"],
+            label=label,
+            window_hours=monitor.get("window_hours", 26),
+        )
+    elif mtype == "cost_anomaly":
+        result["checks"]["anomaly"] = check_cost_anomaly()
+    elif mtype == "slack_listener":
+        result["checks"]["heartbeat"] = check_slack_listener_heartbeat()
     else:
         result["checks"]["unknown"] = {"status": "WARNING",
                                        "reason": f"Unknown monitor type: {mtype}"}
@@ -795,6 +908,7 @@ def run_connector_check(connector: dict) -> dict:
         results["checks"]["amount_sanity"] = check_amount_sanity(table)
     results["checks"]["attribution"] = check_attribution(channel)
     results["checks"]["credentials"] = check_credentials(connector)
+    results["checks"]["liveness"]    = check_credential_liveness(connector)
 
     # Idle-aware: a channel with no active campaigns / no spend is HEALTHY-IDLE,
     # not stale/broken (e.g. LinkedIn with no live campaigns). Suppress freshness +
@@ -803,10 +917,17 @@ def run_connector_check(connector: dict) -> dict:
     no_spend = (ss.get("yesterday_spend_usd", 0) or 0) == 0 and (ss.get("avg_7d_usd", 0) or 0) == 0
     is_idle = known_paused or (table == "campaigns_daily" and no_spend)
     if is_idle:
-        for cn in ("freshness", "row_integrity"):
+        # Suppress all data-presence checks for idle channels — zero data is correct.
+        for cn in ("freshness", "row_integrity", "attribution"):
             if results["checks"].get(cn, {}).get("status") in ("BROKEN", "WARNING"):
                 results["checks"][cn]["status"] = "HEALTHY"
                 results["checks"][cn]["note"] = "IDLE — no active campaigns / no spend (not a fault)"
+        # Also suppress 60-day token warnings for idle channels —
+        # the token isn't being used so expiry is non-urgent.
+        cred = results["checks"].get("credentials", {})
+        if cred.get("status") == "WARNING" and connector.get("cred_type") == "60_day":
+            results["checks"]["credentials"]["status"] = "HEALTHY"
+            results["checks"]["credentials"]["note"] = "IDLE — token expiry non-urgent while channel is paused"
     results["is_idle"] = is_idle
 
     # Persistent-WARNING escalation: only for active (non-idle) connectors.
@@ -962,6 +1083,11 @@ def run_all_checks(post_slack: bool = True, write_bq: bool = True) -> dict:
         except Exception as e:
             print(f"[connector_tracker] BQ write failed: {e}")
 
+    try:
+        alert_consecutive_broken(all_results)
+    except Exception as e:
+        print(f"[connector_tracker] consecutive-broken alert failed: {e}")
+
     if post_slack and broken > 0:
         post_status_board(all_results, overall)
 
@@ -972,6 +1098,63 @@ def run_all_checks(post_slack: bool = True, write_bq: bool = True) -> dict:
         "broken_count":  broken,
         "warning_count": warning,
         "healthy_count": healthy,
+    }
+
+
+# ── Unified police status (single entry point for orchestrator) ───────────────
+
+def get_police_status() -> dict:
+    """Return a single summary dict the orchestrator can read to decide whether
+    the system is healthy enough to proceed with the daily loop.
+
+    Aggregates: inbound connectors + outbound monitors + cost + scheduler + liveness.
+    Pulls live data — do NOT cache this; freshness is the point.
+
+    Returns:
+        {
+          "overall":      "GREEN" | "AMBER" | "RED",
+          "broken":       [{"surface": str, "reason": str, "fix": str}, ...],
+          "warnings":     [{"surface": str, "reason": str}, ...],
+          "healthy_count": int,
+          "summary":      str,   # one-liner for Slack
+        }
+    """
+    raw = run_all_checks(post_slack=False, write_bq=False)
+    broken  = []
+    warnings = []
+
+    for r in raw["connectors"] + raw["monitors"]:
+        surface = r.get("label") or r.get("channel") or r.get("name", "unknown")
+        for cname, cr in r.get("checks", {}).items():
+            if cr.get("status") == "BROKEN":
+                broken.append({
+                    "surface": surface,
+                    "check":   cname,
+                    "reason":  cr.get("reason", "BROKEN"),
+                    "fix":     cr.get("fix") or r.get("fix_command") or "",
+                })
+            elif cr.get("status") == "WARNING":
+                warnings.append({
+                    "surface": surface,
+                    "check":   cname,
+                    "reason":  cr.get("reason", "WARNING"),
+                })
+
+    overall = "RED" if broken else ("AMBER" if warnings else "GREEN")
+    b, w, h = len(broken), len(warnings), raw["healthy_count"]
+    summary = (
+        f"RED: {b} broken, {w} warning, {h} healthy — check #nexa-health"
+        if overall == "RED" else
+        f"AMBER: {w} warning, {h} healthy — review when convenient"
+        if overall == "AMBER" else
+        f"GREEN: all {h} checks healthy"
+    )
+    return {
+        "overall":       overall,
+        "broken":        broken,
+        "warnings":      warnings,
+        "healthy_count": h,
+        "summary":       summary,
     }
 
 
