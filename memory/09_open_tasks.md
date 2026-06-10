@@ -174,6 +174,19 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-06-10, final)
+
+- [x] **Slack listener + LinkedIn connectors now HEALTHY.** Both were showing BROKEN in the activity dashboard — now resolved. Confirmed by user on 2026-06-10.
+- [x] **Connector health: idle suppression extended (`bdadded`).** `attribution` and `credentials` checks now suppressed for idle/known_paused channels — LinkedIn no longer generates false WARNINGs when campaigns are paused.
+- [x] **Slack listener monitoring added (`bdadded`).** `check_slack_listener_heartbeat()` registered in SYSTEM_MONITORS. `slack_listener.py` writes a BQ heartbeat every 10 poll cycles (~10 min). Health check window: 2h.
+- [x] **3-consecutive-BROKEN alert → Asana escalation (`bdadded` + later).** `alert_consecutive_broken()` now creates an Asana task assigned to marketing-ops (not a Slack post) when any connector/monitor has been BROKEN for 3+ consecutive hourly checks. Dedup via `agent_activity_log` (6h window). Marketing-ops owns the fix; growth-analyst reviews after.
+- [x] **Hourly health check upgraded (`bdadded`).** `_run_health_check()` in `operational_scheduler.py` now runs the full `run_all_checks()` (with BQ write) instead of the lightweight script — so `alert_consecutive_broken` fires hourly.
+- [x] **GA4 collector built (`9a86462`).** `collectors/ga4_bq.py` — daily sessions / engaged sessions / users / conversions / bounce rate from GA4 Data API → `ga4_sessions_daily`. Wired into 6h refresh in `reporting_scheduler.py`. Property ID: 517912363.
+- [x] **Connector failure escalation chain defined (`bdadded`).** `marketing-ops.md` updated: owns activity dashboard, diagnoses/fixes connectors, hands off to growth-analyst. `growth-analyst.md` updated: owns post-fix data integrity review (7d BQ↔HS reconciliation, QA gate — 3+ HEALTHY + <2% delta + no view drift — final sign-off).
+- [x] **BQ ↔ HubSpot reconciliation tolerance set to 2%** (updated per user request).
+- [x] **Creative & Landing Pages on-demand section added to dashboard (`d771ffc`).** Three new cards: (1) Creative Performance Audit → creates Asana task for Creative Strategist with best-to-scale/worst-to-replace direction; (2) New Creative Variants Brief → OCEAN-aligned A/B brief per segment for Creative Strategist; (3) New Landing Page Brief → auto-fills `create_lp_brief()` from live BQ CPQL data, creates Asana chain CRO → UI/UX → Developer.
+- [x] **Activity dashboard fully structured.** On-Demand Actions panel now has three rows: Campaign Operations, Audits, Creative & Landing Pages. All existing actions confirmed healthy.
+
 ## Done this session (2026-06-10, continued)
 
 - [x] **`/activity` UnboundLocalError resolved (`f7101e5`).** Cache read path was missing 8 variables added after the cache was designed (`user_rows`, `intel_rows`, `task_status_rows`, `executed_rows`, `followup_rows`, `new_ads_rows_raw`, `hc_rows`, `fresh_rows`) — caused `UnboundLocalError` on every request served from cache.
