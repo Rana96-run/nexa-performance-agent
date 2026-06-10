@@ -100,7 +100,8 @@ def agent_identity(log_role: str) -> dict:
 ASANA_PROJECTS = {
     "daily_activity": os.getenv("ASANA_PROJECT_DAILY_ACTIVITY") or os.getenv("ASANA_PORTFOLIO_DAILY_ACTIVITY") or "1213280681364571",  # Daily Activity portfolio (confirmed 2026-05-11)
     "optimization":   os.getenv("ASANA_PROJECT_OPTIMIZATION")   or os.getenv("ASANA_PORTFOLIO_OPTIMIZATION")   or "1213239417965392",  # Optimization portfolio (confirmed 2026-05-11)
-"seasonal":       os.getenv("ASANA_PROJECT_SEASONAL")       or os.getenv("ASANA_PORTFOLIO_SEASONAL"),
+    "seasonal":       os.getenv("ASANA_PROJECT_SEASONAL")       or os.getenv("ASANA_PORTFOLIO_SEASONAL"),
+    "cro":            os.getenv("ASANA_PROJECT_CRO")            or "1215576593439221",  # CRO & Landing Pages (created 2026-06-09, in Performance Marketing portfolio)
 }
 
 # Microsoft Ads
