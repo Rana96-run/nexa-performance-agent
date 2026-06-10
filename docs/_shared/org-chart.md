@@ -54,7 +54,7 @@ Direct handoff: **cro-specialist → ui-ux-designer → developer**, result back
 ## Dept 3 — Support · serve both depts above, NO internal handoff
 | Agent | Owns |
 |---|---|
-| **marketing-ops** *(OPS)* | UTM structure policy; pixel health (both Meta pixels); HubSpot lead_utm_campaign field mapping; Railway env vars + credential rotation (single source of truth for secrets). Fires #nexa-health on RED only, never all-clears. |
+| **marketing-ops** *(Marketing Project Coordinator — OPS)* | UTM structure policy; pixel health (both Meta pixels); HubSpot lead_utm_campaign field mapping; Railway env vars + credential rotation (single source of truth for secrets). GTM containers (web + server). Fires #nexa-health on RED only, never all-clears. |
 | **growth-analyst** *(DATA)* | Owns `memory/` (writes 08_pitfalls.md on every API trap, updates 14_learning_patterns.md after every outcome). One analyst for everything: 8-step loop on live BQ, period comparisons, CRO A/B results, monthly forecasts (forecaster.py). Never reports without live BQ. |
 
 `marketing-ops` and `growth-analyst` run **in parallel — no internal handoff.**

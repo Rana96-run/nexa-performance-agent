@@ -45,7 +45,7 @@ is the bridge so a change in one is traceable to the others.
 | `cro-specialist` | — | `cro_specialist` | Rana Khalid |
 | `ui-ux-designer` | — | `ui_ux_design` | Rana Khalid |
 | `developer` | — | `lp_developer` | Tony Helmy (+ Rana follower) |
-| `marketing-ops` | — | `health_monitor`, `collector` | Donia Mohamed |
+| `marketing-ops` *(Marketing Project Coordinator)* | — | `health_monitor`, `collector` | Donia Mohamed |
 | `growth-analyst` | `paid_media_analyst` | `bq_refresh`, `spike_detector`, `llm_cadence` | Rana Khalid |
 
 **Full coverage — all log-roles owned 1:1 (no orphans, no double-claims).** `user`
