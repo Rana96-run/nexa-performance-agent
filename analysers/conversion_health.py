@@ -720,6 +720,8 @@ def _audit_container(svc, public_id: str, required_tags: list) -> dict:
 
     for tag in tags:
         name     = tag.get("name", "unnamed")
+        if name.lower().startswith("[stape]"):
+            continue  # migrated legacy tags — active replacements exist, skip entirely
         ttype    = (tag.get("type") or "").lower()
         is_paused = tag.get("paused", False)
         params   = {p["key"]: p.get("value", "") for p in tag.get("parameter", [])}
