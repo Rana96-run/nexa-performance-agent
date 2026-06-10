@@ -181,6 +181,17 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-06-10)
+
+- [x] **Views: LOWER/TRIM deal stub matching confirmed correct in Hex (`ee0ab00`).** Deal amounts
+      now flow into `v_adset_performance` and `v_ad_performance` via case+space-insensitive
+      name matching (`LOWER(TRIM(utm_audience/utm_content))`) — previously deals were silently
+      dropped when UTM casing didn't match adset/ad names exactly.
+- [x] **Manual HubSpot collect no longer stales Hex (`12700f6`).** `hubspot_deals_bq.py` and
+      `hubspot_leads_bq.py` now call `create_views()` automatically after any `collect_and_write()`,
+      so a manual re-pull rebuilds all materialized views immediately instead of waiting for
+      the next 6h scheduler tick.
+
 ## Done this session (2026-06-09)
 
 - [x] **Knowledge base restructure — complete.** Swept all 18 session transcripts

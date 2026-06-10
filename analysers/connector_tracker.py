@@ -43,6 +43,7 @@ _DEAL_AMOUNT_SPIKE = 50.0  # daily deal amount_total > N×90d-median → BROKEN 
 _MIN_ATTRIBUTION_RATE = 0.5  # < 50% leads joined → WARNING
 _LI_TOKEN_WARN_DAYS = 45   # LinkedIn token warn threshold
 _LI_TOKEN_BREAK_DAYS = 60  # LinkedIn token expiry
+_WARNING_ESCALATION_RUNS = 3  # consecutive WARNING runs → escalate to BROKEN
 
 # System-monitor thresholds
 _DATABOX_STALE_HOURS  = 28   # daily push should land within 28h; warn if older
@@ -592,6 +593,43 @@ def run_system_checks() -> list[dict]:
     return [run_system_check(m) for m in SYSTEM_MONITORS]
 
 
+# ── Check: Persistent WARNING escalation ─────────────────────────────────────
+
+def check_persistent_warning(channel: str) -> dict:
+    """If the last N consecutive health-log rows for this channel are all WARNING,
+    escalate to BROKEN. Idle channels are exempt (they legitimately stay WARNING-
+    suppressed). Returns HEALTHY when history is too short or mixed."""
+    proj, ds = _proj_ds()
+    sql = f"""
+        SELECT status
+        FROM `{proj}.{ds}.connector_health_log`
+        WHERE channel = '{channel}'
+        ORDER BY check_ts DESC
+        LIMIT {_WARNING_ESCALATION_RUNS}
+    """
+    try:
+        rows = _bq_query(sql)
+    except Exception as e:
+        # History unavailable — don't false-escalate
+        return {"status": "HEALTHY", "note": f"escalation history check skipped: {str(e)[:60]}"}
+
+    if len(rows) < _WARNING_ESCALATION_RUNS:
+        return {"status": "HEALTHY", "note": f"only {len(rows)} history rows — need {_WARNING_ESCALATION_RUNS} to escalate"}
+
+    statuses = [r.status for r in rows]
+    if all(s == "WARNING" for s in statuses):
+        return {
+            "status": "BROKEN",
+            "reason": (
+                f"Channel has been WARNING for {_WARNING_ESCALATION_RUNS} consecutive "
+                f"daily checks — escalated to BROKEN. Last statuses: {statuses}. "
+                f"Fix: investigate root cause, then re-run the collector."
+            ),
+            "fix": f"railway run python {COLLECTOR_SCRIPTS.get(channel, 'collectors/' + channel + '_bq.py')} 3",
+        }
+    return {"status": "HEALTHY", "recent_statuses": statuses}
+
+
 # ── Aggregate per connector ───────────────────────────────────────────────────
 
 def run_connector_check(connector: dict) -> dict:
@@ -628,6 +666,11 @@ def run_connector_check(connector: dict) -> dict:
                 results["checks"][cn]["status"] = "HEALTHY"
                 results["checks"][cn]["note"] = "IDLE — no active campaigns / no spend (not a fault)"
     results["is_idle"] = is_idle
+
+    # Persistent-WARNING escalation: only for active (non-idle) connectors.
+    # Idle channels are exempt — they legitimately sit in WARNING-suppressed state.
+    if not is_idle:
+        results["checks"]["escalation"] = check_persistent_warning(channel)
 
     # Aggregate status: BROKEN > WARNING > HEALTHY
     for check_name, check_result in results["checks"].items():
