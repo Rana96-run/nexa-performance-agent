@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from flask import Flask, jsonify, redirect, render_template, request, Response
+from werkzeug.exceptions import HTTPException
 from collectors.hubspot_webhook import hubspot_bp
 
 app = Flask(__name__, template_folder="templates")
@@ -56,6 +57,9 @@ def _uptime_str() -> str:
 @app.errorhandler(Exception)
 def _handle_exception(e):
     """Capture every unhandled Flask exception to BQ so the self-healer can detect it."""
+    # Don't log HTTP 4xx as dashboard errors — those are client errors, not server faults.
+    if isinstance(e, HTTPException) and e.code < 500:
+        raise e
     import traceback
     tb = traceback.format_exc()
     route = request.path if request else "unknown"
@@ -448,12 +452,20 @@ def activity_dashboard():
             _cached = entry["data"]
 
     if _cached:
-        heatmap_raw  = _cached["heatmap_raw"]
-        detail_rows  = _cached["detail_rows"]
-        infra_rows   = _cached["infra_rows"]
-        channel_rows = _cached["channel_rows"]
-        _kpi_rows    = _cached["kpi_rows"]
-        _last_rows   = _cached["last_rows"]
+        heatmap_raw      = _cached["heatmap_raw"]
+        detail_rows      = _cached["detail_rows"]
+        infra_rows       = _cached["infra_rows"]
+        channel_rows     = _cached["channel_rows"]
+        _kpi_rows        = _cached["kpi_rows"]
+        _last_rows       = _cached["last_rows"]
+        user_rows        = _cached.get("user_rows", [])
+        intel_rows       = _cached.get("intel_rows", [])
+        task_status_rows = _cached.get("task_status_rows", [])
+        executed_rows    = _cached.get("executed_rows", [])
+        followup_rows    = _cached.get("followup_rows", [])
+        new_ads_rows_raw = _cached.get("new_ads_rows_raw", [])
+        hc_rows          = _cached.get("hc_rows", [])
+        fresh_rows       = _cached.get("fresh_rows", [])
     else:
         heatmap_sql = f"""
             SELECT day, category, SUM(count) AS count
@@ -837,12 +849,20 @@ def activity_dashboard():
             _ACTIVITY_CACHE[_cache_key] = {
                 "ts": time.time(),
                 "data": {
-                    "heatmap_raw":  heatmap_raw,
-                    "detail_rows":  detail_rows,
-                    "infra_rows":   infra_rows,
-                    "channel_rows": channel_rows,
-                    "kpi_rows":     _kpi_rows,
-                    "last_rows":    _last_rows,
+                    "heatmap_raw":      heatmap_raw,
+                    "detail_rows":      detail_rows,
+                    "infra_rows":       infra_rows,
+                    "channel_rows":     channel_rows,
+                    "kpi_rows":         _kpi_rows,
+                    "last_rows":        _last_rows,
+                    "user_rows":        user_rows,
+                    "intel_rows":       intel_rows,
+                    "task_status_rows": task_status_rows,
+                    "executed_rows":    executed_rows,
+                    "followup_rows":    followup_rows,
+                    "new_ads_rows_raw": new_ads_rows_raw,
+                    "hc_rows":          hc_rows,
+                    "fresh_rows":       fresh_rows,
                 },
             }
 

@@ -96,15 +96,9 @@ SYSTEM_MONITORS = [
         "job_role": "daily_digest",
     },
     {
-        "name":      "databox_daily_spend",
+        "name":      "databox_push",
         "type":      "databox",
-        "label":     "Databox: Daily Spend",
-        "dataset_id": os.getenv("DATABOX_DATASET_DAILY_SPEND", "199c5297"),
-    },
-    {
-        "name":      "databox_all_grains",
-        "type":      "databox",
-        "label":     "Databox: All Grains",
+        "label":     "Databox: All Grains push",
         "dataset_id": os.getenv("DATABOX_DATASET_ALL_GRAINS", "6158be78"),
     },
 ]
@@ -392,67 +386,38 @@ def check_credentials(connector: dict) -> dict:
 # ── Check 6: Databox Push Freshness ──────────────────────────────────────────
 
 def check_databox_freshness(dataset_id: str, label: str) -> dict:
-    """Did we push to this Databox dataset within _DATABOX_STALE_HOURS?
+    """Did the Databox pusher run successfully within _DATABOX_STALE_HOURS?
 
-    Uses the Dataset Ingestion API:
-      GET api.databox.com/v1/datasets/{id}/ingestions?limit=5
-      Auth: x-api-key header (DATABOX_TOKEN = PAK)
+    Reads from agent_activity_log (role='databox_push') — avoids depending on
+    Databox's ingestion history API which requires a UUID-format dataset ID
+    that doesn't exist for our short-ID dataset (6158be78).
     """
-    import urllib.request
-    import urllib.error
-
-    token = os.getenv("DATABOX_TOKEN")
-    if not token:
-        return {"status": "WARNING",
-                "reason": "DATABOX_TOKEN not set — cannot verify push freshness"}
-
-    url = f"{_DATABOX_API_BASE}/v1/datasets/{dataset_id}/ingestions?limit=5"
-    req = urllib.request.Request(
-        url,
-        headers={"x-api-key": token, "Accept": "application/json"},
-    )
+    proj, ds = _proj_ds()
+    sql = f"""
+        SELECT ts, details, status
+        FROM `{proj}.{ds}.agent_activity_log`
+        WHERE role = 'databox_push'
+          AND status = 'success'
+        ORDER BY ts DESC
+        LIMIT 1
+    """
     try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read(200).decode(errors="ignore")
-        return {"status": "BROKEN",
-                "reason": f"Databox API HTTP {e.code} for {label}: {body[:80]}",
-                "fix": "Check DATABOX_TOKEN in Railway and re-run collectors/databox_pusher.py"}
+        rows = _bq_query(sql)
     except Exception as e:
-        return {"status": "BROKEN",
-                "reason": f"Databox API unreachable for {label}: {str(e)[:80]}",
-                "fix": "Check Railway network / DATABOX_TOKEN"}
-
-    # Response is a list of ingestion objects (most recent first)
-    # Each record: {id, status, createdAt, recordsCount, ...}
-    ingestions = data if isinstance(data, list) else data.get("ingestions", [])
-    if not ingestions:
         return {"status": "WARNING",
-                "reason": f"No ingestion history found for {label} (dataset {dataset_id})"}
+                "reason": f"Could not query agent_activity_log for databox: {str(e)[:80]}"}
 
-    latest = ingestions[0]
-    status_str = (latest.get("status") or "unknown").lower()
-    created_raw = latest.get("createdAt") or latest.get("created_at") or ""
-
-    if not created_raw:
-        return {"status": "WARNING",
-                "reason": f"No timestamp on latest ingestion for {label}"}
-
-    try:
-        ts = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
-        hours_old = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
-    except Exception:
-        return {"status": "WARNING",
-                "reason": f"Cannot parse ingestion timestamp for {label}: {created_raw[:30]}"}
-
-    if status_str in ("failed", "error"):
+    if not rows:
         return {
             "status": "BROKEN",
-            "reason": f"{label} last ingestion FAILED at {created_raw[:16]} — "
-                      f"{latest.get('errors', '')[:80]}",
+            "reason": f"{label}: no successful push found in agent_activity_log",
             "fix": "railway run python collectors/databox_pusher.py",
         }
+
+    ts_raw = rows[0].ts
+    detail = rows[0].details or ""
+    hours_old = (datetime.now(timezone.utc) - ts_raw.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+
     if hours_old > _DATABOX_BROKEN_HOURS:
         return {
             "status": "BROKEN",
@@ -464,9 +429,7 @@ def check_databox_freshness(dataset_id: str, label: str) -> dict:
             "status": "WARNING",
             "reason": f"{label} last pushed {hours_old:.0f}h ago (>{_DATABOX_STALE_HOURS}h — expected daily)",
         }
-
-    records = latest.get("recordsCount", latest.get("records_count", "?"))
-    return {"status": "HEALTHY", "hours_old": round(hours_old, 1), "records": records}
+    return {"status": "HEALTHY", "hours_old": round(hours_old, 1), "records": detail}
 
 
 # ── Check 7: Railway App Health ───────────────────────────────────────────────

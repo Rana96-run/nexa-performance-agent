@@ -505,6 +505,43 @@ def run_push(days: int = 7, grains: list = None) -> int:
             print(f"[databox] {name} total: {n_g:,} records", flush=True)
 
     print(f"[databox] grand total: {total:,} records", flush=True)
+
+    # Log push result to BQ so connector_tracker can verify freshness without
+    # depending on Databox's ingestion history API (which requires a UUID-format
+    # dataset ID that doesn't exist for our short-ID dataset).
+    try:
+        from collectors.bq_writer import get_client
+        from io import BytesIO
+        import json as _json
+        from datetime import datetime as _dt
+        _c = get_client()
+        _row = _json.dumps({
+            "ts": _dt.utcnow().isoformat(),
+            "role": "databox_push",
+            "action": f"push {','.join(targets)} last {days}d",
+            "status": "success",
+            "details": f"{total:,} records",
+        }).encode()
+        from google.cloud.bigquery import LoadJobConfig, SchemaField, SourceFormat
+        import os as _os
+        _proj, _ds = _os.environ["BQ_PROJECT_ID"], _os.environ["BQ_DATASET"]
+        _cfg = LoadJobConfig(
+            source_format=SourceFormat.NEWLINE_DELIMITED_JSON,
+            write_disposition="WRITE_APPEND",
+            create_disposition="CREATE_IF_NEEDED",
+            schema=[
+                SchemaField("ts",     "TIMESTAMP"),
+                SchemaField("role",   "STRING"),
+                SchemaField("action", "STRING"),
+                SchemaField("status", "STRING"),
+                SchemaField("details", "STRING"),
+            ],
+        )
+        _c.load_table_from_file(BytesIO(_row), f"{_proj}.{_ds}.agent_activity_log",
+                                job_config=_cfg).result()
+    except Exception as _log_err:
+        print(f"[databox] activity log write failed (non-fatal): {_log_err}", flush=True)
+
     return total
 
 
