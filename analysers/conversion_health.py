@@ -54,39 +54,46 @@ def check_google_ads_conversions(days: int = 14) -> dict:
         cid        = GOOGLE_ADS_CONFIG["customer_id"].replace("-", "")
         since      = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-        # Enabled conversion actions + their recent all_conversions
-        q = f"""
-            SELECT
-              conversion_action.id,
-              conversion_action.name,
-              conversion_action.status,
-              conversion_action.tag_snippets,
-              metrics.all_conversions
+        # Query 1: list enabled conversion actions (no segments — always works)
+        q_actions = """
+            SELECT conversion_action.id,
+                   conversion_action.name,
+                   conversion_action.status
             FROM conversion_action
             WHERE conversion_action.status = 'ENABLED'
-              AND segments.date >= '{since}'
         """
         issues = []
         try:
-            rows = list(ga_svc.search(customer_id=cid, query=q))
+            action_rows = list(ga_svc.search(customer_id=cid, query=q_actions))
+        except Exception as e:
+            return {
+                "platform": "Google Ads", "status": "warning",
+                "issues":   [{"name": "query_failed", "detail": str(e)[:120],
+                              "fix": "Check Google Ads API credentials and customer ID"}],
+                "summary":  f"Google Ads query failed: {str(e)[:80]}",
+            }
+
+        if not action_rows:
+            return {"platform": "Google Ads", "status": "ok", "issues": [],
+                    "summary": "No enabled conversion actions found"}
+
+        # Query 2: metrics require segments.date — needs explicit date range
+        today_str = date.today().strftime("%Y-%m-%d")
+        q_metrics = f"""
+            SELECT conversion_action.name,
+                   metrics.all_conversions
+            FROM conversion_action
+            WHERE conversion_action.status = 'ENABLED'
+              AND segments.date BETWEEN '{since}' AND '{today_str}'
+        """
+        try:
+            rows = list(ga_svc.search(customer_id=cid, query=q_metrics))
         except Exception:
-            # Fall back: list actions, check which have no recent data
-            q2 = """
-                SELECT conversion_action.id, conversion_action.name,
-                       conversion_action.status, conversion_action.created_time
-                FROM conversion_action
-                WHERE conversion_action.status = 'ENABLED'
-            """
-            rows = list(ga_svc.search(customer_id=cid, query=q2))
-            # Can't determine conversion counts without the metrics segment — report as unknown
-            if rows:
-                return {
-                    "platform": "Google Ads",
-                    "status":   "ok",
-                    "issues":   [],
-                    "summary":  f"{len(rows)} enabled conversion action(s) — live count unavailable (segment query failed)",
-                }
-            return {"platform": "Google Ads", "status": "ok", "issues": [], "summary": "No enabled conversion actions found"}
+            # Metrics unavailable — fall back to existence-only check
+            return {
+                "platform": "Google Ads", "status": "ok", "issues": [],
+                "summary":  f"{len(action_rows)} enabled conversion action(s) — metrics unavailable, existence confirmed",
+            }
 
         # Group by action: sum all_conversions across date segments
         totals: dict[str, dict] = {}
@@ -241,9 +248,6 @@ def check_meta_pixel_events(pixel_id: str = META_WEB_PIXEL, days: int = 7) -> di
                 "summary":  "Meta pixel check skipped — no access token",
             }
 
-        since = int((datetime.now() - timedelta(days=days)).timestamp())
-        until = int(datetime.now().timestamp())
-
         # 1. Pixel last fired time (overall)
         r = _req.get(
             f"https://graph.facebook.com/v19.0/{pixel_id}",
@@ -255,19 +259,33 @@ def check_meta_pixel_events(pixel_id: str = META_WEB_PIXEL, days: int = 7) -> di
         last_fired = pixel_data.get("last_fired_time")
         pixel_name = pixel_data.get("name", pixel_id)
 
-        # 2. Event-level stats — check Lead event specifically
+        # 2. Event-level stats — use /stats endpoint with correct param names
+        # Meta API uses 'start_time'/'end_time' as ISO strings or unix timestamps
+        # at the pixel level, not the event_stats sub-endpoint which requires an ad account
+        # Instead: use the pixel diagnostic / activity endpoint
+        since_dt = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        until_dt = datetime.now().strftime("%Y-%m-%d")
         r2 = _req.get(
-            f"https://graph.facebook.com/v19.0/{pixel_id}/event_stats",
+            f"https://graph.facebook.com/v19.0/{pixel_id}/stats",
             params={
                 "access_token": token,
-                "granularity":  "DAY",
-                "start_time":   since,
-                "end_time":     until,
+                "aggregation":  "event",
+                "start_time":   since_dt,
+                "end_time":     until_dt,
             },
             timeout=15,
         )
-        r2.raise_for_status()
-        event_stats = r2.json().get("data", [])
+        # /stats may not be available for all tokens — fall back gracefully
+        if r2.status_code == 400:
+            # Try the events endpoint as alternative
+            r2 = _req.get(
+                f"https://graph.facebook.com/v19.0/{pixel_id}/events",
+                params={"access_token": token, "fields": "event_name,count",
+                        "limit": 50},
+                timeout=15,
+            )
+        event_stats_raw = r2.json() if r2.status_code == 200 else {}
+        event_stats = event_stats_raw.get("data", [])
 
         # Sum Lead event counts across all days
         lead_count = sum(
