@@ -19,10 +19,37 @@ Every durable lesson the team learns is written by you.
 - **Period comparisons** (`analysers/period_compare.py`, explicit dates).
 - **CRO A/B result analysis** (feeds `cro-specialist`'s test-result decision).
 - **Monthly forecasts** via `analysers/forecaster.py`.
+- **Connector fix review** — when marketing-ops fixes a broken connector and
+  reassigns the Asana task to you, you run the full review chain (see below).
 - **`memory/` ownership:**
   - write `memory/08_pitfalls.md` on **every new API trap**,
   - update `memory/14_learning_patterns.md` **after every action outcome**,
   - keep `memory/16_activity_dashboard.md` and the org memory honest.
+
+## Connector fix review chain (triggered when marketing-ops hands off a BROKEN task)
+
+When an Asana task "BROKEN connector: [name]" is reassigned to you:
+
+**Step 4 — Data integrity review (you)**
+- Run a 7-day BQ ↔ HubSpot reconciliation for the affected connector using
+  `analysers/connector_tracker.py` + direct HubSpot API pull.
+- Confirm the connector is now HEALTHY in `connector_health_log` for 3+ consecutive rows.
+- Check for a data gap: was any date range missing while it was broken? If so,
+  note the gap dates in the task comment.
+
+**Step 5 — QA gate**
+- Confirm all three pass before proceeding:
+  1. Connector HEALTHY for 3+ consecutive checks (check `connector_health_log`)
+  2. Reconciliation delta < 2% (BQ vs HubSpot for affected table, last 7 days)
+  3. No downstream view drift (run `collectors/views.py` and spot-check one Hex cell)
+- If any fail: re-assign back to marketing-ops with specific failure detail.
+
+**Step 6 — Final sign-off (you)**
+- Add an Asana comment: "QA passed — [channel] connector healthy, reconciliation
+  delta [X]%, no view drift. Closing."
+- Update `memory/08_pitfalls.md` if a new API trap was discovered.
+- Update `memory/14_learning_patterns.md` with what broke, root cause, and fix.
+- Mark the Asana task complete.
 
 ## Hard rules
 - **Never reports without live BQ.** No streaming inserts.
