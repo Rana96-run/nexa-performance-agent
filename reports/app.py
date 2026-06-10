@@ -2768,6 +2768,292 @@ def ondemand_status(key: str):
     return jsonify(_ONDEMAND_STATUS.get(key, {"running": False, "result": None, "error": None}))
 
 
+@app.route("/api/ondemand/creative-audit", methods=["POST"])
+def ondemand_creative_audit():
+    """Run creative performance audit across all social channels.
+    Ranks creatives by qual rate + SQLs, identifies best to scale / worst to replace.
+    Creates an Asana task for the Creative Strategist with direction."""
+    days = int(request.args.get("days", 30))
+
+    def _run():
+        from analysers.creative_performance import (
+            audit_creative_performance,
+            audit_creative_by_campaign_type,
+            format_creative_section,
+        )
+        from executors.asana import create_task
+        from datetime import date
+
+        # Pull cross-channel and audience-tier breakdowns
+        social_result = audit_creative_performance(days=days, min_leads=3)
+        tier_result   = audit_creative_by_campaign_type(days=days, min_leads=3)
+
+        creative_section = format_creative_section(social_result)
+        tier_insights    = "\n".join(f"- {i}" for i in tier_result.get("insights", []))
+
+        best  = social_result.get("best",  [])
+        worst = social_result.get("worst", [])
+
+        if not best and not worst:
+            return {"summary": "No creative data found for the selected window — try a longer date range.", "returncode": 0}
+
+        today = date.today().isoformat()
+        description = (
+            f"Creative performance audit — last {days} days\n\n"
+            f"CREATIVE RANKINGS (by SQL qual rate):\n{creative_section}\n\n"
+            + (f"AUDIENCE TIER INSIGHTS:\n{tier_insights}\n\n" if tier_insights else "")
+            + "ACTION ITEMS FOR CREATIVE STRATEGIST:\n"
+            + (f"1. Scale: '{best[0]['name']}' ({best[0]['sqls']} SQLs, {best[0]['qual_rate']*100:.0f}% qual) — "
+               "duplicate this creative into a new ad variant with a fresh hook keeping the same format.\n"
+               if best else "")
+            + (f"2. Replace: '{worst[0]['name']}' ({worst[0]['disquals']} disqualified leads, "
+               f"{worst[0]['qual_rate']*100:.0f}% qual) — pause this ad and test a new variant "
+               "targeting the qualified buyer more explicitly (e.g. 'for accountants', '5+ employees').\n"
+               if worst else "")
+            + "\nScope at least 2 A/B variants per winning creative × audience tier before next review.\n\n"
+            f"Created: {today}\nDue: {today}\nPriority: Medium\n"
+            f"Type: Recommendation\nChannel: social\nAsset level: ad\nAction: optimize → [Creative Strategist]"
+        )
+
+        task_gid = create_task(
+            title=f"Creative Performance Audit — {days}d — {today}",
+            description=description,
+            project_key="daily_activity",
+            task_type="Recommendation",
+            channel="meta",
+            asset_level="ad",
+            action="optimize",
+            log_role="creative_strategy",
+        )
+
+        n_best  = len(best)
+        n_worst = len(worst)
+        summary = (
+            f"Done — {n_best} top creative(s), {n_worst} underperformer(s) found. "
+            f"Asana task created for Creative Strategist."
+        )
+        return {"summary": summary, "returncode": 0, "task_gid": task_gid}
+
+    started = _run_ondemand_task("creative_audit", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/creative_audit"})
+
+
+@app.route("/api/ondemand/creative-brief", methods=["POST"])
+def ondemand_creative_brief():
+    """Generate a creative variants brief based on best-performing creative × audience tier.
+    Scopes A/B variants per segment and creates an Asana task for the Creative Strategist."""
+    days    = int(request.args.get("days", 30))
+    channel = request.args.get("channel", "")
+
+    def _run():
+        from analysers.creative_performance import (
+            audit_creative_performance,
+            audit_creative_by_campaign_type,
+        )
+        from executors.asana import create_task
+        from datetime import date
+
+        social = audit_creative_performance(
+            channel=channel or None, days=days, min_leads=3
+        )
+        tier   = audit_creative_by_campaign_type(days=days, min_leads=3)
+
+        best   = social.get("best",  [])
+        worst  = social.get("worst", [])
+
+        if not best:
+            return {"summary": "Not enough creative data to build a brief — no top performers found yet.", "returncode": 0}
+
+        # Build A/B variant suggestions from best × worst
+        top     = best[0]
+        channel_label = channel or "social (all channels)"
+        today   = date.today().isoformat()
+
+        tier_lines = []
+        by_type = tier.get("by_type", {})
+        for audience, items in sorted(by_type.items()):
+            if items:
+                t = items[0]
+                tier_lines.append(
+                    f"  - {audience}: '{t['name']}' — {t['sqls']} SQLs, {t['qual_rate']*100:.0f}% qual"
+                )
+
+        description = (
+            f"Creative variants brief — {channel_label} — last {days} days\n\n"
+            f"BEST PERFORMING CREATIVE (baseline for variants):\n"
+            f"  '{top['name']}' — {top['sqls']} SQLs, {top['qual_rate']*100:.0f}% qual rate\n\n"
+            + (f"TOP CREATIVE PER AUDIENCE TIER:\n" + "\n".join(tier_lines) + "\n\n" if tier_lines else "")
+            + "VARIANT BRIEF (OCEAN-aligned — scope 2 variants minimum):\n"
+            "Variant A — Openness angle: Lead with the feature benefit ('automate your bookkeeping').\n"
+            "  Target: Lookalike / Broad. Keep the winning format, change only the hook.\n"
+            "Variant B — Conscientiousness angle: Lead with compliance / accuracy ('VAT-compliant invoicing').\n"
+            "  Target: Interests. Pair with a testimonial or trust badge.\n\n"
+            "SUCCESS CRITERIA:\n"
+            f"  - Qual rate > {top['qual_rate']*100:.0f}% (match or beat current best)\n"
+            "  - Min 50 leads per variant before declaring a winner\n"
+            "  - Review at 14 days — do not pause before 14-day window\n\n"
+            "NEXT STEPS:\n"
+            "1. Creative Strategist: brief to Donia for copy + visual direction\n"
+            "2. Campaign Manager: duplicate the winning ad set, swap only the creative\n"
+            "3. Growth Analyst: review at 14d — update memory/14_learning_patterns.md\n\n"
+            f"Created: {today}\nDue: {today}\nPriority: Medium\n"
+            f"Type: Recommendation\nChannel: {channel or 'social'}\n"
+            f"Asset level: ad\nAction: optimize → [Creative Strategist]"
+        )
+
+        task_gid = create_task(
+            title=f"Creative Variants Brief — {channel_label} — {today}",
+            description=description,
+            project_key="daily_activity",
+            task_type="Recommendation",
+            channel=channel or "meta",
+            asset_level="ad",
+            action="optimize",
+            log_role="creative_strategy",
+        )
+
+        return {
+            "summary": f"Done — brief scoped for {len(best)} top creative(s). Asana task created for Creative Strategist.",
+            "returncode": 0,
+            "task_gid": task_gid,
+        }
+
+    started = _run_ondemand_task("creative_brief", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/creative_brief"})
+
+
+@app.route("/api/ondemand/lp-brief", methods=["POST"])
+def ondemand_lp_brief():
+    """Find the worst-CPQL campaign for the selected product and generate a full CRO LP brief.
+    Creates the Asana task chain: CRO Specialist → UI/UX Designer → Developer."""
+    product = request.args.get("product", "Invoice")
+    days    = int(request.args.get("days", 14))
+
+    def _run():
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+        from analysers.lp_tasks import create_lp_brief
+        from config import CPQL_WARNING
+        from datetime import date, timedelta
+
+        today = date.today()
+        since = (today - timedelta(days=days)).isoformat()
+        to    = (today - timedelta(days=1)).isoformat()
+
+        # Find worst-CPQL campaign for this product that has enough data
+        sql = f"""
+            WITH hs AS (
+                SELECT lead_utm_campaign,
+                       SUM(leads_total)     AS leads,
+                       SUM(leads_qualified) AS sqls
+                FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+                WHERE date BETWEEN '{since}' AND '{to}'
+                  AND lead_utm_campaign IS NOT NULL
+                  AND LOWER(lead_utm_campaign) LIKE '%{product.lower()}%'
+                GROUP BY lead_utm_campaign
+                HAVING SUM(leads_total) >= 5
+            ),
+            sp AS (
+                SELECT campaign_name,
+                       SUM(spend)  AS spend
+                FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+                WHERE date BETWEEN '{since}' AND '{to}'
+                  AND LOWER(campaign_name) LIKE '%{product.lower()}%'
+                GROUP BY campaign_name
+            )
+            SELECT
+                sp.campaign_name,
+                hs.leads,
+                hs.sqls,
+                sp.spend,
+                SAFE_DIVIDE(sp.spend, NULLIF(hs.sqls, 0)) AS cpql
+            FROM sp
+            LEFT JOIN hs ON LOWER(sp.campaign_name) = LOWER(hs.lead_utm_campaign)
+            WHERE SAFE_DIVIDE(sp.spend, NULLIF(hs.sqls, 0)) > {CPQL_WARNING}
+               OR hs.sqls IS NULL
+            ORDER BY cpql DESC
+            LIMIT 1
+        """
+
+        try:
+            rows = list(get_client().query(sql).result())
+        except Exception as e:
+            return {"summary": f"BQ query failed: {e}", "returncode": 1}
+
+        if not rows:
+            return {
+                "summary": f"No {product} campaign above CPQL warning threshold in last {days}d — all campaigns healthy.",
+                "returncode": 0,
+            }
+
+        row         = rows[0]
+        camp_name   = row.campaign_name or f"{product} campaign"
+        cpql        = round(float(row.cpql or 0), 2)
+        leads       = int(row.leads or 0)
+        sqls        = int(row.sqls  or 0)
+        spend       = round(float(row.spend or 0), 2)
+        qual_rate   = round(sqls / leads * 100, 1) if leads > 0 else 0.0
+        conv_pct    = round(leads / max(spend / 3, 1) * 100, 2)  # rough estimate
+
+        # Infer channel from campaign name
+        channel = "meta"
+        for ch in ("google", "snap", "tiktok", "linkedin", "bing"):
+            if ch in camp_name.lower():
+                channel = ch
+                break
+
+        try:
+            result = create_lp_brief(
+                product=product,
+                hypothesis_slug="cpql-optimisation",
+                channel=channel,
+                hypothesis=(
+                    f"A new LP variant with a clearer value proposition will reduce CPQL "
+                    f"below ${CPQL_WARNING} (currently ${cpql}) for '{camp_name}'."
+                ),
+                current_cpql=cpql,
+                current_conversion_pct=conv_pct,
+                destination_url="",
+                audience="SMB accountants and business owners",
+                ocean_notes=(
+                    "High Conscientiousness segment — emphasise accuracy, VAT compliance, "
+                    "and time-saving. Lead with social proof (number of businesses using Qoyod)."
+                ),
+                offer_message=f"Try {product} free — no credit card required",
+                page_structure=(
+                    "Hero: headline + sub-headline + CTA button above fold. "
+                    "Section 2: 3 key benefits (icons). "
+                    "Section 3: social proof / customer count. "
+                    "Section 4: ZATCA compliance badge. "
+                    "Section 5: final CTA."
+                ),
+                success_criteria=(
+                    f"CPQL < ${CPQL_WARNING} over 14-day window. "
+                    f"Qual rate >= {qual_rate + 10:.0f}% (current: {qual_rate}%). "
+                    "Min 30 leads per variant before calling winner."
+                ),
+                risks="Low traffic risk if campaign spend < $5/day — brief may need 21-day window.",
+                window_days=days,
+            )
+            summary = (
+                f"Done — LP brief created for '{camp_name}' (CPQL ${cpql}). "
+                f"Asana chain: CRO → UI/UX → Developer."
+            )
+            return {"summary": summary, "returncode": 0, "test_id": result.get("test_id")}
+        except ValueError as e:
+            return {"summary": f"Skipped: {e}", "returncode": 0}
+        except Exception as e:
+            return {"summary": f"Brief creation failed: {e}", "returncode": 1}
+
+    started = _run_ondemand_task("lp_brief", _run)
+    if not started:
+        return jsonify({"status": "already_running"}), 202
+    return jsonify({"status": "started", "poll": "/api/ondemand/status/lp_brief"})
+
+
 @app.route("/api/search-duplicate-candidates", methods=["GET"])
 def search_duplicate_candidates():
     """

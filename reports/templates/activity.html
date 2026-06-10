@@ -2213,6 +2213,98 @@ a:hover{text-decoration:underline}
           <div id="asana-backfill-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
         </div>
       </div>
+
+      <!-- Row 3: Creative & Landing Pages -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px;margin-top:20px">Creative &amp; Landing Pages</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+
+        <!-- Creative Performance Audit -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Creative Performance Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Ranks all social creatives by qual rate &amp; SQLs.<br>
+            Identifies best to scale + worst to replace.<br>
+            Creates Asana task for Creative Strategist.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="creative-audit-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+            </select>
+            <button id="creative-audit-btn" onclick="runCreativeAudit()"
+                    style="background:none;border:1px solid #6e40c9;border-radius:6px;
+                           color:#a371f7;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Audit
+            </button>
+          </div>
+          <div id="creative-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+        <!-- Creative Variants Brief -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">New Creative Variants Brief</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Based on best-performing creative × audience tier data.<br>
+            Scopes A/B variants per segment — creates Asana task<br>
+            for Creative Strategist with OCEAN persona notes.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <select id="creative-brief-channel" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="">All channels</option>
+              <option value="meta">Meta</option>
+              <option value="snapchat">Snapchat</option>
+              <option value="tiktok">TikTok</option>
+              <option value="linkedin">LinkedIn</option>
+            </select>
+            <select id="creative-brief-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+            </select>
+            <button id="creative-brief-btn" onclick="runCreativeBrief()"
+                    style="background:none;border:1px solid #6e40c9;border-radius:6px;
+                           color:#a371f7;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Create Brief
+            </button>
+          </div>
+          <div id="creative-brief-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+        <!-- New LP Brief from Performance -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">New Landing Page Brief</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Finds campaigns with CPQL above warning threshold.<br>
+            Generates CRO brief + Asana task chain:<br>
+            CRO Specialist → UI/UX Designer → Developer.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <select id="lp-brief-product" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="Invoice">Invoice</option>
+              <option value="Bookkeeping">Bookkeeping</option>
+              <option value="Qflavours">Qflavours</option>
+              <option value="General">General</option>
+            </select>
+            <select id="lp-brief-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14" selected>Last 14 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <button id="lp-brief-btn" onclick="runLpBrief()"
+                    style="background:none;border:1px solid #1f6feb;border-radius:6px;
+                           color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Create Brief
+            </button>
+          </div>
+          <div id="lp-brief-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -3046,6 +3138,102 @@ function runAsanaBackfill() {
   fetch('/api/asana-backfill', {method:'POST'})
     .then(function() { stat.textContent = 'Running in background — reload in ~60s to see results'; })
     .catch(function() { stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Creative Performance Audit ────────────────────────────────────
+function runCreativeAudit() {
+  var btn  = document.getElementById('creative-audit-btn');
+  var stat = document.getElementById('creative-audit-status');
+  var days = document.getElementById('creative-audit-days').value;
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~30s…';
+  fetch('/api/ondemand/creative-audit?days=' + days, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~30s';
+        btn.disabled = false; btn.textContent = 'Run Audit'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/creative_audit';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Run Audit';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var r = s.result || {};
+            stat.style.color = r.returncode === 0 ? '#3fb950' : '#f85149';
+            stat.textContent = r.summary || (r.returncode === 0 ? 'Done — Asana task created' : 'Finished with errors');
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Creative Variants Brief ────────────────────────────────────────
+function runCreativeBrief() {
+  var btn  = document.getElementById('creative-brief-btn');
+  var stat = document.getElementById('creative-brief-status');
+  var days = document.getElementById('creative-brief-days').value;
+  var ch   = document.getElementById('creative-brief-channel').value;
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~30s…';
+  var qs = '?days=' + days + (ch ? '&channel=' + encodeURIComponent(ch) : '');
+  fetch('/api/ondemand/creative-brief' + qs, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~30s';
+        btn.disabled = false; btn.textContent = 'Create Brief'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/creative_brief';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Create Brief';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var r = s.result || {};
+            stat.style.color = '#3fb950';
+            stat.textContent = r.summary || 'Done — Asana task created for Creative Strategist';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Create Brief'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Create Brief'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: New LP Brief ────────────────────────────────────────────────────
+function runLpBrief() {
+  var btn  = document.getElementById('lp-brief-btn');
+  var stat = document.getElementById('lp-brief-status');
+  var prod = document.getElementById('lp-brief-product').value;
+  var days = document.getElementById('lp-brief-days').value;
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~30s…';
+  fetch('/api/ondemand/lp-brief?product=' + encodeURIComponent(prod) + '&days=' + days, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~30s';
+        btn.disabled = false; btn.textContent = 'Create Brief'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/lp_brief';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Create Brief';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var r = s.result || {};
+            stat.style.color = '#3fb950';
+            stat.textContent = r.summary || 'Done — LP brief + Asana chain created';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Create Brief'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Create Brief'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
 }
 
 // ── Team Guide toggle ─────────────────────────────────────────────────────────
