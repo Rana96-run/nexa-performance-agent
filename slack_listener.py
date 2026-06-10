@@ -742,7 +742,8 @@ def run():
         print(f"[listener] startup heartbeat skipped: {e}")
 
     since = str((datetime.now(timezone.utc) - timedelta(minutes=5)).timestamp())
-    asana_tick = 0   # poll Asana every 2 Slack cycles
+    asana_tick   = 0   # poll Asana every 2 Slack cycles
+    heartbeat_tick = 0  # write BQ heartbeat every 10 cycles (~10 min)
 
     while True:
         new_since = str(datetime.now(timezone.utc).timestamp())
@@ -809,6 +810,17 @@ def run():
                 reply = route_request(context)
                 _reply_asana_comment(hit["task_gid"], reply)
                 print(f"[asana] Replied to task {hit['task_gid']}")
+
+        # --- Periodic BQ heartbeat (every 10 cycles = ~10 min) ---
+        heartbeat_tick += 1
+        if heartbeat_tick >= 10:
+            heartbeat_tick = 0
+            try:
+                from logs.activity_logger import log_activity
+                log_activity(role="slack_listener", action="heartbeat", status="success",
+                             details={"poll_channels": len(CHANNELS)})
+            except Exception as e:
+                print(f"[listener] heartbeat write failed: {e}")
 
         since = new_since
         time.sleep(60)
