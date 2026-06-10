@@ -1,6 +1,9 @@
 """
-BI Tool Comparison table on Miro — Databox vs Hex vs Funnel + Data Studio.
-Creates a fresh board in the Qoyod team and draws a clean, sharp table.
+BI Tool Comparison — two versions on one Miro board.
+Copies the most recent user-created board (to avoid "Developer team" watermark),
+then draws two side-by-side comparison tables:
+  1. Qoyod-specific (HubSpot Lead Module, CPQL, writeback, etc.)
+  2. Generic SaaS (any B2B software business)
 
 Run:
     railway run --service nexa-web python scripts/_bi_comparison_miro.py
@@ -10,26 +13,25 @@ import os, time, requests
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN   = os.getenv("MIRO_ACCESS_TOKEN")
-TEAM_ID = "3074457345976989160"   # Qoyod team
-H       = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
-BASE    = ""   # set after board is created
+TOKEN = os.getenv("MIRO_ACCESS_TOKEN")
+H     = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+BASE  = ""   # set after board is found
 
 # ── colours ───────────────────────────────────────────────────────────────────
-C_NAVY   = "#1E3A5F"   # header bg
-C_NAVYTX = "#FFFFFF"   # header text
-C_CAT    = "#EEF2FF"   # section header bg
-C_CATTX  = "#1E3A5F"   # section header text
-C_GREEN  = "#D1FAE5"   # yes fill
-C_GREENTX= "#065F46"   # yes text
-C_RED    = "#FEE2E2"   # no fill
-C_REDTX  = "#991B1B"   # no text
-C_AMBER  = "#FEF3C7"   # partial fill
-C_AMBERTX= "#92400E"   # partial text
+C_NAVY   = "#1E3A5F"
+C_NAVYTX = "#FFFFFF"
+C_CAT    = "#EEF2FF"
+C_CATTX  = "#1E3A5F"
+C_GREEN  = "#D1FAE5"
+C_GREENTX= "#065F46"
+C_RED    = "#FEE2E2"
+C_REDTX  = "#991B1B"
+C_AMBER  = "#FEF3C7"
+C_AMBERTX= "#92400E"
 C_WHITE  = "#FFFFFF"
-C_ROW    = "#F8FAFC"   # alternating row
-C_BORDER = "#CBD5E1"   # cell border
-C_TXT    = "#1E293B"   # body text
+C_ROW    = "#F8FAFC"
+C_BORDER = "#CBD5E1"
+C_TXT    = "#1E293B"
 C_SUBTXT = "#64748B"
 
 YES  = "✓"
@@ -37,79 +39,102 @@ NO   = "✗"
 PART = "⚠ partial"
 VER  = "⚠ verify"
 
-ROWS = [
-    # (category, feature, databox, hex, funnel)
+# ── TABLE 1 — Qoyod-specific ──────────────────────────────────────────────────
+ROWS_QOYOD = [
     ("DATA & CONNECTORS", "", "", "", ""),
-    ("", "Native ad platform connectors\n(Meta / Google / Snap / TikTok / LinkedIn / Microsoft)", YES, NO, YES),
-    ("", "HubSpot Contact connector", YES, YES, YES),
-    ("", "HubSpot Deals connector", YES, YES, YES),
+    ("", "Ad platform connectors\n(Meta / Google / Snap / TikTok / LinkedIn)", YES, NO, YES),
     ("", "HubSpot Lead Module (object 0-136)", VER, YES, VER),
-    ("", "BigQuery — raw SQL support", YES, YES, YES),
-    ("", "Zero connector maintenance effort", YES, NO, YES),
+    ("", "HubSpot Deals connector", YES, YES, YES),
+    ("", "BigQuery — raw SQL", YES, YES, YES),
+    ("", "Zero connector maintenance", YES, NO, YES),
+    ("", "USD normalization across channels", PART, YES, YES),
+    ("", "UTC → Asia/Riyadh timezone", PART, YES, PART),
+    ("", "Data refresh frequency", "15 min–24 h", "On-demand+6 h", "6 h"),
+
+    ("ANALYSIS — QOYOD KPIs", "", "", "", ""),
+    ("", "CPQL from Lead Module (true qualified)", VER, YES, VER),
     ("", "Cross-channel blended CPL / CPQL", PART, YES, YES),
-    ("", "Data refresh frequency", "15 min – 24 h", "On-demand + 6 h", "6 h"),
-    ("", "Historical backfill", PART, YES, YES),
-    ("", "Custom dimension definitions via code", NO, YES, NO),
-    ("", "USD normalization across all channels", PART, YES, YES),
-    ("", "UTC → Asia/Riyadh timezone handling", PART, YES, PART),
+    ("", "Disqualification reason breakdown", NO, YES, NO),
+    ("", "Ad / adset-level drill-down", YES, YES, YES),
+    ("", "Raw SQL + Python in same workspace", NO, YES, NO),
+    ("", "Version control on metric definitions", NO, YES, NO),
 
     ("VISUALIZATION", "", "", "", ""),
     ("", "Drag-and-drop dashboard builder", YES, NO, YES),
-    ("", "Chart types (line / bar / donut / table / funnel)", YES, YES, YES),
-    ("", "Mobile-friendly view / native app", YES, NO, PART),
-    ("", "Real-time auto-refresh while viewing", YES, PART, NO),
-    ("", "Branded dashboard (logo / custom colors)", YES, YES, PART),
+    ("", "Mobile-friendly / native app", YES, NO, PART),
+    ("", "Real-time auto-refresh", YES, PART, NO),
+    ("", "Branded (Qoyod navy + logo)", YES, YES, PART),
     ("", "Period-over-period delta tiles", YES, YES, YES),
 
-    ("ANALYSIS & SQL", "", "", "", ""),
-    ("", "Raw SQL query support", YES, YES, PART),
-    ("", "Python / Pandas cells", NO, YES, NO),
-    ("", "Formula / calculated metrics", YES, YES, PART),
-    ("", "Ad-level / adset-level drill-down", YES, YES, YES),
-    ("", "Disqualification reason breakdown", NO, YES, NO),
-    ("", "CPQL from Lead Module (true qualified count)", VER, YES, VER),
-    ("", "Version control on metric definitions", NO, YES, NO),
-
     ("OPS & AUTOMATION", "", "", "", ""),
-    ("", "Metric-based alerts (email / Slack)", YES, PART, YES),
-    ("", "Writeback to ad platforms (pause / scale / keywords)", NO, YES, NO),
+    ("", "Metric alerts (email / Slack)", YES, PART, YES),
+    ("", "Writeback — pause / scale / keywords", NO, YES, NO),
     ("", "Scheduled report delivery", YES, YES, YES),
-    ("", "Programmatic / API access for agent reads", NO, YES, PART),
-    ("", "Connector maintenance (API version updates)", YES, NO, YES),
+    ("", "API access for agent reads", NO, YES, PART),
+    ("", "Connector maintenance ownership", "Databox", "We own it", "Funnel"),
 
-    ("SHARING & ACCESS", "", "", "", ""),
-    ("", "Public shareable link (no login required)", YES, YES, YES),
-    ("", "Embed in other tools (iframe)", YES, PART, YES),
-    ("", "Mobile native app", YES, NO, NO),
-
-    ("PRICING", "", "", "", ""),
+    ("PRICING (current)", "", "", "", ""),
+    ("", "Approximate monthly cost", "~$59–$199", "~$24/user", "$1k–$3k+"),
     ("", "Free tier available", NO, YES, PART),
-    ("", "Approximate monthly cost", "~$59 – $199", "~$24/user", "$1k – $3k+"),
-    ("", "Cost scales with data volume", NO, PART, YES),
 
     ("DECISION", "", "", "", ""),
-    ("", "Verdict — what we keep", "PRIMARY ✓", "INTERNAL\nOPTIMIZATION ✓", "DROPPED ✗"),
+    ("", "Verdict", "PRIMARY ✓", "INTERNAL\nOPTIMIZATION ✓", "DROPPED ✗"),
+]
+
+# ── TABLE 2 — Generic SaaS ────────────────────────────────────────────────────
+ROWS_SAAS = [
+    ("DATA & CONNECTORS", "", "", "", ""),
+    ("", "Ad platform connectors (major channels)", YES, NO, YES),
+    ("", "CRM connector (any — HubSpot/SF/Pipedrive)", YES, YES, YES),
+    ("", "E-commerce / product analytics", YES, PART, YES),
+    ("", "Data warehouse (BQ / Snowflake / Redshift)", YES, YES, YES),
+    ("", "Zero connector maintenance", YES, NO, YES),
+    ("", "Currency normalization", PART, YES, YES),
+    ("", "Timezone control", PART, YES, PART),
+    ("", "Data refresh frequency", "15 min–24 h", "On-demand+6 h", "6 h"),
+
+    ("SAAS KPIs", "", "", "", ""),
+    ("", "MRR / ARR tracking", YES, YES, YES),
+    ("", "Churn rate & cohort retention", PART, YES, PART),
+    ("", "CAC / LTV / Payback period", PART, YES, YES),
+    ("", "Pipeline velocity & win rate", YES, YES, YES),
+    ("", "Product funnel (trial → paid)", PART, YES, PART),
+    ("", "Custom formula metrics", YES, YES, PART),
+
+    ("VISUALIZATION", "", "", "", ""),
+    ("", "No-code dashboard builder", YES, NO, YES),
+    ("", "Mobile app / responsive view", YES, NO, PART),
+    ("", "Real-time refresh", YES, PART, NO),
+    ("", "White-label / branded dashboards", YES, YES, PART),
+    ("", "Exec-ready shareable link", YES, YES, YES),
+
+    ("OPS & AUTOMATION", "", "", "", ""),
+    ("", "KPI alerts (email / Slack / Teams)", YES, PART, YES),
+    ("", "Automated report delivery", YES, YES, YES),
+    ("", "API / programmatic access", NO, YES, PART),
+    ("", "Writeback to ad platforms", NO, YES, NO),
+    ("", "Connector maintenance ownership", "Vendor", "You own it", "Vendor"),
+
+    ("PRICING", "", "", "", ""),
+    ("", "Approx monthly cost (small team)", "~$59–$199", "~$24/user", "$500–$3k+"),
+    ("", "Scales with data volume", NO, PART, YES),
+    ("", "Free tier", NO, YES, PART),
+
+    ("DECISION", "", "", "", ""),
+    ("", "Best for", "Fast team\ndashboards", "Analyst +\nautomation", "Multi-source\nblending"),
 ]
 
 # ── geometry ──────────────────────────────────────────────────────────────────
-COL_W  = [440, 160, 160, 200]   # Feature | Databox | Hex | Funnel
-ROW_H  = 56
-HDR_H  = 64    # column header row height
-CAT_H  = 40    # section header row height
+COL_W   = [360, 150, 150, 190]   # Feature | Databox | Hex | Funnel
+ROW_H   = 52
+HDR_H   = 60
+CAT_H   = 38
+TITLE_H = 80
 TABLE_W = sum(COL_W)
+GAP     = 120   # horizontal gap between the two tables
 
-TITLE_H  = 90   # space above table for title
-PADDING  = 40   # frame padding on all sides
-
-# table top-left on the board
-TL_X = 0
-TL_Y = TITLE_H
-
-# total frame dimensions
-FRAME_W = TABLE_W + PADDING * 2
-FRAME_H = TITLE_H + HDR_H + sum(
-    CAT_H if r[0] else ROW_H for r in ROWS
-) + PADDING
+# second table starts at TABLE_W + GAP
+OFFSET2 = TABLE_W + GAP
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -121,34 +146,44 @@ def _post(path, payload, retries=3):
             time.sleep(2 + attempt * 2)
             continue
         if not r.ok:
-            print(f"  WARN {path}: {r.status_code} — {r.text[:120]}")
+            print(f"  WARN {path}: {r.status_code} — {r.text[:100]}")
             return None
         return r.json()
     return None
 
 
-def _shape(text, x, y, w, h, fill, border_color, border_w,
-           font_size, font_color, h_align, v_align, bold=False):
-    """Post a rectangle cell using only fields the Miro API accepts."""
+def _shape(text, x, y, w, h, fill, border_color, font_size, font_color,
+           h_align="center", bold=False, border_w=1):
     content = f"<b>{text}</b>" if bold else str(text)
+    style = {
+        "fillColor":   fill,
+        "borderColor": border_color,
+        "fontFamily":  "open_sans",
+        "fontSize":    str(font_size),
+        "color":       font_color,
+        "textAlign":   h_align,
+    }
+    if border_w > 0:
+        style["borderWidth"] = str(border_w)
     _post("/shapes", {
-        "data": {"content": content, "shape": "rectangle"},
-        "style": {
-            "fillColor":   fill,
-            "borderColor": border_color,
-            **({ "borderWidth": str(border_w) } if border_w > 0 else {}),
-            "fontFamily":  "open_sans",
-            "fontSize":    str(font_size),
-            "color":       font_color,
-            "textAlign":   h_align,
-        },
+        "data":     {"content": content, "shape": "rectangle"},
+        "style":    style,
         "position": {"x": x, "y": y, "origin": "center"},
         "geometry": {"width": w, "height": h},
     })
 
 
+def _text(content, x, y, w, font_size, color, align="center"):
+    _post("/texts", {
+        "data":     {"content": content},
+        "style":    {"fontSize": str(font_size), "color": color,
+                     "textAlign": align, "fontFamily": "open_sans"},
+        "position": {"x": x, "y": y, "origin": "center"},
+        "geometry": {"width": w},
+    })
+
+
 def status_style(val):
-    """Return (fill, text_color) for a status value, or None if neutral."""
     s = str(val)
     if s in (YES, "PRIMARY ✓") or s.startswith("INTERNAL"):
         return C_GREEN, C_GREENTX
@@ -159,128 +194,58 @@ def status_style(val):
     return None, None
 
 
-def _make_board():
-    r = requests.post(
-        "https://api.miro.com/v2/boards",
-        headers=H,
-        json={
-            "name": "BI Tool Comparison — Databox vs Hex vs Funnel",
-            "description": "Qoyod Performance Agent · 2026-06-10",
-            "policy": {
-                "permissionsPolicy": {"collaborationToolsStartAccess": "all_editors"},
-                "sharingPolicy": {"access": "private", "teamAccess": "edit"},
-            },
-        },
-        timeout=15,
-    )
-    if not r.ok:
-        print(f"[miro] board create failed: {r.status_code} {r.text[:300]}")
-        return None, None
-    d = r.json()
-    return d["id"], d.get("viewLink", "")
+def _draw_table(rows, x_offset, title, subtitle):
+    """Draw one full comparison table starting at x_offset."""
+    cx = x_offset + TABLE_W / 2
+    TL_Y = TITLE_H
 
+    # title bar
+    _shape("", cx, TITLE_H / 2, TABLE_W, TITLE_H,
+           fill=C_NAVY, border_color=C_NAVY,
+           font_size=14, font_color=C_NAVYTX, border_w=0)
+    _text(f"<b>{title}</b>", cx, 22, TABLE_W, 22, "#FFFFFF")
+    _text(subtitle, cx, 58, TABLE_W, 13, "#93C5FD")
+    time.sleep(0.2)
 
-def build():
-    if not TOKEN:
-        print("[miro] MIRO_ACCESS_TOKEN not set — aborting")
-        return
-
-    board_id, view_link = _make_board()
-    if not board_id:
-        return
-
-    global BASE
-    BASE = f"https://api.miro.com/v2/boards/{board_id}"
-    print(f"[miro] board created: {view_link}")
-
-    # ── title block ───────────────────────────────────────────────────────────
-    cx = TL_X + TABLE_W / 2
-
-    # Title background bar
-    _shape("", cx, TITLE_H / 2,
-           TABLE_W, TITLE_H,
-           fill=C_NAVY, border_color=C_NAVY, border_w=0,
-           font_size=14, font_color=C_NAVYTX, h_align="center", v_align="middle")
-
-    # Title text (posted as a text widget for cleaner rendering)
-    _post("/texts", {
-        "data": {"content": "<b>BI Tool Comparison — Databox vs Hex vs Funnel + Data Studio</b>"},
-        "style": {
-            "fontSize": "24",
-            "color": "#FFFFFF",
-            "textAlign": "center",
-            "fontFamily": "open_sans",
-        },
-        "position": {"x": cx, "y": 28, "origin": "center"},
-        "geometry": {"width": TABLE_W},
-    })
-    _post("/texts", {
-        "data": {"content": "Qoyod Performance Agent  ·  2026-06-10  ·  Green = ✓  Red = ✗  Amber = ⚠ partial"},
-        "style": {
-            "fontSize": "14",
-            "color": "#93C5FD",
-            "textAlign": "center",
-            "fontFamily": "open_sans",
-        },
-        "position": {"x": cx, "y": 66, "origin": "center"},
-        "geometry": {"width": TABLE_W},
-    })
-    time.sleep(0.3)
-
-    # ── column header row ─────────────────────────────────────────────────────
+    # column headers
     col_labels = ["Feature / Capability", "Databox", "Hex", "Funnel + Data Studio"]
-    cx_off = TL_X
+    cx_off = x_offset
     for label, cw in zip(col_labels, COL_W):
-        _shape(label,
-               cx_off + cw / 2, TL_Y + HDR_H / 2,
-               cw, HDR_H,
-               fill="#162D4A", border_color="#0F1E30", border_w=1,
-               font_size=15, font_color="#FFFFFF",
-               h_align="center", v_align="middle", bold=True)
+        _shape(label, cx_off + cw / 2, TL_Y + HDR_H / 2, cw, HDR_H,
+               fill="#162D4A", border_color="#0F1E30",
+               font_size=14, font_color="#FFFFFF", bold=True)
         cx_off += cw
-    time.sleep(0.3)
+    time.sleep(0.2)
 
-    # ── data rows ─────────────────────────────────────────────────────────────
+    # data rows
     cur_y = TL_Y + HDR_H
     row_num = 0
     data_row = 0
 
-    for rec in ROWS:
+    for rec in rows:
         cat, feature, db, hx, fn = rec
 
         if cat:
-            # section header — full width, shorter height
-            _shape(f"  {cat}",
-                   TL_X + TABLE_W / 2, cur_y + CAT_H / 2,
+            _shape(f"  {cat}", x_offset + TABLE_W / 2, cur_y + CAT_H / 2,
                    TABLE_W, CAT_H,
-                   fill=C_CAT, border_color="#C7D2E8", border_w=1,
-                   font_size=13, font_color=C_CATTX,
-                   h_align="left", v_align="middle", bold=True)
+                   fill=C_CAT, border_color="#C7D2E8",
+                   font_size=12, font_color=C_CATTX, h_align="left", bold=True)
             cur_y += CAT_H
         else:
             data_row += 1
             row_bg = C_WHITE if data_row % 2 else C_ROW
 
-            # Feature cell
-            _shape(f"  {feature}",
-                   TL_X + COL_W[0] / 2, cur_y + ROW_H / 2,
+            _shape(f"  {feature}", x_offset + COL_W[0] / 2, cur_y + ROW_H / 2,
                    COL_W[0], ROW_H,
-                   fill=row_bg, border_color=C_BORDER, border_w=1,
-                   font_size=13, font_color=C_TXT,
-                   h_align="left", v_align="middle")
+                   fill=row_bg, border_color=C_BORDER,
+                   font_size=12, font_color=C_TXT, h_align="left")
 
-            # Status cells
-            x_off = TL_X + COL_W[0]
+            x_off = x_offset + COL_W[0]
             for val, cw in zip([db, hx, fn], COL_W[1:]):
                 sf, stx = status_style(val)
-                _shape(val,
-                       x_off + cw / 2, cur_y + ROW_H / 2,
-                       cw, ROW_H,
-                       fill=sf or row_bg,
-                       border_color=C_BORDER, border_w=1,
-                       font_size=13,
-                       font_color=stx or C_TXT,
-                       h_align="center", v_align="middle",
+                _shape(val, x_off + cw / 2, cur_y + ROW_H / 2, cw, ROW_H,
+                       fill=sf or row_bg, border_color=C_BORDER,
+                       font_size=12, font_color=stx or C_TXT,
                        bold=bool(sf))
                 x_off += cw
 
@@ -288,10 +253,104 @@ def build():
 
         row_num += 1
         if row_num % 10 == 0:
-            time.sleep(0.4)
+            time.sleep(0.3)
 
-    print(f"[miro] Done — {row_num} rows ({data_row} data + section headers)")
-    print(f"[miro] Board: {view_link}")
+    return row_num, data_row
+
+
+def _get_existing_board():
+    """Return the ID of the most recent user-created board (not this script's boards)."""
+    r = requests.get(
+        "https://api.miro.com/v2/boards?team_id=3074457345976989160"
+        "&sort=last_modified&limit=20",
+        headers=H, timeout=15
+    )
+    script_names = {
+        "BI Tool Comparison — Databox vs Hex vs Funnel",
+        "agent-write-test-DELETE-ME",
+    }
+    for b in r.json().get("data", []):
+        if b["name"] not in script_names and "BI Tool Comparison" not in b["name"]:
+            return b["id"], b["name"]
+    return None, None
+
+
+def build():
+    if not TOKEN:
+        print("[miro] MIRO_ACCESS_TOKEN not set — aborting")
+        return
+
+    # Copy an existing non-script board to avoid "Developer team" watermark
+    src_id, src_name = _get_existing_board()
+    if not src_id:
+        print("[miro] no suitable source board found")
+        return
+
+    TEAM_ID = "3074457345976989160"  # Qoyod team
+    print(f"[miro] creating board in Qoyod team ({TEAM_ID})")
+    r = requests.post(
+        "https://api.miro.com/v2/boards",
+        headers=H,
+        json={
+            "name": "BI Tool Comparison — Databox vs Hex vs Funnel (Qoyod & SaaS)",
+            "team": {"id": TEAM_ID},
+            "policy": {
+                "permissionsPolicy": {"collaborationToolsStartAccess": "all_editors"},
+                "sharingPolicy": {"access": "private", "teamAccess": "edit"},
+            },
+        },
+        timeout=15,
+    )
+    print(f"[miro] create response: {r.status_code} — {r.text[:120]}")
+    if not r.ok:
+        return
+    board_id = r.json()["id"]
+    view_link = r.json().get("viewLink", "")
+
+    global BASE
+    BASE = f"https://api.miro.com/v2/boards/{board_id}"
+    print(f"[miro] board ready: {view_link}")
+
+    # Clear any existing content from the copied board
+    deleted = 0
+    for kind in ("shapes", "sticky_notes", "texts", "frames", "images", "cards"):
+        cursor = None
+        while True:
+            url = f"{BASE}/{kind}?limit=50"
+            if cursor:
+                url += f"&cursor={cursor}"
+            gr = requests.get(url, headers=H, timeout=15)
+            if not gr.ok:
+                break
+            d = gr.json()
+            for item in d.get("data", []):
+                requests.delete(f"{BASE}/{kind}/{item['id']}", headers=H, timeout=10)
+                deleted += 1
+            cursor = d.get("cursor")
+            if not cursor:
+                break
+    if deleted:
+        print(f"[miro] cleared {deleted} existing items")
+        time.sleep(1)
+
+    # Draw Table 1 — Qoyod
+    r1, d1 = _draw_table(
+        ROWS_QOYOD, 0,
+        "BI Tool Comparison — Qoyod Performance",
+        "Qoyod-specific  ·  CPQL / Lead Module / Writeback / Attribution  ·  2026-06-10",
+    )
+    print(f"[miro] Table 1 done: {r1} rows")
+    time.sleep(0.5)
+
+    # Draw Table 2 — Generic SaaS (offset to the right)
+    r2, d2 = _draw_table(
+        ROWS_SAAS, OFFSET2,
+        "BI Tool Comparison — Generic SaaS Business",
+        "Applies to any B2B SaaS  ·  MRR / CAC / LTV / Churn / Pipeline  ·  2026-06-10",
+    )
+    print(f"[miro] Table 2 done: {r2} rows")
+
+    print(f"\n[miro] Done! Board: {view_link}")
 
 
 if __name__ == "__main__":
