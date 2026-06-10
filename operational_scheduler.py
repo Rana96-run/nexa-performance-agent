@@ -961,12 +961,22 @@ def _post_weekly_summary(spikes: list | None = None,
 
 
 def _run_health_check():
-    """Run health check — results logged to BQ only, visible in Activity Dashboard."""
+    """Hourly health check — owned by marketing-ops.
+    Runs the full connector tracker so alert_consecutive_broken() can escalate
+    to an Asana task when any connector has been BROKEN for 3+ consecutive hours.
+    Results written to connector_health_log (BQ). No Slack post from here —
+    escalation goes to Asana (marketing-ops → growth-analyst review chain)."""
     try:
-        from scripts.health_check import main as hc_main
-        hc_main(post_slack=False)
+        from analysers.connector_tracker import run_all_checks
+        result = run_all_checks(post_slack=False, write_bq=True)
+        print(
+            f"[ops-scheduler] Hourly health: {result['overall']} — "
+            f"{result['healthy_count']} healthy, "
+            f"{result['warning_count']} warning, "
+            f"{result['broken_count']} broken"
+        )
     except Exception as e:
-        print(f"[ops-scheduler] Health check failed: {e}")
+        print(f"[ops-scheduler] Hourly health check failed: {e}")
         traceback.print_exc()
 
 

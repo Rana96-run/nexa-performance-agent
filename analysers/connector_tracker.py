@@ -726,23 +726,40 @@ def check_slack_listener_heartbeat(window_hours: int = 2) -> dict:
 _CONSECUTIVE_BROKEN_THRESHOLD = 3
 
 
+def _already_escalated(proj: str, ds: str, channel: str, window_hours: int = 6) -> bool:
+    """Return True if an escalation task was already created for this channel
+    within the last *window_hours* — prevents duplicate Asana tasks per run cycle."""
+    sql = f"""
+        SELECT COUNT(*) AS n
+        FROM `{proj}.{ds}.agent_activity_log`
+        WHERE action = 'connector_escalated'
+          AND channel = '{channel}'
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {window_hours} HOUR)
+    """
+    try:
+        rows = _bq_query(sql)
+        return (rows[0].n or 0) > 0
+    except Exception:
+        return False  # err on the side of creating the task
+
+
 def alert_consecutive_broken(all_results: list) -> None:
-    """For every channel/monitor that is currently BROKEN, check if the last
-    N consecutive health-log rows are also BROKEN. If so, post a one-line Slack
-    alert to #nexa-health. Runs after write_health_log so the current result is
-    already persisted."""
+    """For every channel/monitor BROKEN for 3+ consecutive checks:
+    1. Create an Asana task assigned to marketing-ops to diagnose and fix.
+    2. The task description encodes the full review chain:
+       marketing-ops fixes → growth-analyst reviews → QA gate → growth-analyst final sign-off.
+    3. Dedup: skip if an escalation was already created for this channel in the last 6h.
+    Runs after write_health_log so the current result is already persisted."""
     proj, ds = _proj_ds()
-    slack_token = os.getenv("SLACK_BOT_TOKEN", "")
-    health_channel = os.getenv("SLACK_HEALTH_CHANNEL", "#nexa-health")
 
     broken_channels = [r["channel"] for r in all_results if r.get("status") == "BROKEN"]
     if not broken_channels:
         return
 
-    # Build a single query for all broken channels at once
     channel_list = ", ".join(f"'{c}'" for c in broken_channels)
     sql = f"""
-        SELECT channel, ARRAY_AGG(status ORDER BY check_ts DESC LIMIT {_CONSECUTIVE_BROKEN_THRESHOLD}) AS last_statuses
+        SELECT channel,
+               ARRAY_AGG(status ORDER BY check_ts DESC LIMIT {_CONSECUTIVE_BROKEN_THRESHOLD}) AS last_statuses
         FROM `{proj}.{ds}.connector_health_log`
         WHERE channel IN ({channel_list})
         GROUP BY channel
@@ -759,34 +776,82 @@ def alert_consecutive_broken(all_results: list) -> None:
         statuses = history.get(channel, [])
         if len(statuses) < _CONSECUTIVE_BROKEN_THRESHOLD:
             continue
-        if all(s == "BROKEN" for s in statuses[:_CONSECUTIVE_BROKEN_THRESHOLD]):
-            # Find the human-readable reason from the current result
-            result = next((r for r in all_results if r["channel"] == channel), {})
-            label  = result.get("label") or channel
-            reason = ""
-            for cr in result.get("checks", {}).values():
-                if cr.get("status") == "BROKEN":
-                    reason = cr.get("reason", "")
-                    break
-            msg = (
-                f":red_circle: *{label}* has been BROKEN for "
-                f"{_CONSECUTIVE_BROKEN_THRESHOLD}+ consecutive checks — {reason or 'no detail'}"
+        if not all(s == "BROKEN" for s in statuses[:_CONSECUTIVE_BROKEN_THRESHOLD]):
+            continue
+        if _already_escalated(proj, ds, channel):
+            print(f"[connector_tracker] {channel} already escalated — skipping duplicate task")
+            continue
+
+        result = next((r for r in all_results if r["channel"] == channel), {})
+        label  = result.get("label") or channel
+        fix_cmd = result.get("fix_command") or ""
+
+        # Build per-check detail for the task body
+        check_lines = []
+        for cname, cr in result.get("checks", {}).items():
+            if cr.get("status") in ("BROKEN", "WARNING"):
+                check_lines.append(
+                    f"- {cname}: {cr.get('status')} — {cr.get('reason', 'no detail')}"
+                )
+        checks_detail = "\n".join(check_lines) or "- (no check detail)"
+
+        today = datetime.now(_RIYADH).strftime("%Y-%m-%d")
+        description = (
+            f"The connector [{label}] has been BROKEN for {_CONSECUTIVE_BROKEN_THRESHOLD}+ "
+            f"consecutive hourly health checks. Requires diagnosis and fix.\n\n"
+            f"FAILING CHECKS:\n{checks_detail}\n\n"
+            f"FIX HINT: {fix_cmd or 'See connector_health_log for detail.'}\n\n"
+            f"REVIEW CHAIN (do not skip steps):\n"
+            f"1. [Marketing Ops] Diagnose root cause — read connector_health_log, check Railway logs, "
+            f"confirm credentials / freshness / attribution are the issue.\n"
+            f"2. [Marketing Ops] Apply fix — redeploy / rotate credentials / backfill data. "
+            f"Verify connector returns HEALTHY in next check.\n"
+            f"3. [Marketing Ops → Growth Analyst] Hand off: update this task with fix summary, "
+            f"reassign to Growth Analyst for data-integrity review.\n"
+            f"4. [Growth Analyst] Review: run 7-day BQ ↔ HubSpot reconciliation for affected "
+            f"connector. Confirm no data gap. Update memory/08_pitfalls.md if a new trap found.\n"
+            f"5. [QA Gate] Pass: confirm connector is HEALTHY for 3+ consecutive checks, "
+            f"reconciliation delta < 2%, no downstream view drift.\n"
+            f"6. [Growth Analyst — Final Review] Sign off: confirm fix is durable, update "
+            f"memory/14_learning_patterns.md with what happened and what was done.\n\n"
+            f"Created: {today}\n"
+            f"Due: {today}\n"
+            f"Priority: High\n"
+            f"Type: Fix\n"
+            f"Channel: {channel}\n"
+            f"Asset level: infrastructure\n"
+            f"Action: fix → [Marketing Ops] → [Growth Analyst]"
+        )
+
+        try:
+            from executors.asana import create_task
+            task_gid = create_task(
+                title=f"BROKEN connector: {label} — 3+ consecutive failures",
+                description=description,
+                project_key="daily_activity",
+                task_type="Fix",
+                channel=channel,
+                asset_level="infrastructure",
+                action="fix",
+                log_role="health_monitor",
             )
-            if slack_token:
-                try:
-                    import requests as _requests
-                    _requests.post(
-                        "https://slack.com/api/chat.postMessage",
-                        headers={"Authorization": f"Bearer {slack_token}",
-                                 "Content-Type": "application/json"},
-                        json={"channel": health_channel, "text": msg},
-                        timeout=10,
-                    )
-                    print(f"[connector_tracker] consecutive-BROKEN alert sent for {channel}")
-                except Exception as e:
-                    print(f"[connector_tracker] Slack alert failed for {channel}: {e}")
-            else:
-                print(f"[connector_tracker] ALERT (no token): {msg}")
+            print(f"[connector_tracker] escalation task created for {channel}: {task_gid}")
+        except Exception as e:
+            print(f"[connector_tracker] Asana escalation failed for {channel}: {e}")
+            task_gid = None
+
+        # Record the escalation in agent_activity_log so dedup works on the next run
+        try:
+            from logs.activity_logger import log_activity
+            log_activity(
+                role="health_monitor",
+                action="connector_escalated",
+                channel=channel,
+                status="success" if task_gid else "failed",
+                details={"label": label, "checks": check_lines, "task_gid": task_gid},
+            )
+        except Exception as e:
+            print(f"[connector_tracker] activity log write failed for {channel}: {e}")
 
 
 # ── Aggregate per system monitor ──────────────────────────────────────────────
