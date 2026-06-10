@@ -61,7 +61,7 @@ def analyse_wow(days_current: int = 7) -> dict[str, Any]:
             SUM(engaged_sessions)        AS engaged_sessions,
             SUM(new_users)               AS new_users,
             SUM(conversions)             AS conversions,
-            SUM(total_session_duration_s) AS total_duration_s,
+            SUM(avg_session_duration_s * sessions) AS total_duration_s,
             SUM(sessions) AS sess_for_avg
           FROM `{PROJECT_ID}.{DATASET}.ga4_sessions_daily`
           WHERE date BETWEEN '{pri_st}' AND '{cur_end}'
