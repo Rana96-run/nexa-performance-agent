@@ -624,10 +624,29 @@ _REQUIRED_WEB_TAGS = [
 ]
 
 _REQUIRED_SERVER_TAGS = [
-    ("GA4 Client",              ["gaawc", "googtag", "html"],   "GA4 server-side client — receives GA4 hits"),
-    ("Meta CAPI",               ["html", "custhtml"],           "Meta Conversions API forwarding tag"),
-    ("Google Ads CAPI",         ["html", "custhtml"],           "Google Ads server-side conversion forwarding"),
+    ("GA4 Client",     ["sgtmgaaw", "gaawc", "googtag"],  "GA4 server-side client — receives GA4 hits"),
+    ("Meta CAPI",      ["cvt_5tp8w", "cvt_ncn6s"],        "Meta Conversions API forwarding tag"),
+    ("Google Ads CAPI",["sgtmadsct", "sgtmadscl"],        "Google Ads server-side conversion forwarding"),
 ]
+
+
+def _tag_platform(name: str, ttype: str) -> str:
+    """Map a GTM tag to a platform slug for dedup purposes."""
+    n, t = name.lower(), ttype.lower()
+    if t in ("cvt_5tp8w", "cvt_ncn6s") or "meta" in n or "facebook" in n:
+        return "meta"
+    if (t in ("sgtmadsct", "sgtmadscl", "sgtmadsremarket", "awct", "gclidw", "awud")
+            or "gads" in n or "google ads" in n or "googleads" in n):
+        return "gads"
+    if t == "cvt_k8m24" or "tiktok" in n:
+        return "tiktok"
+    if t.startswith("cvt_pj5t4") or t.startswith("cvt_239171595") or "snap" in n:
+        return "snap"
+    if t == "cvt_pbnhc" or "linkedin" in n:
+        return "linkedin"
+    if t in ("sgtmgaaw", "gaawc", "googtag") or "ga4" in n:
+        return "ga4"
+    return "other"
 
 
 def _gtm_svc():
@@ -725,8 +744,9 @@ def _audit_container(svc, public_id: str, required_tags: list) -> dict:
         if is_conversion and freq == "oncePerEvent" and "pageview" in " ".join(fire_names).lower():
             issues.append("Firing on pageview with oncePerEvent — may double-count multi-page sessions")
 
-        # Check Meta pixel tags for correct event and pixel ID (Meta/Facebook only — not Twitter/LinkedIn/TikTok/Snap)
-        if "meta" in name_lower or "facebook" in name_lower:
+        # Check Meta pixel tags for correct event and pixel ID
+        # Only applies to raw HTML/custHTML tags — Stape/template connectors store the ID via their own config
+        if ("meta" in name_lower or "facebook" in name_lower) and ttype in ("html", "custhtml", ""):
             tag_html = params.get("html", "") + str(params)
             if META_WEB_PIXEL not in tag_html and META_CRM_PIXEL not in tag_html:
                 if tag_html:  # only flag if there IS HTML content (not empty template)
@@ -736,10 +756,10 @@ def _audit_container(svc, public_id: str, required_tags: list) -> dict:
                 issues.append("Tag named 'Lead' but fbq event is not 'Lead' — check the event name in the HTML")
                 recs.append("Change fbq('track', '...') to fbq('track', 'Lead') exactly (case-sensitive)")
 
-        # Check GA4 tags for measurement ID
+        # Check GA4 tags for measurement ID (skip GTM variable references like {{const-ga4-measurement-id}})
         if ttype in ("gaawc", "googtag") or "ga4" in name_lower:
             mid = params.get("measurementId", "") or params.get("trackingId", "")
-            if mid and "G-" not in mid and "UA-" not in mid:
+            if mid and not mid.startswith("{{") and "G-" not in mid and "UA-" not in mid:
                 issues.append(f"Measurement ID looks wrong: '{mid}' — GA4 IDs start with G-")
                 recs.append("Update Measurement ID to the correct G-XXXXXXXX format from GA4 property settings")
 
@@ -786,10 +806,21 @@ def _audit_container(svc, public_id: str, required_tags: list) -> dict:
                     "note":    "Tag not found — needs to be created",
                 })
 
-    # Priority 1: paused conversion tags + tags with firing issues
-    # Priority 2: missing tags
-    # Priority 3: naming/frequency improvements
-    p1 = [t for t in tag_reports if t["issues"] and t["status"] == "PAUSED"]
+    # Build set of platforms that already have a live conversion tag (lead/capi/conversion in name)
+    _conv_kws = ("lead", "conversion", "convert", "purchase", "capi", "contact", "signup", "goal")
+    live_conv_platforms = {
+        _tag_platform(t["name"], t["type"])
+        for t in tag_reports
+        if t["status"] == "LIVE" and any(kw in t["name"].lower() for kw in _conv_kws)
+    }
+
+    # Priority 1: paused conversion tags with NO live replacement + live tags with issues
+    # Paused tags are suppressed when a live tag of the same platform exists (migrated/replaced)
+    p1 = [
+        t for t in tag_reports
+        if t["issues"] and t["status"] == "PAUSED"
+        and _tag_platform(t["name"], t["type"]) not in live_conv_platforms
+    ]
     p1_issues = [t for t in tag_reports if t["issues"] and t["status"] == "LIVE"]
     p2 = missing
     p3 = [t for t in tag_reports if not t["issues"] and t["status"] == "LIVE" and
