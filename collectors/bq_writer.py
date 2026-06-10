@@ -833,7 +833,16 @@ hubspot AS (
 ),
 -- Deals: ID-matched bucket (Snap/Meta/TikTok Instantform — survives adset renames)
 deals_by_id AS (
-  SELECT date, qoyod_source AS channel,
+  SELECT date,
+    CASE qoyod_source
+      WHEN 'Meta Ads'      THEN 'meta'
+      WHEN 'Google Ads'    THEN 'google_ads'
+      WHEN 'Snapchat Ads'  THEN 'snapchat'
+      WHEN 'Tiktok Ads'    THEN 'tiktok'
+      WHEN 'LinkedIn Ads'  THEN 'linkedin'
+      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
+      ELSE qoyod_source
+    END AS channel,
     deal_adgroup_id_sync AS adset_id,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
@@ -863,7 +872,17 @@ deals_by_id AS (
 ),
 -- Deals: name-matched bucket (Google/Bing/LinkedIn website forms — no sync ID)
 deals_by_name AS (
-  SELECT date, qoyod_source AS channel, deal_utm_campaign AS utm_campaign,
+  SELECT date,
+    CASE qoyod_source
+      WHEN 'Meta Ads'      THEN 'meta'
+      WHEN 'Google Ads'    THEN 'google_ads'
+      WHEN 'Snapchat Ads'  THEN 'snapchat'
+      WHEN 'Tiktok Ads'    THEN 'tiktok'
+      WHEN 'LinkedIn Ads'  THEN 'linkedin'
+      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
+      ELSE qoyod_source
+    END AS channel,
+    deal_utm_campaign AS utm_campaign,
     deal_utm_audience AS utm_audience,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
@@ -1106,7 +1125,16 @@ hubspot AS (
 ),
 -- Deals: ID-matched bucket (survives ad renames)
 deals_by_id AS (
-  SELECT date, qoyod_source AS channel,
+  SELECT date,
+    CASE qoyod_source
+      WHEN 'Meta Ads'      THEN 'meta'
+      WHEN 'Google Ads'    THEN 'google_ads'
+      WHEN 'Snapchat Ads'  THEN 'snapchat'
+      WHEN 'Tiktok Ads'    THEN 'tiktok'
+      WHEN 'LinkedIn Ads'  THEN 'linkedin'
+      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
+      ELSE qoyod_source
+    END AS channel,
     deal_ad_id_sync AS ad_id,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
              THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
@@ -1136,7 +1164,16 @@ deals_by_id AS (
 ),
 -- Deals: name-matched bucket (no sync ID)
 deals_by_name AS (
-  SELECT date, qoyod_source AS channel,
+  SELECT date,
+    CASE qoyod_source
+      WHEN 'Meta Ads'      THEN 'meta'
+      WHEN 'Google Ads'    THEN 'google_ads'
+      WHEN 'Snapchat Ads'  THEN 'snapchat'
+      WHEN 'Tiktok Ads'    THEN 'tiktok'
+      WHEN 'LinkedIn Ads'  THEN 'linkedin'
+      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
+      ELSE qoyod_source
+    END AS channel,
     deal_utm_campaign AS utm_campaign,
     deal_utm_content AS utm_content,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
