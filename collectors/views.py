@@ -339,6 +339,37 @@ WITH
     WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
       AND deal_campaign_id_sync IS NULL
     GROUP BY date, qoyod_source, deal_utm_campaign
+  ),
+  -- All-time campaign_id → name lookup (used by stubs below)
+  campaign_names AS (
+    SELECT campaign_id, ANY_VALUE(campaign_name) AS campaign_name
+    FROM `{P}.{D}.campaigns_daily`
+    GROUP BY campaign_id
+  ),
+  -- Stub rows: ID-matched deals whose (date, campaign_id) has no spend row
+  deal_id_stubs AS (
+    SELECT di.date, cm.channel, di.campaign_id,
+           COALESCE(cn.campaign_name, di.campaign_id) AS campaign_name
+    FROM deals_by_id di
+    JOIN channel_map cm ON cm.qoyod_source = di.qoyod_source
+    LEFT JOIN campaign_names cn ON cn.campaign_id = di.campaign_id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM spend s
+      WHERE s.date = di.date AND s.campaign_id = di.campaign_id
+    )
+  ),
+  -- Stub rows: name-matched deals whose (date, campaign_name) has no spend row
+  deal_name_stubs AS (
+    SELECT dn.date, cm.channel,
+           CAST(NULL AS STRING) AS campaign_id,
+           dn.campaign_name
+    FROM deals_by_name dn
+    JOIN channel_map cm ON cm.qoyod_source = dn.qoyod_source
+    WHERE NOT EXISTS (
+      SELECT 1 FROM spend s
+      WHERE s.date = dn.date
+        AND LOWER(s.campaign_name) = LOWER(dn.campaign_name)
+    )
   )
 SELECT
   s.date,
@@ -388,7 +419,18 @@ SELECT
         NULLIF(s.clicks, 0)) * 100, 4) AS cvr_pct,
   ROUND(SAFE_DIVIDE(IFNULL(li.qualified,0) + IFNULL(ln.qualified,0),
         NULLIF(IFNULL(li.leads,0) + IFNULL(ln.leads,0), 0)) * 100, 2) AS qual_rate_pct
-FROM spend s
+FROM (
+  SELECT t.date, t.channel, t.campaign_id, t.campaign_name, t.status, t.spend, t.impressions, t.clicks
+  FROM spend t
+  UNION ALL
+  SELECT date, channel, campaign_id, campaign_name,
+         CAST(NULL AS STRING) AS status, 0.0 AS spend, 0 AS impressions, 0 AS clicks
+  FROM deal_id_stubs
+  UNION ALL
+  SELECT date, channel, campaign_id, campaign_name,
+         CAST(NULL AS STRING) AS status, 0.0 AS spend, 0 AS impressions, 0 AS clicks
+  FROM deal_name_stubs
+) s
 LEFT JOIN channel_map cm   ON cm.channel = s.channel
 -- ID-match (Snap/Meta/TikTok Instantform — survives renames + separates duplicate names)
 LEFT JOIN leads_by_id li   ON li.date = s.date
