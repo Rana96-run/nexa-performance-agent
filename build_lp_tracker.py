@@ -33,39 +33,41 @@ TMPL   = {"qnav":("E6F1FB","0C447C"),"qnav-dark":("EEEDFE","3C3489"),
 FIX    = {"N/A":("F1EFE8","5F5E5A"),"Needed":("FAEEDA","633806"),"Done":("EAF3DE","27500A")}
 
 ROWS = [
-    ("HDR","#","Category","Page (EN)","Live URL","Preview URL","Status","Template","Mobile Fix","Total Subs","May 2026","Jun 2026","WP Modified","Notes"),
+    # HS Leads (30d) and SQLs (30d) are inferred from BQ hubspot_leads_individual via utm_content → LP mapping (paid search WP ads only, last 30 days)
+    ("HDR","#","Category","Page (EN)","Live URL","Preview URL","Status","Template","Mobile Fix","Total Subs","May 2026","Jun 2026","HS Leads (30d)","SQLs (30d)","WP Modified","Notes"),
     ("CAT","QFLAVOURS"),
-    ("DAT","1","Qflavours","Qflavours — Cashier & Restaurant","https://lp.qoyod.com/qflavours/","https://lp.qoyod.com/?page_id=8&preview=true","Live","old-nav","N/A","14","1","—","2026-05-25","Apr=13 May=1"),
-    ("DAT","2","Qflavours","Qflavours — Know page","https://lp.qoyod.com/know-qflavours/","https://lp.qoyod.com/?page_id=240&preview=true","Live","old-nav","N/A","9","1","—","2026-05-25","Apr=8 May=1"),
-    ("DAT","3","Qflavours","Flavours POS for Restaurants","","https://lp.qoyod.com/?page_id=558&preview=true","Draft","—","—","—","—","—","2026-05-23",""),
-    ("DAT","4","Qflavours","Flavours POS Rebuilt (v2)","","https://lp.qoyod.com/?page_id=840&preview=true","Draft","—","—","—","—","—","2026-05-25","Rebuilt 2026-05-25"),
+    ("DAT","1","Qflavours","Qflavours — Cashier & Restaurant","https://lp.qoyod.com/qflavours/","https://lp.qoyod.com/?page_id=8&preview=true","Live","old-nav","N/A","14","1","—","—","—","2026-05-25","Apr=13 May=1 / Snap instantforms"),
+    ("DAT","2","Qflavours","Qflavours — Know page","https://lp.qoyod.com/know-qflavours/","https://lp.qoyod.com/?page_id=240&preview=true","Live","old-nav","N/A","9","1","—","—","—","2026-05-25","Apr=8 May=1 / Snap instantforms"),
+    ("DAT","3","Qflavours","Flavours POS for Restaurants","","https://lp.qoyod.com/?page_id=558&preview=true","Draft","—","—","—","—","—","—","—","2026-05-23",""),
+    ("DAT","4","Qflavours","Flavours POS Rebuilt (v2)","","https://lp.qoyod.com/?page_id=840&preview=true","Draft","—","—","—","—","—","—","—","2026-05-25","Rebuilt 2026-05-25"),
     ("CAT","ACCOUNTING"),
-    ("DAT","5","Accounting","Accounting — best solution","https://lp.qoyod.com/accounting/","https://lp.qoyod.com/?page_id=303&preview=true","Live","old-nav","N/A","247","208","10","2026-06-08","Apr=29 — highest traffic"),
-    ("DAT","6","Accounting","Accounting for Accountants","","https://lp.qoyod.com/?page_id=553&preview=true","Draft","qnav","Needed","—","—","—","2026-05-25","Rebuilt 2026-05-26"),
-    ("DAT","7","Accounting","Cloud Accounting Software","https://lp.qoyod.com/accounting-system/","https://lp.qoyod.com/?page_id=850&preview=true","Live","qnav","Done 2026-06-09","4","4","—","2026-06-09","A/B base page"),
+    ("DAT","5","Accounting","Accounting — best solution","https://lp.qoyod.com/accounting/","https://lp.qoyod.com/?page_id=303&preview=true","Live","old-nav","N/A","247","208","10","93","28","2026-06-08","Apr=29 — highest traffic"),
+    ("DAT","6","Accounting","Accounting for Accountants","","https://lp.qoyod.com/?page_id=553&preview=true","Draft","qnav","Needed","—","—","—","—","—","2026-05-25","Rebuilt 2026-05-26"),
+    ("DAT","7","Accounting","Cloud Accounting Software","https://lp.qoyod.com/accounting-system/","https://lp.qoyod.com/?page_id=850&preview=true","Live","qnav","Done 2026-06-09","4","4","—","29","3","2026-06-09","A/B base page"),
     ("CAT","ZATCA"),
-    ("DAT","8","ZATCA","E-Invoice Integration","https://lp.qoyod.com/einvoice-integration/","https://lp.qoyod.com/?page_id=463&preview=true","Live","old-nav","N/A","319","312","7","2026-06-08","Legacy live — 2nd highest traffic"),
-    ("DAT","9","ZATCA","ZATCA E-Invoice Phase 2","https://lp.qoyod.com/zatca-einvoice/","https://lp.qoyod.com/?page_id=851&preview=true","Live","qnav-dark","Done 2026-06-09","2","—","2","2026-06-09","Do NOT batch-upload"),
+    ("DAT","8","ZATCA","E-Invoice Integration","https://lp.qoyod.com/einvoice-integration/","https://lp.qoyod.com/?page_id=463&preview=true","Live","old-nav","N/A","319","312","7","231","62","2026-06-08","Legacy live — 2nd highest traffic"),
+    ("DAT","9","ZATCA","ZATCA E-Invoice Phase 2","https://lp.qoyod.com/zatca-einvoice/","https://lp.qoyod.com/?page_id=851&preview=true","Live","qnav-dark","Done 2026-06-09","2","—","2","96","8","2026-06-09","Do NOT batch-upload"),
     ("CAT","POS"),
-    ("DAT","10","POS / Retail","POS for Retail with ZATCA","","https://lp.qoyod.com/?page_id=548&preview=true","Draft","—","—","—","—","—","2026-05-23",""),
-    ("DAT","11","POS / Retail","Accounting for Retail","","https://lp.qoyod.com/?page_id=559&preview=true","Draft","qnav","Needed","—","—","—","2026-05-25","Rebuilt 2026-05-26"),
-    ("DAT","12","POS / Retail","Qoyod POS for Retail","","https://lp.qoyod.com/?page_id=841&preview=true","Draft","—","—","—","—","—","2026-05-23",""),
+    ("DAT","10","POS / Retail","POS for Retail with ZATCA","","https://lp.qoyod.com/?page_id=548&preview=true","Draft","—","—","—","—","—","—","—","2026-05-23",""),
+    ("DAT","11","POS / Retail","Accounting for Retail","","https://lp.qoyod.com/?page_id=559&preview=true","Draft","qnav","Needed","—","—","—","—","—","2026-05-25","Rebuilt 2026-05-26"),
+    ("DAT","12","POS / Retail","Qoyod POS for Retail","","https://lp.qoyod.com/?page_id=841&preview=true","Draft","—","—","—","—","—","—","—","2026-05-23",""),
     ("CAT","SECTOR"),
-    ("DAT","13","Sector","Accounting for Services","","https://lp.qoyod.com/?page_id=682&preview=true","Draft","qnav","Needed","—","—","—","2026-05-25","Rebuilt 2026-05-26"),
-    ("DAT","14","Sector","Accounting for Tech Companies","https://lp.qoyod.com/tech-sector/","https://lp.qoyod.com/?page_id=683&preview=true","Live","qnav","Done 2026-06-09","2","—","2","2026-06-09",""),
-    ("DAT","15","Sector","Accounting for Real Estate","","https://lp.qoyod.com/?page_id=685&preview=true","Draft","—","—","—","—","—","2026-05-23",""),
+    ("DAT","13","Sector","Accounting for Services","","https://lp.qoyod.com/?page_id=682&preview=true","Draft","qnav","Needed","—","—","—","—","—","2026-05-25","Rebuilt 2026-05-26"),
+    ("DAT","14","Sector","Accounting for Tech Companies","https://lp.qoyod.com/tech-sector/","https://lp.qoyod.com/?page_id=683&preview=true","Live","qnav","Done 2026-06-09","2","—","2","—","—","2026-06-09","HubSpot form, no WP LP ads"),
+    ("DAT","15","Sector","Accounting for Real Estate","","https://lp.qoyod.com/?page_id=685&preview=true","Draft","—","—","—","—","—","—","—","2026-05-23",""),
     ("CAT","BOOKKEEPING"),
-    ("DAT","16","Bookkeeping","Bookkeeping for Business Owners","","https://lp.qoyod.com/?page_id=557&preview=true","Draft","qnav","Needed","—","—","—","2026-06-07","Rebuilt 2026-05-26"),
+    ("DAT","16","Bookkeeping","Bookkeeping for Business Owners","","https://lp.qoyod.com/?page_id=557&preview=true","Draft","qnav","Needed","—","—","—","—","—","2026-06-07","Rebuilt 2026-05-26"),
     ("CAT","OTHER"),
-    ("DAT","17","Other","Qawaem — File Financial Statements","https://lp.qoyod.com/qawaem/","https://lp.qoyod.com/?page_id=773&preview=true","Live","qnav-mega","Done 2026-06-08","4","2","2","2026-06-08","All 6 mobile fixes"),
+    ("DAT","17","Other","Qawaem — File Financial Statements","https://lp.qoyod.com/qawaem/","https://lp.qoyod.com/?page_id=773&preview=true","Live","qnav-mega","Done 2026-06-08","4","2","2","18","2","2026-06-08","All 6 mobile fixes"),
     ("CAT","SUMMARY"),
     ("SUM","Live pages","8","303 / 463 / 683 / 773 / 850 / 851 / 8 / 240"),
     ("SUM","Draft pages","9","548 / 553 / 557 / 558 / 559 / 682 / 685 / 840 / 841"),
     ("SUM","Mobile Fix Done","4","tech-sector / accounting-system / zatca-einvoice / qawaem"),
     ("SUM","Mobile Fix Needed","4","accounting-accountants / retail-accounting / services-sector / bookkeeping-smb"),
+    ("SUM","HS Leads source","last 30d","Google + Bing paid search → _WP utm_content ads only"),
 ]
 
-COL_W = [5, 14, 32, 28, 28, 9, 12, 18, 12, 9, 9, 14, 34]
+COL_W = [5, 14, 32, 28, 28, 9, 12, 18, 12, 9, 9, 10, 9, 14, 34]
 cc = None
 
 for row_data in ROWS:
@@ -79,15 +81,15 @@ for row_data in ROWS:
         for ci, cell in enumerate(ws[r], 1):
             cell.fill = fill("021544")
             cell.font = fnt("FFFFFF", sz=10, bold=True)
-            cell.alignment = mc() if ci in (1,6,7,8,9,10,11) else mid()
+            cell.alignment = mc() if ci in (1,6,7,8,9,10,11,12,13) else mid()
 
     elif rtype == "CAT":
         cc = CAT.get(cells[0], CAT["OTHER"])
         ws.append([f"  {cells[0].title()}"])
         r = ws.max_row
         ws.row_dimensions[r].height = 18
-        ws.merge_cells(f"A{r}:M{r}")
-        for ci in range(1, 14):
+        ws.merge_cells(f"A{r}:O{r}")
+        for ci in range(1, 16):
             ws.cell(r, ci).fill = fill(cc[0])
         ws.cell(r, 1).font = fnt(cc[1], sz=9, bold=True)
         ws.cell(r, 1).alignment = mid()
@@ -96,7 +98,7 @@ for row_data in ROWS:
         ws.append(cells)
         r = ws.max_row
         ws.row_dimensions[r].height = 20
-        for ci in range(1, 14):
+        for ci in range(1, 16):
             cell = ws.cell(r, ci)
             cell.fill = fill("FFFFFF")
             cell.border = bb()
@@ -127,6 +129,7 @@ for row_data in ROWS:
             ws.cell(r,8).fill = fill(FIX[fk][0])
             ws.cell(r,8).font = fnt(FIX[fk][1], sz=10, bold=True)
             ws.cell(r,8).alignment = mc()
+        # cols 9-11: Elementor submission counts
         for ci in [9,10,11]:
             v = cells[ci-1]
             cell = ws.cell(r, ci)
@@ -135,14 +138,24 @@ for row_data in ROWS:
                 cell.font = fnt("021544", sz=11, bold=True)
             else:
                 cell.font = fnt("B4B2A9", sz=10)
-        ws.cell(r,12).font = fnt("888780", sz=10)
-        ws.cell(r,13).font = fnt("5F5E5A", sz=10, italic=True)
+        # cols 12-13: HS Leads (30d) and SQLs (30d) from BQ
+        for ci in [12,13]:
+            v = cells[ci-1]
+            cell = ws.cell(r, ci)
+            cell.alignment = mr()
+            if v and v != "—" and v != "0":
+                cell.fill = fill("EAF3DE") if ci == 13 else fill("E6F1FB")
+                cell.font = fnt("173404" if ci == 13 else "042C53", sz=11, bold=True)
+            else:
+                cell.font = fnt("B4B2A9", sz=10)
+        ws.cell(r,14).font = fnt("888780", sz=10)
+        ws.cell(r,15).font = fnt("5F5E5A", sz=10, italic=True)
 
     elif rtype == "SUM":
         ws.append(cells)
         r = ws.max_row
         ws.row_dimensions[r].height = 18
-        for ci in range(1, 14):
+        for ci in range(1, 16):
             cell = ws.cell(r, ci)
             cell.fill = fill("F5F7FB")
             cell.font = fnt("444441", sz=10, bold=True)

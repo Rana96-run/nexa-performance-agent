@@ -1,0 +1,52 @@
+[
+  {
+    "lp_slug": "brand-mainsite",
+    "leads": 403,
+    "sqls": 175
+  },
+  {
+    "lp_slug": "einvoice-integration",
+    "leads": 231,
+    "sqls": 62
+  },
+  {
+    "lp_slug": "pricing-page",
+    "leads": 131,
+    "sqls": 18
+  },
+  {
+    "lp_slug": "zatca-einvoice",
+    "leads": 96,
+    "sqls": 8
+  },
+  {
+    "lp_slug": "accounting",
+    "leads": 93,
+    "sqls": 28
+  },
+  {
+    "lp_slug": "accounting-system",
+    "leads": 29,
+    "sqls": 3
+  },
+  {
+    "lp_slug": "bookkeeping-draft",
+    "leads": 20,
+    "sqls": 9
+  },
+  {
+    "lp_slug": "qawaem",
+    "leads": 18,
+    "sqls": 2
+  },
+  {
+    "lp_slug": "other",
+    "leads": 16,
+    "sqls": 8
+  },
+  {
+    "lp_slug": "pos-draft",
+    "leads": 11,
+    "sqls": 6
+  }
+]
