@@ -412,14 +412,19 @@ def check_gtm_tags(container_public_id: str = GTM_WEB_ID) -> dict:
             ws_parent = f"{parent}/workspaces/{ws_id}"
             tags = svc.accounts().containers().workspaces().tags().list(parent=ws_parent).execute().get("tag", [])
 
-        issues  = []
+        issues     = []
+        seen_names  = set()
         found_meta_lead = False
         found_ga4       = False
 
         for tag in tags:
-            tag_name  = (tag.get("name") or "").lower()
+            raw_name  = tag.get("name") or "unnamed"
+            tag_name  = raw_name.lower()
             tag_type  = (tag.get("type") or "").lower()
             is_paused = tag.get("paused", False)
+            if raw_name in seen_names:
+                continue
+            seen_names.add(raw_name)
 
             # Meta pixel tag with Lead event
             if "meta" in tag_name or "facebook" in tag_name or tag_type in ("html", "custhtml"):
@@ -428,19 +433,27 @@ def check_gtm_tags(container_public_id: str = GTM_WEB_ID) -> dict:
                     found_meta_lead = True
                     if is_paused:
                         issues.append({
-                            "name":   f"GTM:{tag.get('name')}",
+                            "name":   f"GTM:{raw_name}",
                             "detail": "Meta Lead event tag is PAUSED in GTM",
-                            "fix":    f"In GTM container {container_public_id} → Tags → '{tag.get('name')}' → unpause and publish",
+                            "fix":    f"In GTM container {container_public_id} → Tags → '{raw_name}' → unpause and publish",
                         })
 
-            # GA4 configuration tag
-            if tag_type in ("gaawc", "googtag") or "ga4" in tag_name or "google analytics" in tag_name:
+            # GA4 configuration tag (gaawc = legacy type; googtag with "ga4" in name)
+            # Exclude: gaawe (event tags — pausing these is fine), and googtag for non-GA4 platforms
+            _non_ga4_platforms = ("snap", "microsoft", "bing", "gads", "google ads", "aw-", "twitter")
+            is_ga4_cfg = (
+                tag_type == "gaawc" or
+                (tag_type in ("gaawc", "googtag") and
+                 ("ga4" in tag_name or "google analytics" in tag_name) and
+                 not any(kw in tag_name for kw in _non_ga4_platforms))
+            )
+            if is_ga4_cfg:
                 found_ga4 = True
                 if is_paused:
                     issues.append({
-                        "name":   f"GTM:{tag.get('name')}",
-                        "detail": "GA4 configuration tag is PAUSED in GTM",
-                        "fix":    f"In GTM container {container_public_id} → Tags → '{tag.get('name')}' → unpause and publish",
+                        "name":   f"GTM:{raw_name}",
+                        "detail": f"GA4 configuration tag '{raw_name}' is PAUSED in GTM",
+                        "fix":    f"In GTM container {container_public_id} - Tags - '{raw_name}' - unpause and publish",
                     })
 
         if not found_meta_lead:
@@ -691,7 +704,7 @@ def _audit_container(svc, public_id: str, required_tags: list) -> dict:
         ttype    = (tag.get("type") or "").lower()
         is_paused = tag.get("paused", False)
         params   = {p["key"]: p.get("value", "") for p in tag.get("parameter", [])}
-        fire_ids = [ftr.get("triggerId") for ftr in tag.get("firingTriggerId", [])]
+        fire_ids   = tag.get("firingTriggerId", [])   # list of trigger ID strings
         fire_names = [triggers.get(tid, {}).get("name", tid) for tid in fire_ids]
         freq     = params.get("firingFrequency", "notOnce")
 
@@ -712,8 +725,8 @@ def _audit_container(svc, public_id: str, required_tags: list) -> dict:
         if is_conversion and freq == "oncePerEvent" and "pageview" in " ".join(fire_names).lower():
             issues.append("Firing on pageview with oncePerEvent — may double-count multi-page sessions")
 
-        # Check Meta pixel tags for correct event and pixel ID
-        if "meta" in name_lower or "facebook" in name_lower or "pixel" in name_lower:
+        # Check Meta pixel tags for correct event and pixel ID (Meta/Facebook only — not Twitter/LinkedIn/TikTok/Snap)
+        if "meta" in name_lower or "facebook" in name_lower:
             tag_html = params.get("html", "") + str(params)
             if META_WEB_PIXEL not in tag_html and META_CRM_PIXEL not in tag_html:
                 if tag_html:  # only flag if there IS HTML content (not empty template)
