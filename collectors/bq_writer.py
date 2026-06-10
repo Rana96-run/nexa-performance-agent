@@ -815,6 +815,35 @@ WITH platform AS (
     SELECT 1 FROM `{PROJECT_ID}.{DATASET}.adsets_daily` a
     WHERE a.date = d.date AND a.adset_id = d.adset_id
   )
+  UNION ALL
+  -- Stub rows: name-matched deals (no adset sync ID) with a known utm_audience
+  -- that exists in adsets_daily but has no spend row on deal create date
+  SELECT d.date, am.channel, am.campaign_name, am.utm_audience, am.adset_name,
+    CAST(NULL AS STRING) AS status,
+    am.adset_id AS platform_adset_id,
+    am.platform_campaign_id,
+    0.0 AS spend, 0 AS impressions, 0 AS clicks
+  FROM (
+    SELECT date, LOWER(TRIM(deal_utm_audience)) AS utm_key
+    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+    WHERE deal_adgroup_id_sync IS NULL AND deal_utm_audience IS NOT NULL
+    GROUP BY 1, 2
+  ) d
+  JOIN (
+    SELECT adset_id, ANY_VALUE(channel) AS channel,
+      ANY_VALUE(campaign_name) AS campaign_name,
+      ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
+      ANY_VALUE(adset_name) AS adset_name,
+      ANY_VALUE(campaign_id) AS platform_campaign_id,
+      LOWER(TRIM(ANY_VALUE(COALESCE(utm_audience, adset_name)))) AS utm_key
+    FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
+    GROUP BY adset_id
+  ) am ON am.utm_key = d.utm_key
+  WHERE NOT EXISTS (
+    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.adsets_daily` a
+    WHERE a.date = d.date
+      AND LOWER(TRIM(COALESCE(a.utm_audience, a.adset_name))) = d.utm_key
+  )
 ),
 -- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience)
 -- grain from utm_paid_attribution_daily. 2026-06-09: removed the adset-ID and
@@ -1104,6 +1133,40 @@ WITH platform AS (
   WHERE NOT EXISTS (
     SELECT 1 FROM `{PROJECT_ID}.{DATASET}.ads_daily` a
     WHERE a.date = d.date AND a.ad_id = d.ad_id
+  )
+  UNION ALL
+  -- Stub rows: name-matched deals (no ad sync ID) with a known utm_content
+  -- that exists in ads_daily but has no spend row on deal create date
+  SELECT d.date, am.channel, am.campaign_name, am.adset_name,
+    am.utm_content, am.ad_name,
+    am.ad_id AS platform_ad_id,
+    am.platform_adset_id,
+    am.platform_campaign_id,
+    0.0 AS spend, 0 AS impressions, 0 AS clicks,
+    CAST(NULL AS STRING) AS creative_type,
+    CAST(NULL AS STRING) AS status
+  FROM (
+    SELECT date, LOWER(TRIM(deal_utm_content)) AS utm_key
+    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
+    WHERE deal_ad_id_sync IS NULL AND deal_utm_content IS NOT NULL
+    GROUP BY 1, 2
+  ) d
+  JOIN (
+    SELECT ad_id, ANY_VALUE(channel) AS channel,
+      ANY_VALUE(campaign_name) AS campaign_name,
+      ANY_VALUE(adset_name) AS adset_name,
+      ANY_VALUE(COALESCE(utm_content, ad_name)) AS utm_content,
+      ANY_VALUE(ad_name) AS ad_name,
+      ANY_VALUE(adset_id) AS platform_adset_id,
+      ANY_VALUE(campaign_id) AS platform_campaign_id,
+      LOWER(TRIM(ANY_VALUE(COALESCE(utm_content, ad_name)))) AS utm_key
+    FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+    GROUP BY ad_id
+  ) am ON am.utm_key = d.utm_key
+  WHERE NOT EXISTS (
+    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.ads_daily` a
+    WHERE a.date = d.date
+      AND LOWER(TRIM(COALESCE(a.utm_content, a.ad_name))) = d.utm_key
   )
 ),
 -- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience,
