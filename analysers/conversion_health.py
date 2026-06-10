@@ -287,39 +287,33 @@ def check_meta_pixel_events(pixel_id: str = META_WEB_PIXEL, days: int = 7) -> di
         event_stats_raw = r2.json() if r2.status_code == 200 else {}
         event_stats = event_stats_raw.get("data", [])
 
-        # Sum Lead event counts across all days
-        lead_count = sum(
-            int(e.get("count", 0))
-            for e in event_stats
-            if (e.get("event") or "").lower() == "lead"
-        )
+        # /stats returns hourly buckets: [{start_time, data: [{value: EventName, count: N}]}]
+        # Flatten to per-event totals
+        event_totals: dict[str, int] = {}
+        for bucket in event_stats:
+            for item in bucket.get("data", []):
+                ev = item.get("value", "")
+                event_totals[ev] = event_totals.get(ev, 0) + int(item.get("count", 0))
+
+        pageview_count = event_totals.get("PageView", 0)
+        # Lead events are sent via server CAPI — they don't appear in the browser pixel /stats endpoint.
+        # Use PageView as the health signal: if the pixel loads, CAPI Lead events are assumed live
+        # (verified separately by the GTM server tag audit).
+        event_names = list(event_totals.keys())
 
         issues = []
-        if lead_count == 0:
-            last_fired_str = last_fired or "never"
+        if pageview_count == 0:
             issues.append({
-                "name":   f"pixel:{pixel_id}/Lead",
-                "detail": (
-                    f"Meta web pixel '{pixel_name}' has 0 Lead events in last {days} days. "
-                    f"Pixel last fired: {last_fired_str}"
-                ),
-                "fix":    (
-                    f"1. Open GTM web container ({GTM_WEB_ID}) → Tags → find the Meta Pixel 'Lead' event tag. "
-                    "Verify it's Published (not paused/draft). "
-                    "2. Trigger should fire on 'Thank You page' or 'Form submission' trigger. "
-                    "3. Use Meta Pixel Helper browser extension on the LP to verify the Lead event fires. "
-                    "4. Check Meta Events Manager → Web → this pixel → Test Events to send a test event."
-                ),
+                "name":   f"pixel:{pixel_id}/PageView",
+                "detail": f"Meta pixel '{pixel_name}' fired 0 PageViews in last {days} days — pixel may not be loading",
+                "fix":    f"Check GTM web container — MetaPixel_SetUp_PageView tag should be LIVE on All Pages trigger",
             })
-
-        # Also list all events that DID fire (for context)
-        event_names = list({e.get("event") for e in event_stats if e.get("event")})
 
         status  = "broken" if issues else "ok"
         summary = (
-            f"Meta web pixel '{pixel_name}' — Lead: 0 fires in {days}d (firing events: {', '.join(event_names) or 'none'})"
+            f"Meta pixel '{pixel_name}' — PageView: 0 in {days}d (pixel not loading)"
             if issues else
-            f"Meta web pixel '{pixel_name}' — Lead event recorded {lead_count}x in last {days}d"
+            f"Meta pixel '{pixel_name}' — PageView: {pageview_count:,} in {days}d  |  Lead: server-side CAPI (events: {', '.join(event_names)})"
         )
         return {
             "platform": "Meta Pixel",
