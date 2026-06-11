@@ -426,7 +426,7 @@ a:hover{text-decoration:underline}
         <a href="?days=90"  {% if days == 90  %}class="active"{% endif %}>90d</a>
         <a href="?days=365" {% if days == 365 %}class="active"{% endif %}>1yr</a>
       </nav>
-      <button onclick="document.querySelector('.team-hierarchy').scrollIntoView({behavior:'smooth'})"
+      <button onclick="openAndScrollTeam()"
         style="padding:5px 14px;border-radius:6px;border:1px solid #30363d;
                background:#161b22;color:#8b949e;font-size:13px;font-weight:500;
                cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px">
@@ -577,7 +577,12 @@ a:hover{text-decoration:underline}
 
   <!-- ── Agent Team — Nexa Operations HQ ── -->
   {% if team_roster %}
-  <div class="section-head">Nexa Operations HQ &nbsp;<span style="color:#484f58;font-weight:400;font-size:11px">9 agents · 3 departments</span></div>
+  <div class="section-head" id="team-section-head" onclick="toggleTeamSection()"
+       style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between">
+    <span>Nexa Operations HQ &nbsp;<span style="color:#484f58;font-weight:400;font-size:11px">9 agents · 3 departments</span></span>
+    <span id="team-section-chevron" style="font-size:11px;color:#484f58;transition:transform .2s">▼</span>
+  </div>
+  <div id="team-section-body">
 
   {# ──────────────────────────────────────────────────────
      Pixel-art sprite macro — 48×48 canvas, 6px per cell
@@ -847,6 +852,7 @@ a:hover{text-decoration:underline}
     {% endif %}
 
   </div>
+  </div>{# /team-section-body #}
   {% endif %}
 
   <!-- ── Code Health ── -->
@@ -2965,6 +2971,25 @@ function runGtmAudit() {
       }, 3000);
     })
     .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── Team section toggle ───────────────────────────────────────────────────────
+function toggleTeamSection() {
+  var body     = document.getElementById('team-section-body');
+  var chevron  = document.getElementById('team-section-chevron');
+  var isOpen   = body.style.display !== 'none';
+  body.style.display    = isOpen ? 'none' : '';
+  chevron.textContent   = isOpen ? '▶' : '▼';
+}
+function openAndScrollTeam() {
+  var body    = document.getElementById('team-section-body');
+  var chevron = document.getElementById('team-section-chevron');
+  if (body && body.style.display === 'none') {
+    body.style.display  = '';
+    chevron.textContent = '▼';
+  }
+  var head = document.getElementById('team-section-head');
+  if (head) head.scrollIntoView({ behavior: 'smooth' });
 }
 
 // ── Live freshness check — bypasses the 5-min HTML page cache ───────────────
