@@ -38,32 +38,32 @@ app.register_blueprint(hubspot_bp)
 
 # ─── Cowork skill directory (loaded once at startup) ─────────────────────────
 
-_CRON_LABELS: dict[str, str] = {
-    "0 4 * * *":  "Daily 07:00 Riyadh",
-    "0 5 * * *":  "Daily 08:00 Riyadh",
-    "0 7 * * *":  "Daily 10:00 Riyadh",
-    "0 5 * * 0":  "Sunday 08:00 Riyadh",
-    "0 5 * * 1":  "Monday 08:00 Riyadh",
-    "30 5 * * 1": "Monday 08:30 Riyadh",
-    "0 5 1 * *":  "1st of month",
+_AGENT_DEPT: dict[str, tuple[str, str, str]] = {
+    # slug → (display name, department label, dept colour)
+    "ai-orchestrator":     ("AI Orchestrator",     "Manager",     "#b08800"),
+    "performance-lead":    ("Performance Lead",     "Performance", "#58a6ff"),
+    "campaign-manager":    ("Campaign Manager",     "Performance", "#58a6ff"),
+    "creative-strategist": ("Creative Strategist",  "Performance", "#58a6ff"),
+    "growth-analyst":      ("Growth Analyst",       "Data",        "#d2a8ff"),
+    "project-coordinator": ("Project Coordinator",  "Operations",  "#3fb950"),
+    "cro-specialist":      ("CRO Specialist",       "CRO",         "#f0883e"),
+    "ui-ux-designer":      ("UI/UX Designer",       "CRO",         "#f0883e"),
+    "developer":           ("Developer",            "CRO",         "#f0883e"),
 }
 
-_AGENT_LABELS: dict[str, str] = {
-    "ai-orchestrator":     "Orchestrator",
-    "campaign-manager":    "Campaign Manager",
-    "creative-strategist": "Creative Strategist",
-    "growth-analyst":      "Growth Analyst",
-    "performance-lead":    "Performance Lead",
-    "project-coordinator": "Project Coordinator",
-    "cro-specialist":      "CRO Specialist",
+_DEPT_SORT: dict[str, int] = {
+    "Manager": 0, "Performance": 1, "Data": 2, "Operations": 3, "CRO": 4,
 }
 
 
-def _load_cowork_skills() -> list[dict]:
-    """Parse YAML frontmatter from .claude/skills/cowork/*.md — no pyyaml needed."""
-    skills: list[dict] = []
-    skill_dir = os.path.join(os.path.dirname(__file__), "..", ".claude", "skills", "cowork")
-    for path in sorted(glob.glob(os.path.join(skill_dir, "*.md"))):
+def _load_agents() -> list[dict]:
+    """Parse YAML frontmatter from .claude/agents/*.md (skips _TEMPLATE and README)."""
+    agents: list[dict] = []
+    agent_dir = os.path.join(os.path.dirname(__file__), "..", ".claude", "agents")
+    for path in sorted(glob.glob(os.path.join(agent_dir, "*.md"))):
+        fname = os.path.basename(path)
+        if fname.startswith("_") or fname == "README.md":
+            continue
         try:
             with open(path, encoding="utf-8") as f:
                 content = f.read()
@@ -75,22 +75,21 @@ def _load_cowork_skills() -> list[dict]:
                 if ":" not in line:
                     continue
                 k, _, v = line.partition(":")
-                k, v = k.strip(), v.strip().strip("\"'")
-                if v.startswith("[") and v.endswith("]"):
-                    v = [x.strip() for x in v[1:-1].split(",") if x.strip()]
-                meta[k] = v
-            meta["cadence"] = _CRON_LABELS.get(meta.get("schedule", ""), "On-demand")
-            meta["agent_label"] = _AGENT_LABELS.get(meta.get("agent", ""), meta.get("agent", ""))
-            meta["scheduled"] = "schedule" in meta
-            skills.append(meta)
+                meta[k.strip()] = v.strip().strip("\"'")
+            slug = meta.get("name", fname.replace(".md", ""))
+            display, dept, colour = _AGENT_DEPT.get(slug, (slug, "—", "#8b949e"))
+            meta["slug"] = slug
+            meta["display_name"] = display
+            meta["department"] = dept
+            meta["dept_colour"] = colour
+            agents.append(meta)
         except Exception:
             pass
-    # Sort: scheduled first (by cadence), then on-demand alphabetically
-    skills.sort(key=lambda s: (not s["scheduled"], s.get("cadence", ""), s.get("name", "")))
-    return skills
+    agents.sort(key=lambda a: (_DEPT_SORT.get(a["department"], 9), a["display_name"]))
+    return agents
 
 
-_COWORK_SKILLS: list[dict] = _load_cowork_skills()
+_AGENTS: list[dict] = _load_agents()
 
 
 # ─── Static report pages ──────────────────────────────────────────────────────
@@ -2016,7 +2015,7 @@ def activity_dashboard():
         panel2_rows=panel2_rows,
         panel3_health=panel3_health,
         panel3_has_failure=panel3_has_failure,
-        cowork_skills=_COWORK_SKILLS,
+        agents=_AGENTS,
     )
     print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
     with _ACTIVITY_CACHE_LOCK:

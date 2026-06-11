@@ -2571,12 +2571,12 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
-    {# ── Panel 4: Workflow Directory ── #}
-    <div class="panel-card" id="panel-cowork">
+    {# ── Panel 4: Agent Directory ── #}
+    <div class="panel-card" id="panel-agents">
       <div class="panel-header" onclick="togglePanel(this)">
-        <div class="panel-title">Workflow Directory</div>
+        <div class="panel-title">Agent Directory</div>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="panel-count">{{ cowork_skills|length }} skills</span>
+          <span class="panel-count">{{ agents|length }} agents</span>
           <span class="panel-arrow">▾</span>
         </div>
       </div>
@@ -2584,42 +2584,31 @@ a:hover{text-decoration:underline}
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
             <tr style="background:#161b22;border-bottom:1px solid #21262d">
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Skill</th>
               <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">When</th>
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Connectors</th>
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">What it does</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Department</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Model</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">When to dispatch</th>
             </tr>
           </thead>
           <tbody>
-            {% for sk in cowork_skills %}
+            {% for ag in agents %}
             <tr style="border-bottom:{% if not loop.last %}1px solid #21262d{% else %}none{% endif %}">
               <td style="padding:8px 12px;white-space:nowrap">
-                <span style="font-family:monospace;color:#79c0ff;font-weight:600">/{{ sk.name }}</span>
+                <div style="color:#e6edf3;font-weight:600">{{ ag.display_name }}</div>
+                <div style="font-family:monospace;color:#484f58;font-size:10px">{{ ag.slug }}</div>
               </td>
-              <td style="padding:8px 12px;white-space:nowrap;color:#e6edf3">{{ sk.agent_label }}</td>
               <td style="padding:8px 12px;white-space:nowrap">
-                {% if sk.scheduled %}
-                  <span style="background:#1f3a1f;color:#3fb950;border-radius:4px;padding:2px 6px;font-size:11px">{{ sk.cadence }}</span>
-                {% else %}
-                  <span style="background:#1c2128;color:#8b949e;border-radius:4px;padding:2px 6px;font-size:11px">On-demand</span>
-                {% endif %}
+                <span style="border-radius:4px;padding:2px 8px;font-size:11px;background:{{ ag.dept_colour }}22;color:{{ ag.dept_colour }};border:1px solid {{ ag.dept_colour }}55">{{ ag.department }}</span>
               </td>
-              <td style="padding:8px 12px">
-                {% if sk.connectors is iterable and sk.connectors is not string %}
-                  {% for c in sk.connectors %}
-                    <span style="background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:1px 5px;font-size:10px;color:#8b949e;margin-right:3px">{{ c }}</span>
-                  {% endfor %}
-                {% else %}
-                  <span style="color:#484f58">—</span>
-                {% endif %}
+              <td style="padding:8px 12px;white-space:nowrap;color:#8b949e;font-family:monospace;font-size:11px">
+                {{ ag.model if ag.model else '—' }}
               </td>
-              <td style="padding:8px 12px;color:#8b949e;max-width:280px">
-                {{ sk.description[:110] }}{% if sk.description|length > 110 %}…{% endif %}
+              <td style="padding:8px 12px;color:#8b949e;max-width:340px">
+                {{ ag.description[:120] }}{% if ag.description|length > 120 %}…{% endif %}
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="5" style="padding:20px;text-align:center;color:#484f58">No skills loaded</td></tr>
+            <tr><td colspan="4" style="padding:20px;text-align:center;color:#484f58">No agents loaded</td></tr>
             {% endfor %}
           </tbody>
         </table>
