@@ -13,6 +13,18 @@ GOOGLE_ADS_CONFIG = {
     "customer_id": "1513020554",          # Active account - no dashes
 }
 
+# Conversion actions we actually use — only these are checked for recording health.
+# Old/legacy actions (OLD HubSpot - Lead, Old- Sales Qualified Lead, Free trial, etc.)
+# are excluded to avoid false "not recording" alerts.
+GOOGLE_ADS_ACTIVE_CONVERSIONS = {
+    "Page view",
+    "HubSpot - Lead",
+    "HubSpot - Sales Qualified Lead",
+    "HubSpot - Customer",
+    "YouTube channel subscriptions",
+    "YouTube follow-on views",
+}
+
 # Meta
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 META_AD_ACCOUNTS = [

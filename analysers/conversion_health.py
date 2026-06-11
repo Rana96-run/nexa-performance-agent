@@ -43,11 +43,11 @@ GTM_SERVER_ID   = os.getenv("GTM_SERVER_CONTAINER_ID", "GTM-PK6924TJ")
 # ── 1. Google Ads ─────────────────────────────────────────────────────────────
 
 def check_google_ads_conversions(days: int = 14) -> dict:
-    """Finds enabled Google Ads conversion actions with 0 conversions in last N days.
-    A goal with spend but no conversions means the tag is broken or misconfigured."""
+    """Checks only the active Google Ads conversion actions (config.GOOGLE_ADS_ACTIVE_CONVERSIONS).
+    Legacy/unused actions are excluded to avoid false 'not recording' alerts."""
     try:
         from executors.google_ads import get_client
-        from config import GOOGLE_ADS_CONFIG
+        from config import GOOGLE_ADS_CONFIG, GOOGLE_ADS_ACTIVE_CONVERSIONS
 
         client     = get_client()
         ga_svc     = client.get_service("GoogleAdsService")
@@ -73,9 +73,12 @@ def check_google_ads_conversions(days: int = 14) -> dict:
                 "summary":  f"Google Ads query failed: {str(e)[:80]}",
             }
 
-        if not action_rows:
+        # Filter to only the active conversion actions we care about
+        active_rows = [r for r in action_rows
+                       if r.conversion_action.name in GOOGLE_ADS_ACTIVE_CONVERSIONS]
+        if not active_rows:
             return {"platform": "Google Ads", "status": "ok", "issues": [],
-                    "summary": "No enabled conversion actions found"}
+                    "summary": "No active conversion actions found (check GOOGLE_ADS_ACTIVE_CONVERSIONS in config.py)"}
 
         # Query 2: metrics require segments.date — needs explicit date range
         today_str = date.today().strftime("%Y-%m-%d")
@@ -89,20 +92,27 @@ def check_google_ads_conversions(days: int = 14) -> dict:
         try:
             rows = list(ga_svc.search(customer_id=cid, query=q_metrics))
         except Exception:
-            # Metrics unavailable — fall back to existence-only check
             return {
                 "platform": "Google Ads", "status": "ok", "issues": [],
-                "summary":  f"{len(action_rows)} enabled conversion action(s) — metrics unavailable, existence confirmed",
+                "summary":  f"{len(active_rows)} active conversion action(s) — metrics unavailable, existence confirmed",
             }
 
-        # Group by action: sum all_conversions across date segments
+        # Group by action: sum all_conversions across date segments — active only
         totals: dict[str, dict] = {}
         for r in rows:
             action = r.conversion_action
             key    = action.name
+            if key not in GOOGLE_ADS_ACTIVE_CONVERSIONS:
+                continue  # skip legacy/unused actions
             if key not in totals:
                 totals[key] = {"id": action.id, "conversions": 0.0}
             totals[key]["conversions"] += r.metrics.all_conversions or 0.0
+
+        # Also add active actions that had zero rows in the metrics query (truly 0)
+        for r in active_rows:
+            name = r.conversion_action.name
+            if name not in totals:
+                totals[name] = {"id": r.conversion_action.id, "conversions": 0.0}
 
         for name, data in totals.items():
             if data["conversions"] == 0:
@@ -118,9 +128,9 @@ def check_google_ads_conversions(days: int = 14) -> dict:
 
         status = "broken" if issues else "ok"
         summary = (
-            f"{len(issues)} conversion action(s) not recording out of {len(totals)} enabled"
+            f"{len(issues)} active conversion action(s) not recording out of {len(totals)} checked"
             if issues else
-            f"All {len(totals)} Google Ads conversion action(s) recording"
+            f"All {len(totals)} active Google Ads conversion action(s) recording"
         )
         return {"platform": "Google Ads", "status": status, "issues": issues, "summary": summary}
 
