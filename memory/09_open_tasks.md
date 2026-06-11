@@ -17,11 +17,16 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       files with the 7-field standard (scope + does-NOT-own, skills + trust tiers, memory
       READ/WRITE, receives-from, hands-to, reports-to). Created `memory/agents/` per-agent
       private folder structure. Commits: `dd2f5ff` (folders), `1ea1a64` (agent files).
-- [x] **Phase 2 — Cowork skill files. DONE 2026-06-12.** 9 skill files written to
+- [x] **Phase 2 — Cowork skill files. DONE 2026-06-12.** 12 skill files in
       `.claude/skills/cowork/`: daily-loop, weekly-review, keyword-autofix (scheduled),
       campaign-manager, creative-strategist, growth-analyst, cro-specialist,
-      project-coordinator, performance-lead (on-demand). Each includes connectors,
-      hard rules, output format, done-means. Commit: `820efc1`.
+      project-coordinator, performance-lead (on-demand).
+      + 3 new automation skills (2026-06-12): monthly-creative-report (1st of month,
+      creative-strategist → Google Sheet per channel, winning criteria qual>50% + CPL≤$30),
+      daily-slack-audit (10:00 Riyadh, project-coordinator → check #approvals reactions,
+      remind in-thread, flag execution gaps), monthly-performance-deck (1st of month,
+      performance-lead → full-funnel Slides deck, all 3 new-biz pipelines).
+      Commits: `820efc1` (first 9), pending commit (last 3).
 - [ ] **Phase 3 — Cowork connectors.** Wire BigQuery, Slack, Asana, Meta, Google Ads,
       HubSpot in Cowork platform UI. Test each connector independently. ~30-60 min manual
       setup. Owner: `project-coordinator`.
