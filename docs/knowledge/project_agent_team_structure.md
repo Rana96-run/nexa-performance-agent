@@ -20,7 +20,7 @@ on the #approvals ✅, owns all cross-dept handoffs.
 → `developer`.
 
 **Dept 3 — Support** (serve both depts, NO internal handoff, parallel):
-`marketing-ops` (UTM/pixel/secrets) ∥ `growth-analyst` (owns memory/, 8-step loop
+`project-coordinator` (UTM/pixel/secrets) ∥ `growth-analyst` (owns memory/, 8-step loop
 on live BQ, forecasts).
 
 **Critical trap:** do NOT build agents from `agent_activity_log` — its 13 `role`

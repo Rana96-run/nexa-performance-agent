@@ -1,14 +1,14 @@
 ---
-name: marketing-ops-dept
+name: project-coordinator-dept
 description: |
-  Department Skill — Marketing Operations Management agent interface.
+  Department Skill — Project Coordinator Management agent interface.
   Defines what data the Ops agent receives from Nexa, how to interpret it,
   what reports it produces, and how it feeds back into the performance agent.
   Load when the Ops agent needs to understand its data contract with Nexa,
   or when Nexa needs to verify what it must send to Ops.
 ---
 
-# Marketing Operations Department Skill
+# Project Coordinator Department Skill
 
 > **Status & relationship to the 9-agent org (read first).** This skill describes
 > an **aspirational EXTERNAL** leadership-facing Ops agent that would read Nexa's
@@ -16,7 +16,7 @@ description: |
 > does not exist and no code writes it** — the integration was never wired.
 >
 > Mapping to the **current** org (`docs/_shared/org-chart.md`): the in-house
-> Support seat **`marketing-ops`** owns UTM/pixel/secrets (NOT the leadership
+> Support seat **`project-coordinator`** owns UTM/pixel/secrets (NOT the leadership
 > reporting described here); the leadership report + #approvals digest is assembled
 > by **`ai-orchestrator`** from **`growth-analyst`**'s live-BQ numbers. Use the
 > report formats below as the **spec** for those reports, and as the build spec

@@ -87,9 +87,9 @@ AGENT_IDENTITY: dict[str, dict] = {
     # ── Campaign Manager ──────────────────────────────────────────────────────
     "campaign_creator":        {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_DONIA_GID)},
     "keyword_management":      {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_DONIA_GID)},
-    # ── Marketing Ops ─────────────────────────────────────────────────────────
-    "health_monitor":          {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
-    "collector":               {"display_name": "Marketing Ops",       "slack_name": "Nexa · Marketing Ops",    "slack_emoji": ":wrench:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
+    # ── Project Coordinator ───────────────────────────────────────────────────
+    "health_monitor":          {"display_name": "Project Coordinator",  "slack_name": "Nexa · Project Coordinator", "slack_emoji": ":wrench:",       "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
+    "collector":               {"display_name": "Project Coordinator",  "slack_name": "Nexa · Project Coordinator", "slack_emoji": ":wrench:",       "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
     # ── Growth Analyst ────────────────────────────────────────────────────────
     "bq_refresh":              {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     "spike_detector":          {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},

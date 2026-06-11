@@ -19,16 +19,16 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       private folder structure. Commits: `dd2f5ff` (folders), `1ea1a64` (agent files).
 - [ ] **Phase 2 — Cowork skill files.** Create one Cowork skill file per agent in
       `.claude/skills/cowork/`. Same content as Phase 1 agent files, Cowork format.
-      Each skill logs a row to `agent_activity_log` on run. Owner: `marketing-ops` wires.
+      Each skill logs a row to `agent_activity_log` on run. Owner: `project-coordinator` wires.
 - [ ] **Phase 3 — Cowork connectors.** Wire BigQuery, Slack, Asana, Meta, Google Ads,
       HubSpot in Cowork platform UI. Test each connector independently. ~30-60 min manual
-      setup. Owner: `marketing-ops`.
+      setup. Owner: `project-coordinator`.
 - [ ] **Phase 4 — Daily loop on Cowork.** Set up `/daily-loop` as scheduled Cowork skill
       at 08:00 Riyadh. Run in parallel with Railway `main.py daily` for 14 days. Compare
       outputs. Retire Railway LLM layer once outputs match for 14 consecutive days.
 - [ ] **Phase 5 — n8n wiring (optional, independent).** Replace Railway Python collectors
       one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays <2% delta
-      after each replacement. Owner: `marketing-ops`. Can run independently of Phases 1-4.
+      after each replacement. Owner: `project-coordinator`. Can run independently of Phases 1-4.
 
 **Also included in Phase 1:**
 - [ ] Activity dashboard: rebuild as 4 panels (Marketing Decisions, Approvals, System

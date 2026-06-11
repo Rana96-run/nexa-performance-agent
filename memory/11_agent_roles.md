@@ -27,7 +27,7 @@
 | _Manager_ | `ai-orchestrator` | gates all writes ✅, owns all handoffs, 8-step loop 08:00 |
 | Performance (LEAD `performance-lead`) | `campaign-manager`, `creative-strategist` | the two directs run **in parallel** |
 | CRO / Landing Page | `cro-specialist` → `ui-ux-designer` → `developer` | **direct sequential handoff** |
-| Support (serve both, no internal handoff) | `marketing-ops`, `growth-analyst` | run **in parallel** |
+| Support (serve both, no internal handoff) | `project-coordinator`, `growth-analyst` | run **in parallel** |
 
 `growth-analyst` owns `memory/` (writes 08_pitfalls + 14_learning_patterns).
 
@@ -45,7 +45,7 @@ is the bridge so a change in one is traceable to the others.
 | `cro-specialist` | — | `cro_specialist` | Rana Khalid |
 | `ui-ux-designer` | — | `ui_ux_design` | Rana Khalid |
 | `developer` | — | `lp_developer` | Tony Helmy (+ Rana follower) |
-| `marketing-ops` *(Marketing Project Coordinator)* | — | `health_monitor`, `collector` | Donia Mohamed |
+| `project-coordinator` *(Project Coordinator)* | — | `health_monitor`, `collector` | Donia Mohamed |
 | `growth-analyst` | `paid_media_analyst` | `bq_refresh`, `spike_detector`, `llm_cadence` | Rana Khalid |
 
 **Full coverage — all log-roles owned 1:1 (no orphans, no double-claims).** `user`
@@ -77,12 +77,12 @@ repoint. Left for an explicit go.
 ## What's in-house vs external (updated 2026-06-08)
 
 The new org brought **CRO / Landing Page in-house** (Dept 2: `cro-specialist` →
-`ui-ux-designer` → `developer`) and made **Marketing Ops** an in-house Support
+`ui-ux-designer` → `developer`) and made **Project Coordinator** an in-house Support
 seat. What stays external:
 - **Creative production** (cutting actual ad creatives) — briefed via Asana
   `[Creative Brief]`. Our `creative-strategist` owns *direction*, not production.
 - **Lifecycle / email / HubSpot workflows** — briefed via Asana `[MarkOps Brief]`.
-  Our `marketing-ops` owns tracking/pixels/secrets, not lifecycle automation.
+  Our `project-coordinator` owns tracking/pixels/secrets, not lifecycle automation.
 
 ## Decision flow at a glance (9-agent org)
 

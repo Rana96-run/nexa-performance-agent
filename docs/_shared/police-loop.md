@@ -36,7 +36,7 @@ DETECT ─► ROUTE ─► FIX ─► VERIFY ─► REPORT
 
 | Stage | Owner | What happens |
 |---|---|---|
-| **DETECT** | `marketing-ops` | Surfaces every signal: `connector_health_log` (BROKEN/WARNING + fix_command), `collector_failures`, the QA gate blocks, `dashboard_violations.jsonl`, and `self_healer` scans. Fires #nexa-health on RED. Escalate a WARNING unchanged 3+ days to BROKEN — **but only for channels expected to have activity** (see idle rule). |
+| **DETECT** | `project-coordinator` | Surfaces every signal: `connector_health_log` (BROKEN/WARNING + fix_command), `collector_failures`, the QA gate blocks, `dashboard_violations.jsonl`, and `self_healer` scans. Fires #nexa-health on RED. Escalate a WARNING unchanged 3+ days to BROKEN — **but only for channels expected to have activity** (see idle rule). |
 
 > **⚠️ Idle ≠ broken (the cry-wolf guard).** A channel with **no active campaigns /
 > no recent spend** that shows zero/stale data is **HEALTHY-IDLE, not a fault** —
@@ -53,7 +53,7 @@ DETECT ─► ROUTE ─► FIX ─► VERIFY ─► REPORT
 | Issue class | Owner | Autonomy |
 |---|---|---|
 | Stale view / failed collector (re-runnable) | `growth-analyst` (data) / `self_healer` | **autonomous** ✅ — re-run the collector/view |
-| Connector health, pixel, UTM/field-map | `marketing-ops` | autonomous for re-runs; **human-gated** for OAuth/credential refresh |
+| Connector health, pixel, UTM/field-map | `project-coordinator` | autonomous for re-runs; **human-gated** for OAuth/credential refresh |
 | Dashboard / config bug (e.g. role_overlap) | owner of the file | autonomous ✅ (code reviewed before push) |
 | Schema / attribution drift | `growth-analyst` | autonomous detect + reconcile; schema change = reviewed |
 | Wasteful / mis-set ad campaign | `performance-lead` → `campaign-manager` | **NEVER autonomous** — human ✅ in #approvals |

@@ -59,7 +59,7 @@ for the previous one's output. The artifact travels through the shared workspace
 
 ### Dept 3 — Support (parallel, no internal handoff)
 ```
-marketing-ops      growth-analyst
+project-coordinator      growth-analyst
    (UTM/pixel/         (BQ analysis,
     secrets)            memory, forecasts)
 ```
@@ -71,7 +71,7 @@ called directly, run in parallel, and don't chain to each other.
 - **Every write** (scale / pause / create / launch / LP deploy) waits for the
   human **✅** in #approvals. ❌ skips. No exceptions except negative keywords
   (no spend at risk).
-- Stale data (not live BQ) → `growth-analyst` blocks; `marketing-ops` fires
+- Stale data (not live BQ) → `growth-analyst` blocks; `project-coordinator` fires
   #nexa-health on RED only.
 
 ## After the handoff (close the loop)

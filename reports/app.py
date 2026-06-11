@@ -1662,7 +1662,7 @@ def activity_dashboard():
                 "Receives reports from all dept leads, queues decisions",
             ],
             "receives_from": [],
-            "sends_to":      ["Performance Lead", "CRO Specialist", "Marketing Ops", "Growth Analyst"],
+            "sends_to":      ["Performance Lead", "CRO Specialist", "Project Coordinator", "Growth Analyst"],
             "agent_file":    ".claude/agents/ai-orchestrator.md",
         },
         # ── Performance dept ────────────────────────────────────────────────
@@ -1779,7 +1779,7 @@ def activity_dashboard():
         },
         # ── Support dept ────────────────────────────────────────────────────
         {
-            "title":         "Marketing Ops",
+            "title":         "Project Coordinator",
             "desc":          "UTM policy, Meta pixel health, HubSpot field mapping, Railway credential rotation.",
             "color":         "#6366f1",
             "dept":          "Support",
@@ -1794,7 +1794,7 @@ def activity_dashboard():
             ],
             "receives_from": ["AI Orchestrator"],
             "sends_to":      [],
-            "agent_file":    ".claude/agents/marketing-ops.md",
+            "agent_file":    ".claude/agents/project-coordinator.md",
         },
         {
             "title":         "Growth Analyst",
@@ -3131,7 +3131,7 @@ def ondemand_conversion_audit():
       - GTM web container: Meta Lead tag + GA4 config tag live
       - GA4: ga4_sessions_daily data freshness
 
-    Creates one consolidated Asana task (log_role=health_monitor → marketing-ops)
+    Creates one consolidated Asana task (log_role=health_monitor → project-coordinator)
     for any platform with issues.
     """
     def _run():
@@ -3161,7 +3161,7 @@ def ondemand_gtm_audit():
     Reads every tag in the live published version of GTM-TFH26VC2 and
     GTM-PK6924TJ. Checks status, triggers, pixel IDs, event names, and
     cross-references against the required tag list. Creates Asana tasks for
-    any Priority 1 blockers or missing tags — routed to marketing-ops with
+    any Priority 1 blockers or missing tags — routed to project-coordinator with
     a manager report section for ai-orchestrator.
     """
     def _run():

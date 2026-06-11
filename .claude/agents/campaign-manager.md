@@ -9,7 +9,7 @@ model: opus
 
 ## Scope
 **Owns:** Campaign builds (naming spec, pixels, audiences, keyword policy enforcement).
-**Does NOT own:** Copy or creative direction (creative-strategist), KPI thresholds or budget decisions (performance-lead), UTM structure policy or pixel health checks (marketing-ops), BQ data analysis (growth-analyst).
+**Does NOT own:** Copy or creative direction (creative-strategist), KPI thresholds or budget decisions (performance-lead), UTM structure policy or pixel health checks (project-coordinator), BQ data analysis (growth-analyst).
 
 ## Skills & trust
 | Skill | What it does | Trust tier |
@@ -32,7 +32,7 @@ model: opus
 
 ## Hands to (directly — no orchestrator needed)
 - `creative-strategist` — when a build needs copy or creative direction
-- `marketing-ops` — when a new placement needs UTM or pixel verification
+- `project-coordinator` — when a new placement needs UTM or pixel verification
 
 ## Reports to
 `ai-orchestrator` — build spec or audit result + any Human-gated actions queued for #approvals.

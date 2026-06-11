@@ -195,7 +195,7 @@ The team is **9 Claude Code subagents** = 1 manager + 3 departments (see
 - **Manager:** `ai-orchestrator` — 8-step loop 08:00, gates writes ✅, owns handoffs.
 - **Performance** (LEAD `performance-lead`): `campaign-manager` ∥ `creative-strategist`.
 - **CRO / Landing Page** (sequential): `cro-specialist` → `ui-ux-designer` → `developer`.
-- **Support** (parallel): `marketing-ops` ∥ `growth-analyst` (owns `memory/`).
+- **Support** (parallel): `project-coordinator` ∥ `growth-analyst` (owns `memory/`).
 
 > **Two layers:** these dev-time subagents are separate from the **production
 > runtime** (`claude/roles.py`), which loads `runtime_personas/qoyod-*.md` personas at

@@ -8,7 +8,7 @@ memory/dashboard_violations.jsonl, and blocks the write on block-severity.
 Agent routing:
   growth-analyst  →  role overlap / data attribution in _TEAM_DEFS
   developer       →  CSS/HTML structural issues in templates
-  marketing-ops   →  (reserved — config-level policy issues)
+  project-coordinator →  (reserved — config-level policy issues)
 
 After blocking: the orchestrator runs the 'dashboard-audit' workflow, which
 dispatches the responsible agents to fix and report automatically.

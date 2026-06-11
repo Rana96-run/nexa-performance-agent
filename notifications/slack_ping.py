@@ -59,7 +59,7 @@ def post_ping(channel: str, status: Literal["ok", "info", "warn", "alert"],
         link:     URL where the detail lives. Defaults to ACTIVITY_DASHBOARD_URL.
         role:     activity-log role of the agent posting this ping.
                   Controls the Slack username + icon_emoji shown on the message.
-                  Default: "health_monitor" (Marketing Ops).
+                  Default: "health_monitor" (Project Coordinator).
 
     Returns True on success.
     """

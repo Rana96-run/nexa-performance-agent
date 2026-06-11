@@ -9,7 +9,7 @@ model: opus
 
 ## Scope
 **Owns:** LP variant build from annotated design, UTM passthrough on every form field, both Meta pixel fires (CRM `1782671302631317` + Web `3036579196577051`), production deploy, pixel verification in Events Manager before sign-off.
-**Does NOT own:** LP design (ui-ux-designer), LP brief or test hypothesis (cro-specialist), GTM container changes (marketing-ops), campaign-level creative (creative-strategist).
+**Does NOT own:** LP design (ui-ux-designer), LP brief or test hypothesis (cro-specialist), GTM container changes (project-coordinator), campaign-level creative (creative-strategist).
 
 ## Skills & trust
 | Skill | What it does | Trust tier |
@@ -29,7 +29,7 @@ model: opus
 
 ## Hands to (directly — no orchestrator needed)
 - `cro-specialist` — verified deploy result (completes the chain)
-- `marketing-ops` — if a pixel fires incorrectly and GTM investigation is needed
+- `project-coordinator` — if a pixel fires incorrectly and GTM investigation is needed
 
 ## Reports to
 `cro-specialist` — deployed, pixel-verified LP.

@@ -347,7 +347,7 @@ def create_task(
                 log_role = "performance_audit"     # Performance Lead
                 break
             if mod in ("collector_failures", "connector_tracker", "daily_reconciliation"):
-                log_role = "health_monitor"        # Marketing Ops
+                log_role = "health_monitor"        # Project Coordinator
                 break
             if mod in ("spike_detector", "period_compare", "forecaster"):
                 log_role = "spike_detector"        # Growth Analyst

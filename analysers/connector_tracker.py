@@ -750,9 +750,9 @@ def _already_escalated(proj: str, ds: str, channel: str, window_hours: int = 6) 
 
 def alert_consecutive_broken(all_results: list) -> None:
     """For every channel/monitor BROKEN for 3+ consecutive checks:
-    1. Create an Asana task assigned to marketing-ops to diagnose and fix.
+    1. Create an Asana task assigned to project-coordinator to diagnose and fix.
     2. The task description encodes the full review chain:
-       marketing-ops fixes → growth-analyst reviews → QA gate → growth-analyst final sign-off.
+       project-coordinator fixes → growth-analyst reviews → QA gate → growth-analyst final sign-off.
     3. Dedup: skip if an escalation was already created for this channel in the last 6h.
     Runs after write_health_log so the current result is already persisted."""
     proj, ds = _proj_ds()
@@ -807,11 +807,11 @@ def alert_consecutive_broken(all_results: list) -> None:
             f"FAILING CHECKS:\n{checks_detail}\n\n"
             f"FIX HINT: {fix_cmd or 'See connector_health_log for detail.'}\n\n"
             f"REVIEW CHAIN (do not skip steps):\n"
-            f"1. [Marketing Ops] Diagnose root cause — read connector_health_log, check Railway logs, "
+            f"1. [Project Coordinator] Diagnose root cause — read connector_health_log, check Railway logs, "
             f"confirm credentials / freshness / attribution are the issue.\n"
-            f"2. [Marketing Ops] Apply fix — redeploy / rotate credentials / backfill data. "
+            f"2. [Project Coordinator] Apply fix — redeploy / rotate credentials / backfill data. "
             f"Verify connector returns HEALTHY in next check.\n"
-            f"3. [Marketing Ops → Growth Analyst] Hand off: update this task with fix summary, "
+            f"3. [Project Coordinator → Growth Analyst] Hand off: update this task with fix summary, "
             f"reassign to Growth Analyst for data-integrity review.\n"
             f"4. [Growth Analyst] Review: run 7-day BQ ↔ HubSpot reconciliation for affected "
             f"connector. Confirm no data gap. Update memory/08_pitfalls.md if a new trap found.\n"
@@ -825,7 +825,7 @@ def alert_consecutive_broken(all_results: list) -> None:
             f"Type: Fix\n"
             f"Channel: {channel}\n"
             f"Asset level: infrastructure\n"
-            f"Action: fix → [Marketing Ops] → [Growth Analyst]"
+            f"Action: fix → [Project Coordinator] → [Growth Analyst]"
         )
 
         try:

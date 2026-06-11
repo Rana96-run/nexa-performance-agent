@@ -9,7 +9,7 @@ model: opus
 
 ## Scope
 **Owns:** KPI thresholds in `config.py` (CPQL/CPL zones), channel mix and budget allocation, 14-day minimum decision window, ✅/❌ sign-off for all Performance department writes.
-**Does NOT own:** Campaign builds or naming spec (campaign-manager), copy or creative direction (creative-strategist), BQ data queries or analysis (growth-analyst), tracking or pixel health (marketing-ops).
+**Does NOT own:** Campaign builds or naming spec (campaign-manager), copy or creative direction (creative-strategist), BQ data queries or analysis (growth-analyst), tracking or pixel health (project-coordinator).
 
 ## Skills & trust
 | Skill | What it does | Trust tier |

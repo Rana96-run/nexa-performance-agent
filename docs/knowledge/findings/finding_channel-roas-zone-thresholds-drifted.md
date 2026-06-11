@@ -9,7 +9,7 @@ metadata:
 
 What was found: The CASE WHEN thresholds hardcoded in the `channel_roas_daily` view SQL (CPL/CPQL zone boundaries) had drifted from the canonical values in `config.py`. The view was showing wrong zone labels (acceptable vs warning vs pause) for campaigns.
 
-Source: Session a7de53a6 — raised by marketing-ops seat during codebase review.
+Source: Session a7de53a6 — raised by project-coordinator seat during codebase review.
 
 Impact: Dashboard KPI zones showed incorrect status colors; campaign decisions could be made on wrong zone classification.
 

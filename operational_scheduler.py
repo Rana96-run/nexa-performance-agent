@@ -1170,11 +1170,11 @@ def _post_weekly_summary(spikes: list | None = None,
 
 
 def _run_health_check():
-    """Hourly health check — owned by marketing-ops.
+    """Hourly health check — owned by project-coordinator.
     Runs the full connector tracker so alert_consecutive_broken() can escalate
     to an Asana task when any connector has been BROKEN for 3+ consecutive hours.
     Results written to connector_health_log (BQ). No Slack post from here —
-    escalation goes to Asana (marketing-ops → growth-analyst review chain)."""
+    escalation goes to Asana (project-coordinator → growth-analyst review chain)."""
     try:
         from analysers.connector_tracker import run_all_checks
         result = run_all_checks(post_slack=False, write_bq=True)

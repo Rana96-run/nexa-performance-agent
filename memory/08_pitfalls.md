@@ -89,7 +89,7 @@
   - LP audit + CRO brief → **cro-specialist** (hands off to ui-ux-designer → developer if fixes needed)
   - BQ verification / period comparison / CPQL calculation → **growth-analyst**
   - Pause/scale decision + CPQL thresholds → **performance-lead**
-  - #approvals digest post + Asana tasks → **campaign-manager** or **marketing-ops**
+  - #approvals digest post + Asana tasks → **campaign-manager** or **project-coordinator**
   - Code/script fixes (e.g. audit_active_keywords.py syntax error) → **developer**
 
 Append one-liner entries as they're discovered. Every entry should include
@@ -1219,7 +1219,7 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
   loads (qoyod-manager-os, qoyod-brand-identity, qoyod-paid-media-agent,
   qoyod-analyst-agent, nexa-strategist, qoyod-daily-report). Moving them breaks Railway.
 - **`agent_handoff_log` does NOT exist** (no BQ table, no code). The
-  growth-marketing-dept / marketing-ops-dept / agent-handoff skills assuming it are
+  growth-marketing-dept / project-coordinator-dept / agent-handoff skills assuming it are
   aspirational specs — don't treat their payloads as live.
 - **Don't blind-repoint `claude/roles.py` at the dev playbooks.** Runtime personas
   are rich (~23KB); dev playbooks are tight. Repointing shrinks prompts and degrades

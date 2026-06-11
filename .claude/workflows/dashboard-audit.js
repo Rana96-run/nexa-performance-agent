@@ -4,7 +4,7 @@ export const meta = {
   phases: [
     { title: 'Capture', detail: 'Growth Analyst reads violations queue and assesses root causes' },
     { title: 'Fix',     detail: 'Developer + Growth Analyst apply targeted fixes in parallel' },
-    { title: 'Report',  detail: 'Marketing Ops marks violations resolved, writes audit log' },
+    { title: 'Report',  detail: 'Project Coordinator marks violations resolved, writes audit log' },
   ],
 }
 
@@ -145,14 +145,14 @@ For each violation in the list above:
      spike_detector  → growth-analyst   (detects BQ anomalies)
      bq_refresh      → growth-analyst   (owns BQ layer)
      llm_cadence     → growth-analyst   (runs the 8-step loop)
-     daily_digest    → marketing-ops    (posts the Slack digest)
+     daily_digest    → project-coordinator    (posts the Slack digest)
      cro_analysis    → cro-specialist   (LP brief + hypothesis)
      lp_deploy       → developer        (ships to production)
      lp_design       → ui-ux-designer   (LP design)
      performance_audit → performance-lead
      keyword_management → campaign-manager
-     health_monitor  → marketing-ops
-     slack_approval  → marketing-ops
+     health_monitor  → project-coordinator
+     slack_approval  → project-coordinator
      ops_scheduler   → ai-orchestrator
 4. After editing, verify no role string appears in more than one roles set.
 
@@ -170,8 +170,8 @@ const all_fixed   = [...(dev_result?.fixed_ids || []),   ...(analyst_result?.fix
 const all_skipped = [...(dev_result?.skipped_ids || []), ...(analyst_result?.skipped_ids || [])]
 log(`Fix: ${all_fixed.length} fixed, ${all_skipped.length} skipped`)
 
-// ── PHASE 3: REPORT  (Marketing Ops) ─────────────────────────────────────────
-// Marketing Ops marks resolved violations in the queue, writes the audit log
+// ── PHASE 3: REPORT  (Project Coordinator) ─────────────────────────────────────────
+// Project Coordinator marks resolved violations in the queue, writes the audit log
 // entry, and confirms the system is clean. They own "ops hygiene" — closing
 // the loop is exactly their charter.
 phase('Report')
@@ -179,7 +179,7 @@ phase('Report')
 const today = new Date().toISOString().slice(0, 10)
 
 const report = await agent(`
-You are Marketing Ops for Nexa Ops. You own the plumbing — closing this
+You are Project Coordinator for Nexa Ops. You own the plumbing — closing this
 audit loop is your responsibility.
 
 AUDIT RESULTS:
@@ -209,7 +209,7 @@ STEP 3 — Return the report object.
   still_open_count: number still with status="open" after your update
   summary:          2 sentences — what was fixed + what (if anything) remains open
   log_entry:        the exact string you appended to 14_activity_dashboard.md
-`, { schema: REPORT_SCHEMA, phase: 'Report', agentType: 'marketing-ops', label: 'mktg-ops:report' })
+`, { schema: REPORT_SCHEMA, phase: 'Report', agentType: 'project-coordinator', label: 'mktg-ops:report' })
 
 log(`Report: fixed=${report?.fixed_count} still-open=${report?.still_open_count}`)
 log(report?.summary || '')

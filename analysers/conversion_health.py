@@ -572,7 +572,7 @@ def create_tasks(results: list[dict]) -> list[str]:
     if not problems:
         return []
 
-    # One consolidated task for marketing-ops covering all platforms
+    # One consolidated task for project-coordinator covering all platforms
     lines = [f"Conversion tracking health audit — {today}\n"]
     for r in problems:
         lines.append(f"## {r['platform']} — {r['status'].upper()}")
@@ -585,12 +585,12 @@ def create_tasks(results: list[dict]) -> list[str]:
 
     lines += [
         "REVIEW CHAIN:",
-        "1. [Marketing Ops] Apply fixes above — verify each platform shows recording.",
+        "1. [Project Coordinator] Apply fixes above — verify each platform shows recording.",
         "2. [Growth Analyst] Confirm 3-day trailing conversion counts are non-zero in BQ.",
         "3. [QA Gate] All platforms HEALTHY in next conversion_health check.",
         "4. [Growth Analyst] Sign off — update memory/08_pitfalls.md with root cause.\n",
         f"Created: {today}\nDue: {today}\nPriority: High",
-        "Type: Fix\nChannel: tracking\nAsset level: infrastructure\nAction: fix → [Marketing Ops]",
+        "Type: Fix\nChannel: tracking\nAsset level: infrastructure\nAction: fix → [Project Coordinator]",
     ]
 
     gid = create_task(
@@ -962,9 +962,9 @@ def create_gtm_audit_tasks(audit: dict) -> list[str]:
             audit.get("report", ""),
             "",
             "REVIEW CHAIN:",
-            "1. [Marketing Ops] Apply Priority 1 fixes in GTM — publish a new version.",
-            "2. [Marketing Ops] Verify each fixed tag fires correctly using Tag Assistant.",
-            "3. [Marketing Ops] For missing tags: create them, test, publish.",
+            "1. [Project Coordinator] Apply Priority 1 fixes in GTM — publish a new version.",
+            "2. [Project Coordinator] Verify each fixed tag fires correctly using Tag Assistant.",
+            "3. [Project Coordinator] For missing tags: create them, test, publish.",
             "4. [Growth Analyst] Re-run Conversion Recording Audit — confirm all platforms HEALTHY.",
             "5. [Growth Analyst] Sign off — update memory/08_pitfalls.md with any new trap found.",
             "",
@@ -976,7 +976,7 @@ def create_gtm_audit_tasks(audit: dict) -> list[str]:
             f"  Next audit: run Conversion Recording Audit from /activity in 7 days",
             "",
             f"Created: {today}\nDue: {today}\nPriority: {'High' if p1 else 'Medium'}",
-            f"Type: Audit\nChannel: gtm\nAsset level: infrastructure\nAction: fix → [Marketing Ops]",
+            f"Type: Audit\nChannel: gtm\nAsset level: infrastructure\nAction: fix → [Project Coordinator]",
         ]
 
         gid = create_task(

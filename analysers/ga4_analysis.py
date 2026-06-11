@@ -5,7 +5,7 @@ Week-over-week GA4 session and conversion analysis.
 
 Reads ga4_sessions_daily from BQ; detects significant drops (>20%) in
 sessions, engaged sessions, conversions, or average session duration.
-Creates an Asana task for marketing-ops when a drop exceeds the threshold.
+Creates an Asana task for project-coordinator when a drop exceeds the threshold.
 
 Entry points:
   analyse_wow(days_current=7) → dict with period comparison + flags
@@ -143,7 +143,7 @@ def _already_alerted(window_hours: int = _DEDUP_WINDOW_HOURS) -> bool:
 
 
 def create_alert_tasks(analysis: dict[str, Any]) -> list[str]:
-    """Create an Asana task for marketing-ops when GA4 flags exist.
+    """Create an Asana task for project-coordinator when GA4 flags exist.
     Returns list of task GIDs created (empty if no flags or already alerted)."""
     flags = analysis.get("flags", [])
     if not flags or analysis.get("error"):
@@ -177,14 +177,14 @@ def create_alert_tasks(analysis: dict[str, Any]) -> list[str]:
         *metric_lines,
         "",
         "NEXT STEPS:",
-        "1. [Marketing Ops] Check GA4 property 517912363 for the same period — confirm the drop is real.",
-        "2. [Marketing Ops] Check GTM container GTM-TFH26VC2 for any tag changes (filter by date).",
-        "3. [Marketing Ops] Verify Meta pixel Lead event and GA4 config tag are live.",
+        "1. [Project Coordinator] Check GA4 property 517912363 for the same period — confirm the drop is real.",
+        "2. [Project Coordinator] Check GTM container GTM-TFH26VC2 for any tag changes (filter by date).",
+        "3. [Project Coordinator] Verify Meta pixel Lead event and GA4 config tag are live.",
         "4. [Growth Analyst] Compare against paid channel spend/sessions from campaigns_daily for the same window.",
         "5. [Growth Analyst] Document root cause in memory/14_learning_patterns.md.",
         "",
         f"Created: {today}\nDue: {today}\nPriority: High",
-        "Type: Investigation\nChannel: ga4\nAsset level: analytics\nAction: investigate → [Marketing Ops]",
+        "Type: Investigation\nChannel: ga4\nAsset level: analytics\nAction: investigate → [Project Coordinator]",
     ]
 
     gid = create_task(

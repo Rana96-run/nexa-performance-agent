@@ -29,7 +29,7 @@ overloaded brain.
   routes every request, gates **every write on the human ✅**, owns all handoffs.
 - **Dept 1 — Performance** (LEAD `performance-lead`): `campaign-manager` ∥ `creative-strategist` (parallel).
 - **Dept 2 — CRO / Landing Page** (sequential): `cro-specialist → ui-ux-designer → developer`.
-- **Dept 3 — Support** (parallel, serve both): `marketing-ops` ∥ `growth-analyst` (owns memory/).
+- **Dept 3 — Support** (parallel, serve both): `project-coordinator` ∥ `growth-analyst` (owns memory/).
 
 **Flow:** observe live BQ → compare period-over-period → investigate → decide with
 full setup → **execute only after ✅** → monitor 7d/14d → learn → forecast.
@@ -67,7 +67,7 @@ linked to any other (default flow is structured; the orchestrator can wire any p
 KPI thresholds + budget + sign-off (`performance-lead`) · campaign build, naming,
 pixels, keyword policy (`campaign-manager`) · persona/creative direction +
 A/B (`creative-strategist`) · LP test brief→design→build→verify (`cro-specialist`,
-`ui-ux-designer`, `developer`) · UTM/pixel/secrets (`marketing-ops`) · live-BQ
+`ui-ux-designer`, `developer`) · UTM/pixel/secrets (`project-coordinator`) · live-BQ
 analysis, period-compare, forecasts, memory ownership (`growth-analyst`) · routing +
 the daily loop + the gate (`ai-orchestrator`).
 

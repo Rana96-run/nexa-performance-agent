@@ -18,9 +18,9 @@ See `docs/_shared/org-chart.md` for the full chart. In one screen:
 
 - **Performance** · LEAD `performance-lead` → `campaign-manager` ∥ `creative-strategist`
 - **CRO / Landing Page** · `cro-specialist` → `ui-ux-designer` → `developer`
-- **Support** (serve both, no internal handoff) · `marketing-ops` ∥ `growth-analyst`
+- **Support** (serve both, no internal handoff) · `project-coordinator` ∥ `growth-analyst`
 
-`growth-analyst` is the keeper of `memory/`. `marketing-ops` owns secrets/tracking.
+`growth-analyst` is the keeper of `memory/`. `project-coordinator` owns secrets/tracking.
 
 ## 3. The daily 8-step loop (08:00 Riyadh)
 Run every day; this is the intelligence loop from `CLAUDE.md`, orchestrated:
@@ -46,7 +46,7 @@ Pick the **department by altitude**, hand to its lead, never fan out blindly:
 | copy / creative / A/B / persona | Performance → `performance-lead` → `creative-strategist` |
 | KPI thresholds / budget / channel mix | `performance-lead` |
 | a landing-page test (start/design/build/decide) | CRO → `cro-specialist` (runs the → chain) |
-| tracking / pixels / UTM / secrets / connector health | `marketing-ops` |
+| tracking / pixels / UTM / secrets / connector health | `project-coordinator` |
 | data / period comparison / forecast / CRO A/B numbers / memory | `growth-analyst` |
 | "who handles this?" / cross-department | you decide, then sequence |
 
@@ -68,7 +68,7 @@ the function-roles `ops_scheduler`, `bq_refresh`, `performance_audit`, etc. — 
 are LOG labels, not team agents; see `memory/11_agent_roles.md`).
 
 ## 7. Handoff orchestration (parallel vs sequential)
-- **Parallel:** `campaign-manager` ∥ `creative-strategist`; `marketing-ops` ∥ `growth-analyst`.
+- **Parallel:** `campaign-manager` ∥ `creative-strategist`; `project-coordinator` ∥ `growth-analyst`.
 - **Direct sequential:** `cro-specialist` → `ui-ux-designer` → `developer` (artifact
   travels `docs/landing-pages/` briefs/ → designs/ → specs/, one filename per test).
 - **Cross-dept coordination:** `creative-strategist` ↔ `cro-specialist` before a test goes live.
@@ -77,7 +77,7 @@ Use the HANDOFF packet format in `handoff-protocol.md` for every pass.
 ## 8. Escalation
 - A role escalates to its lead; a lead escalates to you; you escalate to the human.
 - Escalate when: a decision is above the seat's altitude, crosses departments, or
-  risks spend/CPQL beyond guardrail. `marketing-ops` fires #nexa-health on RED only.
+  risks spend/CPQL beyond guardrail. `project-coordinator` fires #nexa-health on RED only.
 
 ## 9. Reporting (what you assemble)
 - **Nightly:** the single #approvals digest — dashboard URL, peak numbers (top + worst
@@ -98,7 +98,7 @@ reviews, Slack posts, Asana tasks. They carry no playbook, no domain guardrails,
 2. Anonymous `agent()` is allowed ONLY for pure mechanical transforms (string parsing, JSON
    reshaping — no domain judgment involved)
 3. `ai-orchestrator` is always first (routes) and last (gates output before it surfaces)
-4. Parallel seats: campaign-manager ∥ creative-strategist; marketing-ops ∥ growth-analyst
+4. Parallel seats: campaign-manager ∥ creative-strategist; project-coordinator ∥ growth-analyst
 5. Sequential chain: cro-specialist → ui-ux-designer → developer (artifact travels with them)
 6. Cross-department work: orchestrator sequences, never merges into a single agent call
 

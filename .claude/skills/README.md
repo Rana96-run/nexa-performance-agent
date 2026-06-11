@@ -11,7 +11,7 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 |---|---|---|
 | **Role Skills** | Who Claude is when doing the work | paid-media-analyst, connector-police, data-engineer, media-buyer, cro-paid-specialist |
 | **Client Skill** | Qoyod product knowledge + brand rules | qoyod-brand |
-| **Department Skills** | How each department operates | marketing-ops-dept, growth-marketing-dept |
+| **Department Skills** | How each department operates | project-coordinator-dept, growth-marketing-dept |
 | **Workflow Skills** | End-to-end process automation | morning-analysis-flow, agent-handoff, approval-execution-flow |
 | **Skill Library** | Procedure playbooks (how to do X) | All others below |
 
@@ -41,7 +41,7 @@ Each skill gives Claude a specific identity, framework, output format, and guard
 
 | Skill | When to load |
 |---|---|
-| `marketing-ops-dept.md` | Writing/reading ops briefs for the Marketing Ops Management agent |
+| `project-coordinator-dept.md` | Writing/reading ops briefs for the Project Coordinator agent |
 | `growth-marketing-dept.md` | Writing/reading growth signals for the Growth Marketing agent |
 
 ---
@@ -99,17 +99,17 @@ Good: a skill that says "you are X, you think like Y, you always output Z, you n
 **Current (the team):** 9 in-house Claude Code subagents — see
 `docs/_shared/org-chart.md` and `CLAUDE.manager.md`. CRO/Landing Page is now an
 **in-house** department (`cro-specialist → ui-ux-designer → developer`); Marketing
-Ops + Growth are in-house **Support** seats (`marketing-ops`, `growth-analyst`).
+Ops + Growth are in-house **Support** seats (`project-coordinator`, `growth-analyst`).
 
 ```
 ai-orchestrator (mgr, gates ✅)
     ├── Performance : performance-lead → campaign-manager ∥ creative-strategist
     ├── CRO / LP    : cro-specialist → ui-ux-designer → developer
-    └── Support     : marketing-ops ∥ growth-analyst   (growth-analyst owns memory/)
+    └── Support     : project-coordinator ∥ growth-analyst   (growth-analyst owns memory/)
             ↕ docs/landing-pages/reference/  (local snapshot of D:\Landing Page Agent)
 ```
 
-**Aspirational (not wired):** the `growth-marketing-dept.md` / `marketing-ops-dept.md`
+**Aspirational (not wired):** the `growth-marketing-dept.md` / `project-coordinator-dept.md`
 skills describe EXTERNAL strategic agents fed by an `agent_handoff_log` BQ table —
 **that table does not exist and no code writes it.** Treat those skills as specs,
 not live integrations (each carries a status header). Same for `agent-handoff.md`.

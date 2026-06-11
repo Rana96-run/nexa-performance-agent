@@ -118,7 +118,7 @@ memory/agents/
     ui-ux-designer/     ← design patterns, ZATCA badge variations
     developer/          ← pixel firing notes, UTM passthrough issues
   support/
-    marketing-ops/      ← connector failure patterns, UTM mapping notes
+    project-coordinator/      ← connector failure patterns, UTM mapping notes
     growth-analyst/     ← BQ query patterns, reconciliation findings
 ```
 
@@ -157,7 +157,7 @@ ai-orchestrator
   ├──► performance-lead        (flag triage → routes to directs)
   │       ├──► campaign-manager ∥ creative-strategist  (parallel)
   │       │       campaign-manager ──► creative-strategist (needs copy)
-  │       │       campaign-manager ──► marketing-ops (pixel verify)
+  │       │       campaign-manager ──► project-coordinator (pixel verify)
   │       │       creative-strategist ──► cro-specialist (pre-launch align)
   │       └── both report back to performance-lead → up to orchestrator
   ├──► cro-specialist          (LP test start/decide)
@@ -165,7 +165,7 @@ ai-orchestrator
   │       │       └──► developer (sequential)
   │       │               └──► cro-specialist (result)
   │       └── cro-specialist reports to orchestrator
-  ├──► marketing-ops           (tracking/pixel/UTM/connectors)
+  ├──► project-coordinator           (tracking/pixel/UTM/connectors)
   └──► growth-analyst          (memory, forecasts, BQ)
        both report directly to orchestrator
 ```
@@ -252,7 +252,7 @@ Railway (Python collectors — unchanged, runs in parallel)
 | `/creative-strategist` | On-demand | `creative-strategist` | Creative brief + variant plan |
 | `/growth-analyst` | On-demand | `growth-analyst` | Analysis + memory writes |
 | `/cro-specialist` | On-demand | `cro-specialist` | LP test brief or result |
-| `/marketing-ops` | On-demand | `marketing-ops` | Connector/pixel/UTM status |
+| `/project-coordinator` | On-demand | `project-coordinator` | Connector/pixel/UTM status |
 | `/performance-lead` | On-demand | `performance-lead` | KPI decision + routed actions |
 | `/weekly-review` | Monday 08:00 Riyadh | `ai-orchestrator` | Weekly ops summary |
 | `/keyword-autofix` | Sunday 08:00 Riyadh | `campaign-manager` | Keyword policy enforcement |
@@ -261,10 +261,10 @@ Railway (Python collectors — unchanged, runs in parallel)
 
 | Connector | Used by | Purpose |
 |---|---|---|
-| BigQuery | `growth-analyst`, `marketing-ops` | Live data reads |
+| BigQuery | `growth-analyst`, `project-coordinator` | Live data reads |
 | Slack | `ai-orchestrator` | #approvals digest, #nexa-health |
 | Asana | `ai-orchestrator`, all agents | Task creation + tracking |
-| Meta Ads | `campaign-manager`, `marketing-ops` | Read audits; writes after ✅ |
+| Meta Ads | `campaign-manager`, `project-coordinator` | Read audits; writes after ✅ |
 | Google Ads | `campaign-manager` | Read audits; writes after ✅ |
 | HubSpot | `growth-analyst` | Read-only lead/deal data |
 | n8n (webhook) | `ai-orchestrator` | Trigger data collection + route approvals |
@@ -272,7 +272,7 @@ Railway (Python collectors — unchanged, runs in parallel)
 ### n8n agent integration
 Any agent can trigger an n8n workflow by calling its webhook URL. Example flows:
 - `campaign-manager` proposes a pause → n8n holds the action → Slack ✅ received → n8n executes the Meta API call
-- `marketing-ops` detects a broken connector → n8n fires the re-collection job → signals `growth-analyst` when data is ready
+- `project-coordinator` detects a broken connector → n8n fires the re-collection job → signals `growth-analyst` when data is ready
 - `growth-analyst` completes analysis → n8n creates the Asana task with full context
 
 This keeps agents focused on decisions only — they never call ad platform APIs directly. n8n is the hands; Cowork is the brain.
@@ -292,7 +292,7 @@ Wire BigQuery, Slack, Asana, Meta, Google Ads, HubSpot in Cowork. Test each conn
 Set up `/daily-loop` as a scheduled Cowork skill at 08:00 Riyadh. Run in parallel with Railway's `main.py daily` for 2 weeks. Compare outputs. Retire Railway's LLM layer once outputs match.
 
 **Phase 5 — n8n wiring**
-Replace Railway Python collectors one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays < 2% delta after each replacement. `marketing-ops` owns this phase.
+Replace Railway Python collectors one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays < 2% delta after each replacement. `project-coordinator` owns this phase.
 
 **Phase 5 is optional and independent** — the system works without n8n. n8n is an improvement to the data/action layer, not a prerequisite for Cowork.
 
@@ -378,7 +378,7 @@ memory/agents/performance/creative-strategist/
 memory/agents/cro/cro-specialist/
 memory/agents/cro/ui-ux-designer/
 memory/agents/cro/developer/
-memory/agents/support/marketing-ops/
+memory/agents/support/project-coordinator/
 memory/agents/support/growth-analyst/
 ```
 
@@ -391,7 +391,7 @@ memory/agents/support/growth-analyst/
 .claude/agents/cro-specialist.md
 .claude/agents/ui-ux-designer.md
 .claude/agents/developer.md
-.claude/agents/marketing-ops.md
+.claude/agents/project-coordinator.md
 .claude/agents/growth-analyst.md
 ```
 
@@ -407,7 +407,7 @@ memory/16_activity_dashboard.md    ← updated spec with 4-panel design
 .claude/skills/cowork/creative-strategist.md
 .claude/skills/cowork/growth-analyst.md
 .claude/skills/cowork/cro-specialist.md
-.claude/skills/cowork/marketing-ops.md
+.claude/skills/cowork/project-coordinator.md
 .claude/skills/cowork/performance-lead.md
 .claude/skills/cowork/weekly-review.md
 .claude/skills/cowork/keyword-autofix.md

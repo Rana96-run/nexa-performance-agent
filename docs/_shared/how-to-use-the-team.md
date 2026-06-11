@@ -26,7 +26,7 @@ the rules they all follow. Pair it with `org-chart.md` (who exists),
 | Start / decide an LP test | *"`cro-specialist`: open a test for the Invoice page, hypothesis = ZATCA above fold."* |
 | Design an LP variant | *"`ui-ux-designer`: design the variant from the Invoice brief."* |
 | Build + ship + verify an LP | *"`developer`: build the Invoice variant, wire UTM + both pixels, verify in Events Manager."* |
-| Fix tracking / pixels / secrets | *"`marketing-ops`: the Web pixel stopped firing — check it."* |
+| Fix tracking / pixels / secrets | *"`project-coordinator`: the Web pixel stopped firing — check it."* |
 | Pull data / compare / forecast | *"`growth-analyst`: 7d-vs-prior CPQL by channel, explicit dates, live BQ."* |
 
 ## What every agent does on dispatch (so you know what to expect)
@@ -48,6 +48,6 @@ Full text in `communication-rules.md`. The non-negotiables:
   human ✅ in #approvals (negative keywords are the only direct-execute exception).
 
 ## Who works together vs alone
-- **Parallel:** `campaign-manager` ∥ `creative-strategist` · `marketing-ops` ∥ `growth-analyst`.
+- **Parallel:** `campaign-manager` ∥ `creative-strategist` · `project-coordinator` ∥ `growth-analyst`.
 - **Direct sequential handoff:** `cro-specialist` → `ui-ux-designer` → `developer`.
 - **Manager over all:** `ai-orchestrator` gates writes + owns cross-dept handoffs.

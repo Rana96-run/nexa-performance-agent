@@ -37,11 +37,11 @@ Name the seat in plain language:
 | `cro-specialist` | CRO / LP (chain lead) | 8-section LP brief, hypothesis, ZATCA badge, test-result decision. |
 | `ui-ux-designer` | CRO / LP | LP variant design to persona, annotated handoff to Developer. |
 | `developer` | CRO / LP | Build LP, UTM passthrough, pixel fires, deploy, verify in Events Mgr. |
-| `marketing-ops` | Marketing Project Coordinator (OPS) | UTM/pixel/GTM/field-map policy, Railway secrets, connector health, #nexa-health on RED. |
+| `project-coordinator` | Project Coordinator (OPS) | UTM/pixel/GTM/field-map policy, Railway secrets, connector health, #nexa-health on RED. |
 | `growth-analyst` | Support (DATA) | Owns memory/; 8-step loop on live BQ, period compares, forecasts. |
 
 ## Parallel vs sequential
-- **Parallel:** campaign-manager ∥ creative-strategist · marketing-ops ∥ growth-analyst.
+- **Parallel:** campaign-manager ∥ creative-strategist · project-coordinator ∥ growth-analyst.
 - **Sequential (direct handoff):** cro-specialist → ui-ux-designer → developer.
 - Manager `ai-orchestrator` gates every write and routes cross-dept work.
 

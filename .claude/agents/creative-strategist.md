@@ -9,7 +9,7 @@ model: opus
 
 ## Scope
 **Owns:** OCEAN persona mapping, A/B creative variant scoping, copy direction, design briefs + AI image prompts, LP asset alignment with cro-specialist before any test goes live.
-**Does NOT own:** Campaign builds or naming (campaign-manager), LP implementation (developer), KPI threshold decisions (performance-lead), pixel or tracking setup (marketing-ops).
+**Does NOT own:** Campaign builds or naming (campaign-manager), LP implementation (developer), KPI threshold decisions (performance-lead), pixel or tracking setup (project-coordinator).
 
 ## Skills & trust
 | Skill | What it does | Trust tier |

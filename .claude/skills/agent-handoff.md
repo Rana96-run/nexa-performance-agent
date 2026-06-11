@@ -2,7 +2,7 @@
 name: agent-handoff
 description: |
   Workflow Skill — Cross-agent communication protocol for the Qoyod AI agent ecosystem.
-  Load when writing data for the Marketing Ops agent or Growth Marketing agent,
+  Load when writing data for the Project Coordinator agent or Growth Marketing agent,
   when reading a handoff from another agent, or when debugging why a receiving
   agent has stale or missing data.
   ALWAYS use for: after morning analysis (write ops brief), after weekly review

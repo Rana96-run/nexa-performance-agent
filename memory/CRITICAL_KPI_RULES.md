@@ -163,7 +163,7 @@ any per-campaign customization. Document the decision before doing it.
 ## 5. No anonymous agents — every action is seat-owned (non-negotiable)
 
 **Rule:** Every task — analysis, code change, review, deploy, Slack post, Asana task — must
-be performed by a **named seat agent** (growth-analyst, developer, marketing-ops,
+be performed by a **named seat agent** (growth-analyst, developer, project-coordinator,
 performance-lead, campaign-manager, creative-strategist, cro-specialist, ui-ux-designer)
 routed by `ai-orchestrator`. Anonymous agents (workflow task workers with no `agentType`)
 are **never** the execution layer for real work.
@@ -190,7 +190,7 @@ accountable by role.
 **Caught violation (2026-06-09):** Codebase review was launched with 5 anonymous scan workers
 labelled by "dimension" (dead-refs, views-correctness, schedulers, adset-fanout, general-stale).
 No seat ownership, no playbook context, no accountability. Rebuilt correctly with
-growth-analyst + developer + marketing-ops as named seats, routed by ai-orchestrator.
+growth-analyst + developer + project-coordinator as named seats, routed by ai-orchestrator.
 
 ## 6. Self-check after writing a script — before running
 
