@@ -2571,23 +2571,58 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
-    {# ── Panel 4: Cowork Agent Activity (placeholder) ── #}
-    <div class="panel-card panel-placeholder" id="panel-cowork">
+    {# ── Panel 4: Workflow Directory ── #}
+    <div class="panel-card" id="panel-cowork">
       <div class="panel-header" onclick="togglePanel(this)">
-        <div class="panel-title">
-          Cowork Agent Activity
-          <span class="panel-badge">coming soon</span>
-        </div>
+        <div class="panel-title">Workflow Directory</div>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="panel-count">Phase 3</span>
+          <span class="panel-count">{{ cowork_skills|length }} skills</span>
           <span class="panel-arrow">▾</span>
         </div>
       </div>
-      <div class="panel-body" style="display:block">
-        <div style="padding:20px 0;text-align:center">
-          <div style="font-size:14px;color:#8b949e;margin-bottom:8px">Cowork integration coming in Phase 3</div>
-          <div style="font-size:12px;color:#484f58">This panel will surface Cowork agent decisions, handoffs,<br>and approval outcomes once the Cowork migration is complete.</div>
-        </div>
+      <div class="panel-body" style="display:block;padding:0">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#161b22;border-bottom:1px solid #21262d">
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Skill</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">When</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Connectors</th>
+              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">What it does</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sk in cowork_skills %}
+            <tr style="border-bottom:{% if not loop.last %}1px solid #21262d{% else %}none{% endif %}">
+              <td style="padding:8px 12px;white-space:nowrap">
+                <span style="font-family:monospace;color:#79c0ff;font-weight:600">/{{ sk.name }}</span>
+              </td>
+              <td style="padding:8px 12px;white-space:nowrap;color:#e6edf3">{{ sk.agent_label }}</td>
+              <td style="padding:8px 12px;white-space:nowrap">
+                {% if sk.scheduled %}
+                  <span style="background:#1f3a1f;color:#3fb950;border-radius:4px;padding:2px 6px;font-size:11px">{{ sk.cadence }}</span>
+                {% else %}
+                  <span style="background:#1c2128;color:#8b949e;border-radius:4px;padding:2px 6px;font-size:11px">On-demand</span>
+                {% endif %}
+              </td>
+              <td style="padding:8px 12px">
+                {% if sk.connectors is iterable and sk.connectors is not string %}
+                  {% for c in sk.connectors %}
+                    <span style="background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:1px 5px;font-size:10px;color:#8b949e;margin-right:3px">{{ c }}</span>
+                  {% endfor %}
+                {% else %}
+                  <span style="color:#484f58">—</span>
+                {% endif %}
+              </td>
+              <td style="padding:8px 12px;color:#8b949e;max-width:280px">
+                {{ sk.description[:110] }}{% if sk.description|length > 110 %}…{% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="padding:20px;text-align:center;color:#484f58">No skills loaded</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
 

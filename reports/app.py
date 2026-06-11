@@ -20,7 +20,9 @@ Deploy on Railway (single dyno). Railway runs the agent — Flask serves /activi
 """
 from __future__ import annotations
 
+import glob
 import os
+import re
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,6 +34,63 @@ from collectors.hubspot_webhook import hubspot_bp
 
 app = Flask(__name__, template_folder="templates")
 app.register_blueprint(hubspot_bp)
+
+
+# ─── Cowork skill directory (loaded once at startup) ─────────────────────────
+
+_CRON_LABELS: dict[str, str] = {
+    "0 4 * * *":  "Daily 07:00 Riyadh",
+    "0 5 * * *":  "Daily 08:00 Riyadh",
+    "0 7 * * *":  "Daily 10:00 Riyadh",
+    "0 5 * * 0":  "Sunday 08:00 Riyadh",
+    "0 5 * * 1":  "Monday 08:00 Riyadh",
+    "30 5 * * 1": "Monday 08:30 Riyadh",
+    "0 5 1 * *":  "1st of month",
+}
+
+_AGENT_LABELS: dict[str, str] = {
+    "ai-orchestrator":     "Orchestrator",
+    "campaign-manager":    "Campaign Manager",
+    "creative-strategist": "Creative Strategist",
+    "growth-analyst":      "Growth Analyst",
+    "performance-lead":    "Performance Lead",
+    "project-coordinator": "Project Coordinator",
+    "cro-specialist":      "CRO Specialist",
+}
+
+
+def _load_cowork_skills() -> list[dict]:
+    """Parse YAML frontmatter from .claude/skills/cowork/*.md — no pyyaml needed."""
+    skills: list[dict] = []
+    skill_dir = os.path.join(os.path.dirname(__file__), "..", ".claude", "skills", "cowork")
+    for path in sorted(glob.glob(os.path.join(skill_dir, "*.md"))):
+        try:
+            with open(path, encoding="utf-8") as f:
+                content = f.read()
+            m = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+            if not m:
+                continue
+            meta: dict = {}
+            for line in m.group(1).splitlines():
+                if ":" not in line:
+                    continue
+                k, _, v = line.partition(":")
+                k, v = k.strip(), v.strip().strip("\"'")
+                if v.startswith("[") and v.endswith("]"):
+                    v = [x.strip() for x in v[1:-1].split(",") if x.strip()]
+                meta[k] = v
+            meta["cadence"] = _CRON_LABELS.get(meta.get("schedule", ""), "On-demand")
+            meta["agent_label"] = _AGENT_LABELS.get(meta.get("agent", ""), meta.get("agent", ""))
+            meta["scheduled"] = "schedule" in meta
+            skills.append(meta)
+        except Exception:
+            pass
+    # Sort: scheduled first (by cadence), then on-demand alphabetically
+    skills.sort(key=lambda s: (not s["scheduled"], s.get("cadence", ""), s.get("name", "")))
+    return skills
+
+
+_COWORK_SKILLS: list[dict] = _load_cowork_skills()
 
 
 # ─── Static report pages ──────────────────────────────────────────────────────
@@ -1957,6 +2016,7 @@ def activity_dashboard():
         panel2_rows=panel2_rows,
         panel3_health=panel3_health,
         panel3_has_failure=panel3_has_failure,
+        cowork_skills=_COWORK_SKILLS,
     )
     print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
     with _ACTIVITY_CACHE_LOCK:
