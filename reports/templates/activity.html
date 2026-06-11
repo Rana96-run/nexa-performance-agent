@@ -627,7 +627,9 @@ a:hover{text-decoration:underline}
 
   <!-- ── Code Health ── -->
   {% if code_health is defined %}
-  <div class="section-head">Code Health — Dashboard Violations</div>
+  <div class="section-head" onclick="toggleSection('code-health-body','code-health-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Code Health — Dashboard Violations
+    <span id="code-health-chev" style="font-size:11px;color:#484f58">{%- if code_health.open_count > 0 %}▼{% else %}▶{% endif %}</span></div>
+  <div id="code-health-body" style="{%- if code_health.open_count > 0 %}{% else %}display:none{% endif %}">
   <div class="ch-panel">
     <div class="ch-header">
       <div>
@@ -713,10 +715,13 @@ a:hover{text-decoration:underline}
       .catch(function(){ btn.disabled=false; btn.textContent='Run Scan'; });
   }
   </script>
+  </div>
   {% endif %}
 
   <!-- ── Heatmap ── -->
-  <div class="section-head">Contribution Heatmap — Marketing Decisions · {{ date_label }}</div>
+  <div class="section-head" onclick="toggleSection('heatmap-body','heatmap-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Contribution Heatmap — {{ date_label }}
+    <span id="heatmap-chev" style="font-size:11px;color:#484f58">▶</span></div>
+  <div id="heatmap-body" style="display:none">
   <div class="heatmap-wrap">
     {% for cat, cells, total in heatmap_rows_p1 %}
     <div class="hm-row">
@@ -742,10 +747,13 @@ a:hover{text-decoration:underline}
     <div class="hm-cell" data-level="4"></div>
     More
   </div>
+  </div>
 
 
   <!-- ── Asana Task Completion ── -->
-  <div class="section-head">Asana Tasks — Created by Agent</div>
+  <div class="section-head" onclick="toggleSection('asana-body','asana-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Asana Tasks — Created by Agent
+    <span id="asana-chev" style="font-size:11px;color:#484f58">▶</span></div>
+  <div id="asana-body" style="display:none">
 
   {% if asana_completion.total == 0 %}
   <div style="color:#484f58;font-size:12px;margin-bottom:24px">
@@ -896,9 +904,12 @@ a:hover{text-decoration:underline}
     </div>
   </div>
   {% endif %}
+  </div>
 
   <!-- ── Channel Follow-up ── -->
-  <div class="section-head">Channel Follow-up — {{ date_label }}</div>
+  <div class="section-head" onclick="toggleSection('followup-body','followup-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Channel Follow-up — {{ date_label }}
+    <span id="followup-chev" style="font-size:11px;color:#484f58">▶</span></div>
+  <div id="followup-body" style="display:none">
 
 
   <!-- Campaign actions outcome table -->
@@ -1002,6 +1013,7 @@ a:hover{text-decoration:underline}
       <div style="color:#484f58;font-size:12px;padding:4px 0">No new ads detected in the last 14 days.</div>
       {% endif %}
     </div>
+  </div>
   </div>
 
   <!-- ── Data Hygiene ── -->
@@ -1431,7 +1443,9 @@ a:hover{text-decoration:underline}
   </div>
 
   <!-- ── 4-Panel Activity Layout ── -->
-  <div class="section-head">Agent Activity — {{ date_label }}</div>
+  <div class="section-head" onclick="toggleSection('activity-panels-body','activity-panels-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Agent Activity — {{ date_label }}
+    <span id="activity-panels-chev" style="font-size:11px;color:#484f58">▼</span></div>
+  <div id="activity-panels-body">
   <div class="panels-grid">
 
     {# ── Panel 1: Marketing Decisions (primary, always open) ── #}
@@ -1652,6 +1666,7 @@ a:hover{text-decoration:underline}
     </div>
 
   </div><!-- /panels-grid -->
+  </div>
 
   </div><!-- /activity-view -->
 
@@ -2282,6 +2297,15 @@ function runGtmAudit() {
     .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
 }
 
+
+function toggleSection(bodyId, chevId) {
+  var el = document.getElementById(bodyId);
+  var ch = document.getElementById(chevId);
+  if (!el) return;
+  var nowHidden = el.style.display === 'none';
+  el.style.display = nowHidden ? '' : 'none';
+  if (ch) ch.textContent = nowHidden ? '▼' : '▶';
+}
 function scrollToAgents() {
   var el = document.getElementById('panel-agents');
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
