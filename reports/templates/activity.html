@@ -476,11 +476,11 @@ a:hover{text-decoration:underline}
         onmouseout="this.style.background='#0d1b2e'">
         ↗ Performance Dashboard
       </a>
-      <button onclick="openAndScrollTeam()"
+      <button onclick="scrollToAgents()"
         style="padding:5px 14px;border-radius:6px;border:1px solid #30363d;
                background:#161b22;color:#8b949e;font-size:13px;font-weight:500;
                cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px">
-        🏠 Team
+        Agents
       </button>
     </div>
   </div>
@@ -625,286 +625,6 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
-  <!-- ── Agent Team — Nexa Operations HQ ── -->
-  {% if team_roster %}
-  <div class="section-head" id="team-section-head" onclick="toggleTeamSection()"
-       style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between">
-    <span>Nexa Operations HQ &nbsp;<span style="color:#484f58;font-weight:400;font-size:11px">9 agents · 3 departments</span></span>
-    <span id="team-section-chevron" style="font-size:11px;color:#484f58;transition:transform .2s">▼</span>
-  </div>
-  <div id="team-section-body">
-
-  {# ──────────────────────────────────────────────────────
-     Pixel-art sprite macro — 48×48 canvas, 6px per cell
-     ────────────────────────────────────────────────────── #}
-  {% macro sprite(name, size) %}{% set s = size|default(56) %}
-  {%- if name == "orchestrator" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6"  y="0"  width="6"  height="6"  fill="#a78bfa"/><rect x="21" y="0"  width="6"  height="6"  fill="#a78bfa"/><rect x="36" y="0"  width="6"  height="6"  fill="#a78bfa"/>
-    <rect x="0"  y="6"  width="48" height="6"  fill="#7c3aed"/><rect x="21" y="6"  width="6"  height="6"  fill="#f0abfc"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="15" y="18" width="6"  height="6"  fill="#4c1d95"/><rect x="27" y="18" width="6"  height="6"  fill="#4c1d95"/>
-    <rect x="15" y="24" width="18" height="3"  fill="#c47a3a"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#7c3aed"/><rect x="21" y="30" width="6"  height="12" fill="#ede9fe"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#7c3aed"/><rect x="42" y="30" width="6"  height="12" fill="#7c3aed"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#4c1d95"/><rect x="27" y="42" width="9"  height="6"  fill="#4c1d95"/>
-  </svg>
-  {%- elif name == "perf_lead" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="9"  y="0"  width="30" height="12" fill="#dc2626"/><rect x="18" y="3"  width="12" height="6"  fill="#fef2f2"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#dc2626"/>
-    <rect x="19" y="32" width="10" height="8"  fill="#fbbf24"/><rect x="22" y="31" width="4"  height="2"  fill="#fbbf24"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#dc2626"/><rect x="42" y="30" width="6"  height="12" fill="#dc2626"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#7f1d1d"/><rect x="27" y="42" width="9"  height="6"  fill="#7f1d1d"/>
-  </svg>
-  {%- elif name == "campaign_mgr" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="12" y="0"  width="24" height="6"  fill="#f97316"/><rect x="6"  y="6"  width="36" height="6"  fill="#f97316"/>
-    <rect x="21" y="0"  width="6"  height="12" fill="#fed7aa"/><rect x="6"  y="6"  width="36" height="3"  fill="#fed7aa"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#f97316"/><rect x="21" y="30" width="6"  height="12" fill="#ffedd5"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#f97316"/><rect x="42" y="30" width="6"  height="12" fill="#f97316"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#7c2d12"/><rect x="27" y="42" width="9"  height="6"  fill="#7c2d12"/>
-  </svg>
-  {%- elif name == "creative" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="21" y="0"  width="6"  height="6"  fill="#f59e0b"/><rect x="15" y="6"  width="18" height="6"  fill="#f59e0b"/><rect x="9"  y="12" width="30" height="6"  fill="#f59e0b"/>
-    <rect x="21" y="3"  width="6"  height="3"  fill="#fef9c3"/>
-    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
-    <rect x="15" y="21" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="21" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#f59e0b"/>
-    <rect x="9"  y="33" width="6"  height="6"  fill="#ec4899"/><rect x="18" y="33" width="6"  height="6"  fill="#3b82f6"/><rect x="27" y="33" width="6"  height="6"  fill="#22c55e"/><rect x="36" y="33" width="6"  height="6"  fill="#a855f7"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#f59e0b"/><rect x="42" y="30" width="6"  height="12" fill="#f59e0b"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#78350f"/><rect x="27" y="42" width="9"  height="6"  fill="#78350f"/>
-  </svg>
-  {%- elif name == "cro" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6"  y="0"  width="36" height="6"  fill="#059669"/><rect x="12" y="6"  width="24" height="6"  fill="#059669"/><rect x="18" y="12" width="12" height="6"  fill="#059669"/>
-    <rect x="21" y="3"  width="6"  height="12" fill="#34d399"/>
-    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
-    <rect x="15" y="21" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="21" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#059669"/><rect x="21" y="30" width="6"  height="12" fill="#d1fae5"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#059669"/><rect x="42" y="30" width="6"  height="12" fill="#059669"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#064e3b"/><rect x="27" y="42" width="9"  height="6"  fill="#064e3b"/>
-  </svg>
-  {%- elif name == "designer" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="12" y="0"  width="24" height="12" fill="#0d9488"/>
-    <rect x="9"  y="3"  width="6"  height="6"  fill="#ec4899"/><rect x="21" y="3"  width="6"  height="6"  fill="#f59e0b"/><rect x="33" y="3"  width="6"  height="6"  fill="#3b82f6"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#0d9488"/><rect x="15" y="33" width="18" height="6"  fill="#99f6e4"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#0d9488"/><rect x="42" y="30" width="6"  height="12" fill="#0d9488"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#134e4a"/><rect x="27" y="42" width="9"  height="6"  fill="#134e4a"/>
-  </svg>
-  {%- elif name == "developer" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6"  y="0"  width="36" height="12" fill="#0891b2"/>
-    <rect x="6"  y="3"  width="6"  height="6"  fill="#67e8f9"/><rect x="36" y="3"  width="6"  height="6"  fill="#67e8f9"/>
-    <rect x="15" y="3"  width="18" height="6"  fill="#083344"/>
-    <rect x="15" y="4"  width="3"  height="4"  fill="#22d3ee"/><rect x="30" y="4"  width="3"  height="4"  fill="#22d3ee"/><rect x="21" y="5"  width="6"  height="3"  fill="#67e8f9"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#0e7490"/><rect x="18" y="33" width="12" height="6"  fill="#22d3ee"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#0891b2"/><rect x="42" y="30" width="6"  height="12" fill="#0891b2"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#164e63"/><rect x="27" y="42" width="9"  height="6"  fill="#164e63"/>
-  </svg>
-  {%- elif name == "ops" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="12" y="0"  width="24" height="12" fill="#4f46e5"/>
-    <rect x="9"  y="3"  width="6"  height="6"  fill="#c7d2fe"/><rect x="33" y="3"  width="6"  height="6"  fill="#c7d2fe"/>
-    <rect x="18" y="0"  width="12" height="12" fill="#4338ca"/>
-    <rect x="21" y="3"  width="6"  height="6"  fill="#a5b4fc"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#4f46e5"/>
-    <rect x="9"  y="33" width="30" height="3"  fill="#818cf8"/><rect x="9"  y="38" width="30" height="1"  fill="#818cf8"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#4f46e5"/><rect x="42" y="30" width="6"  height="12" fill="#4f46e5"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#312e81"/><rect x="27" y="42" width="9"  height="6"  fill="#312e81"/>
-  </svg>
-  {%- elif name == "analyst" -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="12" y="0"  width="24" height="12" fill="#1e1b4b"/>
-    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
-    <rect x="6"  y="15" width="15" height="9"  fill="#7c3aed"/><rect x="27" y="15" width="15" height="9"  fill="#7c3aed"/>
-    <rect x="9"  y="18" width="9"  height="6"  fill="#ede9fe"/><rect x="30" y="18" width="9"  height="6"  fill="#ede9fe"/>
-    <rect x="12" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="30" y="18" width="6"  height="6"  fill="#1e1b4b"/>
-    <rect x="21" y="18" width="6"  height="3"  fill="#7c3aed"/>
-    <rect x="6"  y="30" width="36" height="12" fill="#6d28d9"/>
-    <rect x="12" y="39" width="4"  height="3"  fill="#c4b5fd"/><rect x="18" y="36" width="4"  height="6"  fill="#c4b5fd"/><rect x="24" y="33" width="4"  height="9"  fill="#c4b5fd"/><rect x="30" y="35" width="4"  height="7"  fill="#c4b5fd"/>
-    <rect x="0"  y="30" width="6"  height="12" fill="#6d28d9"/><rect x="42" y="30" width="6"  height="12" fill="#6d28d9"/>
-    <rect x="12" y="42" width="9"  height="6"  fill="#2e1065"/><rect x="27" y="42" width="9"  height="6"  fill="#2e1065"/>
-  </svg>
-  {%- else -%}
-  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
-    <rect x="12" y="6"  width="24" height="24" fill="#30363d"/><rect x="15" y="15" width="6"  height="6"  fill="#58a6ff"/><rect x="27" y="15" width="6"  height="6"  fill="#58a6ff"/><rect x="6"  y="30" width="36" height="12" fill="#21262d"/>
-  </svg>
-  {%- endif %}
-  {% endmacro %}
-
-  {# ── Org chart: orchestrator → 3 departments ── #}
-  <div class="team-hierarchy">
-
-    {# ── Orchestrator (full-width top card) ── #}
-    {% set main = team_roster | selectattr("is_main") | first %}
-    {# ── Embed full roster as JS for the modal ── #}
-    <script>
-    window._AGENT_ROSTER = {{ team_roster | tojson }};
-    </script>
-
-    {% if main %}
-    <div class="team-main-wrap">
-      <div class="team-main-card" onclick="openAgentModal(0)" style="cursor:pointer">
-        <div class="team-sprite">{{ sprite(main.sprite, 72) }}</div>
-        <div class="team-card-info">
-          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa;margin-bottom:4px">✦ ORCHESTRATOR · ALL DEPTS</div>
-          <div class="team-title" style="font-size:15px">{{ main.title }}</div>
-          <div class="team-desc" style="margin-top:3px">{{ main.desc }}</div>
-          <div class="team-stats" style="margin-top:10px;gap:20px">
-            <div><div class="team-stat-num">{{ main.actions_30d }}</div><div class="team-stat-lbl">actions 30d</div></div>
-            <div><div class="team-stat-num">{{ main.actions_7d }}</div><div class="team-stat-lbl">actions 7d</div></div>
-          </div>
-        </div>
-      </div>
-
-      {# ── Connector stem + 3-branch bar ── #}
-      <div class="tc-stem-down"></div>
-      <div class="tc-bar">
-        <div class="tc-sub-wrap"><div class="tc-node" style="background:#dc2626"></div></div>
-        <div class="tc-sub-wrap"><div class="tc-node" style="background:#059669"></div></div>
-        <div class="tc-sub-wrap"><div class="tc-node" style="background:#6366f1"></div></div>
-      </div>
-
-      {# ── 3 Department columns — same 3-col grid drives both stems and dept bodies ── #}
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:18px auto;gap:0 16px;width:100%">
-        {# stem-up row (grid row 1) #}
-        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
-        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
-        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
-
-        {# Performance dept #}
-        {% set perf_members = team_roster | selectattr("dept", "equalto", "Performance") | list %}
-        <div>
-          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;
-                       background:#7f1d1d;border:1px solid #dc2626;border-bottom:none;
-                       font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fca5a5">
-            ⚡ Performance
-          </div>
-          <div style="border:1px solid #dc262644;border-radius:0 0 8px 8px;padding:10px;
-                       background:#161b22;display:flex;flex-direction:column;gap:8px">
-            {% for member in perf_members %}
-            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')" title="Click to expand {{ member.title }}'s full structure">
-              {% if member.is_lead %}
-              <div class="sub-badge" style="color:#fca5a5;border-color:#dc2626">DEPT LEAD</div>
-              {% else %}
-              <div class="sub-badge">SUBAGENT</div>
-              {% endif %}
-              <div style="display:flex;align-items:center;gap:10px;width:100%">
-                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
-                <div style="flex:1;min-width:0">
-                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
-                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
-                </div>
-                <div style="text-align:right;flex-shrink:0">
-                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
-                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
-                </div>
-              </div>
-              <div class="team-last" style="font-size:10px">
-                {% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}
-                {% else %}<span style="color:#484f58">No activity in window</span>{% endif %}
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-
-        {# CRO / LP dept #}
-        {% set cro_members = team_roster | selectattr("dept", "equalto", "CRO / LP") | list %}
-        <div>
-          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;
-                       background:#064e3b;border:1px solid #059669;border-bottom:none;
-                       font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6ee7b7">
-            🎯 CRO / LP
-          </div>
-          <div style="border:1px solid #05966944;border-radius:0 0 8px 8px;padding:10px;
-                       background:#161b22;display:flex;flex-direction:column;gap:8px">
-            {% for member in cro_members %}
-            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')" title="Click to expand {{ member.title }}'s full structure">
-              {% if member.is_lead %}
-              <div class="sub-badge" style="color:#6ee7b7;border-color:#059669">DEPT LEAD</div>
-              {% else %}
-              <div class="sub-badge">SUBAGENT</div>
-              {% endif %}
-              <div style="display:flex;align-items:center;gap:10px;width:100%">
-                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
-                <div style="flex:1;min-width:0">
-                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
-                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
-                </div>
-                <div style="text-align:right;flex-shrink:0">
-                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
-                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
-                </div>
-              </div>
-              <div class="team-last" style="font-size:10px">
-                {% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}
-                {% else %}<span style="color:#484f58">No activity in window</span>{% endif %}
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-
-        {# Support dept #}
-        {% set support_members = team_roster | selectattr("dept", "equalto", "Support") | list %}
-        <div>
-          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;
-                       background:#1e1b4b;border:1px solid #6366f1;border-bottom:none;
-                       font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#a5b4fc">
-            🔧 Support
-          </div>
-          <div style="border:1px solid #6366f144;border-radius:0 0 8px 8px;padding:10px;
-                       background:#161b22;display:flex;flex-direction:column;gap:8px">
-            {% for member in support_members %}
-            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')" title="Click to expand {{ member.title }}'s full structure">
-              <div class="sub-badge">SUBAGENT</div>
-              <div style="display:flex;align-items:center;gap:10px;width:100%">
-                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
-                <div style="flex:1;min-width:0">
-                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
-                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
-                </div>
-                <div style="text-align:right;flex-shrink:0">
-                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
-                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
-                </div>
-              </div>
-              <div class="team-last" style="font-size:10px">
-                {% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}
-                {% else %}<span style="color:#484f58">No activity in window</span>{% endif %}
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-
-      </div>{# end 3-col depts #}
-    </div>{# end main-wrap #}
-    {% endif %}
-
-  </div>
-  </div>{# /team-section-body #}
-  {% endif %}
-
   <!-- ── Code Health ── -->
   {% if code_health is defined %}
   <div class="section-head">Code Health — Dashboard Violations</div>
@@ -1023,743 +743,6 @@ a:hover{text-decoration:underline}
     More
   </div>
 
-  <!-- ── Metric cards ── -->
-  <div class="section-head">Actions by Category</div>
-  <div class="cards-grid">
-
-    <!-- Campaigns Created -->
-    <div class="card" id="campaigns_created">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🚀</div>
-          <div>
-            <div class="card-name">Campaigns Created</div>
-            <div class="card-counts">30d: {{ metrics.campaigns_created.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_created.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.campaigns_created.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('campaigns_created')">⚙ How this works</button>
-        </div>
-        {% if metrics.campaigns_created.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>Budget</th><th>By</th></tr>
-          {% for r in metrics.campaigns_created.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.campaign_name or '—' }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
-            <td>{% if r.budget %}${{ r.budget }}{% else %}—{% endif %}</td>
-            <td>{{ r.source or 'agent' }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No campaigns created in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Campaigns Paused -->
-    <div class="card" id="campaigns_paused">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">⏸</div>
-          <div>
-            <div class="card-name">Campaigns Paused</div>
-            <div class="card-counts">
-              30d: {{ metrics.campaigns_paused.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_paused.count_7d }}
-              {% if metrics.campaigns_paused.exec_30d is defined %}
-              &nbsp;·&nbsp; <span style="color:#8b949e;font-size:11px">{{ metrics.campaigns_paused.exec_30d }} executed · {{ metrics.campaigns_paused.rec_30d }} recommended</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.campaigns_paused.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('campaigns_paused')">⚙ How this works</button>
-        </div>
-        {% if metrics.campaigns_paused.rows %}
-        {% set ns = namespace(seen={}) %}
-        {% for r in metrics.campaigns_paused.rows %}
-          {% set key = (r.campaign_name or '—') ~ '|' ~ (r.channel or '') %}
-          {% if key not in ns.seen %}
-            {% set _ = ns.seen.update({key: []}) %}
-          {% endif %}
-          {% set _ = ns.seen[key].append(r) %}
-        {% endfor %}
-        <table class="dtable">
-          <tr><th>Campaign</th><th>Channel</th><th>Times</th><th>Last date</th><th>Status</th></tr>
-          {% for key, rows in ns.seen.items() %}
-          {% set r = rows | last %}
-          <tr>
-            <td>{{ r.campaign_name or '—' }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
-            <td style="color:#8b949e">{{ rows | length }}×</td>
-            <td>{{ (rows | map(attribute='day') | sort | last) }}</td>
-            <td>
-              {% if rows | selectattr('status', 'equalto', 'executed') | list %}
-              <span style="color:#39d353;font-size:11px">Executed</span>
-              {% else %}
-              <span style="color:#e3b341;font-size:11px">Pending</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No pause actions in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Campaigns Scaled -->
-    <div class="card" id="campaigns_scaled">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">📈</div>
-          <div>
-            <div class="card-name">Campaigns Scaled</div>
-            <div class="card-counts">
-              30d: {{ metrics.campaigns_scaled.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaigns_scaled.count_7d }}
-              {% if metrics.campaigns_scaled.exec_30d is defined %}
-              &nbsp;·&nbsp; <span style="color:#8b949e;font-size:11px">{{ metrics.campaigns_scaled.exec_30d }} executed · {{ metrics.campaigns_scaled.rec_30d }} recommended</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.campaigns_scaled.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('campaigns_scaled')">⚙ How this works</button>
-        </div>
-        {% if metrics.campaigns_scaled.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Campaign</th><th>Channel</th><th>New Budget</th><th>Status</th></tr>
-          {% for r in metrics.campaigns_scaled.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.campaign_name or '—' }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
-            <td>{% if r.budget %}${{ r.budget }}{% else %}—{% endif %}</td>
-            <td>
-              {% if r.status == 'executed' %}
-              <span style="color:#39d353;font-size:11px">Executed</span>
-              {% else %}
-              <span style="color:#e3b341;font-size:11px">Pending</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No scale actions in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Campaign Audits -->
-    <div class="card" id="campaign_audits">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🔍</div>
-          <div>
-            <div class="card-name">Campaign Audits</div>
-            <div class="card-counts">30d: {{ metrics.campaign_audits.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.campaign_audits.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.campaign_audits.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('campaign_audits')">⚙ How this works</button>
-        </div>
-        {% if metrics.campaign_audits.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Campaigns</th></tr>
-          {% for r in metrics.campaign_audits.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
-            <td>{{ r.cnt }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No audits in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Keywords Added -->
-    <div class="card" id="keywords_added">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🔑</div>
-          <div>
-            <div class="card-name">Positive Keywords Added</div>
-            <div class="card-counts">30d: {{ metrics.keywords_added.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.keywords_added.count_7d }} &nbsp;·&nbsp; <span style="color:#8b949e;font-size:11px">weekly expansion + campaign setup</span></div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.keywords_added.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('keywords_added')">⚙ How this works</button>
-        </div>
-        {% if metrics.keywords_added.term_rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Keyword</th><th>Channel</th></tr>
-          {% for r in metrics.keywords_added.term_rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td style="font-family:monospace;font-size:12px">{{ r.term }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower|replace(' ','_') }}">{{ r.channel or '—' }}</span></td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% elif metrics.keywords_added.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Count</th></tr>
-          {% for r in metrics.keywords_added.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower|replace(' ','_') }}">{{ r.channel or '—' }}</span></td>
-            <td>{{ r.cnt }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No keywords added in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Keywords Paused -->
-    <div class="card" id="keywords_paused">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🔕</div>
-          <div>
-            <div class="card-name">Keywords Paused</div>
-            <div class="card-counts">30d: {{ metrics.keywords_paused.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.keywords_paused.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.keywords_paused.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('keywords_paused')">⚙ How this works</button>
-        </div>
-        {% if metrics.keywords_paused.kw_rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Keyword</th><th>Channel</th></tr>
-          {% for r in metrics.keywords_paused.kw_rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.keyword }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel or '—' }}</span></td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No keywords paused in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Negatives Added -->
-    <div class="card" id="negatives_added">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🚫</div>
-          <div>
-            <div class="card-name">Negatives Added</div>
-            <div class="card-counts">30d: {{ metrics.negatives_added.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.negatives_added.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.negatives_added.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('negatives_added')">⚙ How this works</button>
-        </div>
-        {% if metrics.negatives_added.term_rows %}
-        <table class="dtable" style="margin-bottom:12px">
-          <tr><th>Date</th><th>Term Blocked</th></tr>
-          {% for r in metrics.negatives_added.term_rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td style="font-family:monospace;font-size:12px">{{ r.term }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% endif %}
-        {% if metrics.negatives_added.always_blocked %}
-        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Always-blocked policy</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          {% for term in metrics.negatives_added.always_blocked %}
-          <span style="background:#21262d;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;font-family:monospace;color:#e6edf3">{{ term }}</span>
-          {% endfor %}
-        </div>
-        {% endif %}
-        {% if not metrics.negatives_added.term_rows and not metrics.negatives_added.always_blocked %}
-        <div style="color:#484f58;font-size:12px;padding:4px 0">No negatives added in this period.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Asana Tasks -->
-    <div class="card" id="asana_tasks">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">✅</div>
-          <div>
-            <div class="card-name">Asana Tasks Created</div>
-            <div class="card-counts">30d: {{ metrics.asana_tasks.count_30d }} tasks in {{ metrics.asana_tasks.projects_30d }} projects &nbsp;·&nbsp; 7d: {{ metrics.asana_tasks.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.asana_tasks.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('asana_tasks')">⚙ How this works</button>
-        </div>
-        {% if metrics.asana_tasks.project_counts %}
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          {% for proj, cnt in metrics.asana_tasks.project_counts %}
-          <span style="background:#21262d;border:1px solid #30363d;border-radius:12px;padding:2px 10px;font-size:11px;color:#e6edf3">
-            {{ proj }} <span style="color:#39d353;font-weight:600">{{ cnt }}</span>
-          </span>
-          {% endfor %}
-        </div>
-        {% endif %}
-        {% if metrics.asana_tasks.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Title</th><th>Project</th><th>Type</th><th>Status</th></tr>
-          {% for r in metrics.asana_tasks.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.title }}</td>
-            <td><span class="tag">{{ r.project_key }}</span></td>
-            <td>{{ r.task_action or '—' }}</td>
-            <td>{% if r.asana_status == 'done' %}<span style="color:#39d353">done</span>{% elif r.asana_status == 'open' %}<span style="color:#e3b341">open</span>{% else %}—{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No Asana tasks in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Creative Reviews -->
-    <div class="card" id="creative_reviews">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🎨</div>
-          <div>
-            <div class="card-name">Creative Reviews</div>
-            <div class="card-counts">30d: {{ metrics.creative_reviews.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.creative_reviews.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.creative_reviews.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('creative_reviews')">⚙ How this works</button>
-        </div>
-        {% if metrics.creative_reviews.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Creative</th><th>Campaign</th><th>Channel</th></tr>
-          {% for r in metrics.creative_reviews.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.title }}</td>
-            <td>{{ r.campaign_name }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No creative reviews in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Slack Messages -->
-    <div class="card" id="slack_messages">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">💬</div>
-          <div>
-            <div class="card-name">Slack Messages Sent</div>
-            <div class="card-counts">30d: {{ metrics.slack_messages.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.slack_messages.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.slack_messages.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('slack_messages')">⚙ How this works</button>
-        </div>
-        {% if metrics.slack_messages.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Type</th></tr>
-          {% for r in metrics.slack_messages.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.action|replace('_',' ')|title }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No Slack messages in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Approval Digests -->
-    <div class="card" id="approvals">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">✋</div>
-          <div>
-            <div class="card-name">Approval Digests</div>
-            <div class="card-counts">30d: {{ metrics.slack_approvals.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.slack_approvals.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.slack_approvals.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('slack_approvals')">⚙ How this works</button>
-        </div>
-        {% if metrics.slack_approvals.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Scale</th><th>Pause</th><th>Review</th></tr>
-          {% for r in metrics.slack_approvals.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.scale }}</td>
-            <td>{{ r.pause }}</td>
-            <td>{{ r.review }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No approvals in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Data Collections -->
-    <div class="card" id="data_collections">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🗄</div>
-          <div>
-            <div class="card-name">Data Collections</div>
-            <div class="card-counts">30d: {{ metrics.bq_collections.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.bq_collections.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.bq_collections.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('bq_collections')">⚙ How this works</button>
-        </div>
-        {% if metrics.bq_collections.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Collector</th><th>Rows</th></tr>
-          {% for r in metrics.bq_collections.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.action|replace('collect_','')|replace('_',' ')|title }}</td>
-            <td>{{ r.cnt }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No collections in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Reports Refreshed -->
-    <div class="card" id="reports_refreshed">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">📊</div>
-          <div>
-            <div class="card-name">Reports Refreshed</div>
-            <div class="card-counts">30d: {{ metrics.reports_refreshed.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.reports_refreshed.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.reports_refreshed.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        {% if metrics.reports_refreshed.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Type</th></tr>
-          {% for r in metrics.reports_refreshed.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.action|replace('_',' ')|title }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No refreshes in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Spike Detections -->
-    <div class="card" id="spike_detections">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">⚡</div>
-          <div>
-            <div class="card-name">Spike Detections</div>
-            <div class="card-counts">30d: {{ metrics.spike_detections.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.spike_detections.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.spike_detections.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('spike_detections')">⚙ How this works</button>
-        </div>
-        {% if metrics.spike_detections.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Count</th><th>What spiked</th></tr>
-          {% for r in metrics.spike_detections.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.cnt }}</td>
-            <td style="font-size:11px;color:#8b949e">
-              {% if r.spikes %}
-                {% set labels = r.spikes | replace('[','') | replace(']','') | replace('"','') | replace("'","") %}
-                {% for label in labels.split(',') %}
-                  {% set parts = label.strip().split(':') %}
-                  {% if parts|length == 2 %}
-                    <span style="display:inline-block;margin:1px 3px 1px 0">
-                      <span class="tag {{ parts[0]|lower }}" style="font-size:10px;padding:1px 5px">{{ parts[0] }}</span>
-                      <span style="color:{% if 'up' in label %}#3fb950{% else %}#f85149{% endif %}">
-                        {{ parts[1].strip() | replace('_',' ') }}
-                      </span>
-                    </span>
-                  {% endif %}
-                {% endfor %}
-              {% else %}—{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No spikes detected in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Slack Bot Replies -->
-    <div class="card" id="slack_bot_replies">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">💬</div>
-          <div>
-            <div class="card-name">Slack Bot Replies (@Nexa)</div>
-            <div class="card-counts">30d: {{ metrics.slack_bot.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.slack_bot.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.slack_bot.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('slack_bot_replies')">⚙ How this works</button>
-        </div>
-        {% if metrics.slack_bot.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Tokens In</th><th>Tokens Out</th></tr>
-          {% for r in metrics.slack_bot.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ "{:,}".format(r.tokens_in) }}</td>
-            <td>{{ "{:,}".format(r.tokens_out) }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No bot replies in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Data Quality Heals -->
-    <div class="card" id="data_quality">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🔧</div>
-          <div>
-            <div class="card-name">Data Quality Heals</div>
-            <div class="card-counts">30d: {{ metrics.data_quality.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.data_quality.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.data_quality.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="card-actions">
-          <button class="btn-workflow" onclick="openWorkflow('data_quality')">⚙ How this works</button>
-        </div>
-        {% if metrics.data_quality.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Issue Type</th><th>Channel</th><th>Fixed</th></tr>
-          {% for r in metrics.data_quality.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.issue_type }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-            <td>{{ r.cnt }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No auto-heals in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Ads Paused / Enabled -->
-    <div class="card" id="ads_paused">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">⏸</div>
-          <div>
-            <div class="card-name">Ads Paused / Enabled</div>
-            <div class="card-counts">30d: {{ metrics.ads_paused.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.ads_paused.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.ads_paused.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        {% if metrics.ads_paused.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Action</th><th>Count</th><th>Status</th></tr>
-          {% for r in metrics.ads_paused.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-            <td>{% if r.action == "ads_paused" %}Paused{% elif r.action == "ads_enabled" %}Enabled{% else %}Junk leads flag{% endif %}</td>
-            <td>{{ r.cnt }}</td>
-            <td>{% if r.status == "executed" %}<span style="color:#39d353;font-size:11px">Executed</span>{% else %}<span style="color:#e3b341;font-size:11px">Pending</span>{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No ad state changes in this period.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Approval Rate -->
-    <div class="card" id="approval_rate">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">✅</div>
-          <div>
-            <div class="card-name">Approval Rate</div>
-            <div class="card-counts">
-              {{ metrics.approval_rate.approved_30d }} approved &nbsp;·&nbsp;
-              {{ metrics.approval_rate.rejected_30d }} rejected (30d)
-            </div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.approval_rate.rate_pct }}%</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        {% if metrics.approval_rate.total_30d > 0 %}
-        <div style="margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-            <span style="color:#39d353;font-size:13px;font-weight:600">{{ metrics.approval_rate.approved_30d }} approved</span>
-            <span style="color:#f85149;font-size:13px;font-weight:600">{{ metrics.approval_rate.rejected_30d }} rejected</span>
-            <span style="color:#8b949e;font-size:12px">of {{ metrics.approval_rate.total_30d }} decisions</span>
-          </div>
-          <div style="height:6px;background:#21262d;border-radius:4px;overflow:hidden">
-            <div style="height:6px;background:#238636;border-radius:4px;width:{{ metrics.approval_rate.rate_pct }}%"></div>
-          </div>
-        </div>
-        <table class="dtable">
-          <tr><th>Date</th><th>Decision</th></tr>
-          {% for r in metrics.approval_rate.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.verdict }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No approval decisions logged yet.</div>{% endif %}
-      </div>
-    </div>
-
-    <!-- Weekly Autofix -->
-    <div class="card" id="weekly_autofix">
-      <div class="card-header" onclick="toggleCard(this)">
-        <div class="card-left">
-          <div class="card-icon">🔁</div>
-          <div>
-            <div class="card-name">Weekly Autofix</div>
-            <div class="card-counts">30d: {{ metrics.weekly_autofix.count_30d }} &nbsp;·&nbsp; 7d: {{ metrics.weekly_autofix.count_7d }}</div>
-          </div>
-        </div>
-        <div class="card-right">
-          <div class="card-num">{{ metrics.weekly_autofix.count_30d }}</div>
-          <div class="card-arrow">▾</div>
-        </div>
-      </div>
-      <div class="card-body">
-        {% if metrics.weekly_autofix.rows %}
-        <table class="dtable">
-          <tr><th>Date</th><th>Keywords Fixed</th></tr>
-          {% for r in metrics.weekly_autofix.rows %}
-          <tr>
-            <td>{{ r.day }}</td>
-            <td>{{ r.cnt }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">No Sunday autofix runs in this period.</div>{% endif %}
-      </div>
-    </div>
-
-  </div><!-- /cards-grid -->
 
   <!-- ── Asana Task Completion ── -->
   <div class="section-head">Asana Tasks — Created by Agent</div>
@@ -1917,22 +900,6 @@ a:hover{text-decoration:underline}
   <!-- ── Channel Follow-up ── -->
   <div class="section-head">Channel Follow-up — {{ date_label }}</div>
 
-  <!-- Coverage legend -->
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 18px;margin-bottom:16px;font-size:12px">
-    <div style="font-weight:600;color:#e6edf3;margin-bottom:10px">What's tracked in this window</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px">
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Campaigns paused via agent</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Campaigns scaled via agent</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Campaigns paused directly in platform</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Campaigns re-enabled directly in platform</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Budget changes made directly in platform</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Asana tasks you completed or created</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Scale/pause recommendations you executed</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">New creatives appearing in platform (14d)</span></div>
-      <div><span style="color:#39d353">✓</span> <span style="color:#c9d1d9">Spend before vs after each action</span></div>
-      <div style="color:#8b949e;font-size:11px;padding-top:4px">Syncs every 6h · Google Ads · Meta · Snapchat · LinkedIn</div>
-    </div>
-  </div>
 
   <!-- Campaign actions outcome table -->
   <div class="card" style="margin-bottom:16px" id="followup_campaigns">
@@ -2581,46 +1548,106 @@ a:hover{text-decoration:underline}
     </div>
 
     {# ── Panel 4: Agent Directory ── #}
-    <div class="panel-card" id="panel-agents">
+    <div class="panel-card panel-open" id="panel-agents">
       <div class="panel-header" onclick="togglePanel(this)">
-        <div class="panel-title">Agent Directory</div>
+        <div class="panel-title">Agent Workflow</div>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="panel-count">{{ agents|length }} agents</span>
+          <span class="panel-count">{{ agents|length }} agents · 3 departments</span>
           <span class="panel-arrow">▾</span>
         </div>
       </div>
-      <div class="panel-body" style="display:block;padding:0">
+      <div class="panel-body" style="display:block;padding:16px">
+
+        {# ── Workflow diagram ── #}
+        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Daily loop · 08:00 Riyadh</div>
+
+        {# Row 1: Orchestrator #}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <div style="background:#2a2000;border:1px solid #b0880055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#b08800;white-space:nowrap">AI Orchestrator</div>
+          <div style="flex:1;height:1px;background:#30363d"></div>
+          <div style="font-size:11px;color:#484f58;white-space:nowrap">routes · gates ✅ · posts #approvals digest</div>
+        </div>
+
+        {# Downward connector #}
+        <div style="margin-left:48px;width:1px;height:12px;background:#30363d"></div>
+
+        {# Row 2: Growth Analyst + Performance Lead #}
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:4px">
+          {# Growth Analyst branch #}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div style="background:#1a1030;border:1px solid #d2a8ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#d2a8ff;white-space:nowrap">Growth Analyst</div>
+            <div style="font-size:10px;color:#484f58;text-align:center">BQ analysis<br>period compare</div>
+          </div>
+          <div style="margin-top:12px;font-size:14px;color:#30363d">→</div>
+          {# Performance Lead #}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Performance Lead</div>
+            <div style="font-size:10px;color:#484f58;text-align:center">KPI decisions<br>budget + channel mix</div>
+          </div>
+          <div style="margin-top:12px;font-size:14px;color:#30363d">→</div>
+          {# Campaign Manager + Creative Strategist stacked #}
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Campaign Manager</div>
+              <div style="font-size:10px;color:#484f58">builds · pauses · scales</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Creative Strategist</div>
+              <div style="font-size:10px;color:#484f58">copy · variants · OCEAN</div>
+            </div>
+          </div>
+        </div>
+
+        {# Project Coordinator (support) #}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;margin-top:4px">
+          <div style="width:48px;flex-shrink:0"></div>
+          <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
+          <div style="font-size:10px;color:#484f58">UTMs · pixels · Slack audit · connector health</div>
+          <div style="margin-left:6px;font-size:10px;color:#30363d;font-style:italic">support — no handoff</div>
+        </div>
+
+        {# CRO chain #}
+        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">CRO chain · on demand</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">CRO Specialist</div>
+          <div style="color:#30363d">→</div>
+          <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">UI/UX Designer</div>
+          <div style="color:#30363d">→</div>
+          <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">Developer</div>
+          <div style="font-size:10px;color:#484f58;margin-left:4px">brief → design → build → verify pixels</div>
+        </div>
+
+        {# Divider #}
+        <div style="height:1px;background:#21262d;margin:16px 0"></div>
+
+        {# Agent table (compact) #}
+        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">All agents</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
             <tr style="background:#161b22;border-bottom:1px solid #21262d">
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Department</th>
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">Model</th>
-              <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500">When to dispatch</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Dept</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Dispatch when</th>
             </tr>
           </thead>
           <tbody>
             {% for ag in agents %}
             <tr style="border-bottom:{% if not loop.last %}1px solid #21262d{% else %}none{% endif %}">
-              <td style="padding:8px 12px;white-space:nowrap">
-                <div style="color:#e6edf3;font-weight:600">{{ ag.display_name }}</div>
-                <div style="font-family:monospace;color:#484f58;font-size:10px">{{ ag.slug }}</div>
+              <td style="padding:6px 10px;white-space:nowrap">
+                <span style="color:#e6edf3;font-weight:600">{{ ag.display_name }}</span>
+                <span style="font-family:monospace;color:#484f58;font-size:10px;margin-left:6px">{{ ag.slug }}</span>
               </td>
-              <td style="padding:8px 12px;white-space:nowrap">
-                <span style="border-radius:4px;padding:2px 8px;font-size:11px;background:{{ ag.dept_colour }}22;color:{{ ag.dept_colour }};border:1px solid {{ ag.dept_colour }}55">{{ ag.department }}</span>
+              <td style="padding:6px 10px;white-space:nowrap">
+                <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:{{ ag.dept_colour }}22;color:{{ ag.dept_colour }};border:1px solid {{ ag.dept_colour }}44">{{ ag.department }}</span>
               </td>
-              <td style="padding:8px 12px;white-space:nowrap;color:#8b949e;font-family:monospace;font-size:11px">
-                {{ ag.model if ag.model else '—' }}
-              </td>
-              <td style="padding:8px 12px;color:#8b949e;max-width:340px">
-                {{ ag.description[:120] }}{% if ag.description|length > 120 %}…{% endif %}
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">
+                {{ ag.description[:100] }}{% if ag.description|length > 100 %}…{% endif %}
               </td>
             </tr>
-            {% else %}
-            <tr><td colspan="4" style="padding:20px;text-align:center;color:#484f58">No agents loaded</td></tr>
             {% endfor %}
           </tbody>
         </table>
+
       </div>
     </div>
 
@@ -3255,23 +2282,9 @@ function runGtmAudit() {
     .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
 }
 
-// ── Team section toggle ───────────────────────────────────────────────────────
-function toggleTeamSection() {
-  var body     = document.getElementById('team-section-body');
-  var chevron  = document.getElementById('team-section-chevron');
-  var isOpen   = body.style.display !== 'none';
-  body.style.display    = isOpen ? 'none' : '';
-  chevron.textContent   = isOpen ? '▶' : '▼';
-}
-function openAndScrollTeam() {
-  var body    = document.getElementById('team-section-body');
-  var chevron = document.getElementById('team-section-chevron');
-  if (body && body.style.display === 'none') {
-    body.style.display  = '';
-    chevron.textContent = '▼';
-  }
-  var head = document.getElementById('team-section-head');
-  if (head) head.scrollIntoView({ behavior: 'smooth' });
+function scrollToAgents() {
+  var el = document.getElementById('panel-agents');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── Live freshness check — bypasses the 5-min HTML page cache ───────────────
