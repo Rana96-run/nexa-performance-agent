@@ -33,8 +33,12 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
 **Also included in Phase 1:**
 - [ ] Activity dashboard: rebuild as 4 panels (Marketing Decisions, Approvals, System
       Health collapsed, Cowork Activity). Update `memory/16_activity_dashboard.md`. Plan: write Plan 1C.
-- [ ] Slack digest: implement minimal format (spend · leads · CPQL per channel, one
-      ✅/❌ for all actions, review items with Asana links only). Plan: `docs/superpowers/plans/2026-06-11-phase1b-slack-format.md`.
+- [x] **Slack digest: minimal format DONE 2026-06-12.** `post_nightly_approvals_digest` rewritten
+      with 3-block structure: PERFORMANCE (one line per channel w/ spend·leads·CPQL icon),
+      ACTIONS (scale/pause with single ✅/❌ gate), REVIEW ONLY (Asana links). Channel summary
+      fetched from BQ `paid_channel_daily` using `qualified` column. CPQL icons: ✅ <$85, ⚠️ $85–$130,
+      🔴 >$130. All 4 smoke tests passing. Commit: `cbbbbf2`.
+      Plan: `docs/superpowers/plans/2026-06-11-phase1b-slack-format.md`.
 
 ## P0 — Police findings open (detected 2026-06-08, not yet closed)
 
