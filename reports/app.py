@@ -440,6 +440,18 @@ def activity_dashboard():
         "negative_keywords_removed":                   "Negatives Added",
         "detect_spikes":                               "Optimizations",
         "data_quality_autoheal":                       "Optimizations",
+        "lp_brief_written":                            "LP Briefs",
+        "lp_test_called":                              "LP Briefs",
+        "lp_brief_created":                            "LP Briefs",
+        "lp_test_result_called":                       "LP Briefs",
+        "lp_brief_auto":                               "LP Briefs",
+        "lp_design_complete":                          "LP Designs",
+        "lp_design_created":                           "LP Designs",
+        "lp_deployed":                                 "LP Deploys",
+        "lp_pixels_verified":                          "LP Deploys",
+        "lp_spec_created":                             "LP Deploys",
+        "creative_audit_auto":                         "Creative Audits",
+        "instantform_audit_created":                   "Creative Audits",
     }
 
     # ── BQ queries — all 6 run in parallel, results cached 5 min ─────────────
@@ -509,7 +521,12 @@ def activity_dashboard():
                 'optimize_task_created','drilldown_task_created',
                 'scale_task_created','pause_task_created','junk_leads_task_created',
                 'cadence_daily_complete','cadence_nightly_complete',
-                'cadence_weekly_complete','cadence_monthly_complete'
+                'cadence_weekly_complete','cadence_monthly_complete',
+                'lp_brief_written','lp_test_called','lp_brief_created','lp_test_result_called',
+                'lp_brief_auto',
+                'lp_design_complete','lp_design_created',
+                'lp_deployed','lp_pixels_verified','lp_spec_created',
+                'creative_audit_auto','instantform_audit_created'
               )
             ORDER BY ts DESC
             LIMIT 2000
