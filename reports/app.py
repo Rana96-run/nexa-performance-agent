@@ -2016,6 +2016,7 @@ def activity_dashboard():
         panel3_health=panel3_health,
         panel3_has_failure=panel3_has_failure,
         agents=_AGENTS,
+        hex_performance_url=os.getenv("DASHBOARD_DEST_URL", "https://app.hex.tech"),
     )
     print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
     with _ACTIVITY_CACHE_LOCK:
