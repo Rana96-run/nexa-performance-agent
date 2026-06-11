@@ -359,16 +359,24 @@ WITH
     )
   ),
   -- Stub rows: name-matched deals whose (date, campaign_name) has no spend row
-  -- EXISTS guard ensures only real campaign names (never __none__, auto_social, etc.)
+  -- Guard: campaign must either (a) have ever appeared in campaigns_daily, OR
+  -- (b) follow the naming convention prefix — catches valid campaigns that ran
+  -- zero spend on the deal date (e.g. a closed campaign that still converts).
+  -- This prevents junk UTMs (__none__, auto_social, etc.) while allowing
+  -- convention-named campaigns like TikTok_Leadgen_Prospecting_Interests_Instantform.
   deal_name_stubs AS (
     SELECT dn.date, cm.channel,
            CAST(NULL AS STRING) AS campaign_id,
            dn.campaign_name
     FROM deals_by_name dn
     JOIN channel_map cm ON cm.qoyod_source = dn.qoyod_source
-    WHERE EXISTS (
-      SELECT 1 FROM `{P}.{D}.campaigns_daily` cd
-      WHERE LOWER(cd.campaign_name) = LOWER(dn.campaign_name)
+    WHERE (
+      EXISTS (
+        SELECT 1 FROM `{P}.{D}.campaigns_daily` cd
+        WHERE LOWER(cd.campaign_name) = LOWER(dn.campaign_name)
+      )
+      OR REGEXP_CONTAINS(dn.campaign_name,
+           r'(?i)^(Tiktok|Meta|Snapchat|Google|LinkedIn|Microsoft|PMax|Snap)_')
     )
     AND NOT EXISTS (
       SELECT 1 FROM spend s
