@@ -1867,6 +1867,69 @@ def activity_dashboard():
     # ── Code Health — violations queue + audit log ───────────────────────────
     code_health = _load_code_health()
 
+    # ── 4-panel activity layout ───────────────────────────────────────────────
+    # Panel 1 — Marketing Decisions (performance_audit, keyword_management,
+    #            daily_digest, spike_detector)
+    _P1_ROLES = {'performance_audit', 'keyword_management', 'daily_digest', 'spike_detector'}
+    panel1_rows = [r for r in detail_rows if getattr(r, 'role', None) in _P1_ROLES]
+
+    # Panel 2 — Approval Outcomes
+    _P2_ACTIONS = {
+        'posted_approvals_digest', 'approval_requested',
+        'action_approved_via_slack', 'action_rejected_via_slack',
+    }
+    panel2_rows = [r for r in detail_rows if r.action in _P2_ACTIONS]
+
+    # Panel 3 — System Health: one summary row per role
+    _P3_ROLES = {'health_monitor', 'bq_refresh', 'ops_scheduler', 'collector'}
+    _riyadh_tz = timezone(timedelta(hours=3))
+    _today_riyadh = datetime.now(_riyadh_tz).date()
+    panel3_health: dict = {}
+    # Seed from infra_rows (collect_* → collector; refresh_* → bq_refresh)
+    for r in infra_rows:
+        raw_role = getattr(r, 'role', None) or ''
+        if raw_role in _P3_ROLES:
+            role_key = raw_role
+        elif str(r.action).startswith('collect_'):
+            role_key = 'collector'
+        elif r.action in ('refresh_hex_notebooks', 'refresh_complete', 'refresh_views'):
+            role_key = 'bq_refresh'
+        else:
+            continue
+        entry = panel3_health.setdefault(role_key, {
+            'last_run': None, 'success': 0, 'fail': 0,
+            'label': role_key.replace('_', ' ').title(),
+        })
+        row_day = getattr(r, 'day', None)
+        if row_day and (entry['last_run'] is None or row_day > entry['last_run']):
+            entry['last_run'] = row_day
+        if row_day == _today_riyadh:
+            entry['success'] += int(getattr(r, 'cnt', 1) or 1)
+    # Seed health_monitor from hc_rows
+    if hc_rows:
+        hm_entry = panel3_health.setdefault('health_monitor', {
+            'last_run': None, 'success': 0, 'fail': 0, 'label': 'Health Monitor',
+        })
+        for r in hc_rows:
+            if r.status == 'success':
+                hm_entry['success'] += 1
+            else:
+                hm_entry['fail'] += 1
+        run_ts = hc_rows[0].run_ts if hc_rows else None
+        if run_ts:
+            hm_entry['last_run'] = run_ts.astimezone(_riyadh_tz).date()
+    # Determine overall Panel 3 status (red if any role has 0 success today)
+    panel3_has_failure = any(
+        v['success'] == 0 for v in panel3_health.values()
+    )
+
+    # Heatmap — filter to Panel 1 display categories only
+    _P1_HEATMAP_CATS = {
+        'Campaign Audits', 'Keywords Paused', 'Keywords Added',
+        'Slack Messages', 'Approvals', 'Optimizations',
+    }
+    heatmap_rows_p1 = [row for row in heatmap_rows if row[0] in _P1_HEATMAP_CATS]
+
     print(f"[activity] pre-render at {round(time.time()-_t0,1)}s", flush=True)
     html = render_template(
         "activity.html",
@@ -1874,6 +1937,7 @@ def activity_dashboard():
         date_label=date_label,
         days=days,
         heatmap_rows=heatmap_rows,
+        heatmap_rows_p1=heatmap_rows_p1,
         metrics=metrics,
         totals=totals,
         recent_activity=recent_activity,
@@ -1889,6 +1953,10 @@ def activity_dashboard():
         team_roster=team_roster,
         today=today,
         code_health=code_health,
+        panel1_rows=panel1_rows,
+        panel2_rows=panel2_rows,
+        panel3_health=panel3_health,
+        panel3_has_failure=panel3_has_failure,
     )
     print(f"[activity] render done in {round(time.time()-_t0,1)}s total", flush=True)
     with _ACTIVITY_CACHE_LOCK:

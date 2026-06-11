@@ -345,6 +345,47 @@ a:hover{text-decoration:underline}
               transition:background .15s}
 .ch-scan-btn:hover{background:#30363d}
 .ch-clean{color:#39d353;font-size:13px;font-weight:600}
+
+/* ── 4-panel activity layout ── */
+.panels-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:28px}
+@media(max-width:860px){.panels-grid{grid-template-columns:1fr}}
+.panel-card{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+.panel-card.panel-primary{border-color:#238636;box-shadow:0 0 0 1px #23863622}
+.panel-card.panel-placeholder{opacity:.7}
+.panel-card.panel-full{grid-column:1/-1}
+.panel-header{display:flex;align-items:center;justify-content:space-between;
+               padding:12px 16px;cursor:pointer;user-select:none;
+               border-bottom:1px solid #21262d}
+.panel-header:hover{background:#1c2128}
+.panel-title{font-size:13px;font-weight:600;color:#e6edf3;display:flex;align-items:center;gap:8px}
+.panel-badge{font-size:10px;background:#21262d;color:#8b949e;border-radius:10px;
+              padding:2px 8px;font-weight:500}
+.panel-badge.primary{background:#0e4429;color:#39d353}
+.panel-badge.red{background:#2d1515;color:#f85149}
+.panel-count{font-size:11px;color:#484f58}
+.panel-arrow{color:#484f58;font-size:11px;transition:transform .2s;margin-left:6px}
+.panel-card.panel-open .panel-arrow{transform:rotate(180deg)}
+.panel-body{padding:12px 16px;display:none}
+.panel-card.panel-open .panel-body{display:block}
+.panel-table{width:100%;border-collapse:collapse;font-size:12px}
+.panel-table th{text-align:left;color:#484f58;font-weight:500;
+                 padding:4px 8px 8px;border-bottom:1px solid #21262d}
+.panel-table td{padding:5px 8px;border-bottom:1px solid #161b22;color:#c9d1d9;
+                 max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel-table tr:last-child td{border-bottom:none}
+.panel-empty{color:#484f58;font-size:12px;padding:12px 0;text-align:center}
+.status-success{color:#39d353}
+.status-failed{color:#f85149}
+.status-skipped{color:#8b949e}
+.p3-row{display:flex;align-items:center;justify-content:space-between;
+          padding:8px 0;border-bottom:1px solid #21262d}
+.p3-row:last-child{border-bottom:none}
+.p3-role{font-size:12px;font-weight:600;color:#e6edf3}
+.p3-meta{font-size:11px;color:#8b949e}
+.p3-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-right:8px}
+.p3-dot.green{background:#39d353}
+.p3-dot.red{background:#f85149}
+.p3-dot.grey{background:#484f58}
 </style>
 </head>
 <body>
@@ -946,9 +987,9 @@ a:hover{text-decoration:underline}
   {% endif %}
 
   <!-- ── Heatmap ── -->
-  <div class="section-head">Contribution Heatmap — {{ date_label }}</div>
+  <div class="section-head">Contribution Heatmap — Marketing Decisions · {{ date_label }}</div>
   <div class="heatmap-wrap">
-    {% for cat, cells, total in heatmap_rows %}
+    {% for cat, cells, total in heatmap_rows_p1 %}
     <div class="hm-row">
       <div class="hm-cat-label" onclick="scrollToCard('{{ cat|lower|replace(' ','_') }}')">{{ cat }}</div>
       <div class="hm-cells">
@@ -2413,42 +2454,144 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
-  <!-- ── Recent Activity ── -->
-  <div class="card" id="recent_feed" style="margin-bottom:24px">
-    <div class="card-header" onclick="toggleCard(this)">
-      <div class="card-left">
-        <div class="card-icon">📋</div>
-        <div>
-          <div class="card-name">Recent Activity Feed</div>
-          <div class="card-counts">{{ recent_activity|length }} entries — grouped by week &amp; campaign · click to expand</div>
+  <!-- ── 4-Panel Activity Layout ── -->
+  <div class="section-head">Agent Activity — {{ date_label }}</div>
+  <div class="panels-grid">
+
+    {# ── Panel 1: Marketing Decisions (primary, always open) ── #}
+    <div class="panel-card panel-primary panel-open panel-full" id="panel-marketing-decisions">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">
+          Marketing Decisions
+          <span class="panel-badge primary">primary</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">{{ panel1_rows|length }} actions · performance_audit · keyword_management · daily_digest · spike_detector</span>
+          <span class="panel-arrow">▾</span>
         </div>
       </div>
-      <div class="card-right">
-        <div class="card-num">{{ recent_activity|length }}</div>
-        <div class="card-arrow">▾</div>
+      <div class="panel-body">
+        {% if panel1_rows %}
+        <table class="panel-table">
+          <thead><tr><th>Date (Riyadh)</th><th>Role</th><th>Action</th><th>Status</th><th>Channel</th><th>Campaign</th><th>#</th></tr></thead>
+          <tbody>
+          {% for r in panel1_rows[:50] %}
+          <tr>
+            <td style="white-space:nowrap;color:#8b949e">{{ r.day }}</td>
+            <td><span style="font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;padding:1px 6px">{{ r.role or '—' }}</span></td>
+            <td>{{ (r.action or '').replace('_',' ') }}</td>
+            <td class="status-{{ r.status or 'success' }}">{{ r.status or '—' }}</td>
+            <td>{% if r.channel %}<span class="tag {{ r.channel|lower }}">{{ r.channel }}</span>{% else %}—{% endif %}</td>
+            <td title="{{ r.campaign_name or '' }}">{{ r.campaign_name or '—' }}</td>
+            <td>{{ r.cnt }}</td>
+          </tr>
+          {% endfor %}
+          {% if panel1_rows|length > 50 %}
+          <tr><td colspan="7" style="color:#484f58;text-align:center;font-size:11px;padding:8px">
+            … {{ panel1_rows|length - 50 }} more rows — narrow the date window to see all
+          </td></tr>
+          {% endif %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="panel-empty">No marketing decision activity in this window.</div>
+        {% endif %}
       </div>
     </div>
-    <div class="card-body">
-      <table class="activity-table">
-        <tr>
-          <th>Week</th><th>Category</th><th>Channel</th><th>Campaign</th><th>#</th>
-        </tr>
-        {% for row in recent_activity %}
-        <tr>
-          <td style="white-space:nowrap;color:#8b949e;font-size:11px">{{ row.week }}</td>
-          <td>{{ row.category }}</td>
-          <td><span class="tag {{ (row.channel or '')|lower }}">{{ row.channel }}</span></td>
-          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ row.campaign }}">{{ row.campaign }}</td>
-          <td>
-            {% if row.count > 1 %}
-            <span style="background:#1f6feb;color:#e6edf3;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">{{ row.count }}</span>
-            {% else %}1{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
+
+    {# ── Panel 2: Approval Outcomes (always visible) ── #}
+    <div class="panel-card panel-open" id="panel-approvals">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">Approval Outcomes</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">{{ panel2_rows|length }} events</span>
+          <span class="panel-arrow">▾</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        {% if panel2_rows %}
+        <table class="panel-table">
+          <thead><tr><th>Date</th><th>Role</th><th>Action</th><th>Channel</th><th>Campaign</th></tr></thead>
+          <tbody>
+          {% for r in panel2_rows[:40] %}
+          <tr>
+            <td style="white-space:nowrap;color:#8b949e">{{ r.day }}</td>
+            <td><span style="font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;padding:1px 6px">{{ r.role or '—' }}</span></td>
+            <td style="{% if r.action == 'action_approved_via_slack' %}color:#39d353{% elif r.action == 'action_rejected_via_slack' %}color:#f85149{% else %}color:#c9d1d9{% endif %}">
+              {{ (r.action or '').replace('_',' ') }}
+            </td>
+            <td>{% if r.channel %}<span class="tag {{ r.channel|lower }}">{{ r.channel }}</span>{% else %}—{% endif %}</td>
+            <td title="{{ r.campaign_name or '' }}">{{ r.campaign_name or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="panel-empty">No approval activity in this window.</div>
+        {% endif %}
+      </div>
     </div>
-  </div>
+
+    {# ── Panel 3: System Health (collapsed by default, auto-expands on failure) ── #}
+    <div class="panel-card{% if panel3_has_failure %} panel-open{% endif %}" id="panel-system-health">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">
+          System Health
+          {% if panel3_has_failure %}
+          <span class="panel-badge red">issues detected</span>
+          {% endif %}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">{{ panel3_health|length }} roles · collapsed by default</span>
+          <span class="panel-arrow">▾</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        {% if panel3_health %}
+        {% for role_key, info in panel3_health.items() %}
+        <div class="p3-row">
+          <div style="display:flex;align-items:center">
+            <div class="p3-dot {% if info.success > 0 %}green{% elif info.fail > 0 %}red{% else %}grey{% endif %}"></div>
+            <div>
+              <div class="p3-role">{{ info.label }}</div>
+              <div class="p3-meta">Last run: {{ info.last_run or 'unknown' }}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;color:#39d353;font-weight:600">{{ info.success }} ok today</div>
+            {% if info.fail > 0 %}
+            <div style="font-size:11px;color:#f85149">{{ info.fail }} failed</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="panel-empty">No system health data in this window.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Panel 4: Cowork Agent Activity (placeholder) ── #}
+    <div class="panel-card panel-placeholder" id="panel-cowork">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">
+          Cowork Agent Activity
+          <span class="panel-badge">coming soon</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">Phase 3</span>
+          <span class="panel-arrow">▾</span>
+        </div>
+      </div>
+      <div class="panel-body" style="display:block">
+        <div style="padding:20px 0;text-align:center">
+          <div style="font-size:14px;color:#8b949e;margin-bottom:8px">Cowork integration coming in Phase 3</div>
+          <div style="font-size:12px;color:#484f58">This panel will surface Cowork agent decisions, handoffs,<br>and approval outcomes once the Cowork migration is complete.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panels-grid -->
 
   </div><!-- /activity-view -->
 
@@ -2470,6 +2613,10 @@ a:hover{text-decoration:underline}
 <script>
 function toggleCard(header) {
   header.closest('.card').classList.toggle('open');
+}
+
+function togglePanel(header) {
+  header.closest('.panel-card').classList.toggle('panel-open');
 }
 
 function scrollToCard(id) {
