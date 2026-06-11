@@ -209,7 +209,7 @@ STEP 3 — Return the report object.
   still_open_count: number still with status="open" after your update
   summary:          2 sentences — what was fixed + what (if anything) remains open
   log_entry:        the exact string you appended to 14_activity_dashboard.md
-`, { schema: REPORT_SCHEMA, phase: 'Report', agentType: 'project-coordinator', label: 'mktg-ops:report' })
+`, { schema: REPORT_SCHEMA, phase: 'Report', agentType: 'project-coordinator', label: 'project-coordinator:report' })
 
 log(`Report: fixed=${report?.fixed_count} still-open=${report?.still_open_count}`)
 log(report?.summary || '')

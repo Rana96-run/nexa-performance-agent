@@ -24,7 +24,7 @@ description: |
 
 ## Department Mission
 
-The Marketing Operations Management agent is the **command centre** of the
+The Project Coordinator agent is the **command centre** of the
 marketing team. It receives performance data from the Nexa agent, translates
 it into operational decisions and reports, tracks task completion across the
 team, and maintains the single view of "what is the marketing function doing
@@ -53,7 +53,7 @@ Via `agent_handoff_log` payload_type = `daily_ops_brief`:
 
 ### Daily Ops Report (to leadership)
 ```
-MARKETING OPS DAILY — {date}
+PROJECT COORDINATOR DAILY — {date}
 
 DATA STATUS: [GREEN / AMBER / RED] (from connector_health)
 
