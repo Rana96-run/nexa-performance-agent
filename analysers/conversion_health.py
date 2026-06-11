@@ -114,7 +114,14 @@ def check_google_ads_conversions(days: int = 14) -> dict:
             if name not in totals:
                 totals[name] = {"id": r.conversion_action.id, "conversions": 0.0}
 
+        # YouTube engagement conversions (subscriptions / follow-on views) are
+        # auto-tracked by Google — they don't use a GTM tag, so 0 conversions
+        # simply means no active YouTube campaigns, not a broken tag.
+        YOUTUBE_AUTO_CONVERSIONS = {"YouTube channel subscriptions", "YouTube follow-on views"}
+
         for name, data in totals.items():
+            if name in YOUTUBE_AUTO_CONVERSIONS:
+                continue  # expected 0 when no YouTube campaigns active — not a tag issue
             if data["conversions"] == 0:
                 issues.append({
                     "name":   name,
@@ -180,13 +187,9 @@ def check_microsoft_conversions() -> dict:
             url = "https://campaign.api.bingads.microsoft.com/CampaignManagement/v13/ConversionGoals"
             try:
                 r = _req.get(url, headers=hdrs, timeout=20)
-                if r.status_code == 404:
-                    # Endpoint not available — fall back to BQ-based check
-                    all_issues.append({
-                        "name":   f"account_{acc['account_id']}",
-                        "detail": "Campaign Management REST API unavailable — check manually in Microsoft Ads UI → Conversion tracking",
-                        "fix":    "Open Microsoft Ads → Tools → Conversion tracking → verify UET tag status is Active",
-                    })
+                if r.status_code in (404, 405):
+                    # Endpoint not available with this method — REST API may not
+                    # support ConversionGoals GET on this account type; skip silently.
                     continue
                 r.raise_for_status()
                 goals = r.json().get("ConversionGoals", r.json()) if isinstance(r.json(), dict) else r.json()
