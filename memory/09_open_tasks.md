@@ -17,9 +17,11 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       files with the 7-field standard (scope + does-NOT-own, skills + trust tiers, memory
       READ/WRITE, receives-from, hands-to, reports-to). Created `memory/agents/` per-agent
       private folder structure. Commits: `dd2f5ff` (folders), `1ea1a64` (agent files).
-- [ ] **Phase 2 — Cowork skill files.** Create one Cowork skill file per agent in
-      `.claude/skills/cowork/`. Same content as Phase 1 agent files, Cowork format.
-      Each skill logs a row to `agent_activity_log` on run. Owner: `project-coordinator` wires.
+- [x] **Phase 2 — Cowork skill files. DONE 2026-06-12.** 9 skill files written to
+      `.claude/skills/cowork/`: daily-loop, weekly-review, keyword-autofix (scheduled),
+      campaign-manager, creative-strategist, growth-analyst, cro-specialist,
+      project-coordinator, performance-lead (on-demand). Each includes connectors,
+      hard rules, output format, done-means. Commit: `820efc1`.
 - [ ] **Phase 3 — Cowork connectors.** Wire BigQuery, Slack, Asana, Meta, Google Ads,
       HubSpot in Cowork platform UI. Test each connector independently. ~30-60 min manual
       setup. Owner: `project-coordinator`.
@@ -31,8 +33,11 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       after each replacement. Owner: `project-coordinator`. Can run independently of Phases 1-4.
 
 **Also included in Phase 1:**
-- [ ] Activity dashboard: rebuild as 4 panels (Marketing Decisions, Approvals, System
-      Health collapsed, Cowork Activity). Update `memory/16_activity_dashboard.md`. Plan: write Plan 1C.
+- [x] **Activity dashboard: 4-panel redesign DONE 2026-06-12.** Marketing Decisions
+      (performance_audit/keyword_management/daily_digest/spike_detector), Approval Outcomes,
+      System Health (collapsed, auto-expands on failure), Cowork Activity (placeholder).
+      Heatmap filtered to Panel 1 roles only. No new BQ queries — uses existing detail_rows
+      + infra_rows. Commit: `5e3e0f8`.
 - [x] **Slack digest: minimal format DONE 2026-06-12.** `post_nightly_approvals_digest` rewritten
       with 3-block structure: PERFORMANCE (one line per channel w/ spend·leads·CPQL icon),
       ACTIONS (scale/pause with single ✅/❌ gate), REVIEW ONLY (Asana links). Channel summary
