@@ -607,7 +607,8 @@ def activity_dashboard():
                    JSON_VALUE(details,'$.issue_type') AS issue_type,
                    CAST(JSON_VALUE(details,'$.cost_usd') AS FLOAT64) AS cost_usd,
                    CAST(JSON_VALUE(details,'$.tokens_in') AS INT64) AS tokens_in,
-                   CAST(JSON_VALUE(details,'$.tokens_out') AS INT64) AS tokens_out
+                   CAST(JSON_VALUE(details,'$.tokens_out') AS INT64) AS tokens_out,
+                   JSON_QUERY(details,'$.spikes') AS spike_detail
             FROM {T}.agent_activity_log
             WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
               AND status NOT IN ('failed','skipped')
@@ -1198,7 +1199,8 @@ def activity_dashboard():
     m_spike_detections = {
         "count_30d": sp_c30, "count_7d": sp_c7,
         "rows": [{"day": str(r.day), "channel": r.channel or "—",
-                  "campaign": r.campaign_name or "—", "cnt": r.cnt}
+                  "campaign": r.campaign_name or "—", "cnt": r.cnt,
+                  "spikes": r.spike_detail or ""}
                  for r in intel_rows if r.action == "detect_spikes"][:60],
     }
 

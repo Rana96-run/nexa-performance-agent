@@ -1500,13 +1500,27 @@ a:hover{text-decoration:underline}
         </div>
         {% if metrics.spike_detections.rows %}
         <table class="dtable">
-          <tr><th>Date</th><th>Channel</th><th>Campaign</th><th>Spikes</th></tr>
+          <tr><th>Date</th><th>Count</th><th>What spiked</th></tr>
           {% for r in metrics.spike_detections.rows %}
           <tr>
             <td>{{ r.day }}</td>
-            <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
-            <td>{{ r.campaign }}</td>
             <td>{{ r.cnt }}</td>
+            <td style="font-size:11px;color:#8b949e">
+              {% if r.spikes %}
+                {% set labels = r.spikes | replace('[','') | replace(']','') | replace('"','') | replace("'","") %}
+                {% for label in labels.split(',') %}
+                  {% set parts = label.strip().split(':') %}
+                  {% if parts|length == 2 %}
+                    <span style="display:inline-block;margin:1px 3px 1px 0">
+                      <span class="tag {{ parts[0]|lower }}" style="font-size:10px;padding:1px 5px">{{ parts[0] }}</span>
+                      <span style="color:{% if 'up' in label %}#3fb950{% else %}#f85149{% endif %}">
+                        {{ parts[1].strip() | replace('_',' ') }}
+                      </span>
+                    </span>
+                  {% endif %}
+                {% endfor %}
+              {% else %}—{% endif %}
+            </td>
           </tr>
           {% endfor %}
         </table>
