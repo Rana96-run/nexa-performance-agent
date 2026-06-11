@@ -13,10 +13,10 @@ the bottom of the relevant section.
 Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.md`
 5 phases — do in order. Railway stays live as fallback throughout.
 
-- [ ] **Phase 1 — Agent file cleanup (Claude Code).** Update all 9 `.claude/agents/*.md`
+- [x] **Phase 1 — Agent file cleanup (Claude Code). DONE 2026-06-11.** Updated all 9 `.claude/agents/*.md`
       files with the 7-field standard (scope + does-NOT-own, skills + trust tiers, memory
-      READ/WRITE, receives-from, hands-to, reports-to). Create `memory/agents/` per-agent
-      private folder structure. Owner: `ai-orchestrator` coordinates.
+      READ/WRITE, receives-from, hands-to, reports-to). Created `memory/agents/` per-agent
+      private folder structure. Commits: `dd2f5ff` (folders), `1ea1a64` (agent files).
 - [ ] **Phase 2 — Cowork skill files.** Create one Cowork skill file per agent in
       `.claude/skills/cowork/`. Same content as Phase 1 agent files, Cowork format.
       Each skill logs a row to `agent_activity_log` on run. Owner: `marketing-ops` wires.
@@ -32,9 +32,9 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
 
 **Also included in Phase 1:**
 - [ ] Activity dashboard: rebuild as 4 panels (Marketing Decisions, Approvals, System
-      Health collapsed, Cowork Activity). Update `memory/16_activity_dashboard.md`.
+      Health collapsed, Cowork Activity). Update `memory/16_activity_dashboard.md`. Plan: write Plan 1C.
 - [ ] Slack digest: implement minimal format (spend · leads · CPQL per channel, one
-      ✅/❌ for all actions, review items with Asana links only). Update `notifications/slack.py`.
+      ✅/❌ for all actions, review items with Asana links only). Plan: `docs/superpowers/plans/2026-06-11-phase1b-slack-format.md`.
 
 ## P0 — Police findings open (detected 2026-06-08, not yet closed)
 
