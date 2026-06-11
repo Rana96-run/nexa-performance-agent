@@ -8,6 +8,34 @@ the bottom of the relevant section.
 > scheduler running at 08:00 Riyadh. Activity dashboard shows 6-member team roster.
 > Recommendation engine now includes alternatives-considered + pre-execution sanity checks.
 
+## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
+
+Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.md`
+5 phases — do in order. Railway stays live as fallback throughout.
+
+- [ ] **Phase 1 — Agent file cleanup (Claude Code).** Update all 9 `.claude/agents/*.md`
+      files with the 7-field standard (scope + does-NOT-own, skills + trust tiers, memory
+      READ/WRITE, receives-from, hands-to, reports-to). Create `memory/agents/` per-agent
+      private folder structure. Owner: `ai-orchestrator` coordinates.
+- [ ] **Phase 2 — Cowork skill files.** Create one Cowork skill file per agent in
+      `.claude/skills/cowork/`. Same content as Phase 1 agent files, Cowork format.
+      Each skill logs a row to `agent_activity_log` on run. Owner: `marketing-ops` wires.
+- [ ] **Phase 3 — Cowork connectors.** Wire BigQuery, Slack, Asana, Meta, Google Ads,
+      HubSpot in Cowork platform UI. Test each connector independently. ~30-60 min manual
+      setup. Owner: `marketing-ops`.
+- [ ] **Phase 4 — Daily loop on Cowork.** Set up `/daily-loop` as scheduled Cowork skill
+      at 08:00 Riyadh. Run in parallel with Railway `main.py daily` for 14 days. Compare
+      outputs. Retire Railway LLM layer once outputs match for 14 consecutive days.
+- [ ] **Phase 5 — n8n wiring (optional, independent).** Replace Railway Python collectors
+      one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays <2% delta
+      after each replacement. Owner: `marketing-ops`. Can run independently of Phases 1-4.
+
+**Also included in Phase 1:**
+- [ ] Activity dashboard: rebuild as 4 panels (Marketing Decisions, Approvals, System
+      Health collapsed, Cowork Activity). Update `memory/16_activity_dashboard.md`.
+- [ ] Slack digest: implement minimal format (spend · leads · CPQL per channel, one
+      ✅/❌ for all actions, review items with Asana links only). Update `notifications/slack.py`.
+
 ## P0 — Police findings open (detected 2026-06-08, not yet closed)
 
 Surfaced by `connector_health_log` + freshness check. Route via the police loop
@@ -176,7 +204,7 @@ Campaign IDs (customer 5753494964):
 
 ## Done this session (2026-06-11)
 
-- [x] **GTM: `MetaPixel_Lead_Event` tag created (Tag ID 331, workspace 60).** Client-side `fbq('track','Lead')` on trigger 279 (HS Thank You Page). Awaiting user to publish workspace in GTM-TFH26VC2.
+- [x] **GTM: `MetaPixel_Lead_Event` tag created (Tag ID 331, workspace 60).** Client-side `fbq('track','Lead')` on trigger 279 (HS Thank You Page). Published by user 2026-06-11.
 - [x] **GTM: Server-side CAPI chain fully verified.** `{{Stape | Server URL}}` resolves to `https://sig.qoyod.com`. `GA4|Configuration` (Tag 131) routes all GA4 events to server via `transport_url`. Elementor forms on both `www.qoyod.com` (tag 328) and `lp.qoyod.com` (tag 326) push `lead_generation_success` to dataLayer → GA4 `generate_lead` event (Tag 257) fires → server container `generate_lead` trigger → Meta CAPI. HubSpot forms (non-Elementor) covered by Tag 331 client-side only.
 - [x] **GTM audit false positives all fixed.** `[Stape]` legacy tags skipped, GA4 config detection restricted, pixel ID check Meta-only, GTM variable references not flagged as bad IDs, `_REQUIRED_SERVER_TAGS` updated with real Stape type codes. Committed `e3c6308`, `f347eaa`, `672d862`, `d441b57`.
 - [x] **GA4 WoW analysis column fix.** `avg_session_duration_s * sessions` replaces nonexistent `total_session_duration_s`. Committed `d97fca2`.
