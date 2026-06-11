@@ -710,9 +710,43 @@ def _send_nightly_digest(scale_findings: list, pause_findings: list, review_find
     """
     if not scale_findings and not pause_findings and not review_findings:
         return
+
+    # Fetch yesterday's per-channel summary (spend · leads · CPQL) for the digest header
+    channel_summary = []
+    try:
+        _bq_client = get_client()
+        _yesterday = (date.today() - timedelta(days=1)).isoformat()
+        _sql = f"""
+            SELECT
+              channel,
+              SUM(spend)          AS spend,
+              SUM(leads_total)    AS leads,
+              SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql
+            FROM `{PROJECT_ID}.{DATASET}.paid_channel_daily`
+            WHERE date = '{_yesterday}'
+              AND spend > 0
+            GROUP BY channel
+            ORDER BY spend DESC
+        """
+        for row in _bq_client.query(_sql).result():
+            channel_summary.append({
+                "channel": row.channel,
+                "spend":   float(row.spend or 0),
+                "leads":   int(row.leads or 0),
+                "cpql":    float(row.cpql) if row.cpql is not None else None,
+            })
+    except Exception as _e:
+        print(f"[health-tasks] channel_summary fetch failed (non-fatal): {_e}")
+        channel_summary = []
+
     try:
         from notifications.slack import post_nightly_approvals_digest
-        ts = post_nightly_approvals_digest(scale_findings, pause_findings, review_findings)
+        ts = post_nightly_approvals_digest(
+            scale_findings,
+            pause_findings,
+            review_findings,
+            channel_summary=channel_summary,
+        )
         print(f"[health-tasks] nightly digest posted "
               f"(scale={len(scale_findings)}, pause={len(pause_findings)}, "
               f"review={len(review_findings)}, ts={ts})")

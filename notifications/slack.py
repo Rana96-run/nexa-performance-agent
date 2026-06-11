@@ -127,21 +127,25 @@ def post_nightly_approvals_digest(
     pause_findings: list,
     review_findings: list,
     window_days: int | None = None,
+    channel_summary: list | None = None,
 ) -> str | None:
     """
-    THE ONE #approvals message — posted on the cadence configured by
-    SCALE_PAUSE_DIGEST_INTERVAL_DAYS (default every 4 days, not nightly).
+    THE ONE #approvals message.
 
-    Covers everything in a single post:
-      - Scale candidates  (✅ executes +25% budget)
-      - Pause candidates  (✅ executes pause)
-      - Review summary    (optimize / junk / drilldown — tasks already in Asana)
+    Minimal format:
+      Nexa · {date}  |  {dashboard_url}
 
-    The header shows the data window so the team can verify numbers in
-    HubSpot for the same date range:
-      "Nightly approvals — May 8 · 14d window: Apr 24 → May 7"
+      PERFORMANCE
+      {channel}   ${spend}  ·  {leads} leads  ·  ${cpql} CPQL   {icon}
 
-    ✅ = execute all scale + pause actions  ·  ❌ = skip all
+      ACTIONS  —  ✅ executes all  ·  ❌ skips all
+      ↗  {campaign}   +{pct}% budget  (${old} → ${new})
+      ⏸  {campaign}   pause           (${cpql} CPQL · {days}d)
+
+      REVIEW ONLY  (Asana tasks created)
+      ⚡  {flag}  —  {asana_url}
+
+    ✅ = execute all scale + pause  ·  ❌ = skip all
     Returns the Slack message ts, or None on failure.
     """
     from notifications.quiet import is_quiet, quiet_log
@@ -149,7 +153,6 @@ def post_nightly_approvals_digest(
     if not scale_findings and not pause_findings and not review_findings:
         return None
 
-    # Default window comes from DAYS_FOR_PAUSE_DECISION; callers may override.
     if window_days is None:
         try:
             from config import DAYS_FOR_PAUSE_DECISION
@@ -157,64 +160,75 @@ def post_nightly_approvals_digest(
         except Exception:
             window_days = 14
 
-    # Compute the explicit data window: yesterday minus N..yesterday inclusive.
-    # Yesterday is the last *complete* day of data — today is partial.
-    from datetime import date as _date, timedelta as _td
-    end_d   = _date.today() - _td(days=1)
-    start_d = end_d - _td(days=window_days - 1)
+    _now = datetime.now(timezone.utc)
+    today_label = f"{_now.strftime('%b')} {_now.day}"
 
-    today_label  = datetime.now(timezone.utc).strftime("%b %-d")
-    window_label = f"{window_days}d window: {start_d.strftime('%b %-d')} → {end_d.strftime('%b %-d')}"
-    lines = [f":arrows_counterclockwise: *Nightly approvals — {today_label}*  ·  _{window_label}_"]
+    # ── Dashboard URL ─────────────────────────────────────────────────────────
+    try:
+        from config import ACTIVITY_DEST_URL
+        dash_url = ACTIVITY_DEST_URL
+    except Exception:
+        dash_url = "https://nexa-web-production-6a6b.up.railway.app/activity"
 
-    executable_findings = []
+    lines = [f"*Nexa · {today_label}*  |  {dash_url}"]
 
-    if scale_findings:
-        lines.append("\n*Scale ↑* (+25% budget)")
-        for f in scale_findings:
-            cpql  = f"CPQL ${f['cpql']:.0f}" if f.get("cpql") else "CPQL N/A"
-            avg   = f.get("avg_spend")
-            new_b = f.get("new_budget")
-            budget = f"  ·  ${avg:.0f}→${new_b:.0f}/day" if avg and new_b else ""
-            # Spend-trend sanity flag (set by campaign_health_tasks)
-            trend = f.get("spend_trend")
-            if trend == "no_recent_spend":
-                trend_tag = "  ·  *[no recent spend — verify active]*"
-            elif trend == "declining":
-                recent = f.get("spend_trend_recent")
-                window = f.get("spend_trend_window")
-                trend_tag = f"  ·  *[spend declining — ${recent:.0f} vs ${window:.0f} avg]*" if recent and window else "  ·  *[spend declining]*"
-            elif trend == "accelerating":
-                trend_tag = "  ·  *[accelerating]*"
+    # ── PERFORMANCE block (one line per channel, sorted by spend desc) ────────
+    _CPQL_SCALE   = 85    # below → ✅
+    _CPQL_WARNING = 130   # above → 🔴, between → ⚠️
+
+    if channel_summary:
+        lines.append("\n*PERFORMANCE*")
+        for ch in sorted(channel_summary, key=lambda x: x.get("spend", 0), reverse=True):
+            name   = ch.get("channel", "?").title()
+            spend  = ch.get("spend", 0)
+            leads  = ch.get("leads", 0)
+            cpql   = ch.get("cpql")
+            if cpql is None:
+                icon = "—"
+            elif cpql < _CPQL_SCALE:
+                icon = "✅"
+            elif cpql < _CPQL_WARNING:
+                icon = "⚠️"
             else:
-                trend_tag = ""
-            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}{budget}{trend_tag}")
-        executable_findings.extend(scale_findings)
+                icon = "🔴"
+            cpql_str = f"${cpql:.0f} CPQL" if cpql is not None else "no leads"
+            lines.append(
+                f"{name:<10}  ${spend:.0f}  ·  {leads} leads  ·  {cpql_str}   {icon}"
+            )
 
-    if pause_findings:
-        lines.append("\n*Pause ⏸*")
-        for f in pause_findings:
-            cpql = f"CPQL ${f['cpql']:.0f}" if f.get("cpql") else "CPQL N/A"
-            qual = f"{f.get('qual_rate', 0):.0f}%"
-            # Alternative to full pause (set by campaign_health.py)
-            cut = f.get("alt_budget_cut_pct")
-            alt_tag = f"  ·  *Alt: cut -{cut}% budget first*" if cut else ""
-            lines.append(f"  • `{f.get('campaign', '?')}`  {cpql}  ·  qual {qual}{alt_tag}")
-        executable_findings.extend(pause_findings)
+    # ── ACTIONS block ─────────────────────────────────────────────────────────
+    executable_findings = []
+    action_lines = []
 
-    if review_findings:
-        # Summarise review items — counts only, no names (tasks are in Asana)
-        counts: dict[str, int] = {}
-        for f in review_findings:
-            tag = "Junk" if f.get("junk_leads") else f.get("action", "?").title()
-            counts[tag] = counts.get(tag, 0) + 1
-        review_line = "  ·  ".join(f"{tag} ×{n}" for tag, n in sorted(counts.items()))
-        lines.append(f"\n*Review → Asana*  {review_line}")
+    for f in scale_findings:
+        avg   = f.get("avg_spend")
+        new_b = f.get("new_budget")
+        budget_str = f"  (${avg:.0f} → ${new_b:.0f}/day)" if avg and new_b else ""
+        action_lines.append(f"↗  `{f.get('campaign', '?')}`   +25% budget{budget_str}")
+        executable_findings.append(f)
 
-    if executable_findings:
-        lines.append("\nReact :white_check_mark: to execute scale/pause  ·  :x: to skip all")
-    else:
-        lines.append("\nReact :white_check_mark: to acknowledge  ·  :x: to dismiss")
+    for f in pause_findings:
+        cpql    = f.get("cpql")
+        cpql_str = f"${cpql:.0f} CPQL" if cpql is not None else "high CPQL"
+        days_str = f"{window_days}d"
+        action_lines.append(f"⏸  `{f.get('campaign', '?')}`   pause   ({cpql_str} · {days_str})")
+        executable_findings.append(f)
+
+    if action_lines:
+        lines.append("\n*ACTIONS*  —  ✅ executes all  ·  ❌ skips all")
+        lines.extend(action_lines)
+
+    # ── REVIEW ONLY block ─────────────────────────────────────────────────────
+    review_lines = []
+    for f in review_findings:
+        label = "Junk leads" if f.get("junk_leads") else f.get("action", "review").title()
+        asana = f.get("asana_url", "")
+        asana_part = f"  —  {asana}" if asana else ""
+        review_lines.append(f"⚡  {label}: `{f.get('campaign', '?')}`{asana_part}")
+
+    if review_lines:
+        lines.append("\n*REVIEW ONLY*  (Asana tasks created)")
+        lines.extend(review_lines)
 
     full_text = "\n".join(lines)
 
@@ -244,14 +258,29 @@ def post_nightly_approvals_digest(
                     "campaign_id": f.get("campaign_id", ""),
                     "account_id":  f.get("account_id", ""),
                     "new_budget":  f.get("new_budget"),
-                    "asana_gid":   f.get("asana_gid", ""),
                 }
                 for f in executable_findings
             ],
         })
+        try:
+            from logs.activity_logger import log_activity_async
+            log_activity_async(
+                role="daily_digest",
+                action="posted_approvals_digest",
+                status="success",
+                details={
+                    "scale":  len(scale_findings),
+                    "pause":  len(pause_findings),
+                    "review": len(review_findings),
+                    "ts":     ts,
+                    "format": "minimal_v2",
+                },
+            )
+        except Exception:
+            pass
         return ts
     except SlackApiError as e:
-        print(f"[nightly-approvals-digest] Slack error: {e}")
+        print(f"[slack] post_nightly_approvals_digest failed: {e}")
         return None
 
 
