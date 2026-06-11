@@ -656,8 +656,34 @@ WHERE category IS NOT NULL
 GROUP BY day, category, channel
 """
 
+# All new_biz deals — NO channel filter.
+# Use this view for dashboard "New Biz Total" cards (matching HubSpot all-sources count).
+# paid_channel_daily.new_biz_* columns show PAID-ONLY (inner-joined to v_channel_key_map);
+# this view is the correct source for the aggregate overview section.
+NEW_BIZ_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.v_new_biz_daily` AS
+SELECT
+  date,
+  pipeline,
+  qoyod_source,
+  SUM(deals_total)  AS deals_total,
+  SUM(deals_won)    AS deals_won,
+  SUM(deals_lost)   AS deals_lost,
+  SUM(deals_open)   AS deals_open,
+  SUM(amount_total) AS amount_total,
+  SUM(amount_won)   AS amount_won,
+  SUM(amount_lost)  AS amount_lost,
+  SUM(amount_open)  AS amount_open
+FROM `{P}.{D}.hubspot_deals_daily`
+WHERE pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
+  AND date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
+GROUP BY date, pipeline, qoyod_source
+"""
+
 ALL_VIEWS = [
     ("v_channel_key_map",            CHANNEL_MAP_SQL),
+    # All new_biz deals (all sources) — the correct source for dashboard totals
+    ("v_new_biz_daily",              NEW_BIZ_DAILY_SQL),
     # paid_channel_campaign_daily + paid_channel_daily + channel_roas_daily
     # are MATERIALIZED TABLES — handled by materialize_heavy_views()
     # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
