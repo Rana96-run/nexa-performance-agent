@@ -646,6 +646,13 @@ def activity_dashboard():
               SELECT *, ROW_NUMBER() OVER (
                 PARTITION BY COALESCE(gid, CAST(ts AS STRING)) ORDER BY ts ASC
               ) AS rn FROM all_tasks
+            ),
+            deduped AS (
+              SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY COALESCE(project_key,''), LOWER(TRIM(COALESCE(title,'')))
+                ORDER BY ts DESC
+              ) AS title_rn
+              FROM created WHERE rn=1
             )
         """
         ts_sql = _ts_base_sql + f"""
@@ -657,14 +664,14 @@ def activity_dashboard():
             SELECT c.gid, c.title, c.project_key, c.asset_level, c.created_day,
                    COALESCE(s.completed,FALSE) AS completed, s.completed_at,
                    s.assignee_name, s.due_on
-            FROM created c LEFT JOIN status s ON s.gid=c.gid AND s.rn=1
-            WHERE c.rn=1 ORDER BY c.created_day DESC LIMIT 500
+            FROM deduped c LEFT JOIN status s ON s.gid=c.gid AND s.rn=1
+            WHERE c.title_rn=1 ORDER BY c.created_day DESC LIMIT 500
         """
         ts_sql_fb = _ts_base_sql + """
             SELECT c.gid, c.title, c.project_key, c.asset_level, c.created_day,
                    FALSE AS completed, NULL AS completed_at,
                    NULL AS assignee_name, NULL AS due_on
-            FROM created c WHERE c.rn=1 ORDER BY c.created_day DESC LIMIT 500
+            FROM deduped c WHERE c.title_rn=1 ORDER BY c.created_day DESC LIMIT 500
         """
         exec_sql = f"""
             SELECT DATE(ts,'Asia/Riyadh') AS action_date, action, channel, campaign_name,
