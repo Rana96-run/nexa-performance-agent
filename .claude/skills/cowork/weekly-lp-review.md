@@ -61,7 +61,7 @@ Note: `cvr_pct` = leads / clicks (paid visits as proxy — page-level GA4 is not
 
 ## Google Sheet output
 
-Write results to the Google Sheet identified by `GOOGLE_SHEET_LP_REVIEW_ID` env var (or fall back to creating a new tab in the main reporting sheet). Tab name format: `LP-YYYY-MM-DD` using the report date.
+Write results to the main reporting sheet (ID: `120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg`) — the same sheet used by `action_points_sync.py` and `sheet_action_logger.py`. Add a new tab named `LP-YYYY-MM-DD` (report date). If a tab with that name already exists, overwrite it.
 
 Columns (in order):
 | destination_url | sample_campaign | spend_usd | clicks | impressions | leads | sqls | cvr_pct | cpql_usd |
@@ -102,7 +102,7 @@ Leave as **DRAFT** — do not assign, do not set to active. The task surfaces fo
 - Never post to Slack. This is a draft review loop only.
 - Never modify any live LP, campaign, or ad based on this data.
 - CPQL > $85 is a flag for review, not a pause trigger — pause decisions require full 14-day window and #approvals flow.
-- If `GOOGLE_SHEET_LP_REVIEW_ID` env var is missing, log the error to `agent_activity_log` and stop — do not create the Asana task without the Sheet link.
+- If the Google Sheets API call fails, log the error to `agent_activity_log` and stop — do not create the Asana task without a valid Sheet link.
 
 ## Done means
 
