@@ -46,11 +46,11 @@ Minimum 3 leads threshold to avoid statistical noise.
 
 Both conditions must be met:
 - `qual_ratio > 0.50` (more than half of leads qualify)
-- `cpl ≤ 30.00` (spend per lead within ad-level scale zone)
+- `cpl ≤ 25.00` (spend per lead at or below $25)
 
 Rows meeting both criteria = **winners** (highlight green in Sheet).
-Rows with high qual but CPL > $30 = **optimise** (highlight yellow — good creative, fix bid/budget).
-Everything else = **underperformer**.
+Rows with qual_ratio > 0.50 but CPL > $25 = **optimise** (highlight yellow — creative works, fix bid/budget).
+Rows with qual_ratio ≤ 0.50 regardless of CPL = **underperformer** (highlight red).
 
 ## Google Sheet structure
 
@@ -101,7 +101,7 @@ Action: optimize → [Creative Strategist]
 
 - Never post individual ad names to Slack — Asana + Sheet only.
 - Qual ratio is the primary sort. CPL is secondary. Never sort by spend alone.
-- `AD_CPL_SCALE = $30` — if config changes, reflect it here.
+- CPL winner threshold = $25 (fixed — not derived from AD_CPL_SCALE).
 - Report covers only channels with ≥ 1 ad with ≥ 3 leads. Skip silent channels entirely.
 - The existing weekly creative audit (Sunday) is separate — this report is monthly, higher fidelity, Sheet-first.
 
