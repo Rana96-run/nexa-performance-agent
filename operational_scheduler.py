@@ -290,6 +290,206 @@ def _run_weekly_keyword_autofix() -> dict:
         return counts
 
 
+def _run_weekly_creative_audit() -> dict:
+    """
+    Sunday-only: run creative performance audit across all social channels.
+    Ranks creatives by qual rate + SQLs, creates an Asana task for Creative Strategist.
+    Silent on non-Sunday days.
+    """
+    from analysers.google_ads_audit_tasks import _is_weekly_keyword_day
+    if not _is_weekly_keyword_day():
+        return {}
+    try:
+        from analysers.creative_performance import (
+            audit_creative_performance,
+            audit_creative_by_campaign_type,
+            format_creative_section,
+        )
+        from executors.asana import create_task
+        from datetime import date
+        from logs.activity_logger import log_activity_async
+
+        days = 30
+        social_result = audit_creative_performance(days=days, min_leads=3)
+        tier_result   = audit_creative_by_campaign_type(days=days, min_leads=3)
+        best  = social_result.get("best",  [])
+        worst = social_result.get("worst", [])
+
+        if not best and not worst:
+            print("[weekly-creative-audit] no creative data — skipping Asana task")
+            return {"skipped": True}
+
+        creative_section = format_creative_section(social_result)
+        tier_insights    = "\n".join(f"- {i}" for i in tier_result.get("insights", []))
+        today = date.today().isoformat()
+
+        description = (
+            f"Creative performance audit — last {days} days (auto-generated Sunday)\n\n"
+            f"CREATIVE RANKINGS (by SQL qual rate):\n{creative_section}\n\n"
+            + (f"AUDIENCE TIER INSIGHTS:\n{tier_insights}\n\n" if tier_insights else "")
+            + "ACTION ITEMS FOR CREATIVE STRATEGIST:\n"
+            + (f"1. Scale: '{best[0]['name']}' ({best[0]['sqls']} SQLs, "
+               f"{best[0]['qual_rate']*100:.0f}% qual) — duplicate into a new variant "
+               "with a fresh hook, same format.\n" if best else "")
+            + (f"2. Replace: '{worst[0]['name']}' ({worst[0]['disquals']} disqualified leads, "
+               f"{worst[0]['qual_rate']*100:.0f}% qual) — pause and test a variant "
+               "targeting the qualified buyer more explicitly.\n" if worst else "")
+            + "\nScope at least 2 A/B variants per winning creative × audience tier.\n\n"
+            f"Created: {today}\nDue: {today}\nPriority: Medium\n"
+            f"Type: Recommendation\nChannel: social\nAsset level: ad\n"
+            f"Action: optimize → [Creative Strategist]"
+        )
+        create_task(
+            title=f"[Weekly] Creative Performance Audit — {today}",
+            description=description,
+            project_key="daily_activity",
+            task_type="Recommendation",
+            channel="meta",
+            asset_level="ad",
+            action="optimize",
+            log_role="creative_strategy",
+        )
+        log_activity_async(
+            role="creative_strategy", action="creative_audit_auto",
+            status="success",
+            details={"best_count": len(best), "worst_count": len(worst), "days": days},
+        )
+        result = {"best": len(best), "worst": len(worst)}
+        print(f"[weekly-creative-audit] {result}")
+        return result
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[weekly-creative-audit] failed (non-fatal): {e}")
+        return {}
+
+
+def _run_weekly_lp_briefs() -> dict:
+    """
+    Sunday-only: for each active product, find the worst-CPQL campaign above
+    the warning threshold and auto-create the LP brief Asana chain
+    (CRO Specialist → UI/UX Designer → Developer).
+    Silent when all products are healthy (no campaign above threshold).
+    """
+    from analysers.google_ads_audit_tasks import _is_weekly_keyword_day
+    if not _is_weekly_keyword_day():
+        return {}
+    try:
+        from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+        from analysers.lp_tasks import create_lp_brief
+        from config import CPQL_WARNING
+        from datetime import date, timedelta
+        from logs.activity_logger import log_activity_async
+
+        products = ["Invoice", "Bookkeeping", "Qflavours", "General"]
+        days  = 14
+        today = date.today()
+        since = (today - timedelta(days=days)).isoformat()
+        to    = (today - timedelta(days=1)).isoformat()
+
+        created, skipped = 0, 0
+        for product in products:
+            sql = f"""
+                WITH hs AS (
+                    SELECT lead_utm_campaign,
+                           SUM(leads_total)     AS leads,
+                           SUM(leads_qualified) AS sqls
+                    FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_module_daily`
+                    WHERE date BETWEEN '{since}' AND '{to}'
+                      AND lead_utm_campaign IS NOT NULL
+                      AND LOWER(lead_utm_campaign) LIKE '%{product.lower()}%'
+                    GROUP BY lead_utm_campaign
+                    HAVING SUM(leads_total) >= 5
+                ),
+                sp AS (
+                    SELECT campaign_name, SUM(spend) AS spend
+                    FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+                    WHERE date BETWEEN '{since}' AND '{to}'
+                      AND LOWER(campaign_name) LIKE '%{product.lower()}%'
+                    GROUP BY campaign_name
+                )
+                SELECT sp.campaign_name, hs.leads, hs.sqls, sp.spend,
+                       SAFE_DIVIDE(sp.spend, NULLIF(hs.sqls, 0)) AS cpql
+                FROM sp
+                LEFT JOIN hs ON LOWER(sp.campaign_name) = LOWER(hs.lead_utm_campaign)
+                WHERE SAFE_DIVIDE(sp.spend, NULLIF(hs.sqls, 0)) > {CPQL_WARNING}
+                   OR hs.sqls IS NULL
+                ORDER BY cpql DESC LIMIT 1
+            """
+            rows = list(get_client().query(sql).result())
+            if not rows:
+                skipped += 1
+                continue
+
+            row       = rows[0]
+            camp_name = row.campaign_name or f"{product} campaign"
+            cpql      = round(float(row.cpql or 0), 2)
+            leads     = int(row.leads or 0)
+            sqls      = int(row.sqls  or 0)
+            qual_rate = round(sqls / leads * 100, 1) if leads > 0 else 0.0
+            spend     = round(float(row.spend or 0), 2)
+            conv_pct  = round(leads / max(spend / 3, 1) * 100, 2)
+
+            channel = "meta"
+            for ch in ("google", "snap", "tiktok", "linkedin", "bing"):
+                if ch in camp_name.lower():
+                    channel = ch
+                    break
+
+            try:
+                create_lp_brief(
+                    product=product,
+                    hypothesis_slug="cpql-optimisation",
+                    channel=channel,
+                    hypothesis=(
+                        f"A new LP variant with a clearer value proposition will reduce CPQL "
+                        f"below ${CPQL_WARNING} (currently ${cpql}) for '{camp_name}'."
+                    ),
+                    current_cpql=cpql,
+                    current_conversion_pct=conv_pct,
+                    destination_url="",
+                    audience="SMB accountants and business owners",
+                    ocean_notes=(
+                        "High Conscientiousness segment — emphasise accuracy, VAT compliance, "
+                        "and time-saving. Lead with social proof (number of businesses using Qoyod)."
+                    ),
+                    offer_message=f"Try {product} free — no credit card required",
+                    page_structure=(
+                        "Hero: headline + sub-headline + CTA button above fold. "
+                        "Section 2: 3 key benefits (icons). "
+                        "Section 3: social proof / customer count. "
+                        "Section 4: ZATCA compliance badge. "
+                        "Section 5: final CTA."
+                    ),
+                    success_criteria=(
+                        f"CPQL < ${CPQL_WARNING} over 14-day window. "
+                        f"Qual rate >= {qual_rate + 10:.0f}% (current: {qual_rate}%). "
+                        "Min 30 leads per variant before calling winner."
+                    ),
+                    risks="Low traffic risk if campaign spend < $5/day — brief may need 21-day window.",
+                    window_days=days,
+                )
+                created += 1
+                print(f"[weekly-lp-briefs] {product}: LP brief created (CPQL ${cpql})")
+            except ValueError as e:
+                print(f"[weekly-lp-briefs] {product}: skipped — {e}")
+                skipped += 1
+            except Exception as e:
+                print(f"[weekly-lp-briefs] {product}: failed — {e}")
+
+        log_activity_async(
+            role="cro_analysis", action="lp_brief_auto",
+            status="success",
+            details={"products_briefed": created, "products_healthy": skipped},
+        )
+        result = {"briefs_created": created, "products_healthy": skipped}
+        print(f"[weekly-lp-briefs] {result}")
+        return result
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[weekly-lp-briefs] failed (non-fatal): {e}")
+        return {}
+
+
 def _run_google_ads_audit() -> list:
     """Daily impression-share, quality-score, and search-terms audit.
     Creates Asana tasks with consolidated recommendations."""
@@ -859,6 +1059,15 @@ def _nightly():
     # rule-mandated action (pause / delete / remove-negative), and logs the
     # counts to BQ so Monday's weekly summary picks them up.
     weekly_fix_counts = _run_weekly_keyword_autofix()
+
+    # 3i. WEEKLY CREATIVE AUDIT — Sunday Riyadh only.
+    # Ranks creatives by qual rate + SQLs → Asana task for Creative Strategist.
+    _run_weekly_creative_audit()
+
+    # 3j. WEEKLY LP BRIEFS — Sunday Riyadh only.
+    # For each product with a campaign above CPQL warning threshold → full
+    # Asana chain (CRO Specialist → UI/UX Designer → Developer). Silent when healthy.
+    _run_weekly_lp_briefs()
 
     # 4. Audit is SILENT — Asana tasks are the record. No daily Slack post.
     #    Weekly Slack summary goes out Monday night (step below).
