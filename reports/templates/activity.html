@@ -2498,10 +2498,25 @@ function closeWorkflowDirect() {
 }
 
 function showCheckDetail(name, ok, msg) {
-  document.getElementById('hc-detail-icon').textContent = ok ? 'OK' : 'FAIL';
+  document.getElementById('hc-detail-icon').textContent = ok ? '✅' : '❌';
   document.getElementById('hc-detail-name').textContent = name;
-  document.getElementById('hc-detail-msg').textContent  = msg;
-  const overlay = document.getElementById('hc-detail-overlay');
+  // If msg contains the WHY separator, split into explanation + raw detail
+  var msgEl = document.getElementById('hc-detail-msg');
+  var parts = msg.split('\n\n');
+  if (!ok && parts.length >= 2) {
+    var why = parts[0];
+    var raw = parts.slice(1).join('\n\n');
+    msgEl.innerHTML =
+      '<div style="color:#e6edf3;font-weight:600;margin-bottom:8px;font-size:12px;font-family:inherit">' +
+        why.replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+      '</div>' +
+      '<div style="color:#8b949e;font-size:11px;font-family:monospace;white-space:pre-wrap;word-break:break-all">' +
+        raw.replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+      '</div>';
+  } else {
+    msgEl.textContent = msg;
+  }
+  var overlay = document.getElementById('hc-detail-overlay');
   overlay.style.display = 'flex';
 }
 

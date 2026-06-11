@@ -399,11 +399,13 @@ def check_slack_listener() -> tuple[bool, str]:
     This is what actually handles ✅/❌ reactions on Railway.
     """
     import requests as _req
-    # 1. Check the /slack/events webhook endpoint
+    # 1. Probe /slack/events with POST (no signature) — expect 403 invalid_signature = endpoint is up.
+    #    Using GET would return 405 (Method Not Allowed), which is also fine.
     try:
-        r = _req.get(f"{BASE_URL}/slack/events", timeout=10)
-        # Flask returns 405 Method Not Allowed for GET (it only accepts POST) — that means it's up
-        if r.status_code in (200, 405):
+        r = _req.post(f"{BASE_URL}/slack/events", json={}, timeout=10)
+        # 403 = signature check working (endpoint up). 200 = url_verification challenge.
+        # 405 = method not allowed (should not happen but also means server is up).
+        if r.status_code in (200, 403, 405):
             events_ok = True
         else:
             events_ok = False
@@ -468,6 +470,29 @@ CHECK_CATEGORY = {
     "Asana":                 "Connectors",
 }
 
+# One or two lines shown in the click-to-expand modal when a check fails.
+# Explains WHY this error appears and what to do about it.
+CHECK_WHY = {
+    "Slack listener":      "The /slack/events webhook is unreachable or crashing. This means ✅/❌ reactions on #approvals won't trigger approve/reject. Fix: check Railway logs for errors on the /slack/events route, then redeploy.",
+    "LinkedIn":            "The LinkedIn OAuth refresh token has expired (HTTP 401). Fix: run `railway run python collectors/linkedin_oauth.py` to get a new token, then update LINKEDIN_REFRESH_TOKEN in Railway.",
+    "Google Ads":          "The Google Ads API credentials are invalid or the customer ID is wrong. Fix: re-run `python google_ads_oauth.py` and update GOOGLE_ADS_REFRESH_TOKEN in Railway.",
+    "Meta Ads":            "The Meta access token has expired or the ad account ID is incorrect. Fix: generate a new long-lived token in Meta Business Manager → System Users, update META_ACCESS_TOKEN in Railway.",
+    "Microsoft Ads":       "The Microsoft Ads refresh token has expired. Fix: run `railway run python collectors/microsoft_oauth.py` to refresh, update MS_REFRESH_TOKEN in Railway.",
+    "Snapchat":            "The Snapchat API token is invalid or expired. Fix: re-authenticate via Snapchat Business API and update SNAP_ACCESS_TOKEN in Railway.",
+    "TikTok":              "The TikTok API token is invalid or expired. Fix: re-authenticate via TikTok for Business and update TIKTOK_ACCESS_TOKEN in Railway.",
+    "HubSpot API":         "The HubSpot access token is invalid. Fix: generate a new private app token in HubSpot → Settings → Private Apps, update HUBSPOT_ACCESS_TOKEN in Railway.",
+    "HubSpot webhook":     "The HubSpot webhook endpoint (/webhooks/hubspot) is unreachable. Fix: check Railway logs for errors on this route.",
+    "BigQuery":            "Cannot connect to BigQuery. Fix: verify GOOGLE_APPLICATION_CREDENTIALS is set in Railway and the service account has BigQuery access.",
+    "Railway deployment":  "The Railway app is not reachable at its public URL. Fix: check Railway dashboard for a failed deploy or crashed process.",
+    "Conversion recording":"One or more active conversion actions recorded 0 conversions in the last 14 days. The tag may be broken or misconfigured in GTM.",
+    "Conversion tracking": "A conversion tracking platform has an unhealthy status (Inactive/Unverified). Fix: verify the tag is installed and firing in the platform's tag health UI.",
+    "Flask":               "The Flask /health endpoint is not responding. Fix: check Railway logs — the web process may have crashed.",
+    "Data freshness":      "One or more BQ tables haven't been updated in 3+ days. Fix: check the collector logs in Railway for the stale channel.",
+    "GA4 data":            "The GA4 BQ table is stale or empty. Fix: check the ga4_bq collector in Railway logs.",
+    "Asana":               "The Asana API token is invalid. Fix: generate a new personal access token in Asana → My Profile → Apps, update ASANA_ACCESS_TOKEN in Railway.",
+    "Slack":               "The Slack bot token is invalid or the bot is not in the expected workspace. Fix: check SLACK_BOT_TOKEN in Railway.",
+}
+
 
 def _log_to_bq(results: dict, run_id: str) -> None:
     """Write one row per check to agent_activity_log so the dashboard can read them."""
@@ -499,7 +524,12 @@ def run_all(run_id: str | None = None) -> dict:
             ok, msg = False, f"Unexpected error: {e}"
             traceback.print_exc()
         elapsed = round(time.time() - t0, 1)
-        results[name] = (ok, f"{msg}  ({elapsed}s)")
+        # Prepend the WHY explanation to the message on failure so the modal explains the root cause
+        if not ok and name in CHECK_WHY:
+            full_msg = f"{CHECK_WHY[name]}\n\n{msg}  ({elapsed}s)"
+        else:
+            full_msg = f"{msg}  ({elapsed}s)"
+        results[name] = (ok, full_msg)
         icon = "✅" if ok else "❌"
         print(f"  {icon}  {name:<20} {msg}  ({elapsed}s)")
     _log_to_bq(results, run_id)

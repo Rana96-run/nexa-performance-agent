@@ -57,9 +57,11 @@ def _uptime_str() -> str:
 @app.errorhandler(Exception)
 def _handle_exception(e):
     """Capture every unhandled Flask exception to BQ so the self-healer can detect it."""
-    # Don't log HTTP 4xx as dashboard errors — those are client errors, not server faults.
-    if isinstance(e, HTTPException) and e.code < 500:
-        raise e
+    # HTTPExceptions (404, 405, etc.) must be returned, not re-raised.
+    # Re-raising an HTTPException from inside an error handler causes Flask to
+    # treat it as an unhandled exception and return 500 instead of the correct status.
+    if isinstance(e, HTTPException):
+        return e
     import traceback
     tb = traceback.format_exc()
     route = request.path if request else "unknown"
@@ -71,7 +73,6 @@ def _handle_exception(e):
         )
     except Exception:
         pass
-    # Re-raise so Flask still returns its normal 500
     raise e
 
 
