@@ -2361,6 +2361,23 @@ a:hover{text-decoration:underline}
         </div>
 
       </div>
+
+      <!-- ── Recently Created Asana Tasks ── -->
+      <div style="margin-top:24px">
+        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:10px">Recently Created Tasks
+          <span style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:6px;color:#30363d">(last 48 h)</span>
+          <button onclick="loadRecentTasks()" title="Refresh"
+                  style="background:none;border:none;color:#484f58;font-size:13px;cursor:pointer;
+                         margin-left:6px;padding:0;vertical-align:middle">↻</button>
+        </div>
+        <div id="recent-tasks-container"
+             style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;
+                    font-size:12px;color:#8b949e;min-height:40px">
+          Loading…
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -2766,6 +2783,75 @@ function closeSearchDupModal() {
 }
 
 // ── On-demand: Generic audit runner ───────────────────────────────────────────
+// ── Recently Created Asana Tasks ─────────────────────────────────────────────
+var _CHANNEL_COLORS = {
+  meta:'#0866ff', tiktok:'#ff0050', snapchat:'#fffc00', google_ads:'#4285f4',
+  linkedin:'#0a66c2', microsoft_ads:'#00a4ef', conversion_health:'#f85149',
+  databox_push:'#f0883e', general:'#8b949e'
+};
+var _ACTION_LABELS = {pause:'Pause',optimize:'Optimize',fix:'Fix',create:'Create',scale:'Scale'};
+
+function loadRecentTasks() {
+  var el = document.getElementById('recent-tasks-container');
+  if (!el) return;
+  el.textContent = 'Loading…';
+  fetch('/api/recent-tasks')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var tasks = (data.tasks || []);
+      if (!tasks.length) {
+        el.innerHTML = '<span style="color:#484f58;font-style:italic">No tasks created in the last 48 h</span>';
+        return;
+      }
+      // Group by project_key
+      var groups = {};
+      tasks.forEach(function(t) {
+        var grp = t.project_key || 'other';
+        if (!groups[grp]) groups[grp] = [];
+        groups[grp].push(t);
+      });
+      var PROJECT_LABELS = {daily_activity:'Daily Activity', optimization:'Optimization', other:'Other'};
+      var html = '';
+      ['daily_activity','optimization','other'].forEach(function(grp) {
+        if (!groups[grp] || !groups[grp].length) return;
+        html += '<div style="font-size:10px;font-weight:600;color:#484f58;text-transform:uppercase;'
+              + 'letter-spacing:.06em;margin-bottom:6px;margin-top:' + (html ? '14px' : '0') + '">'
+              + (PROJECT_LABELS[grp]||grp) + ' (' + groups[grp].length + ')</div>';
+        groups[grp].forEach(function(t) {
+          var chColor = _CHANNEL_COLORS[t.channel] || _CHANNEL_COLORS.general;
+          var actionLabel = _ACTION_LABELS[t.task_action] || t.task_action;
+          var tsLabel = '';
+          if (t.ts) {
+            var diff = Math.round((Date.now() - new Date(t.ts)) / 60000);
+            tsLabel = diff < 60 ? diff + 'm ago' : Math.round(diff/60) + 'h ago';
+          }
+          var title = t.title.replace(/<[^>]*>/g,'');
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'
+                + 'border-bottom:1px solid #161b22">'
+                + '<span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;'
+                + 'background:' + chColor + ';display:inline-block"></span>'
+                + '<a href="' + t.url + '" target="_blank" rel="noopener"'
+                + '   style="color:#e6edf3;text-decoration:none;flex:1;min-width:0;'
+                + '          white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '
+                + '   title="' + title.replace(/"/g,'&quot;') + '">'
+                + escHtml(title) + '</a>'
+                + '<span style="font-size:10px;color:#484f58;flex-shrink:0">' + escHtml(actionLabel) + '</span>'
+                + (tsLabel ? '<span style="font-size:10px;color:#484f58;flex-shrink:0">' + tsLabel + '</span>' : '')
+                + '</div>';
+        });
+      });
+      el.innerHTML = html;
+    })
+    .catch(function(e){ el.innerHTML = '<span style="color:#f85149">Failed to load: '+e+'</span>'; });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Load on page init
+document.addEventListener('DOMContentLoaded', loadRecentTasks);
+
 function runAudit(key, btnId, statusId) {
   const btn  = document.getElementById(btnId);
   const stat = document.getElementById(statusId);
@@ -2788,6 +2874,7 @@ function runAudit(key, btnId, statusId) {
                 const rc = d.result && d.result.returncode;
                 stat.style.color = rc === 0 ? '#3fb950' : '#f85149';
                 stat.textContent = rc === 0 ? 'Done — check Asana / #approvals' : 'Finished with errors (rc='+rc+')';
+                loadRecentTasks(); // refresh task list after audit completes
               }
             }
           });

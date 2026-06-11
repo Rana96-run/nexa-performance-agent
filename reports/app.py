@@ -2795,6 +2795,45 @@ def ondemand_status(key: str):
     return jsonify(_ONDEMAND_STATUS.get(key, {"running": False, "result": None, "error": None}))
 
 
+@app.route("/api/recent-tasks")
+def recent_tasks():
+    """Return Asana tasks created in the last 48 h, from agent_activity_log."""
+    import json as _json
+    hours = int(request.args.get("hours", 48))
+    try:
+        from collectors.bq_writer import get_client
+        bq = get_client()
+        P = bq.project
+        D = os.environ.get("BQ_DATASET", "qoyod_marketing")
+        sql = f"""
+            SELECT ts, channel, details
+            FROM `{P}.{D}.agent_activity_log`
+            WHERE action = 'asana_task_created'
+              AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {hours} HOUR)
+            ORDER BY ts DESC
+            LIMIT 50
+        """
+        tasks = []
+        for row in bq.query(sql).result():
+            d = _json.loads(row.details) if row.details else {}
+            gid = d.get("gid")
+            if not gid:
+                continue
+            tasks.append({
+                "gid": gid,
+                "title": d.get("title", ""),
+                "project_key": d.get("project_key", ""),
+                "task_action": d.get("task_action", ""),
+                "asset_level": d.get("asset_level", ""),
+                "channel": row.channel or "",
+                "ts": row.ts.isoformat() if row.ts else "",
+                "url": f"https://app.asana.com/0/0/{gid}/f",
+            })
+        return jsonify({"tasks": tasks})
+    except Exception as exc:
+        return jsonify({"tasks": [], "error": str(exc)}), 200
+
+
 @app.route("/api/ondemand/creative-audit", methods=["POST"])
 def ondemand_creative_audit():
     """Run creative performance audit across all social channels.
