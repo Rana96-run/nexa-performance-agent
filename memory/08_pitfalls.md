@@ -1,21 +1,13 @@
 # Pitfalls & Known Traps
 
-## paid_channel_daily.new_biz_* counts PAID DEALS ONLY — not total new_biz (2026-06-11)
+## paid_channel_daily.new_biz_* shows PAID-ATTRIBUTED deals only — HubSpot discrepancy is expected (2026-06-11)
 
-- **Symptom:** Dashboard shows 537 new_biz deals vs HubSpot 1,165 for the same 3 pipelines + create date filter. A ~56% undercount.
-- **Root cause:** The `deals` CTE in `PAID_CHANNEL_DAILY_SQL` INNER JOINs `hubspot_deals_daily` to `v_channel_key_map` on `qoyod_source`. This drops all deals from non-paid sources: `Direct Traffic` (1,843 all-time), `Offline` (1,441), `Direct In-app Purchase` (1,123), `Other` (569), `Organic Social` (115), `Email Marketing` (181), `Referrals` (33), `Twitter Ads` (small). Total dropped all-time: 5,362 out of 13,194 (41%).
-- **`paid_channel_daily.new_biz_*` columns are for PAID-CHANNEL attribution** — they are correct for CPL/CPQL/ROAS analysis at the channel grain.
-- **For total new_biz overview (matching HubSpot), use `v_new_biz_daily`** — this view queries `hubspot_deals_daily` for all 3 pipelines (Sales Pipeline, Bookkeeping, Qflavours) WITHOUT any channel filter.
-- **Fix:** Added `v_new_biz_daily` view (2026-06-11). Hex "New Biz Total" section cells must use this view. The reconciliation check (memory/09_open_tasks.md) was passing because it queries `hubspot_deals_daily` directly, not `paid_channel_daily`.
-- **Hex cell SQL to use:**
-  ```sql
-  SELECT SUM(deals_total) as total_deals, SUM(deals_won) as won_deals,
-         SUM(deals_lost) as lost_deals, SUM(deals_open) as open_deals,
-         SUM(amount_total) as total_amount, SUM(amount_won) as won_amount,
-         SUM(amount_lost) as lost_amount, SUM(amount_open) as open_amount
-  FROM qoyod_marketing.v_new_biz_daily
-  WHERE date BETWEEN {{ start_date }} AND {{ end_date }}
-  ```
+- **"Discrepancy" is by design.** Dashboard shows 537 new_biz deals; HubSpot shows 1,165 for the same 3 pipelines + create date. The gap (~628 deals) is non-paid sources.
+- **paid_channel_daily INNER JOINs deals to v_channel_key_map** → only paid sources survive: Google Ads, Meta Ads, Snapchat Ads, TikTok Ads, Microsoft Ads, LinkedIn Ads, Organic Search.
+- **Sources dropped (non-paid, intentionally):** Direct Traffic (1,843 all-time), Offline (1,441), Direct In-app Purchase (1,123), Other (569), Email Marketing (181), Organic Social (115), Referrals (33). Total non-paid: 5,362 out of 13,194 deals (41%).
+- **The dashboard is a paid media performance dashboard** — showing only paid-attributed new_biz is correct for CPL/CPQL/ROAS analysis.
+- **When comparing to HubSpot:** HubSpot Pipeline(3) + Create date shows ALL sources. Expect dashboard to be ~46-59% of HubSpot total depending on the period.
+- **`v_new_biz_daily` BQ view** (added 2026-06-11) queries all sources without channel filter — useful for all-sources funnel analysis but NOT for the paid dashboard.
 
 ## utm_source in v_adset/v_ad_performance — COALESCE fallback required for Databox filters (2026-06-09)
 
