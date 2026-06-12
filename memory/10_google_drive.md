@@ -6,6 +6,13 @@ alongside (not inside) the code repo.
 - **Folder URL:** https://drive.google.com/drive/folders/1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74
 - **Folder ID:** `1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74`
 
+## Subfolder IDs (set in Railway 2026-06-12)
+
+| Env var | Folder ID | Purpose |
+|---|---|---|
+| `GDRIVE_REPORTS_FOLDER_ID` | `1YPyFKhegbtf04yf_Z3UpiuCWmjXv9wcl` | Monthly performance decks (PPTX) |
+| `GDRIVE_CREATIVE_REPORTS_FOLDER_ID` | `1h4JvcYdsKi_OrAPbBBz9Tlqqq844qQXF` | Monthly creative reports (Sheets) |
+
 ## Pick ONE connection method
 
 We already have a Google service account (used for BigQuery). The cleanest

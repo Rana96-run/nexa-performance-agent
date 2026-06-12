@@ -57,7 +57,7 @@ def list_folder(folder_id: str = DEFAULT_FOLDER_ID, page_size: int = 1000):
 
     Includes Shared Drive items (supportsAllDrives + includeItemsFromAllDrives).
     Without these flags the API returns an empty list when the folder lives
-    in a Workspace Shared Drive instead of personal "My Drive".
+    in a Workspace Shared Drive instead of personal My Drive.
     """
     svc = _client()
     q = f"'{folder_id}' in parents and trashed = false"
@@ -136,18 +136,17 @@ def upload(
     folder_id: str,
     mime_type: Optional[str] = None,
 ) -> str:
-    """Upload a local file to a Drive folder. Returns the new file's Drive ID.
+    """Upload a local file to a Drive folder. Returns the new file Drive ID.
 
-    If a file with the same name already exists in the folder, it is NOT
-    replaced — a new file is created (Drive allows duplicate names). If you
-    want idempotent uploads (overwrite), call find_in_folder() first and use
-    update_file() if a match is found.
+    If a file with the same name already exists in the folder, a new file is
+    created (Drive allows duplicate names). For idempotent uploads call
+    find_in_folder() first.
 
     Args:
         local_path: absolute path to the file to upload
         filename:   name the file should have in Drive
-        folder_id:  Drive folder ID (use GDRIVE_REPORTS_FOLDER_ID etc.)
-        mime_type:  MIME type of the file; auto-detected from extension if None
+        folder_id:  Drive folder ID (GDRIVE_REPORTS_FOLDER_ID etc.)
+        mime_type:  MIME type; auto-detected from extension if None
     """
     import mimetypes
     from googleapiclient.http import MediaFileUpload
@@ -168,7 +167,7 @@ def upload(
 
 
 def find_in_folder(folder_id: str, name: str) -> Optional[str]:
-    """Return the Drive file ID of the first file named `name` in `folder_id`, or None."""
+    """Return Drive file ID of the first file named name in folder_id, or None."""
     svc = _client()
     q = f"'{folder_id}' in parents and name = '{name}' and trashed = false"
     res = svc.files().list(
@@ -180,12 +179,16 @@ def find_in_folder(folder_id: str, name: str) -> Optional[str]:
 
 
 if __name__ == "__main__":
-    # Smoke test: list the shared folder
     try:
         files = list_folder()
-        print(f"Found {len(files)} items in folder {DEFAULT_FOLDER_ID}:")
+        print(f"Root folder: {len(files)} items")
         for f in files:
-            print(f"  {f['mimeType']:45s}  {f['name']}  ({f['id']})")
+            print(f"  {f['mimeType']:45s}  {f['name']}")
+        reports = list_folder("1YPyFKhegbtf04yf_Z3UpiuCWmjXv9wcl")
+        creative = list_folder("1h4JvcYdsKi_OrAPbBBz9Tlqqq844qQXF")
+        print(f"Reports subfolder: {len(reports)} items")
+        print(f"Creative Reports subfolder: {len(creative)} items")
+        print("ACCESS OK")
     except Exception as e:
         print(f"ERROR: {e}")
         print("Did you share the folder with the service account email?")
