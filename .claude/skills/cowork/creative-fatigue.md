@@ -1,6 +1,8 @@
 ---
 name: creative-fatigue
-description: Catches ads where CTR has dropped 20%+ from their peak in the last 30 days. Flags them before they tank ROAS. Creates Asana task for Creative Strategist to refresh before performance degrades.
+description: Catches ads where CTR has dropped 20%+ from their peak in the last 30 days. Flags them before they tank ROAS. Creates Asana task for Creative Strategist to refresh before performance degrades. Runs weekly on Sunday.
+schedule: "0 5 * * 0"
+timezone: Asia/Riyadh
 agent: creative-strategist
 connectors: [bigquery, asana]
 ---

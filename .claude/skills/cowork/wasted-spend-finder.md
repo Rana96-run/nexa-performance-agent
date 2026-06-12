@@ -1,6 +1,8 @@
 ---
 name: wasted-spend-finder
-description: Flags every adset with $90+ spend and 0 conversions in the last 7 days. Posts findings to Asana for review. On-demand or runs as part of daily-loop.
+description: Flags every adset with $90+ spend and 0 conversions in the last 7 days. Posts findings to Asana for review. Runs daily before the main loop.
+schedule: "0 4 * * *"
+timezone: Asia/Riyadh
 agent: campaign-manager
 connectors: [bigquery, asana]
 ---

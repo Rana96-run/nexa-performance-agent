@@ -1,6 +1,8 @@
 ---
 name: budget-shift
-description: Proposes moving daily budget from the worst-CPQL channel to the best-CPQL channel when zones diverge. Calculates exactly how much to shift and which campaigns to adjust. All changes gate on ✅ in #approvals.
+description: Proposes moving daily budget from the worst-CPQL channel to the best-CPQL channel when zones diverge. Calculates exactly how much to shift and which campaigns to adjust. All changes gate on ✅ in #approvals. Runs every Wednesday.
+schedule: "0 5 * * 3"
+timezone: Asia/Riyadh
 agent: performance-lead
 connectors: [bigquery, slack, asana]
 ---

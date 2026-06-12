@@ -193,34 +193,6 @@ def _run_forecaster() -> dict:
         return {}
 
 
-def _run_spend_drift() -> dict:
-    """Nightly spend-drift detector — 3 rules:
-      1. Scaling-an-underperformer (14d CPQL > $140 AND WoW spend > +20%)
-      2. Silent-death (prior 30d > $500 AND last 7d < 5% of that)
-      3. Launch-wave (≥3 first-spend within 7d on same channel)
-
-    Returns the findings dict from analysers.spend_drift.run_all().
-    Read-only — does NOT auto-create tasks. Findings appear in stdout and
-    are printed into the nightly log so they can be folded into the
-    Slack daily summary by a downstream task creator (TODO: build the
-    spend_drift_tasks.py counterpart that turns findings into Asana posts).
-    """
-    try:
-        from analysers.spend_drift import run_all
-        findings = run_all()
-        total = sum(len(v) for v in findings.values())
-        print(f"[ops-scheduler] spend_drift: {total} total finding(s) — "
-              + ", ".join(f"{k}={len(v)}" for k, v in findings.items()))
-        for rule, items in findings.items():
-            for f in items:
-                print(f"[spend_drift/{rule}] {f}")
-        return findings
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] spend_drift error: {e}")
-        return {}
-
-
 def _run_weekly_keyword_autofix() -> dict:
     """
     Sunday-only: silently scan ENABLED keywords + active negatives, apply
@@ -490,49 +462,6 @@ def _run_weekly_lp_briefs() -> dict:
         return {}
 
 
-def _run_google_ads_audit() -> list:
-    """Daily impression-share, quality-score, and search-terms audit.
-    Creates Asana tasks with consolidated recommendations."""
-    try:
-        from analysers.google_ads_audit_tasks import create_audit_tasks
-        tasks = create_audit_tasks()
-        print(f"[ops-scheduler] Google Ads audit: {len(tasks)} task(s) created")
-        return tasks
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] Google Ads audit error: {e}")
-        return []
-
-
-def _run_microsoft_ads_audit() -> list:
-    """Daily Microsoft Ads IS, QS, and search-terms audit. Mirrors the Google
-    Ads audit shape, logged under role=performance_audit, channel=microsoft_ads."""
-    try:
-        from analysers.microsoft_ads_audit_tasks import create_audit_tasks
-        tasks = create_audit_tasks()
-        print(f"[ops-scheduler] Microsoft Ads audit: {len(tasks)} task(s) created")
-        return tasks
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] Microsoft Ads audit error: {e}")
-        return []
-
-
-def _run_display_audit() -> list:
-    """Per-channel display/social audit (Meta, Snap, TikTok, LinkedIn) —
-    creative fatigue, frequency saturation, zero-conv high-spend pause.
-    Logs under role=performance_audit with channel as a dimension."""
-    try:
-        from analysers.display_audit_tasks import create_audit_tasks
-        tasks = create_audit_tasks()
-        print(f"[ops-scheduler] Display audit (Meta/Snap/TT/LI): {len(tasks)} task(s) created")
-        return tasks
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] Display audit error: {e}")
-        return []
-
-
 # ── Scale/pause digest cadence ──────────────────────────────────────────────
 # The team asked for the #approvals digest every N days, not nightly.
 # Tracked via a state file under .cache/ so the cadence survives restarts.
@@ -577,335 +506,6 @@ def _mark_scale_pause_ran() -> None:
     p = Path(_SCALE_PAUSE_STATE_FILE)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(date.today().isoformat())
-
-
-def _check_monitor_dates() -> None:
-    """
-    Auto-follow-up on approved pause/scale actions at +7 and +14 days.
-
-    Reads agent_activity_log for actions with status='approved' that were
-    logged 7 or 14 days ago. Posts a Slack check-in to #approvals asking
-    the team to re-evaluate. Prevents approved actions from disappearing
-    into Asana and never being measured.
-    """
-    try:
-        from google.cloud import bigquery
-        from slack_sdk import WebClient
-        from config import BQ_PROJECT, BQ_DATASET, SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
-
-        bq  = bigquery.Client(project=BQ_PROJECT)
-        today = date.today()
-
-        sql = f"""
-            SELECT action, details, ts, role
-            FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
-            WHERE status = 'approved'
-              AND action IN ('scale_campaign','pause_keyword','pause_ad','budget_increase')
-              AND DATE(ts, 'Asia/Riyadh') IN (
-                  DATE_SUB('{today}', INTERVAL 7 DAY),
-                  DATE_SUB('{today}', INTERVAL 14 DAY)
-              )
-            ORDER BY ts DESC
-            LIMIT 20
-        """
-        rows = list(bq.query(sql).result())
-        if not rows:
-            print("[ops-scheduler] Monitor dates: nothing due today")
-            return
-
-        # Group by interval
-        due_7d, due_14d = [], []
-        for r in rows:
-            action_date = r.ts.date() if hasattr(r.ts, 'date') else today
-            delta = (today - action_date).days
-            (due_7d if delta <= 7 else due_14d).append(r)
-
-        lines = []
-        if due_7d:
-            lines.append(f"*7-day check-in ({today}) — {len(due_7d)} action(s) approved on "
-                         f"{today - __import__('datetime').timedelta(days=7)}:*")
-            for r in due_7d:
-                d = r.details if isinstance(r.details, dict) else {}
-                lines.append(f"  • {r.action}: {d.get('campaign','') or d.get('keyword','') or str(d)[:80]}")
-        if due_14d:
-            lines.append(f"*14-day check-in ({today}) — {len(due_14d)} action(s) approved on "
-                         f"{today - __import__('datetime').timedelta(days=14)}:*")
-            for r in due_14d:
-                d = r.details if isinstance(r.details, dict) else {}
-                lines.append(f"  • {r.action}: {d.get('campaign','') or d.get('keyword','') or str(d)[:80]}")
-
-        msg = (
-            "*Automated monitor check — approved actions due for review*\n"
-            + "\n".join(lines)
-            + "\n\nPull the period-compare on each campaign above and reply here "
-            "with the outcome (working / not working / reversed). "
-            "No ✅ needed — this is a review prompt only."
-        )
-        from notifications.slack import post_as_role
-        post_as_role("ops_scheduler", SLACK_CHANNEL_APPROVAL, msg)
-        print(f"[ops-scheduler] Monitor dates: posted {len(rows)} check-in(s) to #approvals")
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] Monitor dates check failed (non-fatal): {e}")
-
-
-def _run_budget_redeployment_proposal() -> None:
-    """
-    Automatically propose budget redeployment when:
-      - One or more campaigns are in PAUSE zone (CPQL > $100, 14d window)
-      - One or more campaigns are in SCALE zone (CPQL < $60, 14d window)
-      - The wasted spend is > $50/day
-
-    For each destination (scale) campaign:
-      - Creates an Asana task with the full campaign card + date range
-      - Pre-adds ✅/❌ reactions to the Slack message
-      - Saves asana_gid in the pending_approvals metadata so execution
-        comments back to the task on approval
-
-    For each drain campaign:
-      - Creates a separate review-only Asana task (no ✅ execution)
-
-    Runs only when _should_run_scale_pause() is True (cadence: every 4 days).
-    """
-    try:
-        from google.cloud import bigquery
-        from slack_sdk import WebClient
-        from slack_sdk.errors import SlackApiError
-        from config import (BQ_PROJECT, BQ_DATASET, SLACK_BOT_TOKEN,
-                            SLACK_CHANNEL_APPROVAL, CPQL_PAUSE, CPQL_SCALE)
-        from executors.asana import create_task
-        from logs.activity_logger import log_activity_async
-
-        bq    = bigquery.Client(project=BQ_PROJECT)
-        today = date.today()
-        date_from = (today - __import__("datetime").timedelta(days=14)).isoformat()
-        date_to   = (today - __import__("datetime").timedelta(days=1)).isoformat()
-        date_range_str = f"{date_from} to {date_to}"
-
-        # Single query — fetches perf + most-recent campaign_id/account_id in one pass.
-        # Pre-aggregate HubSpot first to avoid spend fan-out.
-        sql = f"""
-        WITH last_complete AS (
-          SELECT MAX(date) AS d
-          FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
-          WHERE spend > 0
-        ),
-        window_start AS (
-          SELECT DATE_SUB((SELECT d FROM last_complete), INTERVAL 14 DAY) AS d
-        ),
-        hs AS (
-          SELECT date, lead_utm_campaign,
-                 SUM(leads_qualified) AS sqls
-          FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_leads_module_daily`
-          WHERE date >= (SELECT d FROM window_start)
-          GROUP BY date, lead_utm_campaign
-        ),
-        perf AS (
-          SELECT
-            c.channel,
-            c.campaign_name,
-            -- Grab most-recent campaign_id and account_id for this campaign name
-            MAX(c.campaign_id)               AS campaign_id,
-            MAX(c.account_id)                AS account_id,
-            MIN(c.date)                      AS date_from,
-            MAX(c.date)                      AS date_to,
-            SUM(c.spend)                     AS spend_14d,
-            COALESCE(SUM(hs.sqls), 0)        AS sqls_14d,
-            SAFE_DIVIDE(SUM(c.spend), 14.0)  AS daily_avg,
-            SAFE_DIVIDE(SUM(c.spend), NULLIF(SUM(hs.sqls), 0)) AS cpql
-          FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily` c
-          LEFT JOIN hs
-            ON c.date = hs.date
-           AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
-          WHERE c.date >= (SELECT d FROM window_start)
-            AND c.channel != 'microsoft_ads'   -- MS Ads budget API not wired yet
-          GROUP BY c.channel, c.campaign_name
-        )
-        SELECT * FROM perf
-        WHERE spend_14d > 50
-        ORDER BY cpql ASC
-        """
-        rows = list(bq.query(sql).result())
-        if not rows:
-            print("[ops-scheduler] Budget redeployment: no campaigns with spend > $50 in 14d")
-            return
-
-        pause_zone = [r for r in rows if r.cpql and r.cpql > CPQL_PAUSE]
-        scale_zone = [r for r in rows if r.cpql and r.cpql < CPQL_SCALE]
-
-        if not pause_zone or not scale_zone:
-            print("[ops-scheduler] Budget redeployment: no clear drain→scaler pair found")
-            return
-
-        wasted_per_day = sum(r.daily_avg or 0 for r in pause_zone)
-        if wasted_per_day < 50:
-            print(f"[ops-scheduler] Budget redeployment: ${wasted_per_day:.0f}/day freed — "
-                  "below $50 threshold, skipping")
-            return
-
-        # ── Destination campaigns (scale) ──────────────────────────────────────
-        freed        = wasted_per_day
-        n_dest       = min(len(scale_zone), 4)
-        share_each   = round(freed / n_dest, 0)
-        dest_campaigns = sorted(scale_zone, key=lambda x: x.cpql or 999)[:4]
-
-        scale_findings = []   # for Slack lines + Asana
-        for r in dest_campaigns:
-            new_budget = round((r.daily_avg or 0) + share_each, 2)
-            # Create Asana task for each scale destination
-            body = (
-                f"Budget redeployment — scale destination\n\n"
-                f"**Campaign:** {r.campaign_name}\n"
-                f"**Channel:** {r.channel}\n"
-                f"**Data window:** {date_range_str}\n\n"
-                f"**Current spend:** ${r.daily_avg:.0f}/day (14d avg)\n"
-                f"**Proposed budget:** ${new_budget:.0f}/day "
-                f"(+${share_each:.0f} freed from drain campaigns)\n"
-                f"**CPQL:** ${r.cpql:.0f}  ·  "
-                f"**SQLs in window:** {int(r.sqls_14d)}  ·  "
-                f"**Total spend:** ${r.spend_14d:.0f}\n\n"
-                f"**Why scale:** CPQL is in scale zone (< ${CPQL_SCALE:.0f}). "
-                f"Budget freed from drain campaigns (CPQL > ${CPQL_PAUSE:.0f}) is "
-                f"being reallocated here.\n\n"
-                f"React with ✅ in #approvals to execute this budget increase.\n\n"
-                f"---\n"
-                f"Created: {today.isoformat()}  ·  "
-                f"Due: {(today + __import__('datetime').timedelta(days=1)).isoformat()}  ·  "
-                f"Priority: High  ·  Type: Recommendation  ·  "
-                f"Channel: {r.channel}  ·  Asset level: Campaign  ·  Action: Scale"
-            )
-            gid = create_task(
-                title=f"PENDING APPROVAL: Budget Redeployment — Scale {r.campaign_name} "
-                      f"+${share_each:.0f}/day ({date_range_str})",
-                description=body,
-                project_key="optimization",
-                task_type="Recommendation",
-                channel=r.channel,
-                asset_level="campaign",
-                action="scale",
-                campaign_name=r.campaign_name,
-                log_role="campaign_creator",
-            )
-            log_activity_async(
-                role="performance_audit", action="budget_redeployment_scale_task_created",
-                status="pending_approval",
-                channel=r.channel, campaign_name=r.campaign_name,
-                details={
-                    "new_budget": new_budget, "freed_per_day": freed,
-                    "cpql": r.cpql, "date_from": date_from, "date_to": date_to,
-                    "asana_gid": gid,
-                },
-            )
-            scale_findings.append({
-                "action":      "scale",
-                "channel":     r.channel,
-                "campaign":    r.campaign_name,
-                "campaign_id": str(r.campaign_id) if r.campaign_id else "",
-                "account_id":  str(r.account_id)  if r.account_id  else "",
-                "new_budget":  new_budget,
-                "cpql":        r.cpql,
-                "avg_spend":   r.daily_avg,
-                "date_from":   date_from,
-                "date_to":     date_to,
-                "asana_gid":   gid or "",
-            })
-
-        # ── Drain campaigns (review-only Asana tasks, no auto-execution) ───────
-        for r in pause_zone[:5]:
-            drain_body = (
-                f"Budget redeployment — drain campaign review\n\n"
-                f"**Campaign:** {r.campaign_name}\n"
-                f"**Channel:** {r.channel}\n"
-                f"**Data window:** {date_range_str}\n\n"
-                f"**CPQL:** ${r.cpql:.0f} (pause zone — threshold > ${CPQL_PAUSE:.0f})\n"
-                f"**Daily spend:** ${r.daily_avg:.0f}/day  ·  "
-                f"**SQLs in window:** {int(r.sqls_14d)}\n\n"
-                f"**Recommended action:** Reduce budget or pause this campaign. "
-                f"Freed budget has been redirected to higher-efficiency campaigns "
-                f"(see linked scale tasks).\n\n"
-                f"---\n"
-                f"Created: {today.isoformat()}  ·  "
-                f"Due: {(today + __import__('datetime').timedelta(days=2)).isoformat()}  ·  "
-                f"Priority: High  ·  Type: Review  ·  "
-                f"Channel: {r.channel}  ·  Asset level: Campaign  ·  Action: Review"
-            )
-            drain_gid = create_task(
-                title=f"Review: Drain Campaign — {r.campaign_name} "
-                      f"CPQL ${r.cpql:.0f} ({date_range_str})",
-                description=drain_body,
-                project_key="optimization",
-                task_type="Review",
-                channel=r.channel,
-                asset_level="campaign",
-                action="review",
-                campaign_name=r.campaign_name,
-                log_role="performance_audit",
-            )
-            log_activity_async(
-                role="performance_audit", action="budget_redeployment_drain_task_created",
-                status="needs_review",
-                channel=r.channel, campaign_name=r.campaign_name,
-                details={"cpql": r.cpql, "daily_avg": r.daily_avg,
-                         "date_from": date_from, "date_to": date_to,
-                         "asana_gid": drain_gid},
-            )
-
-        # ── Build Slack message ─────────────────────────────────────────────────
-        lines = [
-            f"*Budget redeployment proposal — {today.isoformat()} · 14d window: "
-            f"{date_range_str}*\n",
-            "*Drain campaigns (CPQL > ${:.0f} — reduce budget):*".format(CPQL_PAUSE),
-        ]
-        for r in pause_zone[:5]:
-            lines.append(
-                f"  • `{r.campaign_name}`  CPQL ${r.cpql:.0f}  ·  "
-                f"${r.daily_avg:.0f}/day  →  cut budget"
-            )
-
-        lines.append(f"\n*Freed: ~${freed:.0f}/day*\n")
-        lines.append("*Destination campaigns (CPQL < ${:.0f} — absorb freed budget):*".format(CPQL_SCALE))
-        for f in scale_findings:
-            lines.append(
-                f"  • `{f['campaign']}`  CPQL ${f['cpql']:.0f}  ·  "
-                f"${f['avg_spend']:.0f} → ${f['new_budget']:.0f}/day  (+${share_each:.0f})"
-            )
-        n_tasks = len(scale_findings) + min(len(pause_zone), 5)
-        lines.append(
-            f"\n{n_tasks} Asana task(s) created.\n"
-            "React :white_check_mark: to execute all budget increases  ·  :x: to skip all\n"
-            "_Drain-campaign tasks are review-only — no auto-execution._"
-        )
-
-        from notifications.slack import post_as_role
-        resp = post_as_role("campaign_creator", SLACK_CHANNEL_APPROVAL,
-                            "\n".join(lines)) or {}
-        ts   = resp.get("ts", "")
-        if not ts:
-            print("[ops-scheduler] Budget redeployment: Slack post failed")
-            return
-
-        # Pre-add ✅/❌ reactions (same as post_nightly_approvals_digest)
-        slack = WebClient(token=SLACK_BOT_TOKEN)
-        for emoji in ("white_check_mark", "x"):
-            try:
-                slack.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)
-            except SlackApiError:
-                pass
-
-        # Save structured metadata keyed by ts so _handle_reaction() can execute on ✅
-        from notifications.slack import save_pending_approval
-        save_pending_approval(ts, {
-            "action":        "budget_redeployment",
-            "findings":      scale_findings,   # only scale items are executed
-            "freed_per_day": round(freed, 2),
-        })
-
-        print(f"[ops-scheduler] Budget redeployment: posted to #approvals — "
-              f"${freed:.0f}/day freed, {len(scale_findings)} scale task(s), "
-              f"{min(len(pause_zone),5)} drain review task(s)")
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        print(f"[ops-scheduler] Budget redeployment proposal failed (non-fatal): {e}")
 
 
 def _run_campaign_health() -> tuple[list, list]:
@@ -981,13 +581,7 @@ def _nightly():
     # 3. Spike detector — returns list, folded into summary message.
     spikes = _run_spike_detector()
 
-    # 3a. Spend-drift detector — 3 nightly rules (scaling-underperformer,
-    #     silent-death, launch-wave). Read-only — produces findings that
-    #     show up in the operational log. To be wired into Slack
-    #     #approvals via a follow-up spend_drift_tasks.py module.
-    drift_findings = _run_spend_drift()
-
-    # 3a-bis. Period-over-period auto-comparator + forecaster.
+    # 3a. Period-over-period auto-comparator + forecaster.
     #         CLAUDE.md mandates: every nightly run includes a weekly compare
     #         (last 7d vs prior 7d) and a forward-looking forecast. Monday
     #         additionally runs the monthly compare. Read-only — findings
@@ -997,14 +591,8 @@ def _nightly():
         _run_period_compare_monthly()
     _run_forecaster()
 
-    # 3b. Per-channel performance audits, all under role=performance_audit:
-    #   - Google Ads:        IS / QS / search terms / keyword auto-pause
-    #   - Microsoft Ads:     IS / QS / search terms (mirror of Google)
-    #   - Meta/Snap/TT/LI:   creative fatigue / frequency saturation / zero-conv pause
-    # Asana tasks created per channel × bucket.
-    audit_tasks = _run_google_ads_audit()
-    audit_tasks += _run_microsoft_ads_audit()
-    audit_tasks += _run_display_audit()
+    # 3b. Audit tasks now run via Cowork (google-ads-audit, display-audit, wasted-spend-finder).
+    audit_tasks = []
 
     # 3c. Cross-channel CPQL/CPL health check -> Asana tasks + force-executes scale/pause
     #     Cost: channel source | Leads: HubSpot Lead Module | Window: 14d
@@ -1012,10 +600,6 @@ def _nightly():
     #     Tracked via .cache/last_scale_pause_run.txt; resets across restarts.
     if _should_run_scale_pause():
         health_tasks, health_findings = _run_campaign_health()
-        # 3c-bis. Budget redeployment proposal — when CPQL zones diverge,
-        #         auto-generate a $/day reallocation proposal to #approvals.
-        #         Same 4-day cadence as campaign health. No execution — ✅ gate applies.
-        _run_budget_redeployment_proposal()
         _mark_scale_pause_ran()
     else:
         from config import SCALE_PAUSE_DIGEST_INTERVAL_DAYS
@@ -1048,11 +632,7 @@ def _nightly():
     except Exception as e:
         print(f"[ops-scheduler] LinkedIn token refresh failed (non-fatal): {e}")
 
-    # 3g. Monitor date follow-ups — auto-check approved actions at +7 and +14 days.
-    #     Reads agent_activity_log for approved pause/scale/budget actions from
-    #     7 and 14 days ago. Posts a Slack re-evaluation prompt to #approvals.
-    #     No ✅ needed — review-only. Runs nightly (never misses a follow-up).
-    _check_monitor_dates()
+    # 3g. Monitor outcome follow-ups now run via Cowork (monitor-outcomes skill).
 
     # 3h. WEEKLY KEYWORD AUTO-FIX — Sunday Riyadh only.
     # Silently scans all ENABLED keywords + active negatives, applies the
@@ -1520,4 +1100,205 @@ def _run_slack_audit():
                     channel=SLACK_CHANNEL_APPROVAL, ts=ts
                 )
                 already_reminded = any(
-            
+                    "No approval received yet" in r.get("text", "")
+                    for r in replies.get("messages", [])[1:]  # skip parent
+                )
+            except SlackApiError:
+                already_reminded = False
+
+            if already_reminded:
+                continue
+
+            reminder = (
+                "No approval received yet on this digest. "
+                "Please react with ✅ to approve all scale/pause actions, "
+                "or ❌ to skip. Review-only items (Asana tasks) don't need a reaction."
+            )
+            try:
+                slack.chat_postMessage(
+                    channel=SLACK_CHANNEL_APPROVAL,
+                    thread_ts=ts,
+                    text=reminder,
+                )
+                reminders_sent += 1
+                print(f"[slack-audit] Reminder posted for digest ts={ts} (age {age_h:.1f}h)")
+            except SlackApiError as e:
+                print(f"[slack-audit] Failed to post reminder: {e}")
+
+            if age_h > 24:
+                # Escalate to Asana as well
+                try:
+                    from executors.asana import create_task
+                    create_task(
+                        title=f"#approvals digest unanswered > 24h — {date.today().isoformat()}",
+                        description=(
+                            f"A nightly digest in #approvals has had no ✅ or ❌ reaction "
+                            f"for over 24 hours.\n\nDigest timestamp: {ts}\n"
+                            f"Digest summary: {text}\n\n"
+                            f"Created: {date.today().isoformat()} | Due: {date.today().isoformat()} | "
+                            "Priority: High | Type: System Health | Channel: all | "
+                            "Asset level: campaign | Action: investigate → [Project Coordinator]"
+                        ),
+                        project_key="optimization",
+                        task_type="System Health",
+                        channel="all",
+                        asset_level="campaign",
+                        action="investigate",
+                        log_role="project_coordinator",
+                    )
+                    escalations += 1
+                except Exception as e:
+                    print(f"[slack-audit] Escalation task creation failed (non-fatal): {e}")
+
+        log_activity_async(
+            role="project_coordinator",
+            action="slack_audit_complete",
+            status="success",
+            details={
+                "digests_checked": len(digests),
+                "reminders_sent": reminders_sent,
+                "escalations": escalations,
+                "execution_gaps": execution_gaps,
+            },
+        )
+        print(f"[slack-audit] Done — {len(digests)} checked, "
+              f"{reminders_sent} reminded, {escalations} escalated, "
+              f"{execution_gaps} execution gap(s)")
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[ops-scheduler] Slack audit failed (non-fatal): {e}")
+
+
+def _run_monthly_creative_report():
+    """1st of month, 05:00 UTC (08:00 Riyadh) — winning creative analysis.
+
+    Queries v_ad_performance for the last 30 days, classifies ads as
+    winner / optimise / underperformer, writes a Google Sheet with one tab
+    per channel, and creates an Asana task for the design team.
+    Non-fatal — never blocks the monthly cadence.
+    Added 2026-06-12.
+    """
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["python", "scripts/monthly_creative_report.py"],
+            capture_output=True, timeout=300,
+            cwd=os.path.dirname(__file__),
+        )
+        print(f"[ops-scheduler] Monthly creative report exit={r.returncode}")
+        if r.stdout:
+            tail = r.stdout.decode("utf-8", errors="replace").splitlines()[-20:]
+            for line in tail:
+                print(f"[monthly-creative] {line}")
+        if r.returncode != 0 and r.stderr:
+            tail = r.stderr.decode("utf-8", errors="replace").splitlines()[-10:]
+            for line in tail:
+                print(f"[monthly-creative][err] {line}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[ops-scheduler] Monthly creative report failed (non-fatal): {e}")
+
+
+def run():
+    schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
+    # Second BQ refresh 12h later — picks up workflow re-classifications and
+    # late-arriving leads from the day. Doesn't run the full _nightly cadence,
+    # just refreshes BQ data so dashboards reflect current state.
+    # Added 2026-05-15 to halve attribution lag (was 24h, now 12h).
+    schedule.every().day.at("17:00").do(_refresh_bigquery)  # 20:00 Riyadh = 17:00 UTC
+
+    # ── Slack approval audit — 10:00 Riyadh = 07:00 UTC ──────────────────────
+    # Checks #approvals for unanswered digests (2h+ old), posts in-thread
+    # reminders, and flags approved-but-unexecuted actions to Asana.
+    # Runs 2h after the nightly digest so reactions have time to land.
+    # Added 2026-06-12.
+    schedule.every().day.at("07:00").do(_run_slack_audit)
+
+    # ── Freshness watchdog: every 4h, NEVER let BQ go stale ──────────────────
+    # Checks each source table for MAX(date) lag > 1d OR last_write > 25h ago,
+    # and triggers a targeted re-sync of just the stale collector. This is the
+    # safety net for the case where the 05:00/17:00 scheduled runs were missed.
+    # Added 2026-05-20.
+    for _utc_h in (1, 5, 9, 13, 21):   # every ~4h, spread across the day
+        schedule.every().day.at(f"{_utc_h:02d}:30").do(_watchdog_tick)
+
+    # ── Action sheet auto-update — daily 02:00 UTC = 05:00 Riyadh ───────────
+    # Appends yesterday's team-visible actions to the master ZATCA Action Log
+    # sheet. Replaces the manual _log_session_to_sheet.py workflow. Runs
+    # before the 05:00 nightly so the sheet is current by 8 AM Riyadh standup.
+    # Added 2026-05-25.
+    schedule.every().day.at("02:00").do(_update_action_sheet)
+
+    # ── Workday spend refresh — every 2h during business hours ──────────────
+    # Paid platforms apply retroactive spend adjustments throughout the day
+    # (Meta click-fraud refunds, Snap/MS auction finalization, Google invalid
+    # click reversals — typically 1–3% of spend). Without mid-day refreshes,
+    # the dashboard shows yesterday's spend with up to 12h of unfinalized
+    # adjustments. Refreshing every 2h closes the gap to <0.5%.
+    # Added 2026-05-25 after user reported $30 gap on $1700 yesterday spend.
+    for _utc_h in (6, 8, 10, 12):  # 09:00, 11:00, 13:00, 15:00 Riyadh
+        schedule.every().day.at(f"{_utc_h:02d}:00").do(_refresh_spend_only)
+
+    # ── HubSpot full mirror — 3× daily to keep stage counts within ~4h ──────
+    # Workflows re-classify leads throughout the workday (qualified, disq,
+    # SQL transitions). Three explicit mirrors + the 4h watchdog guarantees
+    # Hex stage counts are at most ~4h behind HubSpot reality.
+    # Tightened on 2026-05-25 after the user observed yesterday's qualified
+    # count was still wrong this morning (16/10 vs reality 21/21).
+    schedule.every().day.at("06:00").do(_daily_full_mirror)   # 09:00 Riyadh — after nightly
+    schedule.every().day.at("12:00").do(_daily_full_mirror)   # 15:00 Riyadh — midday catch
+    schedule.every().day.at("19:00").do(_daily_full_mirror)   # 22:00 Riyadh — end of workday
+
+    # ── QA gate self-test (every day at 04:00 UTC, before nightly) ───────────
+    # Synthetic fixtures + known-good/known-bad inputs verify each check.
+    # If a refactor silently breaks a check, this catches it.
+    schedule.every().day.at("04:00").do(_gate_self_test)
+    schedule.every().day.at("03:30").do(_daily_deep_audit)     # 06:30 Riyadh
+    schedule.every().day.at("03:45").do(_compliance_monitor)   # 06:45 Riyadh
+    schedule.every().day.at("06:30").do(_self_heal)            # 09:30 Riyadh — after nightly
+    schedule.every().day.at("15:00").do(_compliance_monitor)   # 18:00 Riyadh — midday recheck
+    # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
+    # On-demand outside those hours via POST /api/run-health-check
+    for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
+        schedule.every().day.at(f"{_utc_h:02d}:00").do(_run_health_check)
+
+    print("=" * 60)
+    print("  Qoyod Operational Scheduler — LIVE")
+    print("=" * 60)
+    print("  Daily    08:00 Riyadh (05:00 UTC)  — full nightly + BQ refresh")
+    print("  BQ       20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
+    print("  Sheet    05:00 Riyadh (02:00 UTC)  — append actions to master sheet")
+    print("  Spend    09/11/13/15 Riyadh (06/08/10/12 UTC) — workday spend refresh")
+    print("  Mirror   09/15/22 Riyadh (06/12/19 UTC) — HubSpot full mirror (3×/day)")
+    print("  Audit    10:00 Riyadh (07:00 UTC)  — #approvals Slack audit + reminders")
+    print("  Self-test 07:00 Riyadh (04:00 UTC) — QA gate check verification")
+    print("  Self-heal 09:30 Riyadh (06:30 UTC) — detect+fix stale views, failed collectors, 500s")  # noqa
+    print("  Watchdog every ~4h — never let BQ go stale, auto-resync (4h threshold)")
+    print("  Weekly   added Mon mornings")
+    print("  Monthly  added on 1st of month (+ creative report Google Sheet)")
+    print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
+    print("  Manual:  python main.py on_demand")
+    print("=" * 60)
+
+    # Startup health check — logs to console only; no Slack post.
+    # Only the 07:00 scheduled run posts to Slack (and only on failures).
+    try:
+        from scripts.health_check import main as hc_main
+        hc_main(post_slack=False)  # console-only on startup
+    except Exception as e:
+        print(f"[ops-scheduler] Startup health check error: {e}")
+
+    # Catch-up: if a redeploy happened during the 05:00 UTC nightly window,
+    # the data refresh was killed mid-run. Fix it silently on next startup.
+    _catchup_if_stale()
+
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
+
+
+if __name__ == "__main__":
+    run()
