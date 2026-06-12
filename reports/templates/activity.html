@@ -627,6 +627,243 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
+  <!-- ── Agent Team — Nexa Operations HQ ── -->
+  {% if team_roster %}
+  <div class="section-head" id="team-section-head" onclick="toggleSection('team-section-body','team-section-chev')"
+       style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between">
+    <span>Nexa Operations HQ &nbsp;<span style="color:#484f58;font-weight:400;font-size:11px">9 agents · 3 departments</span></span>
+    <span id="team-section-chev" style="font-size:11px;color:#484f58">▲</span>
+  </div>
+  <div id="team-section-body">
+
+  {# ── Pixel-art sprite macro ── #}
+  {% macro sprite(name, size) %}{% set s = size|default(56) %}
+  {%- if name == "orchestrator" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6"  y="0"  width="6"  height="6"  fill="#a78bfa"/><rect x="21" y="0"  width="6"  height="6"  fill="#a78bfa"/><rect x="36" y="0"  width="6"  height="6"  fill="#a78bfa"/>
+    <rect x="0"  y="6"  width="48" height="6"  fill="#7c3aed"/><rect x="21" y="6"  width="6"  height="6"  fill="#f0abfc"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#4c1d95"/><rect x="27" y="18" width="6"  height="6"  fill="#4c1d95"/>
+    <rect x="15" y="24" width="18" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#7c3aed"/><rect x="21" y="30" width="6"  height="12" fill="#ede9fe"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#7c3aed"/><rect x="42" y="30" width="6"  height="12" fill="#7c3aed"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#4c1d95"/><rect x="27" y="42" width="9"  height="6"  fill="#4c1d95"/>
+  </svg>
+  {%- elif name == "perf_lead" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="9"  y="0"  width="30" height="12" fill="#dc2626"/><rect x="18" y="3"  width="12" height="6"  fill="#fef2f2"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#dc2626"/>
+    <rect x="19" y="32" width="10" height="8"  fill="#fbbf24"/><rect x="22" y="31" width="4"  height="2"  fill="#fbbf24"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#dc2626"/><rect x="42" y="30" width="6"  height="12" fill="#dc2626"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#7f1d1d"/><rect x="27" y="42" width="9"  height="6"  fill="#7f1d1d"/>
+  </svg>
+  {%- elif name == "campaign_mgr" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="6"  fill="#f97316"/><rect x="6"  y="6"  width="36" height="6"  fill="#f97316"/>
+    <rect x="21" y="0"  width="6"  height="12" fill="#fed7aa"/><rect x="6"  y="6"  width="36" height="3"  fill="#fed7aa"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#f97316"/><rect x="21" y="30" width="6"  height="12" fill="#ffedd5"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#f97316"/><rect x="42" y="30" width="6"  height="12" fill="#f97316"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#7c2d12"/><rect x="27" y="42" width="9"  height="6"  fill="#7c2d12"/>
+  </svg>
+  {%- elif name == "creative" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="21" y="0"  width="6"  height="6"  fill="#f59e0b"/><rect x="15" y="6"  width="18" height="6"  fill="#f59e0b"/><rect x="9"  y="12" width="30" height="6"  fill="#f59e0b"/>
+    <rect x="21" y="3"  width="6"  height="3"  fill="#fef9c3"/>
+    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
+    <rect x="15" y="21" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="21" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#f59e0b"/>
+    <rect x="9"  y="33" width="6"  height="6"  fill="#ec4899"/><rect x="18" y="33" width="6"  height="6"  fill="#3b82f6"/><rect x="27" y="33" width="6"  height="6"  fill="#22c55e"/><rect x="36" y="33" width="6"  height="6"  fill="#a855f7"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#f59e0b"/><rect x="42" y="30" width="6"  height="12" fill="#f59e0b"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#78350f"/><rect x="27" y="42" width="9"  height="6"  fill="#78350f"/>
+  </svg>
+  {%- elif name == "cro" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6"  y="0"  width="36" height="6"  fill="#059669"/><rect x="12" y="6"  width="24" height="6"  fill="#059669"/><rect x="18" y="12" width="12" height="6"  fill="#059669"/>
+    <rect x="21" y="3"  width="6"  height="12" fill="#34d399"/>
+    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
+    <rect x="15" y="21" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="21" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#059669"/><rect x="21" y="30" width="6"  height="12" fill="#d1fae5"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#059669"/><rect x="42" y="30" width="6"  height="12" fill="#059669"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#064e3b"/><rect x="27" y="42" width="9"  height="6"  fill="#064e3b"/>
+  </svg>
+  {%- elif name == "designer" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="12" fill="#0d9488"/>
+    <rect x="9"  y="3"  width="6"  height="6"  fill="#ec4899"/><rect x="21" y="3"  width="6"  height="6"  fill="#f59e0b"/><rect x="33" y="3"  width="6"  height="6"  fill="#3b82f6"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#0d9488"/><rect x="15" y="33" width="18" height="6"  fill="#99f6e4"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#0d9488"/><rect x="42" y="30" width="6"  height="12" fill="#0d9488"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#134e4a"/><rect x="27" y="42" width="9"  height="6"  fill="#134e4a"/>
+  </svg>
+  {%- elif name == "developer" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6"  y="0"  width="36" height="12" fill="#0891b2"/>
+    <rect x="6"  y="3"  width="6"  height="6"  fill="#67e8f9"/><rect x="36" y="3"  width="6"  height="6"  fill="#67e8f9"/>
+    <rect x="15" y="3"  width="18" height="6"  fill="#083344"/>
+    <rect x="15" y="4"  width="3"  height="4"  fill="#22d3ee"/><rect x="30" y="4"  width="3"  height="4"  fill="#22d3ee"/><rect x="21" y="5"  width="6"  height="3"  fill="#67e8f9"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#0e7490"/><rect x="18" y="33" width="12" height="6"  fill="#22d3ee"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#0891b2"/><rect x="42" y="30" width="6"  height="12" fill="#0891b2"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#164e63"/><rect x="27" y="42" width="9"  height="6"  fill="#164e63"/>
+  </svg>
+  {%- elif name == "ops" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="12" fill="#4f46e5"/>
+    <rect x="9"  y="3"  width="6"  height="6"  fill="#c7d2fe"/><rect x="33" y="3"  width="6"  height="6"  fill="#c7d2fe"/>
+    <rect x="18" y="0"  width="12" height="12" fill="#4338ca"/>
+    <rect x="21" y="3"  width="6"  height="6"  fill="#a5b4fc"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#4f46e5"/>
+    <rect x="9"  y="33" width="30" height="3"  fill="#818cf8"/><rect x="9"  y="38" width="30" height="1"  fill="#818cf8"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#4f46e5"/><rect x="42" y="30" width="6"  height="12" fill="#4f46e5"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#312e81"/><rect x="27" y="42" width="9"  height="6"  fill="#312e81"/>
+  </svg>
+  {%- elif name == "analyst" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="12" fill="#1e1b4b"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="6"  y="15" width="15" height="9"  fill="#7c3aed"/><rect x="27" y="15" width="15" height="9"  fill="#7c3aed"/>
+    <rect x="9"  y="18" width="9"  height="6"  fill="#ede9fe"/><rect x="30" y="18" width="9"  height="6"  fill="#ede9fe"/>
+    <rect x="12" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="30" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="21" y="18" width="6"  height="3"  fill="#7c3aed"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#6d28d9"/>
+    <rect x="12" y="39" width="4"  height="3"  fill="#c4b5fd"/><rect x="18" y="36" width="4"  height="6"  fill="#c4b5fd"/><rect x="24" y="33" width="4"  height="9"  fill="#c4b5fd"/><rect x="30" y="35" width="4"  height="7"  fill="#c4b5fd"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#6d28d9"/><rect x="42" y="30" width="6"  height="12" fill="#6d28d9"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#2e1065"/><rect x="27" y="42" width="9"  height="6"  fill="#2e1065"/>
+  </svg>
+  {%- else -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="6"  width="24" height="24" fill="#30363d"/><rect x="15" y="15" width="6"  height="6"  fill="#58a6ff"/><rect x="27" y="15" width="6"  height="6"  fill="#58a6ff"/><rect x="6"  y="30" width="36" height="12" fill="#21262d"/>
+  </svg>
+  {%- endif %}
+  {% endmacro %}
+
+  {# ── Org chart: orchestrator → 3 departments ── #}
+  <div class="team-hierarchy">
+    {% set main = team_roster | selectattr("is_main") | first %}
+    <script>window._AGENT_ROSTER = {{ team_roster | tojson }};</script>
+
+    {% if main %}
+    <div class="team-main-wrap">
+      <div class="team-main-card" onclick="openAgentModal(0)" style="cursor:pointer">
+        <div class="team-sprite">{{ sprite(main.sprite, 72) }}</div>
+        <div class="team-card-info">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa;margin-bottom:4px">✦ ORCHESTRATOR · ALL DEPTS</div>
+          <div class="team-title" style="font-size:15px">{{ main.title }}</div>
+          <div class="team-desc" style="margin-top:3px">{{ main.desc }}</div>
+          <div class="team-stats" style="margin-top:10px;gap:20px">
+            <div><div class="team-stat-num">{{ main.actions_30d }}</div><div class="team-stat-lbl">actions 30d</div></div>
+            <div><div class="team-stat-num">{{ main.actions_7d }}</div><div class="team-stat-lbl">actions 7d</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tc-stem-down"></div>
+      <div class="tc-bar">
+        <div class="tc-sub-wrap"><div class="tc-node" style="background:#dc2626"></div></div>
+        <div class="tc-sub-wrap"><div class="tc-node" style="background:#059669"></div></div>
+        <div class="tc-sub-wrap"><div class="tc-node" style="background:#6366f1"></div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:18px auto;gap:0 16px;width:100%">
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+
+        {# Performance dept #}
+        {% set perf_members = team_roster | selectattr("dept", "equalto", "Performance") | list %}
+        <div>
+          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;background:#7f1d1d;border:1px solid #dc2626;border-bottom:none;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fca5a5">⚡ Performance</div>
+          <div style="border:1px solid #dc262644;border-radius:0 0 8px 8px;padding:10px;background:#161b22;display:flex;flex-direction:column;gap:8px">
+            {% for member in perf_members %}
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')">
+              {% if member.is_lead %}<div class="sub-badge" style="color:#fca5a5;border-color:#dc2626">DEPT LEAD</div>{% else %}<div class="sub-badge">SUBAGENT</div>{% endif %}
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
+                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
+                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
+                </div>
+              </div>
+              <div class="team-last">{% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}{% else %}<span style="color:#484f58">No activity in window</span>{% endif %}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# CRO / LP dept #}
+        {% set cro_members = team_roster | selectattr("dept", "equalto", "CRO / LP") | list %}
+        <div>
+          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;background:#064e3b;border:1px solid #059669;border-bottom:none;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6ee7b7">🎯 CRO / LP</div>
+          <div style="border:1px solid #05966944;border-radius:0 0 8px 8px;padding:10px;background:#161b22;display:flex;flex-direction:column;gap:8px">
+            {% for member in cro_members %}
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')">
+              {% if member.is_lead %}<div class="sub-badge" style="color:#6ee7b7;border-color:#059669">DEPT LEAD</div>{% else %}<div class="sub-badge">SUBAGENT</div>{% endif %}
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
+                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
+                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
+                </div>
+              </div>
+              <div class="team-last">{% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}{% else %}<span style="color:#484f58">No activity in window</span>{% endif %}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Support dept #}
+        {% set support_members = team_roster | selectattr("dept", "equalto", "Support") | list %}
+        <div>
+          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;background:#1e1b4b;border:1px solid #6366f1;border-bottom:none;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#a5b4fc">🔧 Support</div>
+          <div style="border:1px solid #6366f144;border-radius:0 0 8px 8px;padding:10px;background:#161b22;display:flex;flex-direction:column;gap:8px">
+            {% for member in support_members %}
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')">
+              <div class="sub-badge">SUBAGENT</div>
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
+                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
+                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
+                </div>
+              </div>
+              <div class="team-last">{% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}{% else %}<span style="color:#484f58">No activity in window</span>{% endif %}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+      </div>{# end 3-col depts #}
+    </div>{# end main-wrap #}
+    {% endif %}
+  </div>{# end team-hierarchy #}
+  </div>{# /team-section-body #}
+  {% endif %}
+
   <!-- ── Code Health ── -->
   {% if code_health is defined %}
   <div class="section-head" onclick="toggleSection('code-health-body','code-health-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Code Health — Dashboard Violations
