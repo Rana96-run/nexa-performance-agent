@@ -367,6 +367,8 @@ a:hover{text-decoration:underline}
 .panel-card.panel-open .panel-arrow{transform:rotate(180deg)}
 .panel-body{padding:12px 16px;display:none}
 .panel-card.panel-open .panel-body{display:block}
+.tg-field{margin-bottom:8px;color:#c9d1d9;line-height:1.6}
+.tg-label{font-weight:700;color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-right:5px}
 .panel-table{width:100%;border-collapse:collapse;font-size:12px}
 .panel-table th{text-align:left;color:#484f58;font-weight:500;
                  padding:4px 8px 8px;border-bottom:1px solid #21262d}
@@ -1610,6 +1612,211 @@ a:hover{text-decoration:underline}
 
   </div><!-- /panels-grid -->
   </div>
+
+
+  <!-- ── Agent Team Guide ── -->
+  <div class="section-head" onclick="toggleSection('team-guide-body','team-guide-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;margin-top:12px">Agent Team Guide — 9 agents · 3 departments
+    <span id="team-guide-chev" style="font-size:11px;color:#484f58">▼</span></div>
+  <div id="team-guide-body" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:8px">
+
+      <!-- AI Orchestrator -->
+      <div class="panel-card" id="tg-orchestrator">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#b08800">AI Orchestrator</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#b0880022;color:#b08800;border:1px solid #b0880044">Manager</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Manager of all 3 departments. Runs the 8-step daily intelligence loop, assembles and posts the nightly #approvals digest, routes cross-department handoffs, and gates all write actions via ✅/❌.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Entry point of the daily loop → dispatches Growth Analyst for BQ analysis → routes flags to Performance Lead → receives gated specs from all depts → posts #approvals digest → monitors outcomes.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Any request needing routing, the daily 08:00 Riyadh loop, anything crossing departments, assembling the nightly #approvals digest, or reacting to a ✅/❌ approval.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Single orchestration point so no agent acts without a decision-maker checking the full picture first. Prevents conflicting actions across departments.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "run the daily loop", "route this flag", "post the approvals digest", or any cross-department request. Read-only tools (no Write/Edit/Bash) — model: claude-opus.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Routes and gates, never executes directly. Never skip the ✅ gate for scale/pause actions. Triage all flags in one pass. Trust the HANDOFF packet; only re-pull data when a number is missing from it.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>CLAUDE.manager.md</code>, <code>docs/_shared/handoff-protocol.md</code>, <code>docs/_shared/communication-rules.md</code>. Writes: <code>memory/agents/orchestrator/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>Slack <code>#approvals</code> channel, Asana (routing + task creation), all agent files in <code>.claude/agents/</code>.</div>
+        </div>
+      </div>
+
+      <!-- Performance Lead -->
+      <div class="panel-card" id="tg-performance-lead">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#58a6ff">Performance Lead</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>LEAD of the Performance department. Sets KPI thresholds in <code>config.py</code> (CPQL/CPL zones), allocates budget across channels, gates all Performance dept writes via ✅/❌. Owns the sign-off — no campaign launches without it.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Receives analysis + flags from Growth Analyst → classifies flags (scale/pause/optimize) → routes to Campaign Manager + Creative Strategist in parallel → gates specs → hands gated drafts up to Orchestrator for #approvals.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Set or update KPI thresholds in config.py, channel mix or budget allocation decisions, triage a paid-media flag, or react to the #approvals digest.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Department-level sign-off so no campaign change happens without an explicit decision on thresholds and budget — not just data, but a judgement call with full context.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch after Growth Analyst delivers a period comparison + flags. Say "triage these flags", "update CPQL threshold to $X", "allocate budget across channels for next month". Always read <code>config.py</code> live.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>CPQL before CPL always. 14-day minimum decision window — never act on fewer than 14 days of data. Read <code>config.py</code> live every time (never from memory). Triage ALL flags in one pass (not one-by-one). Never re-read what the Orchestrator already summarised.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>config.py</code> (live every session). Writes: <code>memory/agents/performance/performance-lead/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span><code>config.py</code> (KPI zones), Slack <code>#approvals</code>, Meta + Google Ads indirectly via Campaign Manager.</div>
+        </div>
+      </div>
+
+      <!-- Campaign Manager -->
+      <div class="panel-card" id="tg-campaign-manager">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#58a6ff">Campaign Manager</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Builds and configures paid campaigns. Owns the 5-part naming spec <code>{Channel}_{Type}_{Language}_{Product}_{Audience}</code>, Meta pixel wiring on new placements, keyword policy bucket enforcement, and audience/targeting setup.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Receives from Performance Lead → runs PARALLEL with Creative Strategist (no handoff between them) → delivers build/pause spec back to Performance Lead for gating → never executes without ✅.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Apply naming spec to a new campaign, configure Meta pixels on a new placement, enforce keyword policy buckets, build/pause/scale a campaign spec after Performance Lead gates it.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Dedicated execution agent so naming + pixel + keyword rules are applied consistently every time — no manual checklist needed per campaign.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch after Performance Lead gates a build spec. Provide: channel, type, language, product, audience, targeting setup. Runs in parallel with Creative Strategist — no need to wait for creative spec.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Always delegate naming to <code>executors/naming.py::prefixed()</code> — never bypass it. Pre-aggregate HubSpot before any join. Prospecting must use Interests or Lookalike (never "Prospecting" alone). LinkedIn UTM mapping differs: Group=utm_campaign, Campaign=utm_audience, Ad=utm_content. Never auto-execute without ✅.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>executors/naming.py</code>, <code>executors/keyword_policy.py</code>, <code>config.py</code>, <code>memory/CRITICAL_KPI_RULES.md</code>. Writes: <code>memory/agents/performance/campaign-manager/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>Meta Ads, Google Ads, Snapchat, TikTok, LinkedIn, Microsoft Ads (ad platform APIs). Asana for task logging.</div>
+        </div>
+      </div>
+
+      <!-- Creative Strategist -->
+      <div class="panel-card" id="tg-creative-strategist">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#58a6ff">Creative Strategist</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Owns copy and creative strategy. Maps audiences to OCEAN personas, scopes A/B creative variants per channel per audience segment, aligns LP assets with CRO Specialist before a test goes live.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Receives from Performance Lead → runs PARALLEL with Campaign Manager (no handoff between them) → delivers creative spec/A/B variants. Monthly winning creative report runs auto-scheduled (Cowork, 1st of month 08:00 Riyadh).</div>
+          <div class="tg-field"><span class="tg-label">When</span>OCEAN persona mapping, A/B creative variant scoping per channel, LP asset alignment before a test, monthly creative performance report.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Separates creative judgement from campaign mechanics — copy and persona decisions have dedicated ownership with the right playbook, applied consistently.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "write creative brief for [channel]", "scope A/B variants for [campaign]", "map [audience] to OCEAN persona". Monthly report is auto-scheduled in Cowork (<code>monthly-creative-report</code> skill).</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Never post ad names to Slack — Asana + Google Sheet only. Qual ratio is primary sort; CPL is secondary. Monthly report: winners = qual&gt;50% AND CPL≤$25. Covers channels with ≥1 ad with ≥3 leads. Underperformers highlighted red; winners green.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>docs/PLAYBOOK.md</code>, <code>.claude/skills/cowork/monthly-creative-report.md</code>. Writes: monthly creative Sheet to <code>$GDRIVE_CREATIVE_REPORTS_FOLDER_ID</code>, <code>memory/agents/performance/creative-strategist/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>Meta/Google/Snapchat/TikTok/LinkedIn ad creatives. Google Drive (Creative Reports folder). Asana. Cowork (monthly-creative-report skill).</div>
+        </div>
+      </div>
+
+      <!-- CRO Specialist -->
+      <div class="panel-card" id="tg-cro-specialist">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#f0883e">CRO Specialist</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Leads the CRO / Landing Page chain. Writes the 8-section LP brief + test hypothesis, defines success criteria from 14-day CPQL + destination_url data, owns test-result decisions. First link in the CRO → UI/UX → Developer chain.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Step 1 of 3. Writes brief → hands to UI/UX Designer → Designer hands to Developer → Developer returns verified deploy result → CRO Specialist calls the test outcome. Also runs auto-scheduled: weekly LP review (Monday 06:00 Riyadh) + monthly LP duplicate brief (1st 08:00 Riyadh).</div>
+          <div class="tg-field"><span class="tg-label">When</span>Write LP brief, define test hypothesis, weekly LP review (auto), monthly LP duplicate brief (auto), or decide test outcome after 14 days of BQ data.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Test hypothesis discipline — every LP change starts with a documented brief and ends with a data-based decision, preventing opinion-driven LP changes.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "write LP brief for [product]", "run LP review", "call test outcome for [LP URL]". Auto-scheduled in Cowork: <code>weekly-lp-review</code> (Monday) + <code>monthly-lp-duplicate</code> (1st of month).</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>LP brief always has 8 sections. Success criteria: 14-day CPQL + CVR from <code>campaigns_daily.destination_url</code> joined to <code>hubspot_leads_module_daily</code>. Monthly duplicate is DRAFT only — never auto-starts the design chain without approval. Never dispatch UI/UX Designer without a signed-off brief.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>docs/landing-pages/briefs/</code>, BQ <code>campaigns_daily</code> + <code>hubspot_leads_module_daily</code>. Writes: briefs to <code>docs/landing-pages/briefs/</code>, LP data to Sheet <code>120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg</code> (tab LP-YYYY-MM-DD), Asana draft tasks.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>BQ (<code>campaigns_daily</code>, <code>hubspot_leads_module_daily</code>), Google Sheet (LP review tab), Asana, <code>docs/landing-pages/</code> folder tree.</div>
+        </div>
+      </div>
+
+      <!-- UI/UX Designer -->
+      <div class="panel-card" id="tg-ui-ux-designer">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#f0883e">UI/UX Designer</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Designs landing-page variants in the CRO chain. Turns LP brief into annotated design aligned to OCEAN personas, with ZATCA compliance badge above the fold, and interaction notes for the Developer. Middle link — receives from CRO Specialist, hands to Developer.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Step 2 of 3. Receives signed-off brief from CRO Specialist → produces fully annotated design → hands to Developer. Shared resource from product, coordinated by CRO Specialist.</div>
+          <div class="tg-field"><span class="tg-label">When</span>CRO Specialist has a signed-off LP brief and needs it turned into a buildable, annotated design before Developer can build.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Dedicated design step ensures OCEAN persona alignment, brand consistency, and ZATCA compliance before any code is written — prevents costly rework mid-build.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch with brief file path from <code>docs/landing-pages/briefs/</code> + target OCEAN persona from the brief. Output goes to <code>docs/landing-pages/designs/</code> with same filename as the brief.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>ZATCA badge above fold — mandatory on every design, no exceptions. RTL layout for Arabic. Design all sections in one pass (never section-by-section). Annotate as you design (not a separate second pass). Never design outside what the brief specifies — no unbriefed creative decisions.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>docs/PLAYBOOK.md</code>, <code>docs/landing-pages/reference/lp-design-system.md</code>, brief from <code>docs/landing-pages/briefs/</code>. Writes: annotated design to <code>docs/landing-pages/designs/</code>, <code>memory/agents/cro/ui-ux-designer/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span><code>docs/landing-pages/</code> folder tree (brief → design files), design system at <code>docs/landing-pages/reference/</code>.</div>
+        </div>
+      </div>
+
+      <!-- Developer -->
+      <div class="panel-card" id="tg-developer">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#f0883e">Developer</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Builds and ships the LP variant. Implements annotated design, wires UTM passthrough on every form field, fires both Meta pixels, deploys to production at <code>lp.qoyod.com</code>, and verifies pixel fires in Events Manager before sign-off. Last link in the CRO chain.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Step 3 of 3 (last link). Receives annotated design from UI/UX Designer → builds → deploys → verifies pixels observed in Events Manager → reports verified deploy result back to CRO Specialist.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Implement a LP design, wire UTM passthrough on all form fields, fire both Meta pixels, deploy LP variant to production.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Hard gate at last-mile (pixel verification in Events Manager) so no LP goes live with broken tracking. A missing UTM breaks the lead→campaign join and corrupts CPQL for the entire test.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch when UI/UX Designer hands off annotated design from <code>docs/landing-pages/designs/</code>. Provide design file path. Never sign off until pixels observed firing — not assumed. If pixel fires incorrectly → escalate GTM investigation to Project Coordinator.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>UTM passthrough on EVERY form field — no exceptions. Both pixels must fire on form submit: CRM <code>1782671302631317</code> + Web <code>3036579196577051</code>. Verification = observed in Events Manager, never assumed. Complete ZATCA checklist at <code>docs/landing-pages/_templates/zatca-checklist.md</code> before sign-off.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: design from <code>docs/landing-pages/designs/</code>. Writes: deploy spec to <code>docs/landing-pages/specs/</code>, fills <code>docs/landing-pages/_templates/zatca-checklist.md</code>, <code>memory/agents/cro/developer/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span><code>lp.qoyod.com</code> production, Meta Events Manager (pixel verification), <code>docs/landing-pages/</code> folder tree.</div>
+        </div>
+      </div>
+
+      <!-- Growth Analyst -->
+      <div class="panel-card" id="tg-growth-analyst">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#d2a8ff">Growth Analyst</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#d2a8ff22;color:#d2a8ff;border:1px solid #d2a8ff44">Support · DATA</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>The single DATA analyst for both departments. Runs the 8-step intelligence loop on live BQ, period comparisons, CRO A/B result analysis, monthly forecasts. Owns <code>memory/</code> — writes <code>08_pitfalls.md</code> on every new API trap and updates <code>14_learning_patterns.md</code> after every action outcome.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>No internal handoff (support function, serves both depts). Orchestrator dispatches → queries live BQ → delivers analysis + flags to Performance Lead (or A/B results to CRO Specialist) → writes to shared memory. After a connector fix: runs 7-day BQ ↔ HubSpot reconciliation for Project Coordinator.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Run the 8-step loop, period comparison, root-cause analysis ("why did X happen?"), monthly forecast, CRO A/B result analysis, connector fix data integrity review.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Single analyst means consistent methodology — same period comparison tool, same attribution rules, same memory writes every session. Prevents duplicate or conflicting analysis.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "run period compare [YYYY-MM-DD to YYYY-MM-DD]", "why did CPQL spike?", "forecast month-end spend + leads + CPQL", "analyse A/B test results for [LP URL]". Always provide explicit date ranges — never relative ("last 7 days").</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Never report without live BQ. Always use <code>analysers/period_compare.py</code> — never hand-roll period comparisons. Pre-aggregate HubSpot before any join (avoid spend fan-out). Write every new API trap to <code>memory/08_pitfalls.md</code> immediately. Reconciliation = observed match, not assumed.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>memory/07_attribution.md</code>, <code>memory/14_learning_patterns.md</code>, <code>memory/01_architecture.md</code>. Writes (shared): <code>memory/08_pitfalls.md</code>, <code>memory/14_learning_patterns.md</code>, <code>memory/16_activity_dashboard.md</code>. Scripts: <code>analysers/period_compare.py</code>, <code>analysers/forecaster.py</code>, <code>analysers/connector_tracker.py</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>BigQuery (<code>nexa_performance</code> dataset), HubSpot API (live reconciliation pulls), Asana (task handoff from Project Coordinator), <code>memory/</code> directory.</div>
+        </div>
+      </div>
+
+      <!-- Project Coordinator -->
+      <div class="panel-card panel-full" id="tg-project-coordinator">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#3fb950">Project Coordinator</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#3fb95022;color:#3fb950;border:1px solid #3fb95044">Support · OPS</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+            <div>
+              <div class="tg-field"><span class="tg-label">Description</span>Support OPS function serving both departments. Owns UTM structure policy, Meta pixel health (both pixels), HubSpot <code>lead_utm_campaign</code> field mapping, Railway env vars + credential rotation, GTM containers (web + server), connector failure diagnosis and fix, activity dashboard health.</div>
+              <div class="tg-field"><span class="tg-label">Flow</span>No internal handoff (support, serves both depts). Receives from Orchestrator (connector failure escalation) or Campaign Manager (new pixel need) or Developer (GTM issue) → diagnoses and fixes → hands Asana task to Growth Analyst for 7-day BQ ↔ HubSpot reconciliation.</div>
+              <div class="tg-field"><span class="tg-label">When</span>UTM policy audit, Meta pixel health check, Railway credential rotation, GTM container audit, connector failure diagnosis and fix, conversion recording health audit.</div>
+              <div class="tg-field"><span class="tg-label">Why</span>Dedicated OPS function so tracking, credentials, and connector health have a single accountable owner — prevents silent tracking failures that corrupt CPQL without any visible error.</div>
+            </div>
+            <div>
+              <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "audit GTM containers", "rotate Railway credential [VAR_NAME]", "fix broken connector [name]", "check pixel health", "verify UTM mapping". Use PowerShell (not Bash) on Windows for Railway vars — Bash causes shell expansion issues with env var values.</div>
+              <div class="tg-field"><span class="tg-label">Playbook</span>PowerShell for Railway vars on Windows. Secrets in Railway only — never hardcode. Web GTM: <code>GTM-TFH26VC2</code>. Server GTM: <code>GTM-PK6924TJ</code>. After connector fix → hand Asana task to Growth Analyst for 7-day BQ ↔ HubSpot reconciliation. Activity dashboard reviewed hourly 09:00–17:00 Riyadh.</div>
+              <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/02_credentials.md</code>, <code>memory/07_attribution.md</code>, <code>.claude/skills/railway-sync.md</code>. Writes: <code>connector_health_log</code> in BQ, <code>memory/agents/support/project-coordinator/</code>.</div>
+              <div class="tg-field"><span class="tg-label">Where</span>Railway (env vars + logs), GTM UI (web <code>GTM-TFH26VC2</code> + server <code>GTM-PK6924TJ</code>), Meta Events Manager (pixel health), HubSpot (field mapping), BQ <code>connector_health_log</code> table.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /team-guide-grid -->
+  </div><!-- /team-guide-body -->
 
   </div><!-- /activity-view -->
 
