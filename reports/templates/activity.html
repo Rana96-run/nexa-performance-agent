@@ -1671,45 +1671,6 @@ a:hover{text-decoration:underline}
   <div id="activity-panels-body">
   <div class="panels-grid">
 
-    {# ── Panel 3: System Health (collapsed by default, auto-expands on failure) ── #}
-    <div class="panel-card{% if panel3_has_failure %} panel-open{% endif %}" id="panel-system-health">
-      <div class="panel-header" onclick="togglePanel(this)">
-        <div class="panel-title">
-          System Health
-          {% if panel3_has_failure %}
-          <span class="panel-badge red">issues detected</span>
-          {% endif %}
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="panel-count">{{ panel3_health|length }} roles · collapsed by default</span>
-          <span class="panel-arrow">▾</span>
-        </div>
-      </div>
-      <div class="panel-body">
-        {% if panel3_health %}
-        {% for role_key, info in panel3_health.items() %}
-        <div class="p3-row">
-          <div style="display:flex;align-items:center">
-            <div class="p3-dot {% if info.success > 0 %}green{% elif info.fail > 0 %}red{% else %}grey{% endif %}"></div>
-            <div>
-              <div class="p3-role">{{ info.label }}</div>
-              <div class="p3-meta">Last run: {{ info.last_run or 'unknown' }}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:12px;color:#39d353;font-weight:600">{{ info.success }} ok today</div>
-            {% if info.fail > 0 %}
-            <div style="font-size:11px;color:#f85149">{{ info.fail }} failed</div>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div class="panel-empty">No system health data in this window.</div>
-        {% endif %}
-      </div>
-    </div>
-
     {# ── Scheduled Skills Panel ── #}
     <div class="panel-card panel-full panel-open" id="panel-scheduled-skills">
       <div class="panel-header" onclick="togglePanel(this)">
