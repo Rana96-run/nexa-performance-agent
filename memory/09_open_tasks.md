@@ -27,14 +27,16 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       remind in-thread, flag execution gaps), monthly-performance-deck (1st of month,
       performance-lead → full-funnel Slides deck, all 3 new-biz pipelines).
       Commits: `820efc1` (first 9), pending commit (last 3).
-- [ ] **Phase 3 — Cowork connectors.** Wire BigQuery, Slack, Asana, Meta, Google Ads,
-      HubSpot in Cowork platform UI. Test each connector independently. ~30-60 min manual
-      setup. Owner: `project-coordinator`. Checklist: `docs/cowork-connector-setup.md`.
-      Code prerequisites completed 2026-06-12:
-      - [x] `collectors/drive_reader.py` — list_folder, walk, download, read_text, upload, find_in_folder. Scope: drive.file + drive.readonly (write-capable for monthly report uploads).
-      - [x] `.env.example` — GDRIVE_REPORTS_FOLDER_ID + GDRIVE_CREATIVE_REPORTS_FOLDER_ID added.
-      - [x] Monthly skills — Drive upload sections added with Railway env var references.
-      Manual steps remaining (Rana): share Drive root folder with service account email, create 2 subfolders, set GDRIVE_* IDs in Railway, wire 6 connectors in Cowork UI.
+- [x] **Phase 3 — Cowork connectors. DONE 2026-06-12.** All 6 connectors wired in Cowork UI.
+      - [x] BigQuery (`angular-axle-492812-q4`)
+      - [x] Slack (local dev custom app in Qoyod Slack workspace)
+      - [x] Asana (token + workspace ID from Railway)
+      - [x] Meta Ads (token + account IDs from Railway)
+      - [x] Google Ads (dev token + refresh token + both account IDs from Railway)
+      - [x] HubSpot (token from Railway, portal 144952270)
+      - [x] Drive folder shared with service account; subfolder IDs set in Railway
+      - [x] `collectors/drive_reader.py` complete with upload/find_in_folder
+      Note: Slack connector uses a local dev custom Slack app — token lives in Railway (`SLACK_BOT_TOKEN`), all IDs readable from Railway env.
 - [ ] **Phase 4 — Daily loop on Cowork.** Multi-agent chain (ai-orchestrator → growth-analyst
       → performance-lead → campaign-manager ∥ creative-strategist) with approval gate.
       Full workflow spec: `docs/cowork-phase4-workflow.md`.

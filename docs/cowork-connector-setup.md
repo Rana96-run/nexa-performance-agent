@@ -3,7 +3,7 @@
 **Owner:** project-coordinator  
 **Blocks:** Phase 4 (daily loop parallel run)  
 **Estimated time:** 30–60 min  
-**Status:** ⬜ Not started (as of 2026-06-12)
+**Status:** ✅ Complete (2026-06-12)
 
 ---
 
@@ -34,6 +34,7 @@ Required by: `daily-slack-audit`, `monthly-performance-deck`, `daily-loop`
 - Workspace: Qoyod workspace
 - Bot token: `SLACK_BOT_TOKEN` (from Railway env)
 - Channels needed: `#approvals`, `SLACK_CHANNEL_NOTIFY`
+- **Note:** Uses a local dev custom Slack app — not the production bot. All channel IDs readable from Railway env.
 - Verify by reading the last message in `#approvals`
 
 ### 3. Asana
