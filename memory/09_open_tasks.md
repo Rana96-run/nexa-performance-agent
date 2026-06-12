@@ -29,10 +29,19 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       Commits: `820efc1` (first 9), pending commit (last 3).
 - [ ] **Phase 3 — Cowork connectors.** Wire BigQuery, Slack, Asana, Meta, Google Ads,
       HubSpot in Cowork platform UI. Test each connector independently. ~30-60 min manual
-      setup. Owner: `project-coordinator`.
-- [ ] **Phase 4 — Daily loop on Cowork.** Set up `/daily-loop` as scheduled Cowork skill
-      at 08:00 Riyadh. Run in parallel with Railway `main.py daily` for 14 days. Compare
-      outputs. Retire Railway LLM layer once outputs match for 14 consecutive days.
+      setup. Owner: `project-coordinator`. Checklist: `docs/cowork-connector-setup.md`.
+      Code prerequisites completed 2026-06-12:
+      - [x] `collectors/drive_reader.py` — list_folder, walk, download, read_text, upload, find_in_folder. Scope: drive.file + drive.readonly (write-capable for monthly report uploads).
+      - [x] `.env.example` — GDRIVE_REPORTS_FOLDER_ID + GDRIVE_CREATIVE_REPORTS_FOLDER_ID added.
+      - [x] Monthly skills — Drive upload sections added with Railway env var references.
+      Manual steps remaining (Rana): share Drive root folder with service account email, create 2 subfolders, set GDRIVE_* IDs in Railway, wire 6 connectors in Cowork UI.
+- [ ] **Phase 4 — Daily loop on Cowork.** Multi-agent chain (ai-orchestrator → growth-analyst
+      → performance-lead → campaign-manager ∥ creative-strategist) with approval gate.
+      Full workflow spec: `docs/cowork-phase4-workflow.md`.
+      Key constraint: Cowork sandbox cannot run BQ analysis — Railway runs analysers, Cowork
+      reads outputs via Asana + BQ connector. Schedule Cowork at 08:05 Riyadh (5 min after
+      Railway 08:00). Run parallel for 14 days, then retire Railway LLM layer.
+      Start condition: all 6 Phase 3 connectors wired.
 - [ ] **Phase 5 — n8n wiring (optional, independent).** Replace Railway Python collectors
       one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays <2% delta
       after each replacement. Owner: `project-coordinator`. Can run independently of Phases 1-4.

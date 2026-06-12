@@ -1,8 +1,13 @@
-"""Google Drive read helper.
+"""Google Drive read/write helper.
 
 Reuses the BigQuery service account — requires the service-account email to
-be shared as a Viewer on the target folder, and the Google Drive API to be
-enabled on the same GCP project as BigQuery.
+be shared as **Editor** on the target folder (Viewer is enough for reads, but
+monthly skill reports write back so Editor is needed), and the Google Drive API
+to be enabled on the same GCP project as BigQuery.
+
+Scopes used:
+  - drive.file  — create and update files the service account owns (for uploads)
+  - drive.readonly — list and download any file shared with the service account
 
 See memory/10_google_drive.md for one-time setup.
 """
@@ -17,7 +22,10 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/drive.file",      # create/update files we own
+    "https://www.googleapis.com/auth/drive.readonly",  # list/download shared files
+]
 DEFAULT_FOLDER_ID = os.getenv(
     "GDRIVE_FOLDER_ID", "1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74"
 )
@@ -120,6 +128,55 @@ def read_text(file_id: str, mime_type: Optional[str] = None) -> str:
     while not done:
         _, done = dl.next_chunk()
     return buf.getvalue().decode("utf-8", errors="replace")
+
+
+def upload(
+    local_path: str,
+    filename: str,
+    folder_id: str,
+    mime_type: Optional[str] = None,
+) -> str:
+    """Upload a local file to a Drive folder. Returns the new file's Drive ID.
+
+    If a file with the same name already exists in the folder, it is NOT
+    replaced — a new file is created (Drive allows duplicate names). If you
+    want idempotent uploads (overwrite), call find_in_folder() first and use
+    update_file() if a match is found.
+
+    Args:
+        local_path: absolute path to the file to upload
+        filename:   name the file should have in Drive
+        folder_id:  Drive folder ID (use GDRIVE_REPORTS_FOLDER_ID etc.)
+        mime_type:  MIME type of the file; auto-detected from extension if None
+    """
+    import mimetypes
+    from googleapiclient.http import MediaFileUpload
+
+    if mime_type is None:
+        mime_type, _ = mimetypes.guess_type(local_path)
+        mime_type = mime_type or "application/octet-stream"
+
+    svc = _client()
+    metadata = {"name": filename, "parents": [folder_id]}
+    media = MediaFileUpload(local_path, mimetype=mime_type, resumable=True)
+    result = (
+        svc.files()
+        .create(body=metadata, media_body=media, fields="id", supportsAllDrives=True)
+        .execute()
+    )
+    return result["id"]
+
+
+def find_in_folder(folder_id: str, name: str) -> Optional[str]:
+    """Return the Drive file ID of the first file named `name` in `folder_id`, or None."""
+    svc = _client()
+    q = f"'{folder_id}' in parents and name = '{name}' and trashed = false"
+    res = svc.files().list(
+        q=q, fields="files(id)", pageSize=1,
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+    ).execute()
+    files = res.get("files", [])
+    return files[0]["id"] if files else None
 
 
 if __name__ == "__main__":
