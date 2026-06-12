@@ -1751,35 +1751,40 @@ a:hover{text-decoration:underline}
           <div style="flex:1;height:1px;background:#30363d"></div>
           <div style="font-size:11px;color:#484f58;white-space:nowrap">routes · gates ✅ · posts #approvals digest</div>
         </div>
-
-        {# Bidirectional connector: Orchestrator ↔ Growth Analyst #}
-        <div style="display:flex;align-items:center;margin-left:44px;margin-bottom:2px;gap:4px">
+        <div style="margin-left:44px;margin-bottom:2px">
           <div style="width:1px;height:10px;background:#30363d"></div>
-          <div style="font-size:9px;color:#484f58;margin-left:4px;font-style:italic">direct tasks ↕ final reports</div>
+          <div style="font-size:9px;color:#484f58;font-style:italic">direct tasks ↕ final reports</div>
         </div>
 
-        {# Row 2: Growth Analyst (review layer) #}
+        {# Row 2: Growth Analyst — cross-cutting QA layer #}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
           <div style="background:#1a1030;border:1px solid #d2a8ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#d2a8ff;white-space:nowrap">Growth Analyst</div>
-          <div style="flex:1;height:1px;background:#30363d"></div>
+          <div style="flex:1;height:1px;background:#d2a8ff22"></div>
           <div style="font-size:11px;color:#484f58;white-space:nowrap">reviews all outputs · BQ analysis · period compare</div>
         </div>
-
-        {# Bidirectional connector: Growth Analyst ↔ agents (review loop) #}
-        <div style="display:flex;align-items:center;margin-left:44px;margin-bottom:4px;gap:4px">
+        <div style="margin-left:44px;margin-bottom:2px">
           <div style="width:1px;height:10px;background:#30363d"></div>
-          <div style="font-size:9px;color:#484f58;margin-left:4px;font-style:italic">issues → back to owner · all clear → reports to Orchestrator</div>
+          <div style="font-size:9px;color:#484f58;font-style:italic">issues → back to owner · all clear → reports to Orchestrator</div>
         </div>
 
-        {# Row 3: Performance Lead → branches #}
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
-          {# Performance Lead #}
+        {# Row 3: Project Coordinator — cross-cutting OPS layer #}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+          <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
+          <div style="flex:1;height:1px;background:#3fb95022"></div>
+          <div style="font-size:11px;color:#484f58;white-space:nowrap">all messages · all tasks · reminders · team comms oversight</div>
+        </div>
+        <div style="margin-left:44px;margin-bottom:4px">
+          <div style="width:1px;height:10px;background:#30363d"></div>
+          <div style="font-size:9px;color:#484f58;font-style:italic">UTMs · pixels · connector health · cross-team OPS across all agents</div>
+        </div>
+
+        {# Row 4: Performance Lead → branches #}
+        <div style="display:flex;align-items:flex-start;gap:12px">
           <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
             <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Performance Lead</div>
             <div style="font-size:10px;color:#484f58;text-align:center">KPI decisions<br>budget + channel mix</div>
           </div>
           <div style="margin-top:12px;font-size:14px;color:#30363d;flex-shrink:0">→</div>
-          {# Right column: Campaign Manager + Creative Strategist + CRO chain #}
           <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px">
               <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Campaign Manager</div>
@@ -1789,7 +1794,6 @@ a:hover{text-decoration:underline}
               <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Creative Strategist</div>
               <div style="font-size:10px;color:#484f58">copy · variants · OCEAN</div>
             </div>
-            {# CRO chain — triggered by CPQL > warning #}
             <div style="border-top:1px dashed #30363d;padding-top:6px;margin-top:2px">
               <div style="font-size:10px;color:#484f58;margin-bottom:5px">↳ <span style="color:#58a6ff99">CPQL &gt; warning</span> · weekly / monthly cadence</div>
               <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
@@ -1802,14 +1806,6 @@ a:hover{text-decoration:underline}
               </div>
             </div>
           </div>
-        </div>
-
-        {# Project Coordinator (support) #}
-        <div style="display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid #21262d">
-          <div style="width:48px;flex-shrink:0"></div>
-          <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
-          <div style="font-size:10px;color:#484f58">UTMs · pixels · Slack audit · connector health</div>
-          <div style="margin-left:6px;font-size:10px;color:#30363d;font-style:italic">support — no handoff</div>
         </div>
 
       </div>
