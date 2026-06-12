@@ -1434,39 +1434,6 @@ a:hover{text-decoration:underline}
   <div id="activity-panels-body">
   <div class="panels-grid">
 
-    {# ── Panel 2: Approval Outcomes (always visible) ── #}
-    <div class="panel-card panel-open" id="panel-approvals">
-      <div class="panel-header" onclick="togglePanel(this)">
-        <div class="panel-title">Approval Outcomes</div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="panel-count">{{ panel2_rows|length }} events</span>
-          <span class="panel-arrow">▾</span>
-        </div>
-      </div>
-      <div class="panel-body">
-        {% if panel2_rows %}
-        <table class="panel-table">
-          <thead><tr><th>Date</th><th>Role</th><th>Action</th><th>Channel</th><th>Campaign</th></tr></thead>
-          <tbody>
-          {% for r in panel2_rows[:40] %}
-          <tr>
-            <td style="white-space:nowrap;color:#8b949e">{{ r.day }}</td>
-            <td><span style="font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;padding:1px 6px">{{ r.role or '—' }}</span></td>
-            <td style="{% if r.action == 'action_approved_via_slack' %}color:#39d353{% elif r.action == 'action_rejected_via_slack' %}color:#f85149{% else %}color:#c9d1d9{% endif %}">
-              {{ (r.action or '').replace('_',' ') }}
-            </td>
-            <td>{% if r.channel %}<span class="tag {{ r.channel|lower }}">{{ r.channel }}</span>{% else %}—{% endif %}</td>
-            <td title="{{ r.campaign_name or '' }}">{{ r.campaign_name or '—' }}</td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="panel-empty">No approval activity in this window.</div>
-        {% endif %}
-      </div>
-    </div>
-
     {# ── Panel 3: System Health (collapsed by default, auto-expands on failure) ── #}
     <div class="panel-card{% if panel3_has_failure %} panel-open{% endif %}" id="panel-system-health">
       <div class="panel-header" onclick="togglePanel(this)">
@@ -1578,7 +1545,6 @@ a:hover{text-decoration:underline}
       </div>
       <div class="panel-body" style="display:block;padding:16px">
 
-        {# ── Workflow diagram ── #}
         <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Daily loop · 08:00 Riyadh</div>
 
         {# Row 1: Orchestrator #}
@@ -1591,22 +1557,22 @@ a:hover{text-decoration:underline}
         {# Downward connector #}
         <div style="margin-left:48px;width:1px;height:12px;background:#30363d"></div>
 
-        {# Row 2: Growth Analyst + Performance Lead #}
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:4px">
-          {# Growth Analyst branch #}
-          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        {# Row 2: Growth Analyst → Performance Lead → 3 branches (Campaign Mgr, Creative, CRO) #}
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+          {# Growth Analyst #}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
             <div style="background:#1a1030;border:1px solid #d2a8ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#d2a8ff;white-space:nowrap">Growth Analyst</div>
             <div style="font-size:10px;color:#484f58;text-align:center">BQ analysis<br>period compare</div>
           </div>
-          <div style="margin-top:12px;font-size:14px;color:#30363d">→</div>
+          <div style="margin-top:12px;font-size:14px;color:#30363d;flex-shrink:0">→</div>
           {# Performance Lead #}
-          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
             <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Performance Lead</div>
             <div style="font-size:10px;color:#484f58;text-align:center">KPI decisions<br>budget + channel mix</div>
           </div>
-          <div style="margin-top:12px;font-size:14px;color:#30363d">→</div>
-          {# Campaign Manager + Creative Strategist stacked #}
-          <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="margin-top:12px;font-size:14px;color:#30363d;flex-shrink:0">→</div>
+          {# Right column: Campaign Manager + Creative Strategist + CRO chain as 3rd branch #}
+          <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px">
               <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Campaign Manager</div>
               <div style="font-size:10px;color:#484f58">builds · pauses · scales</div>
@@ -1615,67 +1581,28 @@ a:hover{text-decoration:underline}
               <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Creative Strategist</div>
               <div style="font-size:10px;color:#484f58">copy · variants · OCEAN</div>
             </div>
+            {# CRO chain — 3rd branch, triggered by CPQL > warning #}
+            <div style="border-top:1px dashed #30363d;padding-top:6px;margin-top:2px">
+              <div style="font-size:10px;color:#484f58;margin-bottom:5px">↳ <span style="color:#58a6ff99">CPQL &gt; warning</span> · weekly / monthly cadence</div>
+              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">CRO Specialist</div>
+                <div style="color:#30363d">→</div>
+                <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">UI/UX Designer</div>
+                <div style="color:#30363d">→</div>
+                <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">Developer</div>
+                <div style="font-size:10px;color:#484f58;margin-left:2px">brief → design → build → verify pixels</div>
+              </div>
+            </div>
           </div>
         </div>
 
         {# Project Coordinator (support) #}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid #21262d">
           <div style="width:48px;flex-shrink:0"></div>
           <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
           <div style="font-size:10px;color:#484f58">UTMs · pixels · Slack audit · connector health</div>
           <div style="margin-left:6px;font-size:10px;color:#30363d;font-style:italic">support — no handoff</div>
         </div>
-
-        {# CRO chain — connected trigger from main loop #}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;margin-top:2px">
-          <div style="width:32px;height:1px;background:#30363d;flex-shrink:0"></div>
-          <div style="font-size:10px;color:#484f58;padding:2px 10px;border:1px dashed #30363d;border-radius:12px;white-space:nowrap">
-            <span style="color:#58a6ff88">Performance Lead</span> dispatches on CPQL &gt; warning ·
-            <span style="color:#b0880088">AI Orchestrator</span> routes weekly / monthly
-          </div>
-          <div style="flex:1;height:1px;background:#21262d"></div>
-          <div style="font-size:12px;color:#484f58">↓</div>
-        </div>
-        <div style="font-size:10px;color:#f0883e99;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-left:4px">CRO chain · weekly + monthly</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:4px">
-          <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">CRO Specialist</div>
-          <div style="color:#30363d">→</div>
-          <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">UI/UX Designer</div>
-          <div style="color:#30363d">→</div>
-          <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">Developer</div>
-          <div style="font-size:10px;color:#484f58;margin-left:4px">brief → design → build → verify pixels</div>
-        </div>
-
-        {# Divider #}
-        <div style="height:1px;background:#21262d;margin:16px 0"></div>
-
-        {# Agent table (compact) #}
-        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">All agents</div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="background:#161b22;border-bottom:1px solid #21262d">
-              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
-              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Dept</th>
-              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Dispatch when</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for ag in agents %}
-            <tr style="border-bottom:{% if not loop.last %}1px solid #21262d{% else %}none{% endif %}">
-              <td style="padding:6px 10px;white-space:nowrap">
-                <span style="color:#e6edf3;font-weight:600">{{ ag.display_name }}</span>
-                <span style="font-family:monospace;color:#484f58;font-size:10px;margin-left:6px">{{ ag.slug }}</span>
-              </td>
-              <td style="padding:6px 10px;white-space:nowrap">
-                <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:{{ ag.dept_colour }}22;color:{{ ag.dept_colour }};border:1px solid {{ ag.dept_colour }}44">{{ ag.department }}</span>
-              </td>
-              <td style="padding:6px 10px;color:#8b949e;font-size:11px">
-                {{ ag.description[:100] }}{% if ag.description|length > 100 %}…{% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
 
       </div>
     </div>
