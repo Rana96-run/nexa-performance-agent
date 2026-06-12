@@ -1432,47 +1432,6 @@ a:hover{text-decoration:underline}
   <div id="activity-panels-body">
   <div class="panels-grid">
 
-    {# ── Panel 1: Marketing Decisions (primary, always open) ── #}
-    <div class="panel-card panel-primary panel-open panel-full" id="panel-marketing-decisions">
-      <div class="panel-header" onclick="togglePanel(this)">
-        <div class="panel-title">
-          Marketing Decisions
-          <span class="panel-badge primary">primary</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="panel-count">{{ panel1_rows|length }} actions · performance_audit · keyword_management · daily_digest · spike_detector</span>
-          <span class="panel-arrow">▾</span>
-        </div>
-      </div>
-      <div class="panel-body">
-        {% if panel1_rows %}
-        <table class="panel-table">
-          <thead><tr><th>Date (Riyadh)</th><th>Role</th><th>Action</th><th>Status</th><th>Channel</th><th>Campaign</th><th>#</th></tr></thead>
-          <tbody>
-          {% for r in panel1_rows[:50] %}
-          <tr>
-            <td style="white-space:nowrap;color:#8b949e">{{ r.day }}</td>
-            <td><span style="font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;padding:1px 6px">{{ r.role or '—' }}</span></td>
-            <td>{{ (r.action or '').replace('_',' ') }}</td>
-            <td class="status-{{ r.status or 'success' }}">{{ r.status or '—' }}</td>
-            <td>{% if r.channel %}<span class="tag {{ r.channel|lower }}">{{ r.channel }}</span>{% else %}—{% endif %}</td>
-            <td title="{{ r.campaign_name or '' }}">{{ r.campaign_name or '—' }}</td>
-            <td>{{ r.cnt }}</td>
-          </tr>
-          {% endfor %}
-          {% if panel1_rows|length > 50 %}
-          <tr><td colspan="7" style="color:#484f58;text-align:center;font-size:11px;padding:8px">
-            … {{ panel1_rows|length - 50 }} more rows — narrow the date window to see all
-          </td></tr>
-          {% endif %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="panel-empty">No marketing decision activity in this window.</div>
-        {% endif %}
-      </div>
-    </div>
-
     {# ── Panel 2: Approval Outcomes (always visible) ── #}
     <div class="panel-card panel-open" id="panel-approvals">
       <div class="panel-header" onclick="togglePanel(this)">
@@ -1605,7 +1564,7 @@ a:hover{text-decoration:underline}
         </div>
 
         {# CRO chain #}
-        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">CRO chain · weekly + monthly + on demand</div>
+        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">CRO chain · weekly + monthly</div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">CRO Specialist</div>
           <div style="color:#30363d">→</div>

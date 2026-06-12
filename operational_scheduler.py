@@ -1084,6 +1084,7 @@ def _nightly():
         )
     if today.day == 1:                                    # 1st -> monthly
         _run_with_heartbeat("monthly")
+        _run_monthly_creative_report()                    # Creative sheet + Asana
     if today.day == 1 and today.month in (1, 4, 7, 10):  # Quarter start
         _run_with_heartbeat("quarterly")
 
@@ -1409,95 +1410,114 @@ def _self_heal():
         print(f"[ops-scheduler] self-heal failed (non-fatal): {e}")
 
 
-def run():
-    schedule.every().day.at("05:00").do(_nightly)   # 08:00 Riyadh = 05:00 UTC
-    # Second BQ refresh 12h later — picks up workflow re-classifications and
-    # late-arriving leads from the day. Doesn't run the full _nightly cadence,
-    # just refreshes BQ data so dashboards reflect current state.
-    # Added 2026-05-15 to halve attribution lag (was 24h, now 12h).
-    schedule.every().day.at("17:00").do(_refresh_bigquery)  # 20:00 Riyadh = 17:00 UTC
+def _run_slack_audit():
+    """Daily 07:00 UTC (10:00 Riyadh) — approval flow audit.
 
-    # ── Freshness watchdog: every 4h, NEVER let BQ go stale ──────────────────
-    # Checks each source table for MAX(date) lag > 1d OR last_write > 25h ago,
-    # and triggers a targeted re-sync of just the stale collector. This is the
-    # safety net for the case where the 05:00/17:00 scheduled runs were missed.
-    # Added 2026-05-20.
-    for _utc_h in (1, 5, 9, 13, 21):   # every ~4h, spread across the day
-        schedule.every().day.at(f"{_utc_h:02d}:30").do(_watchdog_tick)
+    Reads #approvals history for the last 26h. For each bot-posted digest:
+      - No reaction, 2–24h old  → reply in-thread once (reminder)
+      - No reaction, > 24h old  → reply + create Asana escalation task
+      - ✅ received              → check BQ execution log; create Asana task if gap
+      - ❌ received              → log 'rejected', no further action
 
-    # ── Action sheet auto-update — daily 02:00 UTC = 05:00 Riyadh ───────────
-    # Appends yesterday's team-visible actions to the master ZATCA Action Log
-    # sheet. Replaces the manual _log_session_to_sheet.py workflow. Runs
-    # before the 05:00 nightly so the sheet is current by 8 AM Riyadh standup.
-    # Added 2026-05-25.
-    schedule.every().day.at("02:00").do(_update_action_sheet)
-
-    # ── Workday spend refresh — every 2h during business hours ──────────────
-    # Paid platforms apply retroactive spend adjustments throughout the day
-    # (Meta click-fraud refunds, Snap/MS auction finalization, Google invalid
-    # click reversals — typically 1–3% of spend). Without mid-day refreshes,
-    # the dashboard shows yesterday's spend with up to 12h of unfinalized
-    # adjustments. Refreshing every 2h closes the gap to <0.5%.
-    # Added 2026-05-25 after user reported $30 gap on $1700 yesterday spend.
-    for _utc_h in (6, 8, 10, 12):  # 09:00, 11:00, 13:00, 15:00 Riyadh
-        schedule.every().day.at(f"{_utc_h:02d}:00").do(_refresh_spend_only)
-
-    # ── HubSpot full mirror — 3× daily to keep stage counts within ~4h ──────
-    # Workflows re-classify leads throughout the workday (qualified, disq,
-    # SQL transitions). Three explicit mirrors + the 4h watchdog guarantees
-    # Hex stage counts are at most ~4h behind HubSpot reality.
-    # Tightened on 2026-05-25 after the user observed yesterday's qualified
-    # count was still wrong this morning (16/10 vs reality 21/21).
-    schedule.every().day.at("06:00").do(_daily_full_mirror)   # 09:00 Riyadh — after nightly
-    schedule.every().day.at("12:00").do(_daily_full_mirror)   # 15:00 Riyadh — midday catch
-    schedule.every().day.at("19:00").do(_daily_full_mirror)   # 22:00 Riyadh — end of workday
-
-    # ── QA gate self-test (every day at 04:00 UTC, before nightly) ───────────
-    # Synthetic fixtures + known-good/known-bad inputs verify each check.
-    # If a refactor silently breaks a check, this catches it.
-    schedule.every().day.at("04:00").do(_gate_self_test)
-    schedule.every().day.at("03:30").do(_daily_deep_audit)     # 06:30 Riyadh
-    schedule.every().day.at("03:45").do(_compliance_monitor)   # 06:45 Riyadh
-    schedule.every().day.at("06:30").do(_self_heal)            # 09:30 Riyadh — after nightly
-    schedule.every().day.at("15:00").do(_compliance_monitor)   # 18:00 Riyadh — midday recheck
-    # Health check every hour 09:00–17:00 Riyadh (06:00–14:00 UTC)
-    # On-demand outside those hours via POST /api/run-health-check
-    for _utc_h in range(6, 15):  # 06,07,...,14 UTC = 09,10,...,17 Riyadh
-        schedule.every().day.at(f"{_utc_h:02d}:00").do(_run_health_check)
-
-    print("=" * 60)
-    print("  Qoyod Operational Scheduler — LIVE")
-    print("=" * 60)
-    print("  Daily    08:00 Riyadh (05:00 UTC)  — full nightly + BQ refresh")
-    print("  BQ       20:00 Riyadh (17:00 UTC)  — second BQ refresh only")
-    print("  Sheet   05:00 Riyadh (02:00 UTC) — append actions to master sheet")
-    print("  Spend   09/11/13/15 Riyadh (06/08/10/12 UTC) — workday spend refresh")
-    print("  Mirror   09/15/22 Riyadh (06/12/19 UTC) — HubSpot full mirror (3×/day)")
-    print("  Self-test 07:00 Riyadh (04:00 UTC) — QA gate check verification")
-    print("  Self-heal 09:30 Riyadh (06:30 UTC) — detect+fix stale views, failed collectors, 500s")  # noqa
-    print("  Watchdog every ~4h — never let BQ go stale, auto-resync (4h threshold)")
-    print("  Weekly   added Mon mornings")
-    print("  Monthly  added on 1st of month")
-    print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
-    print("  Manual:  python main.py on_demand")
-    print("=" * 60)
-
-    # Startup health check — logs to console only; no Slack post.
-    # Only the 07:00 scheduled run posts to Slack (and only on failures).
+    Runs 2h after the nightly digest (08:00 Riyadh) so reactions have time to land.
+    Added 2026-06-12.
+    """
     try:
-        from scripts.health_check import main as hc_main
-        hc_main(post_slack=False)  # console-only on startup
-    except Exception as e:
-        print(f"[ops-scheduler] Startup health check error: {e}")
+        import time as _time
+        import json as _json
+        from slack_sdk import WebClient
+        from slack_sdk.errors import SlackApiError
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_APPROVAL
+        from logs.activity_logger import log_activity_async
 
-    # Catch-up: if a redeploy happened during the 05:00 UTC nightly window,
-    # the data refresh was killed mid-run. Fix it silently on next startup.
-    _catchup_if_stale()
+        slack = WebClient(token=SLACK_BOT_TOKEN)
+        now_ts = _time.time()
+        window = 26 * 3600  # 26h lookback
 
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
+        # ── Step 1: fetch recent digest messages ─────────────────────────────
+        history = slack.conversations_history(
+            channel=SLACK_CHANNEL_APPROVAL,
+            oldest=str(now_ts - window),
+            limit=50,
+        )
+        messages = history.get("messages", [])
+        digests = [
+            m for m in messages
+            if m.get("bot_id") and "ACTIONS" in m.get("text", "")
+        ]
+        print(f"[slack-audit] {len(digests)} digest(s) found in last 26h")
 
+        reminders_sent = 0
+        escalations = 0
+        execution_gaps = 0
 
-if __name__ == "__main__":
-    run()
+        for msg in digests:
+            ts      = msg["ts"]
+            age_h   = (now_ts - float(ts)) / 3600
+            text    = msg.get("text", "")[:200]
+            reacts  = {r["name"] for r in msg.get("reactions", [])}
+
+            if "white_check_mark" in reacts:
+                # ── Check execution in BQ ─────────────────────────────────────
+                try:
+                    from collectors.bq_writer import get_client, PROJECT_ID, DATASET
+                    bq = get_client()
+                    sql = f"""
+                        SELECT action, status, ts AS log_ts
+                        FROM `{PROJECT_ID}.{DATASET}.agent_activity_log`
+                        WHERE action IN (
+                            'scale_campaign_executed', 'pause_campaign_executed',
+                            'pause_ad_executed', 'budget_redeployment_executed',
+                            'action_approved_via_slack'
+                        )
+                        AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), ts, HOUR) <= 4
+                        ORDER BY ts DESC LIMIT 20
+                    """
+                    rows = list(bq.query(sql).result())
+                    approved = any(r.action == "action_approved_via_slack" for r in rows)
+                    executed = any("_executed" in r.action for r in rows)
+                    if approved and not executed:
+                        # Gap: approved but no execution entry within 4h
+                        from executors.asana import create_task
+                        create_task(
+                            title=f"APPROVAL NOT EXECUTED — {date.today().isoformat()}",
+                            description=(
+                                f"An action was approved in #approvals but no execution "
+                                f"was logged in BQ.\n\nApproval timestamp: {ts}\n"
+                                f"Digest summary: {text}\n\n"
+                                "WHAT TO CHECK:\n"
+                                "1. Railway logs for the operational scheduler around approval time\n"
+                                "2. agent_activity_log for any errors from the executor\n"
+                                "3. Was the approval reaction added after the 30-min timeout?\n\n"
+                                f"Created: {date.today().isoformat()} | Due: {date.today().isoformat()} | "
+                                "Priority: High | Type: System Health | Channel: all | "
+                                "Asset level: campaign | Action: investigate → [Project Coordinator]"
+                            ),
+                            project_key="optimization",
+                            task_type="System Health",
+                            channel="all",
+                            asset_level="campaign",
+                            action="investigate",
+                            log_role="project_coordinator",
+                        )
+                        execution_gaps += 1
+                        print(f"[slack-audit] Execution gap found for digest ts={ts}")
+                except Exception as bq_err:
+                    print(f"[slack-audit] BQ execution check failed (non-fatal): {bq_err}")
+                continue
+
+            if "x" in reacts:
+                print(f"[slack-audit] Digest ts={ts} rejected — no action")
+                continue
+
+            # No reaction yet
+            if age_h < 2:
+                continue  # too early
+
+            # Check if we already replied
+            try:
+                replies = slack.conversations_replies(
+                    channel=SLACK_CHANNEL_APPROVAL, ts=ts
+                )
+                already_reminded = any(
+            

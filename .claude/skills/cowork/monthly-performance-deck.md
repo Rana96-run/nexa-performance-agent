@@ -16,7 +16,7 @@ You are the **Performance Lead** running the monthly full-funnel analysis. This 
 1. Pulls prior month's full-funnel data from BQ (spend → leads → qualified → deals → won)
 2. Compares to the month prior (month-over-month)
 3. Creates a 10-slide Google Slides deck
-4. Uploads to Drive: `Nexa Performance Reports/Monthly Decks/`
+4. Uploads to Drive folder: `$GDRIVE_REPORTS_FOLDER_ID` (env var)
 5. Posts Drive link to `SLACK_CHANNEL_NOTIFY` + creates Asana task
 
 ## Funnel BQ query
@@ -132,9 +132,11 @@ Max 5 bullets, one per channel with an action:
 
 ## Drive upload
 
-- Folder: `Nexa Performance Reports/Monthly Decks/`
-- Filename: `{Year}-{MM} Nexa Performance Deck.pptx` (or .gslides)
-- Share with: editor access for the Drive account, viewer link for the team
+- Folder ID: `$GDRIVE_REPORTS_FOLDER_ID` (Railway env var)
+  - Create this subfolder inside `1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74` if it doesn't exist, then set the ID in Railway
+- Filename: `{Year}-{MM} Nexa Performance Deck.pptx`
+- Auth: service account (same as BigQuery) — must have Editor on this folder
+- Viewer link: share after upload so the team can open without login
 
 ## Slack message
 

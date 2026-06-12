@@ -97,6 +97,14 @@ Asset level: ad
 Action: optimize → [Creative Strategist]
 ```
 
+## Drive upload
+
+- Folder ID: `$GDRIVE_CREATIVE_REPORTS_FOLDER_ID` (Railway env var)
+  - Create this subfolder inside `1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74` if it does not exist, then set the ID in Railway
+- Auth: service account (same as BigQuery) — must have Editor on this folder
+- Sheet name: `Winning Creatives — {month_name} {year}` (already defined above)
+- After creating the sheet, move it to this folder ID so it stays organised
+
 ## Hard rules
 
 - Never post individual ad names to Slack — Asana + Sheet only.

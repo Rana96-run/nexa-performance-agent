@@ -95,3 +95,48 @@ Once connectors are wired:
 4. When outputs match for 14 consecutive days → retire Railway LLM layer
 
 Track progress in `memory/09_open_tasks.md` Phase 4 row.
+
+---
+
+## Google Drive prerequisites (before wiring the connector)
+
+**Google Drive API:** ✅ Already enabled in GCP project (confirmed 2026-06-12)
+
+**Remaining steps (manual — ~10 min):**
+
+### Step 1 — Share the root folder with the service account
+1. Open `secrets/bigquery-key.json` (or Railway env `GOOGLE_APPLICATION_CREDENTIALS_JSON`)
+2. Copy the value of `"client_email"` (looks like `something@angular-axle-492812-q4.iam.gserviceaccount.com`)
+3. Open [the shared Drive folder](https://drive.google.com/drive/folders/1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74)
+4. Click **Share** → paste the service account email → set to **Editor** → uncheck "Notify people" → **Send**
+
+### Step 2 — Create the two report subfolders
+Inside the root folder, create these two subfolders:
+
+| Subfolder name | Purpose | Env var to set |
+|---|---|---|
+| `Nexa Performance Reports/Monthly Decks` | Monthly performance deck (PPTX) | `GDRIVE_REPORTS_FOLDER_ID` |
+| `Nexa Performance Reports/Creative Reports` | Monthly winning creatives Sheet | `GDRIVE_CREATIVE_REPORTS_FOLDER_ID` |
+
+For each: right-click the folder → **Get link** → copy the ID from the URL (`/folders/<ID>`).
+
+### Step 3 — Set the IDs in Railway
+```bash
+railway variables set GDRIVE_REPORTS_FOLDER_ID=<id-from-step-2>
+railway variables set GDRIVE_CREATIVE_REPORTS_FOLDER_ID=<id-from-step-2>
+```
+
+Also add to your local `.env` if you run scripts locally.
+
+### Step 4 — Verify access
+```bash
+railway run python -c "
+from collectors.drive_reader import list_folder
+import os
+fid = os.getenv('GDRIVE_REPORTS_FOLDER_ID')
+print('Files in Monthly Decks folder:', list_folder(fid))
+"
+```
+Should return an empty list (not an error). If it throws a 403, the share in Step 1 didn't apply.
+
+> Note: `collectors/drive_reader.py` doesn't exist yet — the Drive reader is described in `memory/10_google_drive.md`. If needed before the connector is wired, use the Drive MCP (google-drive connector in Cowork) instead.
