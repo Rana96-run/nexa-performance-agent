@@ -1506,6 +1506,91 @@ a:hover{text-decoration:underline}
       </div>
     </div>
 
+    {# ── Scheduled Skills Panel ── #}
+    <div class="panel-card panel-full panel-open" id="panel-scheduled-skills">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">Scheduled Skills</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">10 auto-run · Cowork</span>
+          <span class="panel-arrow">▾</span>
+        </div>
+      </div>
+      <div class="panel-body" style="display:block;padding:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#161b22;border-bottom:1px solid #21262d">
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Skill</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">When (Riyadh)</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Output</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">anomaly-alerts</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#d2a8ff22;color:#d2a8ff;border:1px solid #d2a8ff44">Growth Analyst</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Every day · 07:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Slack alert if spend / leads / CPQL anomaly detected</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">daily-loop</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#b0880022;color:#b08800;border:1px solid #b0880044">AI Orchestrator</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Every day · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Slack #approvals digest + Asana tasks</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">daily-slack-audit</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#3fb95022;color:#3fb950;border:1px solid #3fb95044">Project Coordinator</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Every day · 10:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Asana task if #approvals digest unanswered &gt; 24h</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">keyword-autofix</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Campaign Manager</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Sunday · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Pauses policy-violating keywords + Asana weekly review task</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">weekly-lp-review</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO Specialist</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Monday · 06:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Google Sheet tab LP-YYYY-MM-DD + Asana draft</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">weekly-review</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#b0880022;color:#b08800;border:1px solid #b0880044">AI Orchestrator</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Monday · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">5-section weekly ops summary (performance + connector health + forecast)</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">weekly-report</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance Lead</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Monday · 08:30</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Slack stakeholder summary (spend · leads · SQLs · CPQL)</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">monthly-performance-deck</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance Lead</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">1st of month · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">10-slide Google Slides deck → Drive + Slack + Asana</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">monthly-creative-report</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Creative Strategist</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">1st of month · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Google Sheet (winning creatives per channel) + Asana</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">monthly-lp-duplicate</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO Specialist</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">1st of month · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Asana draft LP brief for best-performing page (no auto-execution)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     {# ── Panel 4: Agent Directory ── #}
     <div class="panel-card panel-open" id="panel-agents">
       <div class="panel-header" onclick="togglePanel(this)">
