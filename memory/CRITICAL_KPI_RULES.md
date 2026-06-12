@@ -200,3 +200,25 @@ Before executing any new analysis script, scan the SQL for:
 - `SELECT .* conversions .* FROM .* (campaigns_daily|ads_daily)` and reporting it as "leads" → VIOLATION
 
 If found → rewrite using the WITH-hs-pre-agg pattern above.
+
+Also check these three before writing any recommendation or query:
+
+**Campaign type check (before applying CPQL/CPA targets):**
+- Does the campaign name match `config.py::AWARENESS_PATTERNS`?
+  (`impressionshare`, `impression_share`, `websitetraffic`, `reach`)
+- If yes → **STOP. Do NOT compute CPQL, do NOT recommend tCPA, do NOT flag as "drain".**
+  KPI = IS% (target ≥ 25%). Zero leads is acceptable. Budget control only.
+- If no → proceed with CPQL zones.
+
+**LOWER/TRIM GROUP BY check (before writing any CTE that feeds a case-insensitive join):**
+- Is this CTE the RIGHT side of a `LOWER(TRIM(...))` join predicate?
+- If yes → the CTE MUST also GROUP BY `LOWER(TRIM(the_key_column))`, not the raw column.
+  Grouping by raw casing while joining on normalized casing fans the left side.
+  Rule: `LOWER(TRIM())` join demands a `LOWER(TRIM())`-grouped right side.
+
+**Per-channel reconciliation reminder (after any view or CTE change touching leads):**
+- An org-wide total reconciliation is NOT sufficient. Run per-channel ratio:
+  `v_ad/adset_performance leads` vs `hubspot_leads_module_daily` by channel.
+  Bar: ratio ≤ 1.05 on EVERY paid channel (google_ads, meta, snapchat, tiktok, microsoft_ads).
+  A clean Google Ads total can mask 2× over-count on smaller channels.
+  Use `scripts/reconcile_views.py` for the automated check.

@@ -51,8 +51,8 @@ deals AS (
   SELECT
     channel,
     pipeline,
-    COUNT(*) FILTER (WHERE stage_status = 'open')  AS deals_open,
-    COUNT(*) FILTER (WHERE stage_status = 'won')   AS deals_won,
+    COUNTIF(stage_status = 'open')  AS deals_open,
+    COUNTIF(stage_status = 'won')   AS deals_won,
     SUM(CASE WHEN stage_status = 'won' THEN amount_total ELSE 0 END) AS revenue_won
   FROM `{PROJECT}.{DATASET}.hubspot_deals_daily`
   WHERE date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)

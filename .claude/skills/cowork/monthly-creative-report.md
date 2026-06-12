@@ -1,6 +1,6 @@
 ---
 name: monthly-creative-report
-description: Run the 1st-of-month winning creative analysis per channel. Pulls 30-day ad performance from BQ, identifies winning creatives (qual ratio > 50% AND CPL ≤ $30), writes one Google Sheet tab per channel, and posts the Sheet link to Asana for the design team.
+description: Run the 1st-of-month winning creative analysis per channel. Pulls 30-day ad performance from BQ, identifies winning creatives (qual ratio > 50% AND CPL ≤ $25), writes one Google Sheet tab per channel, and posts the Sheet link to Asana for the design team.
 schedule: "0 5 1 * *"
 timezone: Asia/Riyadh
 agent: creative-strategist
