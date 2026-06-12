@@ -31,7 +31,7 @@ WITH hs AS (
   SELECT lead_utm_campaign,
          SUM(leads_total)      AS leads,
          SUM(leads_qualified)  AS sqls
-  FROM `angular-axle-492812-q4.nexa_performance.hubspot_leads_module_daily`
+  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`
   WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
   GROUP BY lead_utm_campaign
 ),
@@ -44,7 +44,7 @@ lp AS (
     SUM(c.impressions)                     AS impressions,
     SUM(COALESCE(h.leads, 0))              AS leads,
     SUM(COALESCE(h.sqls, 0))               AS sqls
-  FROM `angular-axle-492812-q4.nexa_performance.campaigns_daily` c
+  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c
   LEFT JOIN hs h
     ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)
   WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
@@ -133,7 +133,7 @@ SELECT
                     AND date < DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
                     THEN qualified END), 0)
   ), 0) AS cpql_prior
-FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
 WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
 GROUP BY channel
 ORDER BY spend_curr DESC
@@ -153,7 +153,7 @@ SELECT
   ROUND(SUM(spend) / 7 * 30, 0)    AS projected_month_spend,
   ROUND(SUM(leads_total) / 7 * 30)  AS projected_month_leads,
   ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 0) AS cpql_7d
-FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
 WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
 GROUP BY channel
 ORDER BY projected_month_spend DESC

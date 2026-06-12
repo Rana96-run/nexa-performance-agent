@@ -36,7 +36,7 @@ WITH prior_month AS (
     SUM(qualified)           AS qualified_leads,
     SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0))    AS cpql,
     SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0))  AS cpl
-  FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+  FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
   WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
   GROUP BY 1, 2
 ),
@@ -47,7 +47,7 @@ two_months_ago AS (
     SUM(leads_total) AS leads_prior,
     SUM(qualified)   AS qualified_prior,
     SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql_prior
-  FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+  FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
   WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 MONTH), MONTH)
   GROUP BY 1
 ),
@@ -56,7 +56,7 @@ deals AS (
     COUNTIF(stage_status = 'open') AS deals_open,
     COUNTIF(stage_status = 'won')  AS deals_won,
     SUM(CASE WHEN stage_status = 'won' THEN amount_total ELSE 0 END) AS revenue_won
-  FROM `angular-axle-492812-q4.nexa_performance.hubspot_deals_daily`
+  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`
   WHERE date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
     AND date <  DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'), MONTH)
     AND LOWER(pipeline) IN ('sales pipeline', 'bookkeeping', 'qflavours')
@@ -120,7 +120,7 @@ SELECT
   SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total), 0))       AS qual_ratio,
   SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0))           AS cpl,
   SUM(spend)                                                      AS spend
-FROM `angular-axle-492812-q4.nexa_performance.v_ad_performance`
+FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
 WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
   AND leads_total > 0
 GROUP BY channel, ad_name, ad_id
@@ -164,7 +164,7 @@ WITH hs AS (
   SELECT lead_utm_campaign,
          SUM(leads_total)      AS leads,
          SUM(leads_qualified)  AS sqls
-  FROM `angular-axle-492812-q4.nexa_performance.hubspot_leads_module_daily`
+  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`
   WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
   GROUP BY lead_utm_campaign
 ),
@@ -176,7 +176,7 @@ lp AS (
     SUM(c.clicks)                    AS clicks,
     SUM(COALESCE(h.leads, 0))        AS leads,
     SUM(COALESCE(h.sqls, 0))         AS sqls
-  FROM `angular-axle-492812-q4.nexa_performance.campaigns_daily` c
+  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c
   LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)
   WHERE DATE_TRUNC(c.date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
     AND c.destination_url IS NOT NULL

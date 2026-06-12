@@ -25,7 +25,7 @@ CLIENT_SECRET = os.getenv("LI_CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("LI_REFRESH_TOKEN")
 TOKEN_URL     = "https://www.linkedin.com/oauth/v2/accessToken"
 BQ_PROJECT    = os.getenv("BQ_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT", "angular-axle-492812-q4")
-BQ_DATASET    = os.getenv("BQ_DATASET", "nexa_performance")
+BQ_DATASET    = os.getenv("BQ_DATASET", "qoyod_marketing")
 TOKEN_TABLE   = f"{BQ_PROJECT}.{BQ_DATASET}.platform_tokens"
 
 

@@ -24,9 +24,9 @@ fire on July 1st. **This setup must be complete before then.**
 Required by: `monthly-creative-report`, `monthly-performance-deck`, `daily-loop`, `weekly-review`, all analysis skills.
 
 - Project: `angular-axle-492812-q4`
-- Dataset: `nexa_performance`
+- Dataset: `qoyod_marketing`
 - Auth: service account (`secrets/bigquery-key.json`) — same credentials used by Railway
-- Verify by running a test query: `SELECT MAX(date) FROM nexa_performance.campaigns_daily`
+- Verify by running a test query: `SELECT MAX(date) FROM qoyod_marketing.campaigns_daily`
 
 ### 2. Slack
 Required by: `daily-slack-audit`, `monthly-performance-deck`, `daily-loop`

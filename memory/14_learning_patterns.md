@@ -4,6 +4,35 @@ This file is the agent's outcome library. Every time a recommended action
 is executed and observed for 7–14 days, record the pattern + outcome here.
 The next session reads this file before recommending a similar action.
 
+## 2026-06-12 — TikTok UGC fatigue is persistent, not a one-day spike
+
+**Trigger:** TikTok ads `Tiktok_AR_UGC_Ahmed_BHmy5GL2.mp4` and `Tiktok_AR_UGC_Mohamed_gboJfRem.mp4` flagged for both zero-conv pause (0 HS leads / 14d) AND creative fatigue (CTR declining 43-52% WoW) on two consecutive days (2026-06-11 and 2026-06-12).
+**Recommendation:** Pause both ads (zero-conv rule: $168 and $127 spend / 14d, 0 HS leads). Duplicate and refresh hook/visual.
+**Decision:** Pending ✅ in #approvals.
+**Outcome:** Pending.
+**Learned:** When an ad appears on both the zero-conv pause list AND the creative fatigue list simultaneously, it is a double-signal — both the creative AND the audience match are broken. Pause is higher-confidence in this case. Do not wait for 21d; act at 14d.
+
+---
+
+## 2026-06-12 — Cowork scheduled tasks require the desktop app to be running (not server-side)
+
+**Trigger:** Evaluating whether Cowork scheduled tasks can replace Railway's `main.py daily` as the reliable automation backbone.
+**Finding:** Cowork scheduled tasks run locally at `C:\Users\qoyod\Claude\Scheduled\` — they fire only when the Cowork desktop app is open on Rana's machine. If the laptop is off, Cowork is quit, or the user is offline, the task misses its window entirely. This is fundamentally different from Railway which runs 24/7 on a server.
+**Implication:** Cowork scheduled tasks are appropriate for: summaries Rana reads when she opens her laptop, weekly reviews, monthly reports, on-demand triggers. They are NOT appropriate for: the nightly #approvals digest (must be reliable), data collection, BQ writes, anything the team depends on showing up at a fixed time.
+**Architecture decision:** Railway stays as the backbone for all reliability-critical automation. Cowork is the interactive/human-facing layer. n8n (Phase 5) can eventually replace Railway collectors but must also be server-hosted to be reliable.
+
+---
+
+## 2026-06-12 — Cowork sandbox cannot run Python analysers or call Google/Slack APIs
+
+**Trigger:** Scheduled daily loop attempted to run `campaign_health.py` and `period_compare.py` from the Cowork sandbox. Both failed: `railway` CLI not installed, `google-cloud-bigquery` not installed, outbound HTTPS to google APIs blocked by proxy (403), npm/pip installs fail (EAI_AGAIN / no internet).  Slack MCP returned `invalid_auth`.
+**Recommendation:** The Railway-hosted `main.py daily` agent is the correct runtime for data analysis. Cowork scheduled tasks should be limited to: (a) reading Asana/Slack for context, (b) posting digests to Slack via MCP, (c) writing to memory files. BQ analysis must stay in Railway.
+**Decision:** Fallback: compiled digest from Asana tasks already created by Railway agent, delivered via Gmail draft.
+**Outcome:** Immediate — digest sent. Railway agent tasks confirmed present.
+**Learned:** Never assign BQ-dependent steps to the Cowork scheduler. If Slack MCP token expires, fall back to Gmail draft. Add Slack MCP re-auth to the ops checklist.
+
+---
+
 ## 2026-06-09 — NULL-channel orphans in adset view = non-paid sources, not a map gap
 
 **Trigger:** `v_adset_performance` had 38 leads-only orphan rows (40 leads),

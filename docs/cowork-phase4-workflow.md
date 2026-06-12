@@ -2,21 +2,41 @@
 
 **Owner:** ai-orchestrator  
 **Blocks:** Phase 5 (retire Railway LLM layer)  
-**Status:** ⬜ Not started — waiting on Phase 3 connectors  
-**Start condition:** All 6 Phase 3 connectors wired + `drive_reader.py` uploaded to Railway
+**Status:** 🔄 Revised — see architectural constraints below  
+**Start condition:** Phase 3 connectors wired ✅
 
 ---
 
-## Critical constraint (re-read every session)
+## Two critical constraints (re-read every session)
 
-> **Cowork's sandbox cannot run Python analysers, call the BigQuery client
-> library, or hit Google/Slack APIs via code.**
->
+> **Constraint 1 — Cowork sandbox cannot run Python analysers or call Google/Slack APIs via code.**
 > The correct split: **Railway runs analysis → writes to Asana + BQ.**
-> **Cowork reads those outputs** via connectors and does the human-facing
-> summarisation + routing. This is documented in `memory/14_learning_patterns.md`
-> (entry: 2026-06-12). Any Cowork skill that tries to run `analysers/` or
-> `bq_client.query(...)` directly **will fail silently**.
+> Cowork reads those outputs via connectors and does the human-facing
+> summarisation + routing. See `memory/14_learning_patterns.md` (2026-06-12).
+
+> **Constraint 2 — Cowork scheduled tasks require the desktop app to be running.**
+> Tasks fire from `C:\Users\qoyod\Claude\Scheduled\` — if the laptop is off or
+> Cowork is quit, the task misses its window. This means Cowork scheduled tasks
+> **cannot replace Railway** for reliability-critical automation (nightly digest,
+> data collection, BQ writes). They are appropriate for: summaries Rana reads
+> when she opens her laptop, weekly/monthly reviews, on-demand triggers.
+>
+> **Architecture decision:** Railway stays as the backbone. Cowork is the
+> interactive/human-facing layer. n8n (Phase 5) is the path to eventually
+> replacing Railway collectors with server-hosted workflows.
+
+## Revised Phase 4 scope
+
+Instead of "Cowork replaces Railway LLM layer", Phase 4 is now:
+**Cowork handles the human-facing review layer; Railway keeps the reliable automation.**
+
+| What stays on Railway | What moves to Cowork |
+|---|---|
+| Data collection (collectors/) | Morning review digest (when Rana opens laptop) |
+| BQ analysis (analysers/) | On-demand deep dives |
+| Nightly #approvals digest | Weekly summary review |
+| Anomaly detection | Monthly deck review + sign-off |
+| Keyword audit | Interactive agent conversations |
 
 ---
 
@@ -56,8 +76,8 @@ Cowork /daily-loop (08:05 Riyadh — 5 min after Railway)
 
 Read from connectors:
 1. **Asana** — open tasks in `ASANA_PROJECT_DAILY_ACTIVITY` created since yesterday 08:00 Riyadh. These are Railway's flag outputs (CPQL_REGRESSED, ROAS_REGRESSED, QUAL_DROPPED, LAUNCH_WAVE, ZERO_CONV, JUNK_LEADS).
-2. **BigQuery** — summary row from `paid_channel_daily` for yesterday + 7-day window (pre-aggregated view, one row per channel). Fetch: `SELECT channel, spend, leads_total, leads_qualified, cpql, roas FROM nexa_performance.paid_channel_daily WHERE date = DATE_SUB(CURRENT_DATE("Asia/Riyadh"), INTERVAL 1 DAY)`.
-3. **BigQuery** — pending monitor tasks (actions executed 7d and 14d ago): `SELECT * FROM nexa_performance.agent_activity_log WHERE action IN ('pause','scale','create') AND DATE_DIFF(CURRENT_DATE(), event_date, DAY) IN (7,14) AND outcome IS NULL`.
+2. **BigQuery** — summary row from `paid_channel_daily` for yesterday + 7-day window (pre-aggregated view, one row per channel). Fetch: `SELECT channel, spend, leads_total, leads_qualified, cpql, roas FROM qoyod_marketing.paid_channel_daily WHERE date = DATE_SUB(CURRENT_DATE("Asia/Riyadh"), INTERVAL 1 DAY)`.
+3. **BigQuery** — pending monitor tasks (actions executed 7d and 14d ago): `SELECT * FROM qoyod_marketing.agent_activity_log WHERE action IN ('pause','scale','create') AND DATE_DIFF(CURRENT_DATE(), event_date, DAY) IN (7,14) AND outcome IS NULL`.
 
 Issue HANDOFF to `growth-analyst`:
 ```

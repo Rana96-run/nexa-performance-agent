@@ -38,7 +38,7 @@ def _client():
     from google.cloud import bigquery
     global BQ_PROJECT, BQ_DATASET
     BQ_PROJECT = os.getenv("BQ_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT", "angular-axle-492812-q4")
-    BQ_DATASET = os.getenv("BQ_DATASET", "nexa_performance")
+    BQ_DATASET = os.getenv("BQ_DATASET", "qoyod_marketing")
     return bigquery.Client(project=BQ_PROJECT)
 
 

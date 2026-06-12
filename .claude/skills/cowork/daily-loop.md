@@ -38,7 +38,7 @@ SELECT
   ), 2) AS cpql,
   ROUND(SAFE_DIVIDE(SUM(qualified), SUM(leads_total)) * 100, 1) AS qual_pct,
   ROUND(SAFE_DIVIDE(SUM(revenue_won), SUM(spend)), 2) AS roas
-FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
 WHERE date = DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
 GROUP BY channel
 ORDER BY spend DESC
@@ -56,7 +56,7 @@ WITH base AS (
                     AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 8 DAY)  THEN 'A'
     END AS period,
     spend, leads_total, qualified, open_leads, revenue_won
-  FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+  FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
   WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
 )
 SELECT channel, period,
@@ -94,7 +94,7 @@ SELECT
                    OR leads_total = 0, qualified, 0)), 0)
   ), 0) AS cpql,
   ROUND(SAFE_DIVIDE(SUM(qualified), SUM(leads_total)) * 100, 1) AS qual_pct
-FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
 WHERE channel = '{flagged_channel}'
   AND date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
 GROUP BY campaign_name ORDER BY spend DESC LIMIT 20
@@ -115,7 +115,7 @@ SELECT
   SUM(v.leads_total)     AS hs_leads,
   ROUND(SAFE_DIVIDE(SUM(v.leads_disqualified), NULLIF(SUM(v.leads_total),0))*100,1) AS disq_pct,
   DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MIN(v.date), DAY) AS days_active
-FROM `angular-axle-492812-q4.nexa_performance.v_ad_performance` v
+FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance` v
 WHERE v.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
 GROUP BY v.ad_name, v.channel, v.campaign_name
 HAVING
@@ -146,7 +146,7 @@ Post via `slack_post_message` to `SLACK_CHANNEL_APPROVAL`.
 
 ```sql
 SELECT action_type, target_name, target_id, channel, event_date, outcome
-FROM `angular-axle-492812-q4.nexa_performance.agent_activity_log`
+FROM `angular-axle-492812-q4.qoyod_marketing.agent_activity_log`
 WHERE DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), event_date, DAY) IN (7, 14)
   AND action_type IN ('pause', 'scale', 'create')
   AND outcome IS NULL
@@ -172,7 +172,7 @@ SELECT
     NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
                    OR leads_total = 0, qualified, 0)), 0)
   ), 0) AS cpql_7d
-FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
 WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
 GROUP BY channel ORDER BY projected_month_spend DESC
 ```

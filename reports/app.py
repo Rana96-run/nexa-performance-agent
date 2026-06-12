@@ -3797,6 +3797,148 @@ def team_workspace():
     )
 
 
+# ─── BQ Proxy — monthly review endpoints (used by Cowork scheduled task) ──────
+#
+# Three GET endpoints that run the monthly-review SQL queries and return JSON.
+# Protected by ?token=BQ_PROXY_TOKEN env var.  Called by the monthly-review
+# Cowork scheduled task via mcp__workspace__web_fetch when no BQ MCP is
+# installed in the agent session.
+#
+# Endpoints:
+#   GET /api/monthly/funnel?token=<tok>[&month=YYYY-MM]
+#   GET /api/monthly/creatives?token=<tok>
+#   GET /api/monthly/lp?token=<tok>[&month=YYYY-MM]
+
+def _bq_proxy_auth() -> bool:
+    expected = os.getenv("BQ_PROXY_TOKEN", "")
+    if not expected:
+        return False
+    return request.args.get("token", "") == expected
+
+
+def _bq_client():
+    from collectors.bq_writer import get_client
+    return get_client()
+
+
+@app.route("/api/monthly/funnel")
+def monthly_funnel():
+    """Phase 1 — channel funnel: prior full calendar month vs two months ago."""
+    if not _bq_proxy_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        bq = _bq_client()
+        sql = """
+        WITH prior_month AS (
+          SELECT DATE_TRUNC(date, MONTH) AS month, channel,
+            SUM(spend) AS spend, SUM(leads_total) AS leads, SUM(qualified) AS qualified_leads,
+            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql,
+            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)) AS cpl
+          FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
+          WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
+          GROUP BY 1, 2
+        ),
+        two_months_ago AS (
+          SELECT channel,
+            SUM(spend) AS spend_prior, SUM(leads_total) AS leads_prior, SUM(qualified) AS qualified_prior,
+            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql_prior
+          FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
+          WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 MONTH), MONTH)
+          GROUP BY 1
+        ),
+        deals AS (
+          SELECT channel,
+            COUNTIF(stage_status = 'open') AS deals_open,
+            COUNTIF(stage_status = 'won') AS deals_won,
+            SUM(CASE WHEN stage_status = 'won' THEN amount_total ELSE 0 END) AS revenue_won
+          FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`
+          WHERE date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
+            AND date < DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'), MONTH)
+            AND LOWER(pipeline) IN ('sales pipeline', 'bookkeeping', 'qflavours')
+          GROUP BY 1
+        )
+        SELECT pm.month, pm.channel, pm.spend, pm.leads, pm.qualified_leads, pm.cpql, pm.cpl,
+          tm.spend_prior, tm.leads_prior, tm.qualified_prior, tm.cpql_prior,
+          da.deals_open, da.deals_won, da.revenue_won,
+          SAFE_DIVIDE(da.revenue_won, NULLIF(pm.spend, 0)) AS roas
+        FROM prior_month pm
+        LEFT JOIN two_months_ago tm USING (channel)
+        LEFT JOIN deals da USING (channel)
+        ORDER BY pm.spend DESC
+        """
+        rows = list(bq.query(sql).result())
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/monthly/creatives")
+def monthly_creatives():
+    """Phase 2 — ad-level performance last 30 days."""
+    if not _bq_proxy_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        bq = _bq_client()
+        sql = """
+        SELECT channel, ad_name, ad_id,
+          SUM(clicks) AS clicks,
+          SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0)) AS ctr,
+          SUM(leads_total) AS leads,
+          SUM(qualified) AS qualified_leads,
+          SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total), 0)) AS qual_ratio,
+          SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)) AS cpl,
+          SUM(spend) AS spend
+        FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
+        WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)
+          AND leads_total > 0
+        GROUP BY channel, ad_name, ad_id
+        HAVING SUM(leads_total) >= 3
+        ORDER BY channel, qual_ratio DESC, cpl ASC
+        """
+        rows = list(bq.query(sql).result())
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/monthly/lp")
+def monthly_lp():
+    """Phase 3 — best LP by SQLs in prior full calendar month."""
+    if not _bq_proxy_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        bq = _bq_client()
+        sql = """
+        WITH hs AS (
+          SELECT lead_utm_campaign,
+                 SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls
+          FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`
+          WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
+          GROUP BY lead_utm_campaign
+        ),
+        lp AS (
+          SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,
+            SUM(c.spend) AS spend, SUM(c.clicks) AS clicks,
+            SUM(COALESCE(h.leads, 0)) AS leads, SUM(COALESCE(h.sqls, 0)) AS sqls
+          FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c
+          LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)
+          WHERE DATE_TRUNC(c.date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
+            AND c.destination_url IS NOT NULL
+          GROUP BY destination_url
+        )
+        SELECT destination_url, sample_campaign,
+          ROUND(spend, 2) AS spend_usd, clicks, leads, sqls,
+          ROUND(SAFE_DIVIDE(leads, NULLIF(clicks, 0)) * 100, 2) AS cvr_pct,
+          ROUND(SAFE_DIVIDE(spend, NULLIF(sqls, 0)), 2) AS cpql_usd
+        FROM lp WHERE sqls > 0
+        ORDER BY sqls DESC LIMIT 1
+        """
+        rows = list(bq.query(sql).result())
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── Startup: warn if pending approvals were lost on redeploy ─────────────────
 
 def _check_pending_on_startup():
