@@ -1745,40 +1745,45 @@ a:hover{text-decoration:underline}
 
         <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Daily loop · 08:00 Riyadh</div>
 
-        {# Row 1: AI Orchestrator #}
+        {# AI Orchestrator #}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
           <div style="background:#2a2000;border:1px solid #b0880055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#b08800;white-space:nowrap">AI Orchestrator</div>
           <div style="flex:1;height:1px;background:#30363d"></div>
           <div style="font-size:11px;color:#484f58;white-space:nowrap">routes · gates ✅ · posts #approvals digest</div>
         </div>
-        <div style="margin-left:44px;margin-bottom:2px">
-          <div style="width:1px;height:10px;background:#30363d"></div>
-          <div style="font-size:9px;color:#484f58;font-style:italic">direct tasks ↕ final reports</div>
+        <div style="margin-left:20px;margin-bottom:6px">
+          <div style="width:1px;height:8px;background:#30363d"></div>
         </div>
 
-        {# Row 2: Growth Analyst — cross-cutting QA layer #}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-          <div style="background:#1a1030;border:1px solid #d2a8ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#d2a8ff;white-space:nowrap">Growth Analyst</div>
-          <div style="flex:1;height:1px;background:#d2a8ff22"></div>
-          <div style="font-size:11px;color:#484f58;white-space:nowrap">reviews all outputs · BQ analysis · period compare</div>
-        </div>
-        <div style="margin-left:44px;margin-bottom:2px">
-          <div style="width:1px;height:10px;background:#30363d"></div>
-          <div style="font-size:9px;color:#484f58;font-style:italic">issues → back to owner · all clear → reports to Orchestrator</div>
+        {# Cross-cutting layers zone #}
+        <div style="border:1px solid #21262d;border-radius:8px;padding:10px 12px;margin-bottom:6px;background:#0d1117">
+          <div style="font-size:9px;color:#6e7681;font-weight:700;text-transform:uppercase;letter-spacing:.09em;margin-bottom:9px">Cross-cutting layers</div>
+
+          {# Growth Analyst — QA gate #}
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <div style="background:#1a1030;border:1px solid #d2a8ff55;border-radius:6px;padding:4px 11px;font-size:12px;font-weight:600;color:#d2a8ff;white-space:nowrap">Growth Analyst</div>
+            <div style="flex:1;height:1px;background:#d2a8ff22"></div>
+            <div style="font-size:11px;color:#484f58;white-space:nowrap">QA gate: reviews every output · returns if gaps · approves to Orchestrator</div>
+          </div>
+          <div style="margin-left:16px;margin-bottom:8px;font-size:9px;color:#484f58;font-style:italic">+ BQ analysis · period compare · memory writes</div>
+
+          {# Project Coordinator — OPS layer #}
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:4px 11px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
+            <div style="flex:1;height:1px;background:#3fb95022"></div>
+            <div style="font-size:11px;color:#484f58;white-space:nowrap">all Slack channels · all Asana tasks · overdue reminders</div>
+          </div>
+          <div style="margin-left:16px;font-size:9px;color:#484f58;font-style:italic">+ UTMs · pixels · connector health · Railway · GTM</div>
         </div>
 
-        {# Row 3: Project Coordinator — cross-cutting OPS layer #}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-          <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
-          <div style="flex:1;height:1px;background:#3fb95022"></div>
-          <div style="font-size:11px;color:#484f58;white-space:nowrap">all messages · all tasks · reminders · team comms oversight</div>
-        </div>
-        <div style="margin-left:44px;margin-bottom:4px">
-          <div style="width:1px;height:10px;background:#30363d"></div>
-          <div style="font-size:9px;color:#484f58;font-style:italic">UTMs · pixels · connector health · cross-team OPS across all agents</div>
+        {# Operational chain divider #}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="height:1px;flex:1;background:#21262d"></div>
+          <div style="font-size:9px;color:#6e7681;font-weight:700;text-transform:uppercase;letter-spacing:.09em">Operational chain</div>
+          <div style="height:1px;flex:1;background:#21262d"></div>
         </div>
 
-        {# Row 4: Performance Lead → branches #}
+        {# Performance Lead → branches #}
         <div style="display:flex;align-items:flex-start;gap:12px">
           <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
             <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Performance Lead</div>
