@@ -1743,73 +1743,123 @@ a:hover{text-decoration:underline}
       </div>
       <div class="panel-body" style="display:block;padding:16px">
 
-        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Daily loop · 08:00 Riyadh</div>
+        {# n8n-style workflow canvas #}
+        <div style="margin:-16px;overflow-x:auto">
+          <div style="position:relative;width:640px;height:470px;background:#0d1117;border-radius:0 0 6px 6px">
 
-        {# AI Orchestrator #}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-          <div style="background:#2a2000;border:1px solid #b0880055;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#b08800;white-space:nowrap">AI Orchestrator</div>
-          <div style="flex:1;height:1px;background:#30363d"></div>
-          <div style="font-size:11px;color:#484f58;white-space:nowrap">routes · gates ✅ · posts #approvals digest</div>
-        </div>
-        <div style="margin-left:20px;margin-bottom:6px">
-          <div style="width:1px;height:8px;background:#30363d"></div>
-        </div>
+            <svg style="position:absolute;top:0;left:0;width:640px;height:470px;pointer-events:none" viewBox="0 0 640 470">
+              <defs>
+                <pattern id="wf-dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <circle cx="1" cy="1" r="0.5" fill="#21262d"/>
+                </pattern>
+                <marker id="wfa-gray" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#484f58"/></marker>
+                <marker id="wfa-purple" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#d2a8ff"/></marker>
+                <marker id="wfa-green" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#3fb950"/></marker>
+                <marker id="wfa-blue" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#58a6ff"/></marker>
+                <marker id="wfa-orange" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#f0883e"/></marker>
+              </defs>
+              <rect width="640" height="470" fill="url(#wf-dots)"/>
 
-        {# Cross-cutting layers zone #}
-        <div style="border:1px solid #21262d;border-radius:8px;padding:10px 12px;margin-bottom:6px;background:#0d1117">
-          <div style="font-size:9px;color:#6e7681;font-weight:700;text-transform:uppercase;letter-spacing:.09em;margin-bottom:9px">Cross-cutting layers</div>
+              <!-- 1: Trigger → Orchestrator -->
+              <line x1="320" y1="40" x2="320" y2="56" stroke="#484f58" stroke-width="1.5" marker-end="url(#wfa-gray)"/>
 
-          {# Growth Analyst — QA gate #}
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-            <div style="background:#1a1030;border:1px solid #d2a8ff55;border-radius:6px;padding:4px 11px;font-size:12px;font-weight:600;color:#d2a8ff;white-space:nowrap">Growth Analyst</div>
-            <div style="flex:1;height:1px;background:#d2a8ff22"></div>
-            <div style="font-size:11px;color:#484f58;white-space:nowrap">QA gate: reviews every output · returns if gaps · approves to Orchestrator</div>
-          </div>
-          <div style="margin-left:16px;margin-bottom:8px;font-size:9px;color:#484f58;font-style:italic">+ BQ analysis · period compare · memory writes</div>
+              <!-- 2: Orchestrator → Growth Analyst -->
+              <path d="M 320,94 C 320,124 97,124 97,150" stroke="#d2a8ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-purple)"/>
 
-          {# Project Coordinator — OPS layer #}
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-            <div style="background:#0d2818;border:1px solid #3fb95055;border-radius:6px;padding:4px 11px;font-size:12px;font-weight:600;color:#3fb950;white-space:nowrap">Project Coordinator</div>
-            <div style="flex:1;height:1px;background:#3fb95022"></div>
-            <div style="font-size:11px;color:#484f58;white-space:nowrap">all Slack channels · all Asana tasks · overdue reminders</div>
-          </div>
-          <div style="margin-left:16px;font-size:9px;color:#484f58;font-style:italic">+ UTMs · pixels · connector health · Railway · GTM</div>
-        </div>
+              <!-- 3: Orchestrator → Project Coordinator -->
+              <path d="M 320,94 C 320,124 537,124 537,150" stroke="#3fb95055" stroke-width="1.5" fill="none" marker-end="url(#wfa-green)"/>
 
-        {# Operational chain divider #}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <div style="height:1px;flex:1;background:#21262d"></div>
-          <div style="font-size:9px;color:#6e7681;font-weight:700;text-transform:uppercase;letter-spacing:.09em">Operational chain</div>
-          <div style="height:1px;flex:1;background:#21262d"></div>
-        </div>
+              <!-- 4: Growth Analyst → Orchestrator (QA pass, dashed) -->
+              <path d="M 97,150 C 30,105 185,68 240,76" stroke="#d2a8ff55" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-purple)"/>
+              <rect x="8" y="98" width="42" height="14" rx="3" fill="#150e22" stroke="#d2a8ff33"/>
+              <text x="29" y="108" text-anchor="middle" font-size="9" fill="#d2a8ffaa" font-family="system-ui,sans-serif">QA pass</text>
 
-        {# Performance Lead → branches #}
-        <div style="display:flex;align-items:flex-start;gap:12px">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
-            <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Performance Lead</div>
-            <div style="font-size:10px;color:#484f58;text-align:center">KPI decisions<br>budget + channel mix</div>
-          </div>
-          <div style="margin-top:12px;font-size:14px;color:#30363d;flex-shrink:0">→</div>
-          <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Campaign Manager</div>
-              <div style="font-size:10px;color:#484f58">builds · pauses · scales</div>
+              <!-- 5: Growth Analyst → Performance Lead (flags + analysis) -->
+              <path d="M 97,186 C 97,228 245,228 245,250" stroke="#58a6ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-blue)"/>
+              <rect x="98" y="217" width="72" height="14" rx="3" fill="#0d1b2e" stroke="#58a6ff22"/>
+              <text x="134" y="227" text-anchor="middle" font-size="9" fill="#58a6ff99" font-family="system-ui,sans-serif">flags + analysis</text>
+
+              <!-- 6: Project Coordinator → Performance Lead (reminders, dashed) -->
+              <path d="M 537,186 C 537,228 395,228 395,250" stroke="#3fb95055" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-green)"/>
+              <rect x="452" y="217" width="54" height="14" rx="3" fill="#0a1f10" stroke="#3fb95022"/>
+              <text x="479" y="227" text-anchor="middle" font-size="9" fill="#3fb95099" font-family="system-ui,sans-serif">reminders</text>
+
+              <!-- 7: Project Coordinator → Growth Analyst (monitors all, dashed) -->
+              <path d="M 450,162 C 350,148 280,182 175,168" stroke="#3fb95044" stroke-width="1.2" fill="none" stroke-dasharray="3,3" marker-end="url(#wfa-green)"/>
+              <rect x="284" y="148" width="62" height="14" rx="3" fill="#0d1117" stroke="#3fb95022"/>
+              <text x="315" y="158" text-anchor="middle" font-size="9" fill="#3fb95077" font-family="system-ui,sans-serif">monitors all</text>
+
+              <!-- 8: Performance Lead → Campaign Manager -->
+              <path d="M 320,286 C 320,315 132,315 132,330" stroke="#58a6ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-blue)"/>
+
+              <!-- 9: Performance Lead → Creative Strategist -->
+              <path d="M 320,286 C 320,315 472,315 472,330" stroke="#58a6ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-blue)"/>
+
+              <!-- 10: Campaign Manager → CRO Specialist (CPQL > warning, dashed) -->
+              <path d="M 132,366 C 132,398 85,398 85,420" stroke="#f0883e55" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-orange)"/>
+              <rect x="28" y="381" width="82" height="14" rx="3" fill="#1f0e00" stroke="#f0883e33"/>
+              <text x="69" y="391" text-anchor="middle" font-size="9" fill="#f0883eaa" font-family="system-ui,sans-serif">CPQL &gt; warning</text>
+
+              <!-- 11: Creative Strategist → UI/UX Designer (CPQL > warning, dashed) -->
+              <path d="M 472,366 C 472,398 270,398 270,420" stroke="#f0883e44" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-orange)"/>
+
+              <!-- 12: CRO Specialist → UI/UX Designer -->
+              <line x1="150" y1="438" x2="198" y2="438" stroke="#f0883e55" stroke-width="1.5" marker-end="url(#wfa-orange)"/>
+
+              <!-- 13: UI/UX Designer → Developer -->
+              <line x1="340" y1="438" x2="433" y2="438" stroke="#f0883e55" stroke-width="1.5" marker-end="url(#wfa-orange)"/>
+            </svg>
+
+            <!-- Trigger pill -->
+            <div style="position:absolute;left:240px;top:8px;width:160px;height:32px;background:#161b22;border:1px solid #30363d;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:10px;font-weight:600;color:#6e7681;letter-spacing:.04em">
+              ⏰ Daily Loop · 08:00
             </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="background:#0d1b2e;border:1px solid #58a6ff55;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;color:#58a6ff;white-space:nowrap">Creative Strategist</div>
-              <div style="font-size:10px;color:#484f58">copy · variants · OCEAN</div>
+
+            <!-- AI Orchestrator -->
+            <div style="position:absolute;left:240px;top:58px;width:160px;height:36px;background:#1c1700;border:1px solid #b0880044;border-left:3px solid #b08800;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#b08800">
+              🎯 AI Orchestrator
             </div>
-            <div style="border-top:1px dashed #30363d;padding-top:6px;margin-top:2px">
-              <div style="font-size:10px;color:#484f58;margin-bottom:5px">↳ <span style="color:#58a6ff99">CPQL &gt; warning</span> · weekly / monthly cadence</div>
-              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-                <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">CRO Specialist</div>
-                <div style="color:#30363d">→</div>
-                <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">UI/UX Designer</div>
-                <div style="color:#30363d">→</div>
-                <div style="background:#2a1500;border:1px solid #f0883e55;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:#f0883e;white-space:nowrap">Developer</div>
-                <div style="font-size:10px;color:#484f58;margin-left:2px">brief → design → build → verify pixels</div>
-              </div>
+
+            <!-- Growth Analyst -->
+            <div style="position:absolute;left:20px;top:150px;width:155px;height:36px;background:#150e22;border:1px solid #d2a8ff44;border-left:3px solid #d2a8ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#d2a8ff">
+              📊 Growth Analyst
             </div>
+
+            <!-- Project Coordinator -->
+            <div style="position:absolute;left:450px;top:150px;width:175px;height:36px;background:#0a1f10;border:1px solid #3fb95044;border-left:3px solid #3fb950;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#3fb950">
+              🔧 Project Coordinator
+            </div>
+
+            <!-- Performance Lead -->
+            <div style="position:absolute;left:245px;top:250px;width:150px;height:36px;background:#0d1b2e;border:1px solid #58a6ff44;border-left:3px solid #58a6ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#58a6ff">
+              📈 Performance Lead
+            </div>
+
+            <!-- Campaign Manager -->
+            <div style="position:absolute;left:55px;top:330px;width:155px;height:36px;background:#0d1b2e;border:1px solid #58a6ff44;border-left:3px solid #58a6ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#58a6ff">
+              📢 Campaign Manager
+            </div>
+
+            <!-- Creative Strategist -->
+            <div style="position:absolute;left:390px;top:330px;width:165px;height:36px;background:#0d1b2e;border:1px solid #58a6ff44;border-left:3px solid #58a6ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#58a6ff">
+              ✏️ Creative Strategist
+            </div>
+
+            <!-- CRO Specialist -->
+            <div style="position:absolute;left:20px;top:420px;width:130px;height:36px;background:#1f0e00;border:1px solid #f0883e44;border-left:3px solid #f0883e;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#f0883e">
+              🔬 CRO Specialist
+            </div>
+
+            <!-- UI/UX Designer -->
+            <div style="position:absolute;left:200px;top:420px;width:140px;height:36px;background:#1f0e00;border:1px solid #f0883e44;border-left:3px solid #f0883e;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#f0883e">
+              🎨 UI/UX Designer
+            </div>
+
+            <!-- Developer -->
+            <div style="position:absolute;left:435px;top:420px;width:110px;height:36px;background:#1f0e00;border:1px solid #f0883e44;border-left:3px solid #f0883e;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#f0883e">
+              💻 Developer
+            </div>
+
           </div>
         </div>
 
