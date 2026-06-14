@@ -243,11 +243,9 @@ def post_nightly_approvals_digest(
         ts = response.get("ts", "")
         if not ts:
             return None
-        for emoji in ("white_check_mark", "x"):
-            try:
-                client.reactions_add(channel=SLACK_CHANNEL_APPROVAL, name=emoji, timestamp=ts)
-            except SlackApiError:
-                pass
+        # Do NOT pre-add reactions — if the bot adds white_check_mark here,
+        # _handle_reaction() in reports/app.py immediately sees it and auto-executes.
+        # A human must add the reaction manually.
         save_pending_approval(ts, {
             "action":   "batch_scale_pause",
             "findings": [

@@ -217,15 +217,49 @@ def _run_weekly_keyword_autofix() -> dict:
         kw_csv = write_kw_csv(kw_violations)
         skipped_age = sum(1 for v in kw_violations if v.get("age_guard_skip"))
 
+        # NEVER auto-execute keyword pauses — create an Asana task for human review.
+        # (Changed 2026-06-14: autonomous keyword pauses violate the approval gate rule.)
         if kw_violations:
             from scripts.action_audit_violations import execute as execute_kw
-            kw_counts = execute_kw(kw_violations, dry_run=False)
+            # Dry-run only — for logging the counts, no API mutations
+            kw_counts = execute_kw(kw_violations, dry_run=True)
             counts.update({
                 "kw_paused":  kw_counts.get("paused", 0),
                 "kw_deleted": kw_counts.get("deleted", 0),
-                "kw_errors":  kw_counts.get("errors", 0),
+                "kw_errors":  0,
                 "age_skipped": skipped_age,
             })
+            # Create Asana task for human review instead of executing
+            try:
+                from executors.asana import create_task
+                from datetime import date as _date
+                lines = [f"Weekly keyword audit found {len(kw_violations)} violation(s) requiring action.", ""]
+                for v in kw_violations[:50]:
+                    action = "PAUSE" if v.get("violation") in {
+                        "always_negative", "low_qs_high_lost_is_pause",
+                        "brand_only_block", "competitor_in_generic", "language_mismatch",
+                    } else "REVIEW"
+                    lines.append(f"  • [{action}] `{v.get('keyword', '?')}` — {v.get('violation', '?')} — {v.get('campaign', '?')}")
+                if len(kw_violations) > 50:
+                    lines.append(f"  … and {len(kw_violations) - 50} more (see CSV in logs/)")
+                lines += [
+                    "",
+                    "To execute: `python scripts/audit.py violations` after review.",
+                    f"\nCreated: {_date.today().isoformat()} | Due: {_date.today().isoformat()} | "
+                    "Priority: High | Type: Keyword Audit | Channel: Google | Asset level: keyword | "
+                    "Action: review → approve in Asana then run audit.py violations",
+                ]
+                create_task(
+                    title=f"[Performance Agent] Weekly Keyword Audit — {len(kw_violations)} violations — {_date.today().isoformat()}",
+                    description="\n".join(lines),
+                    project_key="optimization",
+                    task_type="Keyword Audit",
+                    channel="google_ads",
+                    asset_level="keyword",
+                    action="review",
+                )
+            except Exception as _ae:
+                print(f"[weekly-autofix] Asana task creation failed: {_ae}")
         else:
             counts.update({"kw_paused": 0, "kw_deleted": 0, "kw_errors": 0,
                            "age_skipped": skipped_age})

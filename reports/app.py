@@ -2442,9 +2442,22 @@ def _handle_reaction(event: dict):
     reaction = event.get("reaction", "")
     item     = event.get("item", {})
     msg_ts   = item.get("ts", "")
+    reactor  = event.get("user", "")
 
     if reaction not in ("white_check_mark", "x"):
         return
+
+    # Ignore reactions added by the bot itself — prevents self-approval.
+    # The bot may pre-add visual hint emojis; those must never trigger execution.
+    try:
+        from slack_sdk import WebClient as _WC
+        from config import SLACK_BOT_TOKEN as _TK
+        _bot_uid = _WC(token=_TK).auth_test().get("user_id", "")
+        if reactor and _bot_uid and reactor == _bot_uid:
+            print(f"[events] Ignoring self-reaction '{reaction}' from bot {reactor} on {msg_ts}")
+            return
+    except Exception as _e:
+        print(f"[events] Could not verify bot identity for self-reaction guard: {_e}")
 
     try:
         from notifications.slack import get_pending_approval, remove_pending_approval
