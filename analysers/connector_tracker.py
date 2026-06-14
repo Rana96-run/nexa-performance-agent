@@ -731,9 +731,11 @@ def check_slack_listener_heartbeat(window_hours: int = 2) -> dict:
 _CONSECUTIVE_BROKEN_THRESHOLD = 3
 
 
-def _already_escalated(proj: str, ds: str, channel: str, window_hours: int = 6) -> bool:
+def _already_escalated(proj: str, ds: str, channel: str, window_hours: int = 24) -> bool:
     """Return True if an escalation task was already created for this channel
-    within the last *window_hours* — prevents duplicate Asana tasks per run cycle."""
+    within the last *window_hours* — prevents duplicate Asana tasks per run cycle.
+    24h default so hourly health checks (which run 06:00–14:00 UTC) never create
+    more than one task per channel per day."""
     sql = f"""
         SELECT COUNT(*) AS n
         FROM `{proj}.{ds}.agent_activity_log`
