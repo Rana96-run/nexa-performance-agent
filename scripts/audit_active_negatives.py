@@ -35,6 +35,7 @@ from collectors.google_ads import get_client
 from collectors.google_ads_bq import _customer_ids
 from executors.keyword_policy import (
     matches_any,
+    ALWAYS_NEGATIVE_PATTERNS,
     COMPETITOR_PATTERNS,
     BRAND_ONLY_PATTERNS,
     QIYUD_FEATURE_MODIFIERS,
@@ -81,7 +82,14 @@ ADGROUP_NEG_QUERY = """
 
 
 def _classify_negative(term: str) -> str:
-    """Return 'competitor', 'brand_only', or 'ok' (policy-compliant)."""
+    """Return 'competitor', 'brand_only', or 'ok' (policy-compliant).
+
+    ALWAYS_NEGATIVE terms (login, download, free, etc.) are correct as negatives
+    — never flag them for removal even if they also contain a brand/competitor name.
+    """
+    # Protected: login/download/free terms must always stay as negatives
+    if matches_any(term, ALWAYS_NEGATIVE_PATTERNS):
+        return "ok"
     if matches_any(term, COMPETITOR_PATTERNS):
         return "competitor"
     # Brand-only with accounting-noun exception
