@@ -89,6 +89,18 @@ def _hubspot_leads_collector(**kwargs) -> int:
     return hubspot_leads_bq.sync_full_mirror()
 
 
+def _hubspot_deals_collector(**kwargs):
+    """Always run YTD (Jan 1 of current year) — never incremental.
+
+    The scheduler passes incremental=True to every collector in COLLECTORS, but
+    incremental mode for deals uses a 30-day createdate window, which permanently
+    misses deals imported into HubSpot with backdated createdate (ad platform
+    integrations that backfill historical leads). Discovered 2026-06-14 when BQ
+    had only 36% of Sales Pipeline deals vs HubSpot for Jan-May 2026.
+    """
+    return hubspot_deals_bq.collect_and_write()   # no args = YTD default
+
+
 COLLECTORS = [
     # ── Campaign-level direct collectors ──────────────────────────────────────
     ("google_ads",      google_ads_bq.collect_and_write),
@@ -106,7 +118,9 @@ COLLECTORS = [
     # hs_lastmodifieddate so cursor CDC misses them).
     # All other runs: cursor-based CDC (fast, incremental).
     ("hubspot_leads",   _hubspot_leads_collector),
-    ("hubspot_deals",   hubspot_deals_bq.collect_and_write),
+    # Deals: always YTD (never incremental) — ad platform integrations backfill
+    # historical deals with original createdate; incremental 30-day window misses them.
+    ("hubspot_deals",   _hubspot_deals_collector),
     # Website analytics
     ("ga4",             ga4_bq.collect_and_write),
 
