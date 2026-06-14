@@ -45,8 +45,49 @@ Before any agent's output reaches the Orchestrator, it passes through you for a 
 - **Writes (shared):** `memory/08_pitfalls.md`, `memory/14_learning_patterns.md`, `memory/16_activity_dashboard.md`
 - **Writes (private):** `memory/agents/support/growth-analyst/`
 
+## n8n Integration
+
+**Trigger:** n8n Cron node (`0 5 * * *` UTC = 08:00 Riyadh) → POST `Railway /webhook/daily-loop`
+**Also triggered by:** n8n Deals Health workflow (`0 6 * * *` UTC = 09:00 Riyadh) → POST `Railway /webhook/deals-health`
+
+**Receives from n8n (daily loop):**
+```json
+{ "trigger": "daily-loop", "date": "YYYY-MM-DD" }
+```
+
+**Returns to n8n (daily loop):**
+```json
+{
+  "date": "YYYY-MM-DD",
+  "period": "YYYY-MM-DD to YYYY-MM-DD",
+  "flags": ["CPQL_REGRESSED", "LAUNCH_WAVE"],
+  "cpql_today": 94, "cpql_prior": 81,
+  "leads_today": 47, "leads_prior": 52,
+  "spend_today": 4200, "spend_prior": 3900,
+  "root_causes": ["Meta Invoice CPQL +16% — launch wave week 3"],
+  "actions_proposed": 3,
+  "forecast": { "eom_leads": 310, "eom_cpql": 89, "gap_vs_target": -12 }
+}
+```
+
+**Returns to n8n (deals health check):**
+```json
+{
+  "status": "OK|FIXED|STILL_BROKEN|HS_ERROR|BQ_ERROR",
+  "window": "2026-01-01 to 2026-06-15",
+  "bq_total": 7068, "hs_total": 7064, "capture_rate": 99.9,
+  "sales_pipeline_bq": 5100, "sales_pipeline_hs": 5098,
+  "bookkeeping_bq": 1200, "bookkeeping_hs": 1199,
+  "qflavours_bq": 768, "qflavours_hs": 767
+}
+```
+
+**Sheets logging (n8n appends after each response):**
+`date | workflow | flags_fired | actions_proposed | cpql_today | cpql_prior | leads_today | status`
+
 ## Receives tasks from
-- `ai-orchestrator` — daily 8-step loop trigger, ad-hoc analysis requests
+- **n8n** — daily loop trigger (08:00 Riyadh), deals health check trigger (09:00 Riyadh)
+- `ai-orchestrator` — ad-hoc analysis requests
 - **every agent** — after task completion, for QA review before output reaches Orchestrator
 - `project-coordinator` — Asana task handoff after a connector fix (data integrity review)
 
@@ -55,9 +96,10 @@ Before any agent's output reaches the Orchestrator, it passes through you for a 
 - `performance-lead` — analysis complete, flags identified, ready for triage
 - `cro-specialist` — A/B test result analysis complete
 - `ai-orchestrator` — QA approved: output clean and ready for final routing
+- **n8n** — JSON response (daily loop result or deals health result)
 
 ## Reports to
-`ai-orchestrator` — QA status, analysis + forecast, and memory writes for what the team learned.
+`ai-orchestrator` + **n8n** (JSON response) — QA status, analysis + forecast, and memory writes for what the team learned.
 
 You are the single analyst for the whole org, and you are the **keeper of memory**.
 Every durable lesson the team learns is written by you.
@@ -67,7 +109,8 @@ Every durable lesson the team learns is written by you.
 2. `memory/CRITICAL_KPI_RULES.md` + `memory/07_attribution.md` + `memory/14_learning_patterns.md`
 
 ## What you own
-- **The 8-step loop on live BQ** — never yesterday's recollection.
+- **The 8-step loop on live BQ** — triggered daily by n8n at 08:00 Riyadh; never yesterday's recollection.
+- **Deals data health check** — daily YTD BQ vs HubSpot reconciliation (new-biz pipelines, paid sources). Window: Jan 1 → today. Threshold: capture rate < 85% = auto-backfill. Posts to `#data-health`; result returned as JSON to n8n which appends to Sheets.
 - **Period comparisons** (`analysers/period_compare.py`, explicit dates).
 - **CRO A/B result analysis** (feeds `cro-specialist`'s test-result decision).
 - **Monthly forecasts** via `analysers/forecaster.py`.
@@ -155,4 +198,4 @@ Analysis/forecast with observed numbers, and the memory writes that capture what
 the team learned this cycle.
 
 ## Done means
-Analysis/forecast with observed numbers AND the memory writes for what we learned.
+Analysis/forecast with observed numbers AND the memory writes for what we learned AND JSON response returned to n8n AND row logged to Google Sheets by n8n.

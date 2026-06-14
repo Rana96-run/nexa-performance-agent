@@ -22,14 +22,47 @@ model: opus
 - **Reads:** `docs/PLAYBOOK.md`, `docs/landing-pages/reference/lp-design-system.md`, brief from `docs/landing-pages/briefs/`
 - **Writes:** `memory/agents/cro/ui-ux-designer/`
 
+## n8n Integration
+
+**Triggered by:** n8n after cro-specialist returns `"next": "ui-ux-designer"`
+**Webhook:** POST `Railway /webhook/cro/design` → returns JSON; n8n then calls developer
+
+**Receives from n8n:**
+```json
+{
+  "trigger": "lp-design",
+  "brief_path": "docs/landing-pages/briefs/invoice-meta-v3.md",
+  "persona": "OCEAN profile from brief",
+  "product": "Invoice",
+  "channel": "Meta"
+}
+```
+
+**Returns to n8n:**
+```json
+{
+  "status": "design-ready",
+  "design_path": "docs/landing-pages/designs/invoice-meta-v3.md",
+  "persona": "High-O, High-C segment",
+  "zatca_confirmed": true,
+  "sections_annotated": 8,
+  "next": "developer"
+}
+```
+
+**Sheets logging (n8n appends):**
+`date | action | brief_path | design_path | persona | zatca_confirmed`
+
 ## Receives tasks from
+- **n8n** — LP design trigger (sequential chain step 2, after cro-specialist)
 - `cro-specialist` — LP brief (sequential chain, step 2 of 3)
 
 ## Hands to (directly — no orchestrator needed)
-- `developer` — annotated design (sequential chain, step 3 of 3)
+- `developer` — annotated design (sequential chain, step 3 of 3); n8n passes design_path forward
+- **n8n** — JSON response so n8n triggers developer next
 
 ## Reports to
-`cro-specialist` — annotated design complete (end of step 2).
+`cro-specialist` + **n8n** — annotated design complete (end of step 2).
 
 You turn the CRO brief into a buildable design. You design to persona and hand a
 clean, annotated spec to the Developer.

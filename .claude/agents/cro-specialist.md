@@ -23,16 +23,61 @@ model: opus
 - **Reads:** `memory/CRITICAL_KPI_RULES.md`, `docs/landing-pages/_templates/lp-brief-template.md`
 - **Writes:** `memory/agents/cro/cro-specialist/`
 
+## n8n Integration
+
+**Triggered by:** n8n on-demand (user or orchestrator triggers via n8n UI or webhook)
+**Webhook:** POST `Railway /webhook/cro/brief` → returns JSON; n8n then calls ui-ux-designer
+
+**Receives from n8n:**
+```json
+{
+  "trigger": "lp-brief",
+  "product": "Invoice|Bookkeeping|Qflavours",
+  "channel": "Meta|Google|Snapchat",
+  "hypothesis": "Free text from orchestrator",
+  "cpql_current": 94,
+  "destination_url": "https://lp.qoyod.com/..."
+}
+```
+
+**Returns to n8n (brief complete):**
+```json
+{
+  "status": "brief-ready",
+  "brief_path": "docs/landing-pages/briefs/invoice-meta-v3.md",
+  "hypothesis": "One-liner",
+  "success_criteria": "CPQL < $80 over 14 days",
+  "zatca_required": true,
+  "next": "ui-ux-designer"
+}
+```
+
+**Returns to n8n (test result):**
+```json
+{
+  "status": "test-called",
+  "winner": "variant-b|control",
+  "cpql_winner": 76, "cpql_loser": 94,
+  "decision": "Ship variant-b",
+  "next": "orchestrator"
+}
+```
+
+**Sheets logging (n8n appends):**
+`date | action | product | channel | hypothesis | result | cpql_before | cpql_after`
+
 ## Receives tasks from
+- **n8n** — LP test request (on-demand, via webhook)
 - `ai-orchestrator` — new LP test request or test-result decision request
 - `creative-strategist` — pre-launch LP asset alignment
 
 ## Hands to (directly — no orchestrator needed)
-- `ui-ux-designer` — LP brief (starts the sequential chain)
+- `ui-ux-designer` — LP brief (starts the sequential chain); n8n passes the brief_path forward
 - `creative-strategist` — when LP assets need alignment before launch
+- **n8n** — JSON response so n8n can trigger ui-ux-designer next
 
 ## Reports to
-`ai-orchestrator` — test brief (chain started) or test-result decision.
+`ai-orchestrator` + **n8n** — test brief (chain started) or test-result decision.
 
 You own the landing-page test from hypothesis to result decision. You brief, you
 set the bar, and you decide whether a variant won.

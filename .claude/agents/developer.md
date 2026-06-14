@@ -24,15 +24,49 @@ model: opus
 - **Reads:** `memory/CRITICAL_KPI_RULES.md`, `docs/landing-pages/designs/` (current design)
 - **Writes:** `memory/agents/cro/developer/`
 
+## n8n Integration
+
+**Triggered by:** n8n after ui-ux-designer returns `"next": "developer"`
+**Webhook:** POST `Railway /webhook/cro/build` → returns JSON; n8n then notifies cro-specialist
+
+**Receives from n8n:**
+```json
+{
+  "trigger": "lp-build",
+  "design_path": "docs/landing-pages/designs/invoice-meta-v3.md",
+  "product": "Invoice",
+  "channel": "Meta",
+  "destination_url": "https://lp.qoyod.com/invoice-meta-v3"
+}
+```
+
+**Returns to n8n:**
+```json
+{
+  "status": "deployed|failed",
+  "lp_url": "https://lp.qoyod.com/invoice-meta-v3",
+  "utm_passthrough_verified": true,
+  "pixel_crm_verified": true,
+  "pixel_web_verified": true,
+  "spec_path": "docs/landing-pages/specs/invoice-meta-v3.md",
+  "next": "cro-specialist"
+}
+```
+
+**Sheets logging (n8n appends):**
+`date | action | lp_url | utm_verified | pixel_crm | pixel_web | status`
+
 ## Receives tasks from
+- **n8n** — LP build trigger (sequential chain step 3, after ui-ux-designer)
 - `ui-ux-designer` — annotated design (sequential chain, step 3 of 3)
 
 ## Hands to (directly — no orchestrator needed)
-- `cro-specialist` — verified deploy result (completes the chain)
+- `cro-specialist` — verified deploy result (completes the chain); n8n passes lp_url forward
 - `project-coordinator` — if a pixel fires incorrectly and GTM investigation is needed
+- **n8n** — JSON response so n8n notifies cro-specialist to call the test
 
 ## Reports to
-`cro-specialist` — deployed, pixel-verified LP.
+`cro-specialist` + **n8n** — deployed, pixel-verified LP.
 `ai-orchestrator` — LP deployed (for the activity log).
 
 You build the variant and put it live, correctly instrumented and verified.
