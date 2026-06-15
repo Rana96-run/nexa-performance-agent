@@ -7,10 +7,14 @@ Key: classifies deals as won / lost / open via stage.probability.
   0 < probability < 1 -> open (in progress)
 """
 import os
+import time
+import json as _json
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 from collections import defaultdict
 import requests
 from dotenv import load_dotenv
+from google.cloud import bigquery as _bq
 from collectors.bq_writer import upsert_rows, get_client
 from collectors.currency import to_usd, normalize_currency
 
@@ -43,6 +47,7 @@ PROPERTIES = [
     "deal_latest_traffic_source_drilldown_2",
     "hs_v2_time_in_current_stage",
     "hs_is_closed_won", "hs_is_closed",
+    "hs_lastmodifieddate",
 ]
 
 # stage_id -> (pipeline_id, pipeline_label, stage_label, probability)
@@ -558,8 +563,229 @@ def _ensure_table_exists():
               f"hubspot_deals_daily: {[f.name for f in new_fields]}")
 
 
+# ── Record-level mirror: hubspot_deals_individual ───────────────────────────
+# One row per deal — the "deal module" mirror. Same Funnel-style pattern as
+# hubspot_leads_bq.sync_full_mirror(): re-pull every deal created since the
+# window start and overwrite BQ, so any HubSpot filter / date-range reproduces
+# exactly. Built 2026-06-15 as the deals half of the wide-table redesign.
+
+_INDIVIDUAL_TABLE = "hubspot_deals_individual"
+
+# New-business pipelines (labels). Everything else → is_new_biz=False.
+NEW_BIZ_PIPELINES = {"Sales Pipeline", "Bookkeeping", "Qflavours"}
+
+# Mirror coverage window — matches the redesign spec (all data from 2025-01-01).
+MIRROR_START = date(2025, 1, 1)
+
+_INDIVIDUAL_SCHEMA = [
+    _bq.SchemaField("deal_id",               "STRING",    mode="REQUIRED"),
+    _bq.SchemaField("createdate",            "DATE",      mode="REQUIRED"),
+    _bq.SchemaField("closedate",             "DATE"),
+    _bq.SchemaField("hs_lastmodifieddate",   "TIMESTAMP"),
+    _bq.SchemaField("dealname",              "STRING"),
+    _bq.SchemaField("pipeline_id",           "STRING"),
+    _bq.SchemaField("pipeline",              "STRING"),
+    _bq.SchemaField("stage_id",              "STRING"),
+    _bq.SchemaField("stage",                 "STRING"),
+    _bq.SchemaField("stage_status",          "STRING"),   # won | lost | open | unknown
+    _bq.SchemaField("is_won",                "BOOL"),
+    _bq.SchemaField("is_lost",               "BOOL"),
+    _bq.SchemaField("is_open",               "BOOL"),
+    _bq.SchemaField("is_new_biz",            "BOOL"),
+    _bq.SchemaField("amount",                "FLOAT64"),  # USD (primary)
+    _bq.SchemaField("amount_native",         "FLOAT64"),
+    _bq.SchemaField("currency",              "STRING"),
+    _bq.SchemaField("currency_native",       "STRING"),
+    _bq.SchemaField("qoyod_source",          "STRING"),
+    _bq.SchemaField("deal_utm_campaign",     "STRING"),
+    _bq.SchemaField("deal_utm_audience",     "STRING"),
+    _bq.SchemaField("deal_utm_content",      "STRING"),
+    _bq.SchemaField("deal_utm_source",       "STRING"),
+    _bq.SchemaField("deal_utm_medium",       "STRING"),
+    _bq.SchemaField("deal_utm_term",         "STRING"),
+    _bq.SchemaField("deal_campaign_id_sync", "STRING"),
+    _bq.SchemaField("deal_adgroup_id_sync",  "STRING"),
+    _bq.SchemaField("deal_ad_id_sync",       "STRING"),
+    _bq.SchemaField("deal_original_traffic_source", "STRING"),
+    _bq.SchemaField("deal_latest_traffic_source",   "STRING"),
+    _bq.SchemaField("updated_at",            "TIMESTAMP"),
+]
+
+
+def _ensure_deals_individual_table_exists():
+    client   = get_client()
+    table_id = f"{os.getenv('BQ_PROJECT_ID')}.{os.getenv('BQ_DATASET')}.{_INDIVIDUAL_TABLE}"
+    table = _bq.Table(table_id, schema=_INDIVIDUAL_SCHEMA)
+    table.time_partitioning = _bq.TimePartitioning(field="createdate")
+    table.clustering_fields = ["qoyod_source", "pipeline", "stage_status"]
+    client.create_table(table, exists_ok=True)
+
+
+def _row_from_deal(deal: dict):
+    """Convert a raw HubSpot deal result into a hubspot_deals_individual row.
+    Returns None if createdate is missing (can't partition without it)."""
+    p = deal.get("properties", {})
+    created = _to_riyadh_date(p.get("createdate") or "")
+    if not created:
+        return None
+    closed = _to_riyadh_date(p.get("closedate") or "") or None
+
+    plabel, slabel, status = _classify_stage(
+        p.get("dealstage"),
+        hs_is_closed_won=p.get("hs_is_closed_won"),
+        hs_is_closed=p.get("hs_is_closed"),
+    )
+    # closedate sanity guard — placeholder future dates fall back to createdate
+    today_str = date.today().isoformat()
+    if closed and closed > today_str:
+        closed = created
+    elif closed and created and closed < created:
+        closed = created
+
+    amount_native = _to_float(p.get("amount"))
+    native_cur    = normalize_currency(p.get("deal_currency_code") or DEFAULT_DEAL_CURRENCY)
+    amount        = to_usd(amount_native, native_cur)
+
+    explicit_src = (p.get("deal_qoyod_source") or "").strip()
+    src_label    = explicit_src if (explicit_src and explicit_src != "Other") else "Other"
+
+    modified_str = p.get("hs_lastmodifieddate") or ""
+    modified_iso = modified_str.replace("Z", "+00:00") if modified_str else None
+
+    return {
+        "deal_id":               deal["id"],
+        "createdate":            created,
+        "closedate":             closed,
+        "hs_lastmodifieddate":   modified_iso,
+        "dealname":              (p.get("dealname") or "").strip() or None,
+        "pipeline_id":           (p.get("pipeline") or "").strip() or None,
+        "pipeline":              plabel or "Unknown",
+        "stage_id":              p.get("dealstage") or "",
+        "stage":                 slabel or "Unknown",
+        "stage_status":          status,
+        "is_won":                status == "won",
+        "is_lost":               status == "lost",
+        "is_open":               status == "open",
+        "is_new_biz":            (plabel in NEW_BIZ_PIPELINES),
+        "amount":                round(amount, 2),
+        "amount_native":         round(amount_native, 2),
+        "currency":              "USD",
+        "currency_native":       native_cur,
+        "qoyod_source":          src_label,
+        "deal_utm_campaign":     (p.get("deal_utm_campaign") or "").strip() or "__none__",
+        "deal_utm_audience":     (p.get("deal_utm_audience") or "").strip() or None,
+        "deal_utm_content":      (p.get("deal_utm_content")  or "").strip() or None,
+        "deal_utm_source":       (p.get("deal_utm_source")   or "").strip() or None,
+        "deal_utm_medium":       (p.get("deal_utm_medium")   or "").strip() or None,
+        "deal_utm_term":         (p.get("deal_utm_term")     or "").strip() or None,
+        "deal_campaign_id_sync": (p.get("deal_campaign_id_sync") or "").strip() or None,
+        "deal_adgroup_id_sync":  (p.get("deal_adgroup_id_sync")  or "").strip() or None,
+        "deal_ad_id_sync":       (p.get("deal_ad_id_sync")       or "").strip() or None,
+        "deal_original_traffic_source": (p.get("deal_original_traffic_source") or "").strip() or None,
+        "deal_latest_traffic_source":   (p.get("deal_latest_traffic_source")   or "").strip() or None,
+        "updated_at":            datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _flush_deals_individual(client, rows, label="deals-mirror",
+                            write_disposition="WRITE_APPEND"):
+    """Write a batch to hubspot_deals_individual via load job (never streaming).
+    First batch uses WRITE_TRUNCATE (atomic full replace, no streaming-buffer
+    DELETE issue); rest WRITE_APPEND — same pattern as the leads mirror."""
+    table_id = f"{os.getenv('BQ_PROJECT_ID')}.{os.getenv('BQ_DATASET')}.{_INDIVIDUAL_TABLE}"
+    ndjson   = "\n".join(_json.dumps(r, default=str) for r in rows).encode()
+    job_cfg  = _bq.LoadJobConfig(
+        schema=_INDIVIDUAL_SCHEMA,
+        source_format=_bq.SourceFormat.NEWLINE_DELIMITED_JSON,
+        write_disposition=write_disposition,
+    )
+    client.load_table_from_file(BytesIO(ndjson), table_id, job_config=job_cfg).result()
+    print(f"[{label}] flushed {len(rows)} rows ({write_disposition})")
+
+
+def sync_full_mirror_deals(start: date = None) -> int:
+    """Full mirror of every HubSpot deal created since `start` (default 2025-01-01).
+
+    Funnel-style: re-pull all deals' CURRENT property values and overwrite BQ,
+    so any HubSpot filter / date-range reproduces exactly. Deduped by deal id.
+    Searches by createdate in 7-day windows (keeps each search under HubSpot's
+    10k cap), 3-retry/30s backoff on transient 5xx.
+
+    CLI: python -m collectors.hubspot_deals_bq mirror [YYYY-MM-DD]
+    """
+    _load_pipelines()
+    _ensure_deals_individual_table_exists()
+    client = get_client()
+    start  = start or MIRROR_START
+    end_dt = date.today() + timedelta(days=1)
+    print(f"[deals-mirror] re-pull {start} -> {date.today()} ...")
+
+    all_rows, seen = [], set()
+    window, win_start = timedelta(days=7), start
+    while win_start < end_dt:
+        win_end = min(win_start + window, end_dt)
+        w_since = int(datetime(win_start.year, win_start.month, win_start.day,
+                               tzinfo=timezone.utc).timestamp() * 1000)
+        w_until = int(datetime(win_end.year, win_end.month, win_end.day,
+                               tzinfo=timezone.utc).timestamp() * 1000)
+        after, pages, win_count = None, 0, 0
+        while True:
+            data = None
+            for attempt in range(1, 4):
+                try:
+                    data = _search_deals(w_since, until_ms=w_until, after=after)
+                    break
+                except Exception as e:
+                    if attempt < 3:
+                        print(f"[deals-mirror] {win_start} attempt {attempt}/3 failed ({e}) — retry 30s")
+                        time.sleep(30)
+                    else:
+                        print(f"[deals-mirror] {win_start} failed after 3 attempts ({e}) — skip window")
+            if data is None:
+                break
+            for d in data.get("results", []):
+                did = d.get("id")
+                if did in seen:
+                    continue
+                seen.add(did)
+                row = _row_from_deal(d)
+                if row:
+                    all_rows.append(row)
+                    win_count += 1
+            pages += 1
+            after = (data.get("paging") or {}).get("next", {}).get("after")
+            if not after or pages >= 100:
+                break
+        print(f"[deals-mirror]   {win_start} .. {win_end}: {win_count} deals")
+        win_start = win_end
+
+    if not all_rows:
+        print("[deals-mirror] nothing fetched — aborting (table left unchanged)")
+        return 0
+
+    print(f"[deals-mirror] fetched {len(all_rows)} deals total")
+    for i in range(0, len(all_rows), 5000):
+        disp = "WRITE_TRUNCATE" if i == 0 else "WRITE_APPEND"
+        _flush_deals_individual(client, all_rows[i:i + 5000], write_disposition=disp)
+    print(f"[deals-mirror] wrote {len(all_rows)} rows to {_INDIVIDUAL_TABLE}")
+    return len(all_rows)
+
+
 if __name__ == "__main__":
     import sys, argparse
+
+    # Funnel-style full mirror (record-level deal-module replica).
+    if len(sys.argv) > 1 and sys.argv[1] == "mirror":
+        _start = date.fromisoformat(sys.argv[2]) if len(sys.argv) > 2 else None
+        from collectors._lock import collector_lock, CollectorLockBusy
+        try:
+            with collector_lock("hubspot_deals_mirror"):
+                _n = sync_full_mirror_deals(start=_start)
+                print(f"Deals mirror complete: {_n} rows")
+        except CollectorLockBusy as e:
+            print(f"[lock] BUSY — refusing to run: {e}")
+            sys.exit(2)
+        sys.exit(0)
     parser = argparse.ArgumentParser()
     parser.add_argument("days", nargs="?", type=int, default=None,
                         help="Number of days to look back (positional)")

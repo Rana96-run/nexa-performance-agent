@@ -1,5 +1,23 @@
 # Pitfalls & Known Traps
 
+## Cowork scheduled tasks — use .env credentials directly, never MCP connectors (2026-06-13)
+
+- **MCP connectors (Slack, Google, etc.) use separate OAuth tokens** that expire independently of the bot tokens stored in Railway/.env. When a MCP connector returns `invalid_auth`, the task silently fails even though the underlying credentials are fine.
+- **Rule: all scheduled tasks must use credentials from `.env` / Railway env vars directly**, not MCP connectors. Load `.env` at the top of every bash Python script:
+  ```python
+  import os
+  with open(r'D:\Nexa Performance Agent\.env') as f:
+      for line in f:
+          line = line.strip()
+          if line and not line.startswith('#') and '=' in line:
+              k, v = line.split('=', 1)
+              os.environ[k.strip()] = v.strip()
+  ```
+- **Slack** → use `SLACK_BOT_TOKEN` with `requests` calling `slack.com/api/*` directly. DO NOT use `mcp__slack__*`.
+- **BigQuery / any Google API** → use `GOOGLE_APPLICATION_CREDENTIALS_JSON` (Railway, cloud) or `GOOGLE_APPLICATION_CREDENTIALS` (local path to JSON) with `google.oauth2.service_account.Credentials`. DO NOT use the Google MCP connector.
+- **Asana** → use `ASANA_ACCESS_TOKEN` with `requests` calling `app.asana.com/api/1.0/*` directly.
+- **Network note:** Cowork's bash sandbox blocks outbound to most domains. To call external APIs (Slack, Asana, etc.) from bash, the domain must be added to the allowlist in **Settings → Capabilities → Network**. If you get `403 Forbidden` via proxy, this is the cause — ask the user to add the domain.
+
 ## paid_channel_daily.new_biz_* shows PAID-ATTRIBUTED deals only — HubSpot discrepancy is expected (2026-06-11)
 
 - **"Discrepancy" is by design.** Dashboard shows 537 new_biz deals; HubSpot shows 1,165 for the same 3 pipelines + create date. The gap (~628 deals) is non-paid sources.
