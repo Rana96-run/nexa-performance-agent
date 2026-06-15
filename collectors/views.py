@@ -1,18 +1,27 @@
 """
 Unified reporting views — channel and campaign grain.
 
-Materialized tables (rebuilt every 6h by materialize_heavy_views()):
-  - utm_paid_attribution_daily   (UTM-joined spend + leads, campaign grain)
-  - paid_channel_campaign_daily  (spend + leads + deals, campaign grain)
-  - channel_roas_daily           (spend + leads + deals + ROAS, channel grain — spine-anchored)
-  - paid_channel_daily           (same, channel grain via qoyod_source join — spine-anchored)
-  - v_adset_performance          (adset grain)
-  - v_ad_performance             (ad grain)
+Store tables (source of truth, never queried directly by Python analysers):
+  - hubspot_leads_individual    (record-level HubSpot leads mirror, 2025-01-01+)
+  - hubspot_deals_individual    (record-level HubSpot deals mirror, all pipelines, 2025-01-01+)
+  - ads_daily / adsets_daily / campaigns_daily / keywords_daily (platform spend store)
 
-Lightweight views (ALL_VIEWS, refreshed by refresh_all_views()):
-  - v_channel_key_map            (channel slug → display name)
-  - v_agent_activity_dashboard   (agent activity heatmap for Hex)
-  - v_keyword_performance        (keyword grain, via _sub_campaign_views())
+Compat views (ALL_VIEWS — lightweight, refreshed every 6h by refresh_all_views()):
+  - hubspot_leads_module_daily  (aggregates from hubspot_leads_individual — backward compat)
+  - hubspot_deals_daily         (aggregates from hubspot_deals_individual — backward compat)
+  - v_channel_key_map           (channel slug → display name)
+  - v_new_biz_daily             (new-biz deals by pipeline)
+  - v_agent_activity_dashboard  (agent activity heatmap for Hex)
+  - v_keyword_performance       (keyword grain, via _sub_campaign_views())
+
+Materialized tables (rebuilt every 6h by materialize_heavy_views() — group-B chain):
+  - paid_channel_campaign_daily (spend + leads + deals, campaign grain)
+  - channel_roas_daily          (spend + leads + deals + ROAS, channel grain — spine-anchored)
+  - paid_channel_daily          (same, channel grain via qoyod_source join — spine-anchored)
+  - v_adset_performance         (adset grain)
+  - v_ad_performance            (ad grain)
+  - wide_ads                    (ad grain, id-first attribution — primary new reporting table)
+  - wide_keywords               (keyword grain — primary new reporting table)
 """
 import os
 from dotenv import load_dotenv
@@ -688,14 +697,92 @@ WHERE pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
 GROUP BY date, pipeline, qoyod_source
 """
 
+# ── Compat views: HubSpot daily buckets replaced by aggregations on individual tables ─
+# Physical tables were dropped in wide-table redesign Step 4 (2026-06-15).
+# All group-B chain SQLs and Python consumers continue to query the same names —
+# they now read through these lightweight views instead of physical tables.
+HUBSPOT_LEADS_MODULE_COMPAT_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.hubspot_leads_module_daily` AS
+SELECT
+  hs_createdate                                                          AS date,
+  qoyod_source,
+  pipeline,
+  stage,
+  lead_utm_campaign,
+  lead_utm_audience,
+  lead_utm_content,
+  lead_utm_source,
+  lead_utm_medium,
+  lead_utm_term,
+  COUNT(*)                                                               AS leads_total,
+  COUNTIF(is_qualified)                                                  AS leads_qualified,
+  COUNTIF(is_disqualified)                                               AS leads_disqualified,
+  COUNTIF(is_open)                                                       AS leads_open,
+  APPROX_TOP_COUNT(top_disq_reason, 1)[SAFE_OFFSET(0)].value            AS top_disq_reason,
+  MAX(updated_at)                                                        AS updated_at,
+  APPROX_TOP_COUNT(top_disq_sub_reason, 1)[SAFE_OFFSET(0)].value        AS top_disq_sub_reason,
+  CAST(NULL AS STRING)                                                   AS lead_campaign_id,
+  CAST(NULL AS STRING)                                                   AS lead_ad_group_id,
+  CAST(NULL AS STRING)                                                   AS lead_ad_id,
+  ANY_VALUE(lead_campaign_id_sync)                                       AS lead_campaign_id_sync,
+  ANY_VALUE(lead_adgroup_id_sync)                                        AS lead_adgroup_id_sync,
+  ANY_VALUE(lead_ad_id_sync)                                             AS lead_ad_id_sync,
+  ANY_VALUE(lead_google_ad_click_id)                                     AS lead_google_ad_click_id,
+  ANY_VALUE(lead_cta_source_sync)                                        AS lead_cta_source_sync,
+  ANY_VALUE(lead_cta_source_url)                                         AS lead_cta_source_url,
+  ANY_VALUE(ga4_client_id)                                               AS ga4_client_id
+FROM `{P}.{D}.hubspot_leads_individual`
+GROUP BY 1,2,3,4,5,6,7,8,9,10
+"""
+
+HUBSPOT_DEALS_COMPAT_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.hubspot_deals_daily` AS
+SELECT
+  createdate                                                             AS date,
+  qoyod_source,
+  pipeline,
+  stage_status,
+  deal_utm_campaign,
+  deal_utm_audience,
+  deal_utm_content,
+  deal_utm_source,
+  deal_utm_medium,
+  deal_utm_term,
+  COUNT(*)                                                               AS deals_total,
+  COUNTIF(is_won)                                                        AS deals_won,
+  COUNTIF(is_lost)                                                       AS deals_lost,
+  COUNTIF(is_open)                                                       AS deals_open,
+  SUM(amount)                                                            AS amount_total,
+  SUM(IF(is_won,  amount, 0))                                            AS amount_won,
+  SUM(IF(is_lost, amount, 0))                                            AS amount_lost,
+  SUM(IF(is_open, amount, 0))                                            AS amount_open,
+  CAST(NULL AS FLOAT64)                                                  AS avg_time_in_current_stage_ms,
+  MAX(updated_at)                                                        AS updated_at,
+  ANY_VALUE(currency)                                                    AS currency,
+  SUM(amount_native)                                                     AS amount_total_native,
+  SUM(IF(is_won,  amount_native, 0))                                     AS amount_won_native,
+  SUM(IF(is_lost, amount_native, 0))                                     AS amount_lost_native,
+  SUM(IF(is_open, amount_native, 0))                                     AS amount_open_native,
+  ANY_VALUE(currency_native)                                             AS currency_native,
+  ANY_VALUE(deal_campaign_id_sync)                                       AS deal_campaign_id_sync,
+  ANY_VALUE(deal_adgroup_id_sync)                                        AS deal_adgroup_id_sync,
+  ANY_VALUE(deal_ad_id_sync)                                             AS deal_ad_id_sync
+FROM `{P}.{D}.hubspot_deals_individual`
+GROUP BY 1,2,3,4,5,6,7,8,9,10
+"""
+
+
 ALL_VIEWS = [
-    ("v_channel_key_map",            CHANNEL_MAP_SQL),
+    ("v_channel_key_map",              CHANNEL_MAP_SQL),
+    # HubSpot compat views — aggregate from individual store tables (wide-table redesign step 4)
+    ("hubspot_leads_module_daily",     HUBSPOT_LEADS_MODULE_COMPAT_SQL),
+    ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),
     # All new_biz deals (all sources) — the correct source for dashboard totals
-    ("v_new_biz_daily",              NEW_BIZ_DAILY_SQL),
+    ("v_new_biz_daily",                NEW_BIZ_DAILY_SQL),
     # paid_channel_campaign_daily + paid_channel_daily + channel_roas_daily
     # are MATERIALIZED TABLES — handled by materialize_heavy_views()
     # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
-    ("v_agent_activity_dashboard",   AGENT_ACTIVITY_DASHBOARD_SQL),
+    ("v_agent_activity_dashboard",     AGENT_ACTIVITY_DASHBOARD_SQL),
 ]
 
 # Sub-campaign views (keyword / LP grain).
@@ -980,18 +1067,17 @@ def _heavy_views_list():
     reads are instant. Listed in dependency order.
     """
     from collectors.bq_writer import (
-        UTM_PAID_ATTRIBUTION_VIEW_SQL,
         V_ADSET_PERFORMANCE_SQL,
         V_AD_PERFORMANCE_SQL,
     )
     return [
-        ("utm_paid_attribution_daily",  UTM_PAID_ATTRIBUTION_VIEW_SQL),
+        # group-B chain: read through hubspot_*_daily compat views → wide-table store tables
         ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
         ("channel_roas_daily",          CHANNEL_ROAS_DAILY_SQL),
         ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
         ("v_adset_performance",         V_ADSET_PERFORMANCE_SQL),
         ("v_ad_performance",            V_AD_PERFORMANCE_SQL),
-        # Wide-table redesign — new clean views on store tables (Step 3)
+        # Wide-table redesign — primary reporting tables on store tables (Step 3)
         ("wide_ads",                    WIDE_ADS_SQL),
         ("wide_keywords",               WIDE_KEYWORDS_SQL),
     ]
