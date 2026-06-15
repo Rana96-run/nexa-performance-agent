@@ -490,26 +490,26 @@ ALL_VIEWS = [
     ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),
     # All new_biz deals (all sources) — the correct source for dashboard totals
     ("v_new_biz_daily",                NEW_BIZ_DAILY_SQL),
-    # paid_channel_campaign_daily + paid_channel_daily + channel_roas_daily
-    # are MATERIALIZED TABLES — handled by materialize_heavy_views()
+    # Channel + campaign grain rollup views (sourced from wide_ads — rebuilt every 6h)
+    ("paid_channel_campaign_daily",   PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
+    ("paid_channel_daily",            PAID_CHANNEL_DAILY_SQL),
     # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
     ("v_agent_activity_dashboard",     AGENT_ACTIVITY_DASHBOARD_SQL),
 ]
 
-# Sub-campaign views (keyword / LP grain).
-# Defined in bq_writer.py alongside their table schemas.
-# Imported here so refresh_all_views() keeps them in sync automatically.
-#
-# Note: utm_paid_attribution_daily, v_adset_performance, v_ad_performance are
-# MATERIALIZED TABLES (see _heavy_views_list). Only lightweight views live here.
+# Sub-campaign views (keyword / adset / ad grain).
+# v_adset_performance and v_ad_performance are defined in bq_writer.py (alongside
+# their table schemas); imported here so refresh_all_views() keeps them in sync.
+# v_keyword_performance likewise lives in bq_writer.py.
 def _sub_campaign_views():
-    # utm_paid_attribution_daily, v_adset_performance, v_ad_performance are
-    # MATERIALIZED TABLES — they live in _heavy_views_list() / materialize_heavy_views().
-    # Only lightweight grain views that don't need instant-read speed live here.
     from collectors.bq_writer import (
         V_KEYWORD_PERFORMANCE_SQL,
+        V_ADSET_PERFORMANCE_SQL,
+        V_AD_PERFORMANCE_SQL,
     )
     return [
+        ("v_adset_performance",     V_ADSET_PERFORMANCE_SQL),
+        ("v_ad_performance",        V_AD_PERFORMANCE_SQL),
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
     ]
 

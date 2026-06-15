@@ -824,8 +824,10 @@ SELECT
   ROUND(SUM(spend), 2)                                                        AS spend,
   SUM(impressions)                                                             AS impressions,
   SUM(clicks)                                                                  AS clicks,
+  SUM(leads_total)                                                             AS leads_total,
   SUM(leads_total)                                                             AS leads,
   SUM(leads_qualified)                                                         AS leads_qualified,
+  SUM(leads_qualified)                                                         AS qualified,
   SUM(leads_disqualified)                                                      AS leads_disqualified,
   SUM(new_biz_deals_won)                                                       AS new_biz_deals_won,
   SUM(new_biz_deals_lost)                                                      AS new_biz_deals_lost,
@@ -858,115 +860,114 @@ GROUP BY date, channel, campaign_id, adset_id, ad_id
 V_KEYWORD_PERFORMANCE_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_keyword_performance` AS
 -- Keyword level: Google Ads + Microsoft Ads.
--- Spend/impressions/clicks/QS from keywords_daily; leads/deals from HubSpot.
+-- Spend/impressions/clicks/QS from wide_keywords (already joined at materialisation).
+-- Rebuilt 2026-06-15: utm_paid_attribution_daily was dropped; sources are now
+-- wide_keywords (spend + leads via hubspot_leads_individual) and
+-- hubspot_deals_individual for deal aggregates.
 WITH platform AS (
-  SELECT date, channel, campaign_name, adgroup_name, keyword_text AS utm_term,
+  -- wide_keywords already joins keywords_daily + hubspot_leads_individual + hubspot_deals_individual.
+  -- We GROUP BY date×channel×campaign_name×adgroup_name×keyword_text to collapse
+  -- any multi-day window into the daily grain we expose.
+  SELECT
+    date,
+    channel,
+    channel_name,
+    campaign_name,
+    adgroup_name,
+    keyword_text                              AS utm_term,
     match_type,
-    ANY_VALUE(status) AS status,
-    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
-    SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr,
-    AVG(quality_score) AS quality_score
-  FROM `{PROJECT_ID}.{DATASET}.keywords_daily`
-  GROUP BY 1, 2, 3, 4, 5, 6
-),
-hubspot AS (
-  SELECT date, channel, utm_campaign, utm_audience, utm_term,
-    ANY_VALUE(utm_source) AS utm_source,
-    SUM(leads) AS leads,
-    SUM(leads_qualified) AS leads_qualified,
-    SUM(leads_disqualified) AS leads_disqualified,
-    ANY_VALUE(match_method) AS match_method
-  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-  WHERE channel IN ('google_ads', 'microsoft_ads')
-    AND utm_term IS NOT NULL AND utm_campaign != '__no_utm__'
-  GROUP BY 1, 2, 3, 4, 5
+    ANY_VALUE(status)                         AS status,
+    AVG(quality_score)                        AS quality_score,
+    SUM(spend)                               AS spend,
+    SUM(impressions)                         AS impressions,
+    SUM(clicks)                              AS clicks,
+    SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0)) AS ctr,
+    SUM(leads_total)                         AS leads,
+    SUM(leads_qualified)                     AS leads_qualified,
+    SUM(leads_disqualified)                  AS leads_disqualified,
+    SUM(new_biz_deals_won)                   AS new_biz_deals_won,
+    SUM(new_biz_deals_total)                 AS new_biz_deals_total,
+    SUM(new_biz_revenue_won)                 AS new_biz_revenue_won,
+    SUM(all_deals_won)                       AS deals_won,
+    SUM(all_revenue_won)                     AS revenue_won
+  FROM `{PROJECT_ID}.{DATASET}.wide_keywords`
+  GROUP BY 1, 2, 3, 4, 5, 6, 7
 ),
 deals AS (
-  SELECT date, qoyod_source AS channel,
-    deal_utm_campaign AS utm_campaign,
-    deal_utm_term AS utm_term,
-    -- All pipelines
-    SUM(deals_total) AS deals,
-    SUM(deals_won)   AS deals_won,
-    SUM(amount_won)  AS revenue_won,
-    SUM(amount_lost) AS amount_lost,
-    SUM(amount_open) AS amount_open,
-    SUM(amount_total) AS amount_total,
-    -- New business pipelines (Sales Pipeline, Bookkeeping, Qflavours)
+  -- All-pipeline deal aggregates by keyword term (for richer deal columns).
+  SELECT
+    createdate                               AS date,
+    CASE
+      WHEN LOWER(TRIM(qoyod_source)) = 'google ads'    THEN 'google_ads'
+      WHEN LOWER(TRIM(qoyod_source)) = 'microsoft ads' THEN 'microsoft_ads'
+      ELSE LOWER(REPLACE(TRIM(qoyod_source), ' ', '_'))
+    END                                      AS channel,
+    LOWER(TRIM(deal_utm_campaign))           AS utm_campaign,
+    LOWER(TRIM(deal_utm_term))               AS utm_term,
+    SUM(deals_total)                         AS deals_total,
+    SUM(deals_won)                           AS deals,
+    SUM(amount_won)                          AS amount_won,
+    SUM(amount_lost)                         AS amount_lost,
+    SUM(amount_open)                         AS amount_open,
+    SUM(amount_total)                        AS amount_total,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
+             THEN amount_won  ELSE 0 END)    AS new_biz_amount_won,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
+             THEN amount_lost ELSE 0 END)    AS new_biz_amount_lost,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
+             THEN amount_open ELSE 0 END)    AS new_biz_amount_open,
     SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total
+             THEN amount_total ELSE 0 END)   AS new_biz_amount_total
   FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_utm_term IS NOT NULL
-  GROUP BY 1, 2, 3, 4
-),
-utmproxy AS (
-  SELECT date, channel, utm_campaign, utm_term, SUM(spend) AS spend
-  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-  WHERE utm_term IS NOT NULL AND utm_campaign != '__no_utm__'
+  WHERE deal_utm_term IS NOT NULL AND deal_utm_term != ''
   GROUP BY 1, 2, 3, 4
 )
 SELECT
-  COALESCE(p.date, h.date)                  AS date,
-  COALESCE(p.channel, h.channel)            AS channel,
-  CASE COALESCE(p.channel, h.channel)
-    WHEN 'google_ads'    THEN 'Google Ads'
-    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
-    ELSE COALESCE(p.channel, h.channel)
-  END                                        AS channel_name,
-  COALESCE(p.campaign_name, h.utm_campaign)  AS utm_campaign,
-  COALESCE(p.adgroup_name, h.utm_audience)   AS utm_audience,
-  COALESCE(p.adgroup_name, h.utm_audience)   AS adgroup_name,
-  COALESCE(p.utm_term, h.utm_term)           AS utm_term,
-  h.utm_source,
+  p.date,
+  p.channel,
+  p.channel_name,
+  p.campaign_name                            AS utm_campaign,
+  p.adgroup_name                             AS utm_audience,
+  p.adgroup_name                             AS adgroup_name,
+  p.utm_term,
+  CAST(NULL AS STRING)                       AS utm_source,
   p.status,
   p.match_type,
   p.quality_score,
-  COALESCE(p.spend, u.spend, 0)              AS spend,
+  COALESCE(p.spend, 0)                       AS spend,
   COALESCE(p.impressions, 0)                 AS impressions,
   COALESCE(p.clicks, 0)                      AS clicks,
   COALESCE(p.ctr, 0)                         AS ctr,
-  COALESCE(h.leads, 0)                       AS leads,
-  COALESCE(h.leads_qualified, 0)             AS leads_qualified,
-  COALESCE(h.leads_disqualified, 0)          AS leads_disqualified,
-  -- All-pipeline deal amounts
+  COALESCE(p.leads, 0)                       AS leads,
+  COALESCE(p.leads_qualified, 0)             AS leads_qualified,
+  COALESCE(p.leads_disqualified, 0)          AS leads_disqualified,
+  -- All-pipeline deal columns (sourced from hubspot_deals_daily compat view)
   COALESCE(d.deals, 0)                       AS deals,
-  COALESCE(d.deals_won, 0)                   AS deals_won,
-  COALESCE(d.revenue_won, 0)                 AS revenue_won,
+  COALESCE(d.deals, 0)                       AS deals_won,
+  COALESCE(p.revenue_won, d.amount_won, 0)   AS revenue_won,
   COALESCE(d.amount_lost, 0)                 AS amount_lost,
   COALESCE(d.amount_open, 0)                 AS amount_open,
   COALESCE(d.amount_total, 0)                AS amount_total,
-  SAFE_DIVIDE(d.revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0))     AS roas,
+  SAFE_DIVIDE(COALESCE(p.revenue_won, d.amount_won), NULLIF(p.spend, 0)) AS roas,
   -- New business deal amounts (Sales Pipeline + Bookkeeping + Qflavours)
-  COALESCE(d.new_biz_deals_won, 0)           AS new_biz_deals_won,
-  COALESCE(d.new_biz_revenue_won, 0)         AS new_biz_revenue_won,
+  COALESCE(p.new_biz_deals_won, 0)           AS new_biz_deals_won,
+  COALESCE(p.new_biz_revenue_won, d.new_biz_amount_won, 0) AS new_biz_revenue_won,
   COALESCE(d.new_biz_amount_lost, 0)         AS new_biz_amount_lost,
   COALESCE(d.new_biz_amount_open, 0)         AS new_biz_amount_open,
   COALESCE(d.new_biz_amount_total, 0)        AS new_biz_amount_total,
-  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(COALESCE(p.spend, u.spend), 0)) AS new_biz_roas,
-  SAFE_DIVIDE(h.leads_qualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0))    AS qual_rate,
-  SAFE_DIVIDE(h.leads_disqualified, NULLIF(h.leads_qualified + h.leads_disqualified, 0)) AS disq_rate,
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads, 0))           AS CPL,
-  SAFE_DIVIDE(COALESCE(p.spend, u.spend), NULLIF(h.leads_qualified, 0)) AS CPQL,
-  COALESCE(h.match_method, 'utm_proxy')      AS match_method,
-  IF(p.date IS NOT NULL, 'platform', 'utm_proxy')                        AS data_source
+  SAFE_DIVIDE(COALESCE(p.new_biz_revenue_won, d.new_biz_amount_won), NULLIF(p.spend, 0)) AS new_biz_roas,
+  SAFE_DIVIDE(p.leads_qualified, NULLIF(p.leads_qualified + p.leads_disqualified, 0))    AS qual_rate,
+  SAFE_DIVIDE(p.leads_disqualified, NULLIF(p.leads_qualified + p.leads_disqualified, 0)) AS disq_rate,
+  SAFE_DIVIDE(p.spend, NULLIF(p.leads, 0))           AS CPL,
+  SAFE_DIVIDE(p.spend, NULLIF(p.leads_qualified, 0)) AS CPQL,
+  'wide_keywords'                            AS match_method,
+  'wide_keywords'                            AS data_source
 FROM platform p
-FULL OUTER JOIN hubspot h
-  ON p.date = h.date AND p.channel = h.channel
-  AND LOWER(TRIM(p.utm_term)) = LOWER(TRIM(h.utm_term))
-LEFT JOIN utmproxy u
-  ON h.date = u.date AND h.channel = u.channel AND h.utm_term = u.utm_term
 LEFT JOIN deals d
-  ON COALESCE(p.date, h.date) = d.date
-  AND COALESCE(p.channel, h.channel) = d.channel
-  AND LOWER(TRIM(COALESCE(p.utm_term, h.utm_term))) = LOWER(TRIM(d.utm_term))
+  ON p.date = d.date
+  AND p.channel = d.channel
+  AND LOWER(TRIM(p.utm_campaign)) = d.utm_campaign
+  AND LOWER(TRIM(p.utm_term))     = d.utm_term
 """
 
 
