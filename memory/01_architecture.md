@@ -129,11 +129,9 @@ Nexa Performance Agent/
 | `hubspot_leads_individual` | hubspot_leads_bq.py | hs_object_id |
 | `hubspot_deals_daily` | hubspot_deals_bq.py | date, pipeline, qoyod_source |
 | `organic_page_daily` | meta_organic_bq, youtube_bq | date, channel |
-| `gclid_attribution` | google_ads_bq | gclid |
 | `agent_activity_log` | activity_logger.py | role, status |
 | `connector_health_log` | connector_tracker.py | connector, check_type |
 | `asana_task_status` | asana_sync.py | task_id |
-| `qa_gate_events` | gate.py | surface, check_name |
 
 ### Reporting VIEWs (sourced from wide_ads, refreshed every 6h by `refresh_all_views()`)
 
@@ -170,8 +168,8 @@ every 6h via the reporting scheduler.
 ### Lightweight views (from `ALL_VIEWS` + `_sub_campaign_views()`)
 | View | Purpose |
 |---|---|
-| `v_channel_key_map` | Channel slug → display name mapping |
 | `v_keyword_performance` | Keyword grain with QS, IS, leads |
+| ~~`v_channel_key_map`~~ | Dropped 2026-06-16 — inlined as CASE in consumers |
 
 ### Dropped tables (do not recreate)
 
@@ -188,6 +186,14 @@ utm_paid_attribution_daily, channel_roas_daily
 **Dropped 2026-06-16 (0 active analysis consumers):**
 platform_campaign_snapshot, pmax_asset_groups_daily, v_agent_activity_dashboard,
 v_agent_consumption_daily, v_new_biz_daily
+
+**Dropped 2026-06-16 (dataset consolidation — write-only sinks or migrated):**
+- `qa_gate_events` — write-only ops sink; gate.py/self_test.py now log to stdout
+- `adsets_daily` — only consumer (reports/app.py scale endpoint) migrated to wide_ads;
+  6 collector write calls removed (Google/Meta/Snap/TikTok/LinkedIn/Microsoft)
+- `gclid_attribution` — write-only; no Python reads feed attribution decisions;
+  gclid_clickview daily scheduler call removed; gclid removed from connector_tracker
+- `v_channel_key_map` — 7-row CASE view inlined into 3 consumers as CASE expressions
 
 ## Tech choices (and why)
 
