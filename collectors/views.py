@@ -14,14 +14,13 @@ Compat views (ALL_VIEWS — lightweight, refreshed every 6h by refresh_all_views
   - v_agent_activity_dashboard  (agent activity heatmap for Hex)
   - v_keyword_performance       (keyword grain, via _sub_campaign_views())
 
-Materialized tables (rebuilt every 6h by materialize_heavy_views() — group-B chain):
-  - paid_channel_campaign_daily (spend + leads + deals, campaign grain)
-  - channel_roas_daily          (spend + leads + deals + ROAS, channel grain — spine-anchored)
-  - paid_channel_daily          (same, channel grain via qoyod_source join — spine-anchored)
-  - v_adset_performance         (adset grain)
-  - v_ad_performance            (ad grain)
-  - wide_ads                    (ad grain, id-first attribution — primary new reporting table)
-  - wide_keywords               (keyword grain — primary new reporting table)
+Materialized tables (rebuilt every 6h by materialize_heavy_views() — all source from wide_ads):
+  - paid_channel_campaign_daily (campaign grain rollup)
+  - paid_channel_daily          (channel grain rollup)
+  - v_adset_performance         (adset grain rollup)
+  - v_ad_performance            (ad grain rollup — essentially wide_ads with column aliases)
+  - wide_ads                    (ad grain, id-first attribution — primary reporting table)
+  - wide_keywords               (keyword grain — primary reporting table)
 """
 import os
 from dotenv import load_dotenv
@@ -224,376 +223,88 @@ LEFT JOIN deals d ON d.date = spine.date AND d.channel = spine.channel
 """
 
 
-# ─── Unified paid-channel view (single source of truth for the dashboard) ────
-# Joins ad-platform spend with HubSpot leads + deals, computing CPL/CPQL/ROAS
-# in SQL.  All reporting MUST use this view — no Python-side spend/leads math.
-#
-# Date discipline: rows emitted only for date <= CURRENT_DATE('Asia/Riyadh') - 1.
-# Today's data is always partial across platforms (Google Ads is T-1, Meta has
-# 24h lag) so we ALWAYS cut at yesterday.  The dashboard tells the user
-# "data through {yesterday}".
 PAID_CHANNEL_CAMPAIGN_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_campaign_daily` AS
--- ID-first attribution (Option B, 2026-05-13):
---   spend is grouped by (date, channel, campaign_id) — the latest campaign_name
---   is just a display label via ANY_VALUE().
---   Leads + deals are split into two mutually-exclusive buckets:
---     *_by_id   → rows with lead/deal_campaign_id_sync IS NOT NULL
---                 (Snap/Meta/TikTok Instantform — native platform ID populated)
---     *_by_name → rows with sync_id IS NULL
---                 (Google/Bing/LinkedIn website forms — UTM name is the only signal)
---   Sums are safe because the two buckets are disjoint on sync_id.
--- This consolidates renames (same ID gets all leads+spend+deals regardless of
--- how often the name changed) AND separates duplicate-name campaigns by ID.
-WITH
-  channel_map AS (
-    SELECT 'google_ads'    AS channel, 'Google Ads'    AS qoyod_source UNION ALL
-    SELECT 'meta',                     'Meta Ads'                       UNION ALL
-    SELECT 'snapchat',                 'Snapchat Ads'                   UNION ALL
-    SELECT 'tiktok',                   'Tiktok Ads'                     UNION ALL
-    SELECT 'linkedin',                 'LinkedIn Ads'                   UNION ALL
-    SELECT 'microsoft_ads',            'Microsoft Ads'
-  ),
-  spend AS (
-    SELECT date, channel, campaign_id,
-           ANY_VALUE(campaign_name) AS campaign_name,   -- latest name for display
-           ANY_VALUE(status)  AS status,
-           SUM(spend)        AS spend,
-           SUM(impressions)  AS impressions,
-           SUM(clicks)       AS clicks
-    FROM `{P}.{D}.campaigns_daily`
-    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-    GROUP BY date, channel, campaign_id
-  ),
-  -- Leads: ID-matched bucket (Snap / Meta / TikTok Instantform)
-  leads_by_id AS (
-    SELECT date, qoyod_source, lead_campaign_id_sync AS campaign_id,
-           ANY_VALUE(lead_utm_source) AS utm_source,
-           SUM(leads_total)        AS leads,
-           SUM(leads_qualified)    AS qualified,
-           SUM(leads_disqualified) AS disqualified
-    FROM `{P}.{D}.hubspot_leads_module_daily`
-    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-      AND lead_campaign_id_sync IS NOT NULL
-    GROUP BY date, qoyod_source, lead_campaign_id_sync
-  ),
-  -- Leads: name-matched bucket (Google / Microsoft / LinkedIn website forms — no sync ID)
-  leads_by_name AS (
-    SELECT date, qoyod_source, lead_utm_campaign AS campaign_name,
-           ANY_VALUE(lead_utm_source) AS utm_source,
-           SUM(leads_total)        AS leads,
-           SUM(leads_qualified)    AS qualified,
-           SUM(leads_disqualified) AS disqualified
-    FROM `{P}.{D}.hubspot_leads_module_daily`
-    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-      AND lead_campaign_id_sync IS NULL
-    GROUP BY date, qoyod_source, lead_utm_campaign
-  ),
-  -- Deals: ID-matched bucket (new_biz + all-pipeline)
-  deals_by_id AS (
-    SELECT date, qoyod_source, deal_campaign_id_sync AS campaign_id,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_total ELSE 0 END) AS new_biz_deals_total,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_total ELSE 0 END) AS new_biz_amount_total,
-           -- All pipelines
-           SUM(deals_won)    AS all_deals_won,
-           SUM(amount_won)   AS all_revenue_won,
-           SUM(amount_lost)  AS all_amount_lost,
-           SUM(amount_open)  AS all_amount_open,
-           SUM(amount_total) AS all_amount_total
-    FROM `{P}.{D}.hubspot_deals_daily`
-    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-      AND deal_campaign_id_sync IS NOT NULL
-    GROUP BY date, qoyod_source, deal_campaign_id_sync
-  ),
-  -- Deals: name-matched bucket (new_biz + all-pipeline — no sync ID)
-  deals_by_name AS (
-    SELECT date, qoyod_source, deal_utm_campaign AS campaign_name,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN deals_total ELSE 0 END) AS new_biz_deals_total,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-           SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN amount_total ELSE 0 END) AS new_biz_amount_total,
-           -- All pipelines
-           SUM(deals_won)    AS all_deals_won,
-           SUM(amount_won)   AS all_revenue_won,
-           SUM(amount_lost)  AS all_amount_lost,
-           SUM(amount_open)  AS all_amount_open,
-           SUM(amount_total) AS all_amount_total
-    FROM `{P}.{D}.hubspot_deals_daily`
-    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-      AND deal_campaign_id_sync IS NULL
-    GROUP BY date, qoyod_source, deal_utm_campaign
-  ),
-  -- All-time campaign_id → name lookup (used by stubs below)
-  campaign_names AS (
-    SELECT campaign_id, ANY_VALUE(campaign_name) AS campaign_name
-    FROM `{P}.{D}.campaigns_daily`
-    GROUP BY campaign_id
-  ),
-  -- Stub rows: ID-matched deals whose (date, campaign_id) has no spend row
-  -- INNER JOIN campaign_names ensures only real campaigns (ever in campaigns_daily)
-  deal_id_stubs AS (
-    SELECT di.date, cm.channel, di.campaign_id, cn.campaign_name
-    FROM deals_by_id di
-    JOIN channel_map cm ON cm.qoyod_source = di.qoyod_source
-    JOIN campaign_names cn ON cn.campaign_id = di.campaign_id
-    WHERE NOT EXISTS (
-      SELECT 1 FROM spend s
-      WHERE s.date = di.date AND s.campaign_id = di.campaign_id
-    )
-  ),
-  -- Stub rows: name-matched deals whose (date, campaign_name) has no spend row
-  -- Guard: campaign must either (a) have ever appeared in campaigns_daily, OR
-  -- (b) follow the naming convention prefix — catches valid campaigns that ran
-  -- zero spend on the deal date (e.g. a closed campaign that still converts).
-  -- This prevents junk UTMs (__none__, auto_social, etc.) while allowing
-  -- convention-named campaigns like TikTok_Leadgen_Prospecting_Interests_Instantform.
-  deal_name_stubs AS (
-    SELECT dn.date, cm.channel,
-           CAST(NULL AS STRING) AS campaign_id,
-           dn.campaign_name
-    FROM deals_by_name dn
-    JOIN channel_map cm ON cm.qoyod_source = dn.qoyod_source
-    WHERE (
-      EXISTS (
-        SELECT 1 FROM `{P}.{D}.campaigns_daily` cd
-        WHERE LOWER(cd.campaign_name) = LOWER(dn.campaign_name)
-      )
-      OR REGEXP_CONTAINS(dn.campaign_name,
-           r'(?i)^(Tiktok|Meta|Snapchat|Google|LinkedIn|Microsoft|PMax|Snap)_')
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM spend s
-      WHERE s.date = dn.date
-        AND LOWER(s.campaign_name) = LOWER(dn.campaign_name)
-    )
-  )
 SELECT
-  s.date,
-  s.channel,
-  s.campaign_id,                                       -- NEW: exposed for disambiguation
-  s.campaign_name,
-  s.status,
-  COALESCE(li.utm_source, ln.utm_source) AS utm_source,
-  ROUND(s.spend, 2)         AS spend,
-  s.impressions,
-  s.clicks,
-  -- Mutually exclusive buckets — sum is safe
-  IFNULL(li.leads, 0)        + IFNULL(ln.leads, 0)        AS leads,
-  IFNULL(li.qualified, 0)    + IFNULL(ln.qualified, 0)    AS qualified,
-  IFNULL(li.disqualified, 0) + IFNULL(ln.disqualified, 0) AS disqualified,
-  (IFNULL(li.leads,0) + IFNULL(ln.leads,0))
-    - (IFNULL(li.qualified,0) + IFNULL(ln.qualified,0))
-    - (IFNULL(li.disqualified,0) + IFNULL(ln.disqualified,0)) AS open_leads,
-  -- New business deals — ID + name buckets summed
-  IFNULL(di.new_biz_deals_won,   0) + IFNULL(dn.new_biz_deals_won,   0) AS new_biz_deals_won,
-  IFNULL(di.new_biz_deals_lost,  0) + IFNULL(dn.new_biz_deals_lost,  0) AS new_biz_deals_lost,
-  IFNULL(di.new_biz_deals_open,  0) + IFNULL(dn.new_biz_deals_open,  0) AS new_biz_deals_open,
-  IFNULL(di.new_biz_deals_total, 0) + IFNULL(dn.new_biz_deals_total, 0) AS new_biz_deals_total,
-  ROUND(IFNULL(di.new_biz_revenue_won, 0) + IFNULL(dn.new_biz_revenue_won, 0), 2) AS new_biz_revenue_won,
-  ROUND(IFNULL(di.new_biz_amount_lost, 0) + IFNULL(dn.new_biz_amount_lost, 0), 2) AS new_biz_amount_lost,
-  ROUND(IFNULL(di.new_biz_amount_open, 0) + IFNULL(dn.new_biz_amount_open, 0), 2) AS new_biz_amount_open,
-  ROUND(IFNULL(di.new_biz_amount_total,0) + IFNULL(dn.new_biz_amount_total,0), 2) AS new_biz_amount_total,
-  -- KPIs — use the summed lead totals
-  ROUND(SAFE_DIVIDE(s.spend,
-        NULLIF(IFNULL(li.leads,0) + IFNULL(ln.leads,0), 0)),     2) AS cpl,
-  ROUND(SAFE_DIVIDE(s.spend,
-        NULLIF(IFNULL(li.qualified,0) + IFNULL(ln.qualified,0), 0)), 2) AS cpql,
-  ROUND(SAFE_DIVIDE(
-        IFNULL(di.new_biz_revenue_won,0) + IFNULL(dn.new_biz_revenue_won,0),
-        NULLIF(s.spend, 0)), 2) AS new_biz_roas,
-  -- All-pipeline deals (all HubSpot pipelines, not just new_biz)
-  IFNULL(di.all_deals_won,    0) + IFNULL(dn.all_deals_won,    0) AS all_deals_won,
-  ROUND(IFNULL(di.all_revenue_won,  0) + IFNULL(dn.all_revenue_won,  0), 2) AS revenue_won,
-  ROUND(IFNULL(di.all_amount_lost,  0) + IFNULL(dn.all_amount_lost,  0), 2) AS amount_lost,
-  ROUND(IFNULL(di.all_amount_open,  0) + IFNULL(dn.all_amount_open,  0), 2) AS amount_open,
-  ROUND(IFNULL(di.all_amount_total, 0) + IFNULL(dn.all_amount_total, 0), 2) AS amount_total,
-  ROUND(SAFE_DIVIDE(
-        IFNULL(di.all_revenue_won,0) + IFNULL(dn.all_revenue_won,0),
-        NULLIF(s.spend, 0)), 2) AS roas,
-  ROUND(SAFE_DIVIDE(s.clicks, NULLIF(s.impressions, 0)) * 100, 4) AS ctr_pct,
-  ROUND(SAFE_DIVIDE(IFNULL(li.leads,0) + IFNULL(ln.leads,0),
-        NULLIF(s.clicks, 0)) * 100, 4) AS cvr_pct,
-  ROUND(SAFE_DIVIDE(IFNULL(li.qualified,0) + IFNULL(ln.qualified,0),
-        NULLIF(IFNULL(li.leads,0) + IFNULL(ln.leads,0), 0)) * 100, 2) AS qual_rate_pct
-FROM (
-  SELECT t.date, t.channel, t.campaign_id, t.campaign_name, t.status, t.spend, t.impressions, t.clicks
-  FROM spend t
-  UNION ALL
-  SELECT date, channel, campaign_id, campaign_name,
-         CAST(NULL AS STRING) AS status, 0.0 AS spend, 0 AS impressions, 0 AS clicks
-  FROM deal_id_stubs
-  UNION ALL
-  SELECT date, channel, campaign_id, campaign_name,
-         CAST(NULL AS STRING) AS status, 0.0 AS spend, 0 AS impressions, 0 AS clicks
-  FROM deal_name_stubs
-) s
-LEFT JOIN channel_map cm   ON cm.channel = s.channel
--- ID-match (Snap/Meta/TikTok Instantform — survives renames + separates duplicate names)
-LEFT JOIN leads_by_id li   ON li.date = s.date
-                          AND li.qoyod_source = cm.qoyod_source
-                          AND li.campaign_id = s.campaign_id
--- Name-match (Google/Microsoft/LinkedIn website forms — no sync ID populated)
-LEFT JOIN leads_by_name ln ON ln.date = s.date
-                          AND ln.qoyod_source = cm.qoyod_source
-                          AND LOWER(ln.campaign_name) = LOWER(s.campaign_name)
-LEFT JOIN deals_by_id di   ON di.date = s.date
-                          AND di.qoyod_source = cm.qoyod_source
-                          AND di.campaign_id = s.campaign_id
-LEFT JOIN deals_by_name dn ON dn.date = s.date
-                          AND dn.qoyod_source = cm.qoyod_source
-                          AND LOWER(dn.campaign_name) = LOWER(s.campaign_name)
+  date,
+  channel,
+  campaign_id,
+  ANY_VALUE(campaign_name)                                                             AS campaign_name,
+  ANY_VALUE(status)                                                                    AS status,
+  CAST(NULL AS STRING)                                                                 AS utm_source,
+  ROUND(SUM(spend), 2)                                                                AS spend,
+  SUM(impressions)                                                                     AS impressions,
+  SUM(clicks)                                                                          AS clicks,
+  SUM(leads_total)                                                                     AS leads,
+  SUM(leads_qualified)                                                                 AS qualified,
+  SUM(leads_disqualified)                                                              AS disqualified,
+  SUM(leads_open)                                                                      AS open_leads,
+  SUM(new_biz_deals_won)                                                               AS new_biz_deals_won,
+  SUM(new_biz_deals_lost)                                                              AS new_biz_deals_lost,
+  SUM(new_biz_deals_open)                                                              AS new_biz_deals_open,
+  SUM(new_biz_deals_total)                                                             AS new_biz_deals_total,
+  ROUND(SUM(new_biz_revenue_won), 2)                                                  AS new_biz_revenue_won,
+  ROUND(SUM(new_biz_amount_lost), 2)                                                  AS new_biz_amount_lost,
+  ROUND(SUM(new_biz_amount_open), 2)                                                  AS new_biz_amount_open,
+  ROUND(SUM(new_biz_revenue_won)+SUM(new_biz_amount_lost)+SUM(new_biz_amount_open), 2) AS new_biz_amount_total,
+  SUM(all_deals_won)                                                                   AS all_deals_won,
+  ROUND(SUM(all_revenue_won), 2)                                                      AS revenue_won,
+  ROUND(SUM(all_amount_lost), 2)                                                      AS amount_lost,
+  ROUND(SUM(all_amount_open), 2)                                                      AS amount_open,
+  ROUND(SUM(all_revenue_won)+SUM(all_amount_lost)+SUM(all_amount_open), 2)            AS amount_total,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2)                     AS cpl,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2)                 AS cpql,
+  ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)             AS new_biz_roas,
+  ROUND(SAFE_DIVIDE(SUM(all_revenue_won), NULLIF(SUM(spend), 0)), 2)                 AS roas,
+  ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0)) * 100, 4)              AS ctr_pct,
+  ROUND(SAFE_DIVIDE(SUM(leads_total), NULLIF(SUM(clicks), 0)) * 100, 4)              AS cvr_pct,
+  ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+    NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)) * 100, 2)               AS qual_rate_pct
+FROM `{P}.{D}.wide_ads`
+GROUP BY date, channel, campaign_id
+HAVING SUM(spend) > 0 OR SUM(leads_total) > 0  -- drop ghost rows with no activity
 """
 
 
-# Channel-level rollup view — same data aggregated to (date, channel)
+# ── dummy placeholder so old imports don't break ──────────────────────────────
+CHANNEL_ROAS_DAILY_SQL = ""  # dropped — 0 consumers; wide_ads is the source now
+
+
+# Channel-level rollup — simple GROUP BY on wide_ads (id-first attribution already done)
 PAID_CHANNEL_DAILY_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.paid_channel_daily` AS
--- Lead totals come directly from hubspot_leads_module_daily by qoyod_source
--- (no campaign-name join) so ALL paid leads are counted, including those
--- with no UTM campaign. Spend comes from campaigns_daily. Campaign-level
--- drill-down lives in paid_channel_campaign_daily.
-WITH
-  channel_map AS (
-    SELECT 'google_ads'   AS channel, 'Google Ads'   AS qoyod_source UNION ALL
-    SELECT 'meta',                    'Meta Ads'                      UNION ALL
-    SELECT 'snapchat',                'Snapchat Ads'                  UNION ALL
-    SELECT 'tiktok',                  'Tiktok Ads'                    UNION ALL
-    SELECT 'linkedin',                'LinkedIn Ads'                  UNION ALL
-    SELECT 'microsoft_ads',           'Microsoft Ads'
-  ),
-  channel_first AS (
-    SELECT channel, MIN(date) AS first_date
-    FROM `{P}.{D}.campaigns_daily`
-    GROUP BY channel
-  ),
-  spine AS (
-    SELECT d AS date, cf.channel
-    FROM UNNEST(GENERATE_DATE_ARRAY(
-      DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 365 DAY),
-      DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-    )) AS d
-    JOIN channel_first cf ON d >= cf.first_date
-  ),
-  spend AS (
-    SELECT date, channel,
-           SUM(spend)       AS spend,
-           SUM(impressions) AS impressions,
-           SUM(clicks)      AS clicks
-    FROM `{P}.{D}.campaigns_daily`
-    WHERE date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-    GROUP BY date, channel
-  ),
-  leads AS (
-    SELECT cm.channel,
-           l.date,
-           SUM(l.leads_total)        AS leads,
-           SUM(l.leads_qualified)    AS qualified,
-           SUM(l.leads_disqualified) AS disqualified,
-           SUM(l.leads_open)         AS open_leads
-    FROM `{P}.{D}.hubspot_leads_module_daily` l
-    JOIN channel_map cm ON cm.qoyod_source = l.qoyod_source
-    WHERE l.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-    GROUP BY cm.channel, l.date
-  ),
-  deals AS (
-    SELECT cm.channel,
-           d.date,
-           SUM(d.deals_won)    AS deals_won,
-           SUM(d.deals_lost)   AS deals_lost,
-           SUM(d.deals_open)   AS deals_open,
-           SUM(d.deals_total)  AS deals_total,
-           SUM(d.amount_won)   AS revenue_won,
-           SUM(d.amount_lost)  AS amount_lost,
-           SUM(d.amount_open)  AS amount_open,
-           SUM(d.amount_total) AS amount_total,
-           -- New business pipelines (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.deals_won   ELSE 0 END) AS new_biz_deals_won,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.deals_open  ELSE 0 END) AS new_biz_deals_open,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.deals_total ELSE 0 END) AS new_biz_deals_total,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.amount_won  ELSE 0 END) AS new_biz_revenue_won,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.amount_lost ELSE 0 END) AS new_biz_amount_lost,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.amount_open ELSE 0 END) AS new_biz_amount_open,
-           SUM(CASE WHEN d.pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-                    THEN d.amount_total ELSE 0 END) AS new_biz_amount_total
-    FROM `{P}.{D}.hubspot_deals_daily` d
-    JOIN channel_map cm ON cm.qoyod_source = d.qoyod_source
-    WHERE d.date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
-    GROUP BY cm.channel, d.date
-  )
 SELECT
-  spine.date,
-  spine.channel,
-  ROUND(IFNULL(s.spend, 0), 2)              AS spend,
-  IFNULL(s.impressions, 0)                  AS impressions,
-  IFNULL(s.clicks, 0)                       AS clicks,
-  IFNULL(l.leads, 0)                        AS leads_total,
-  IFNULL(l.qualified, 0)                    AS qualified,
-  IFNULL(l.disqualified, 0)                 AS disqualified,
-  IFNULL(l.open_leads, 0)                   AS open_leads,
-  -- Deal metrics (all pipelines)
-  IFNULL(d.deals_won, 0)                    AS deals_won,
-  IFNULL(d.deals_lost, 0)                   AS deals_lost,
-  IFNULL(d.deals_open, 0)                   AS deals_open,
-  ROUND(IFNULL(d.revenue_won, 0), 2)        AS revenue_won,
-  ROUND(IFNULL(d.amount_lost, 0), 2)        AS amount_lost,
-  ROUND(IFNULL(d.amount_open, 0), 2)        AS amount_open,
-  -- New business pipelines only (Sales Pipeline + Bookkeeping + Qflavours) — full parallel set
-  IFNULL(d.new_biz_deals_won,   0)                  AS new_biz_deals_won,
-  IFNULL(d.new_biz_deals_lost,  0)                  AS new_biz_deals_lost,
-  IFNULL(d.new_biz_deals_open,  0)                  AS new_biz_deals_open,
-  IFNULL(d.new_biz_deals_total, 0)                  AS new_biz_deals_total,
-  ROUND(IFNULL(d.new_biz_revenue_won, 0), 2)        AS new_biz_revenue_won,
-  ROUND(IFNULL(d.new_biz_amount_lost, 0), 2)        AS new_biz_amount_lost,
-  ROUND(IFNULL(d.new_biz_amount_open, 0), 2)        AS new_biz_amount_open,
-  ROUND(IFNULL(d.new_biz_amount_total,0), 2)        AS new_biz_amount_total,
-  -- KPIs
-  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.leads,0), 0)),          2) AS cpl,
-  ROUND(SAFE_DIVIDE(IFNULL(s.spend,0), NULLIF(IFNULL(l.qualified,0), 0)),      2) AS cpql,
-  ROUND(SAFE_DIVIDE(IFNULL(l.qualified,0), NULLIF(IFNULL(l.leads,0),0)) * 100, 2) AS qual_rate_pct,
-  -- ROAS: all pipelines
-  ROUND(SAFE_DIVIDE(IFNULL(d.revenue_won,0), NULLIF(IFNULL(s.spend,0), 0)),    2) AS roas,
-  -- ROAS: new business only
-  ROUND(SAFE_DIVIDE(IFNULL(d.new_biz_revenue_won,0), NULLIF(IFNULL(s.spend,0), 0)), 2) AS new_biz_roas
--- Spine-anchored: every channel appears for every date since its first campaign,
--- even on zero-spend / zero-lead days.
-FROM spine
-LEFT JOIN spend s ON s.date = spine.date AND s.channel = spine.channel
-LEFT JOIN leads l ON l.date = spine.date AND l.channel = spine.channel
-LEFT JOIN deals d ON d.date = spine.date AND d.channel = spine.channel
+  date,
+  channel,
+  ROUND(SUM(spend), 2)                                                         AS spend,
+  SUM(impressions)                                                              AS impressions,
+  SUM(clicks)                                                                   AS clicks,
+  SUM(leads_total)                                                              AS leads_total,
+  SUM(leads_qualified)                                                          AS qualified,
+  SUM(leads_disqualified)                                                       AS disqualified,
+  SUM(leads_open)                                                               AS open_leads,
+  SUM(all_deals_won)                                                            AS deals_won,
+  SUM(new_biz_deals_lost)                                                       AS deals_lost,
+  SUM(new_biz_deals_open)                                                       AS deals_open,
+  ROUND(SUM(all_revenue_won), 2)                                               AS revenue_won,
+  ROUND(SUM(all_amount_lost), 2)                                               AS amount_lost,
+  ROUND(SUM(all_amount_open), 2)                                               AS amount_open,
+  SUM(new_biz_deals_won)                                                        AS new_biz_deals_won,
+  SUM(new_biz_deals_lost)                                                       AS new_biz_deals_lost,
+  SUM(new_biz_deals_open)                                                       AS new_biz_deals_open,
+  SUM(new_biz_deals_total)                                                      AS new_biz_deals_total,
+  ROUND(SUM(new_biz_revenue_won), 2)                                           AS new_biz_revenue_won,
+  ROUND(SUM(new_biz_amount_lost), 2)                                           AS new_biz_amount_lost,
+  ROUND(SUM(new_biz_amount_open), 2)                                           AS new_biz_amount_open,
+  ROUND(SUM(new_biz_revenue_won)+SUM(new_biz_amount_lost)+SUM(new_biz_amount_open), 2) AS new_biz_amount_total,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2)              AS cpl,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2)          AS cpql,
+  ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+    NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)) * 100, 2)        AS qual_rate_pct,
+  ROUND(SAFE_DIVIDE(SUM(all_revenue_won), NULLIF(SUM(spend), 0)), 2)          AS roas,
+  ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)      AS new_biz_roas
+FROM `{P}.{D}.wide_ads`
+GROUP BY date, channel
 """
 
 
@@ -1071,13 +782,10 @@ def _heavy_views_list():
         V_AD_PERFORMANCE_SQL,
     )
     return [
-        # group-B chain: read through hubspot_*_daily compat views → wide-table store tables
         ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
-        ("channel_roas_daily",          CHANNEL_ROAS_DAILY_SQL),
         ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
         ("v_adset_performance",         V_ADSET_PERFORMANCE_SQL),
         ("v_ad_performance",            V_AD_PERFORMANCE_SQL),
-        # Wide-table redesign — primary reporting tables on store tables (Step 3)
         ("wide_ads",                    WIDE_ADS_SQL),
         ("wide_keywords",               WIDE_KEYWORDS_SQL),
     ]

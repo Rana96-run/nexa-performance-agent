@@ -764,643 +764,94 @@ FROM combined
 
 V_ADSET_PERFORMANCE_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_adset_performance` AS
--- Adset/AdGroup level: spend + impressions + clicks from adsets_daily (platform),
--- leads/SQLs/disqual from HubSpot, deals/closed-won/ROAS from hubspot_deals_daily.
--- Falls back to UTM-proxy spend when adsets_daily has no rows yet.
--- Ad set / Ad group level performance.
--- Spend/impressions/clicks come from adsets_daily (real platform data via Airbyte).
--- Leads/SQLs come from utm_paid_attribution_daily (HubSpot utm_audience match).
--- Falls back to UTM-proxy spend when adsets_daily has no row for that adset.
-WITH platform AS (
-  -- One row per DISTINCT adset_id (not per name). Same-name different-ID adsets
-  -- stay separate so each keeps its own adset_id + spend. Grouping by adset_id
-  -- was added 2026-06-09 alongside the v_ad_performance fix — ANY_VALUE(adset_id)
-  -- on a name grain silently dropped one ID and merged spend across distinct
-  -- adsets (63 spend-bearing groups, $4.8k/30d).
-  SELECT date, channel, campaign_name,
-    -- utm_audience column holds the resolved custom-param value (e.g. _adgroup for
-    -- Microsoft, adset_name for Meta/TikTok/Snap). Fall back to adset_name so
-    -- channels that don't populate utm_audience still show up.
-    ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
-    ANY_VALUE(adset_name) AS adset_name,
-    ANY_VALUE(status) AS status,
-    adset_id              AS platform_adset_id,
-    ANY_VALUE(campaign_id) AS platform_campaign_id,
-    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks
-  FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
-  GROUP BY date, channel, campaign_name, adset_id
-  UNION ALL
-  -- Stub rows: deals attributed to real adsets but with no spend row on deal create date
-  SELECT d.date, am.channel, am.campaign_name, am.utm_audience, am.adset_name,
-    CAST(NULL AS STRING) AS status,
-    d.adset_id AS platform_adset_id,
-    am.platform_campaign_id,
-    0.0 AS spend, 0 AS impressions, 0 AS clicks
-  FROM (
-    SELECT date, deal_adgroup_id_sync AS adset_id
-    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-    WHERE deal_adgroup_id_sync IS NOT NULL
-    GROUP BY 1, 2
-  ) d
-  JOIN (
-    SELECT adset_id, ANY_VALUE(channel) AS channel,
-      ANY_VALUE(campaign_name) AS campaign_name,
-      ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
-      ANY_VALUE(adset_name) AS adset_name,
-      ANY_VALUE(campaign_id) AS platform_campaign_id
-    FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
-    GROUP BY adset_id
-  ) am ON am.adset_id = d.adset_id
-  WHERE NOT EXISTS (
-    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.adsets_daily` a
-    WHERE a.date = d.date AND a.adset_id = d.adset_id
-  )
-  UNION ALL
-  -- Stub rows: name-matched deals (no adset sync ID) with a known utm_audience
-  -- that exists in adsets_daily but has no spend row on deal create date
-  SELECT d.date, am.channel, am.campaign_name, am.utm_audience, am.adset_name,
-    CAST(NULL AS STRING) AS status,
-    am.adset_id AS platform_adset_id,
-    am.platform_campaign_id,
-    0.0 AS spend, 0 AS impressions, 0 AS clicks
-  FROM (
-    SELECT date, LOWER(TRIM(deal_utm_audience)) AS utm_key
-    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-    WHERE deal_adgroup_id_sync IS NULL AND deal_utm_audience IS NOT NULL
-    GROUP BY 1, 2
-  ) d
-  JOIN (
-    SELECT adset_id, ANY_VALUE(channel) AS channel,
-      ANY_VALUE(campaign_name) AS campaign_name,
-      ANY_VALUE(COALESCE(utm_audience, adset_name)) AS utm_audience,
-      ANY_VALUE(adset_name) AS adset_name,
-      ANY_VALUE(campaign_id) AS platform_campaign_id,
-      LOWER(TRIM(ANY_VALUE(COALESCE(utm_audience, adset_name)))) AS utm_key
-    FROM `{PROJECT_ID}.{DATASET}.adsets_daily`
-    GROUP BY adset_id
-  ) am ON am.utm_key = d.utm_key
-  WHERE NOT EXISTS (
-    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.adsets_daily` a
-    WHERE a.date = d.date
-      AND LOWER(TRIM(COALESCE(a.utm_audience, a.adset_name))) = d.utm_key
-  )
-),
--- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience)
--- grain from utm_paid_attribution_daily. 2026-06-09: removed the adset-ID and
--- campaign-ID re-joins to hubspot_leads_module_daily (Strategy C/D). They
--- double-counted by spraying campaign-level leads across adsets ON TOP OF the
--- audience-grain leads. The upstream view is the single source of truth.
-hubspot AS (
-  SELECT date, channel, utm_campaign, utm_audience,
-    ANY_VALUE(utm_source) AS utm_source,
-    SUM(leads) AS leads,
-    SUM(leads_qualified) AS leads_qualified,
-    SUM(leads_disqualified) AS leads_disqualified
-  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-  WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
-  GROUP BY 1, 2, 3, 4
-),
--- Deals: ID-matched bucket (Snap/Meta/TikTok Instantform — survives adset renames)
-deals_by_id AS (
-  SELECT date,
-    CASE qoyod_source
-      WHEN 'Meta Ads'      THEN 'meta'
-      WHEN 'Google Ads'    THEN 'google_ads'
-      WHEN 'Snapchat Ads'  THEN 'snapchat'
-      WHEN 'Tiktok Ads'    THEN 'tiktok'
-      WHEN 'LinkedIn Ads'  THEN 'linkedin'
-      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
-      ELSE qoyod_source
-    END AS channel,
-    deal_adgroup_id_sync AS adset_id,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
-    -- All pipelines
-    SUM(deals_won)    AS all_deals_won,
-    SUM(amount_won)   AS all_revenue_won,
-    SUM(amount_lost)  AS all_amount_lost,
-    SUM(amount_open)  AS all_amount_open,
-    SUM(amount_total) AS all_amount_total
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_adgroup_id_sync IS NOT NULL
-  GROUP BY 1, 2, 3
-),
--- Deals: name-matched bucket (Google/Bing/LinkedIn website forms — no sync ID)
-deals_by_name AS (
-  SELECT date,
-    CASE qoyod_source
-      WHEN 'Meta Ads'      THEN 'meta'
-      WHEN 'Google Ads'    THEN 'google_ads'
-      WHEN 'Snapchat Ads'  THEN 'snapchat'
-      WHEN 'Tiktok Ads'    THEN 'tiktok'
-      WHEN 'LinkedIn Ads'  THEN 'linkedin'
-      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
-      ELSE qoyod_source
-    END AS channel,
-    deal_utm_campaign AS utm_campaign,
-    deal_utm_audience AS utm_audience,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
-    -- All pipelines
-    SUM(deals_won)    AS all_deals_won,
-    SUM(amount_won)   AS all_revenue_won,
-    SUM(amount_lost)  AS all_amount_lost,
-    SUM(amount_open)  AS all_amount_open,
-    SUM(amount_total) AS all_amount_total
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_adgroup_id_sync IS NULL
-    AND deal_utm_audience IS NOT NULL
-  GROUP BY 1, 2, 3, 4
-),
-utmproxy AS (
-  SELECT date, channel, utm_campaign, utm_audience, SUM(spend) AS spend
-  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-  WHERE utm_campaign != '__no_utm__' AND utm_audience IS NOT NULL
-  GROUP BY 1, 2, 3, 4
-),
-joined AS (
-  SELECT
-    COALESCE(p.date, h.date)                AS date,
-    COALESCE(p.channel, h.channel)          AS channel,
-    COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
-    COALESCE(p.utm_audience, h.utm_audience)  AS utm_audience,
-    p.adset_name                              AS adset_name,
-    p.status                                  AS status,
-    p.platform_campaign_id                    AS campaign_id,
-    p.platform_adset_id                       AS adset_id,
-    COALESCE(p.spend, u.spend) AS spend, p.impressions, p.clicks,
-    p.date AS p_date,
-    h.utm_campaign AS h_utm_campaign,
-    h.utm_source,
-    h.leads              AS leads_raw,
-    h.leads_qualified    AS leads_qualified_raw,
-    h.leads_disqualified AS leads_disqualified_raw,
-    -- dedup key = the upstream bucket's OWN identity (date, channel, utm_campaign,
-    -- utm_audience). Constant per upstream row → counted exactly once even when a
-    -- bucket fans across multiple platform adset_id rows. No ID fallbacks.
-    CASE
-      WHEN h.leads IS NOT NULL THEN CONCAT('AB|', CAST(IFNULL(h.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h.channel,''),
-                                                '|', IFNULL(h.utm_campaign,''), '|', IFNULL(h.utm_audience,''))
-      ELSE NULL
-    END                                        AS lead_src_key,
-    di.new_biz_deals_won  AS di_deals_won,  di.new_biz_deals_lost  AS di_deals_lost,
-    di.new_biz_deals_open AS di_deals_open, di.new_biz_deals_total AS di_deals_total,
-    di.new_biz_revenue_won AS di_rev_won,   di.new_biz_amount_lost AS di_amt_lost,
-    di.new_biz_amount_open AS di_amt_open,  di.new_biz_amount_total AS di_amt_total,
-    di.all_revenue_won AS di_all_rev_won,   di.all_amount_lost AS di_all_amt_lost,
-    di.all_amount_open AS di_all_amt_open,  di.all_amount_total AS di_all_amt_total,
-    di.adset_id AS di_adset_id,
-    dn.new_biz_deals_won  AS dn_deals_won,  dn.new_biz_deals_lost  AS dn_deals_lost,
-    dn.new_biz_deals_open AS dn_deals_open, dn.new_biz_deals_total AS dn_deals_total,
-    dn.new_biz_revenue_won AS dn_rev_won,   dn.new_biz_amount_lost AS dn_amt_lost,
-    dn.new_biz_amount_open AS dn_amt_open,  dn.new_biz_amount_total AS dn_amt_total,
-    dn.all_revenue_won AS dn_all_rev_won,   dn.all_amount_lost AS dn_all_amt_lost,
-    dn.all_amount_open AS dn_all_amt_open,  dn.all_amount_total AS dn_all_amt_total,
-    dn.utm_campaign AS dn_utm_campaign, dn.utm_audience AS dn_utm_audience
-  FROM platform p
-  FULL OUTER JOIN hubspot h
-    ON p.date = h.date AND p.channel = h.channel
-    AND LOWER(TRIM(p.utm_audience)) = LOWER(TRIM(h.utm_audience))
-  LEFT JOIN utmproxy u
-    ON h.date = u.date AND h.channel = u.channel AND h.utm_audience = u.utm_audience
-  -- Deals: ID-match (Snap/Meta/TikTok Instantform — survives adset renames)
-  LEFT JOIN deals_by_id di
-    ON p.date = di.date AND p.channel = di.channel
-    AND p.platform_adset_id = di.adset_id
-  -- Deals: name-match (Google/Bing/LinkedIn website forms — no sync ID)
-  LEFT JOIN deals_by_name dn
-    ON COALESCE(p.date, h.date) = dn.date
-    AND COALESCE(p.channel, h.channel) = dn.channel
-    AND LOWER(TRIM(COALESCE(p.campaign_name, h.utm_campaign))) = LOWER(TRIM(dn.utm_campaign))
-    AND LOWER(TRIM(COALESCE(p.utm_audience, h.utm_audience))) = LOWER(TRIM(dn.utm_audience))
-)
 SELECT
-  date, channel,
-  CASE channel
-    WHEN 'google_ads'    THEN 'Google Ads'
-    WHEN 'meta'          THEN 'Meta Ads'
-    WHEN 'snapchat'      THEN 'Snapchat Ads'
-    WHEN 'tiktok'        THEN 'TikTok Ads'
-    WHEN 'linkedin'      THEN 'LinkedIn Ads'
-    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
-    ELSE channel
-  END                                      AS channel_name,
-  utm_campaign, utm_audience,
-  COALESCE(adset_name, utm_audience) AS adset_name,
-  utm_source,
-  status,
-  campaign_id, adset_id,
-  -- Fan-out guard: each platform row already carries its own adset_id's spend.
-  -- The utm_audience->hubspot join still fans a platform row across multiple
-  -- hubspot rows, so count platform metrics ONCE per adset_id (per day/channel).
-  IF(ROW_NUMBER() OVER (PARTITION BY date, channel,
-       COALESCE(CAST(adset_id AS STRING), LOWER(TRIM(utm_audience)))
-     ORDER BY COALESCE(h_utm_campaign,'')) = 1, COALESCE(spend, 0), 0)  AS spend,
-  IF(ROW_NUMBER() OVER (PARTITION BY date, channel,
-       COALESCE(CAST(adset_id AS STRING), LOWER(TRIM(utm_audience)))
-     ORDER BY COALESCE(h_utm_campaign,'')) = 1, COALESCE(impressions, 0), 0)     AS impressions,
-  IF(ROW_NUMBER() OVER (PARTITION BY date, channel,
-       COALESCE(CAST(adset_id AS STRING), LOWER(TRIM(utm_audience)))
-     ORDER BY COALESCE(h_utm_campaign,'')) = 1, COALESCE(clicks, 0), 0)          AS clicks,
-  -- LEADS fan-out guard: count each HubSpot source row's leads exactly ONCE.
-  IF(lead_src_key IS NULL OR
-     ROW_NUMBER() OVER (PARTITION BY lead_src_key ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1,
-     COALESCE(leads_raw, 0), 0)                AS leads,
-  IF(lead_src_key IS NULL OR
-     ROW_NUMBER() OVER (PARTITION BY lead_src_key ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1,
-     COALESCE(leads_qualified_raw, 0), 0)      AS leads_qualified,
-  IF(lead_src_key IS NULL OR
-     ROW_NUMBER() OVER (PARTITION BY lead_src_key ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1,
-     COALESCE(leads_disqualified_raw, 0), 0)   AS leads_disqualified,
-  -- DEALS fan-out guard: each deal bucket counted once per its own grain.
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_deals_won,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_deals_won,0), 0) AS new_biz_deals_won,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_deals_lost,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_deals_lost,0), 0) AS new_biz_deals_lost,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_deals_open,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_deals_open,0), 0) AS new_biz_deals_open,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_deals_total,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_deals_total,0), 0) AS new_biz_deals_total,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_rev_won,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_rev_won,0), 0) AS new_biz_revenue_won,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_amt_lost,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_amt_lost,0), 0) AS new_biz_amount_lost,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_amt_open,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_amt_open,0), 0) AS new_biz_amount_open,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_amt_total,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_amt_total,0), 0) AS new_biz_amount_total,
-  -- Ratios + cost: use RAW lead values so per-row metrics stay correct
-  SAFE_DIVIDE(leads_qualified_raw, NULLIF(COALESCE(leads_qualified_raw,0) + COALESCE(leads_disqualified_raw,0), 0)) AS qual_rate,
-  SAFE_DIVIDE(leads_disqualified_raw, NULLIF(COALESCE(leads_qualified_raw,0) + COALESCE(leads_disqualified_raw,0), 0)) AS disq_rate,
-  SAFE_DIVIDE(spend, NULLIF(leads_raw, 0))           AS CPL,
-  SAFE_DIVIDE(spend, NULLIF(leads_qualified_raw, 0)) AS CPQL,
-  SAFE_DIVIDE(IFNULL(di_rev_won,0) + IFNULL(dn_rev_won,0), NULLIF(spend, 0)) AS new_biz_roas,
-  -- All-pipeline amounts (fan-out guard identical to new_biz pattern above)
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_rev_won,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_rev_won,0), 0) AS revenue_won,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_amt_lost,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_amt_lost,0), 0) AS amount_lost,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_amt_open,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_amt_open,0), 0) AS amount_open,
-  IF(di_adset_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_adset_id ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(di_all_amt_total,0), 0)
-    + IF(dn_utm_audience IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_audience ORDER BY COALESCE(CAST(adset_id AS STRING),'')) = 1, IFNULL(dn_all_amt_total,0), 0) AS amount_total,
-  SAFE_DIVIDE(IFNULL(di_all_rev_won,0) + IFNULL(dn_all_rev_won,0), NULLIF(spend, 0)) AS roas,
-  IF(p_date IS NOT NULL, 'platform', 'utm_proxy')                         AS data_source
-FROM joined
+  date,
+  channel,
+  ANY_VALUE(channel_name)                                                      AS channel_name,
+  ANY_VALUE(campaign_name)                                                     AS utm_campaign,
+  ANY_VALUE(adset_name)                                                        AS utm_audience,
+  ANY_VALUE(adset_name)                                                        AS adset_name,
+  CAST(NULL AS STRING)                                                         AS utm_source,
+  ANY_VALUE(status)                                                            AS status,
+  campaign_id,
+  adset_id,
+  ROUND(SUM(spend), 2)                                                        AS spend,
+  SUM(impressions)                                                             AS impressions,
+  SUM(clicks)                                                                  AS clicks,
+  SUM(leads_total)                                                             AS leads,
+  SUM(leads_qualified)                                                         AS leads_qualified,
+  SUM(leads_disqualified)                                                      AS leads_disqualified,
+  SUM(new_biz_deals_won)                                                       AS new_biz_deals_won,
+  SUM(new_biz_deals_lost)                                                      AS new_biz_deals_lost,
+  SUM(new_biz_deals_open)                                                      AS new_biz_deals_open,
+  SUM(new_biz_deals_total)                                                     AS new_biz_deals_total,
+  ROUND(SUM(new_biz_revenue_won), 2)                                          AS new_biz_revenue_won,
+  ROUND(SUM(new_biz_amount_lost), 2)                                          AS new_biz_amount_lost,
+  ROUND(SUM(new_biz_amount_open), 2)                                          AS new_biz_amount_open,
+  ROUND(SUM(new_biz_revenue_won)+SUM(new_biz_amount_lost)+SUM(new_biz_amount_open), 2) AS new_biz_amount_total,
+  ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+    NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)), 4)              AS qual_rate,
+  ROUND(SAFE_DIVIDE(SUM(leads_disqualified),
+    NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)), 4)              AS disq_rate,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2)             AS CPL,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2)         AS CPQL,
+  ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)     AS new_biz_roas,
+  ROUND(SUM(all_revenue_won), 2)                                             AS revenue_won,
+  ROUND(SUM(all_amount_lost), 2)                                             AS amount_lost,
+  ROUND(SUM(all_amount_open), 2)                                             AS amount_open,
+  ROUND(SUM(all_revenue_won)+SUM(all_amount_lost)+SUM(all_amount_open), 2)   AS amount_total,
+  ROUND(SAFE_DIVIDE(SUM(all_revenue_won), NULLIF(SUM(spend), 0)), 2)         AS roas,
+  'wide_ads'                                                                  AS data_source
+FROM `{PROJECT_ID}.{DATASET}.wide_ads`
+GROUP BY date, channel, campaign_id, adset_id
 """
 
 
 V_AD_PERFORMANCE_SQL = f"""
 CREATE OR REPLACE VIEW `{PROJECT_ID}.{DATASET}.v_ad_performance` AS
--- Ad/Creative level: spend+impressions+clicks from ads_daily,
--- leads/SQLs/disqual from HubSpot, deals/closed-won/ROAS from deals.
-WITH platform AS (
-  -- One row per DISTINCT ad_id (not per name). Same-name different-ID ads stay
-  -- separate so each keeps its own ad_id + spend. Grouping by ad_id was added
-  -- 2026-06-09 after we found 370 spend-bearing groups ($7.8k/30d) where two
-  -- ads shared a utm_content/ad_name and ANY_VALUE(ad_id) silently dropped one
-  -- ID and merged the spend. utm_content is still carried (for the HubSpot join)
-  -- but it is no longer part of the grain — ad_id is.
-  SELECT date, channel, campaign_name, adset_name,
-    -- utm_content column holds the resolved _adname custom-param value.
-    -- Fall back to ad_name for channels without custom params.
-    ANY_VALUE(COALESCE(utm_content, ad_name)) AS utm_content,
-    ANY_VALUE(ad_name) AS ad_name,
-    ad_id                  AS platform_ad_id,
-    ANY_VALUE(adset_id)    AS platform_adset_id,
-    ANY_VALUE(campaign_id) AS platform_campaign_id,
-    SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks,
-    -- creative_type + status: one value per ad; MAX picks the non-null value across days
-    MAX(creative_type) AS creative_type,
-    MAX(status)        AS status
-  FROM `{PROJECT_ID}.{DATASET}.ads_daily`
-  GROUP BY date, channel, campaign_name, adset_name, ad_id
-  UNION ALL
-  -- Stub rows: deals attributed to real ads but with no spend row on deal create date
-  SELECT d.date, am.channel, am.campaign_name, am.adset_name,
-    am.utm_content, am.ad_name,
-    d.ad_id AS platform_ad_id,
-    am.platform_adset_id,
-    am.platform_campaign_id,
-    0.0 AS spend, 0 AS impressions, 0 AS clicks,
-    CAST(NULL AS STRING) AS creative_type,
-    CAST(NULL AS STRING) AS status
-  FROM (
-    SELECT date, deal_ad_id_sync AS ad_id
-    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-    WHERE deal_ad_id_sync IS NOT NULL
-    GROUP BY 1, 2
-  ) d
-  JOIN (
-    SELECT ad_id, ANY_VALUE(channel) AS channel,
-      ANY_VALUE(campaign_name) AS campaign_name,
-      ANY_VALUE(adset_name) AS adset_name,
-      ANY_VALUE(COALESCE(utm_content, ad_name)) AS utm_content,
-      ANY_VALUE(ad_name) AS ad_name,
-      ANY_VALUE(adset_id) AS platform_adset_id,
-      ANY_VALUE(campaign_id) AS platform_campaign_id
-    FROM `{PROJECT_ID}.{DATASET}.ads_daily`
-    GROUP BY ad_id
-  ) am ON am.ad_id = d.ad_id
-  WHERE NOT EXISTS (
-    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.ads_daily` a
-    WHERE a.date = d.date AND a.ad_id = d.ad_id
-  )
-  UNION ALL
-  -- Stub rows: name-matched deals (no ad sync ID) with a known utm_content
-  -- that exists in ads_daily but has no spend row on deal create date
-  SELECT d.date, am.channel, am.campaign_name, am.adset_name,
-    am.utm_content, am.ad_name,
-    am.ad_id AS platform_ad_id,
-    am.platform_adset_id,
-    am.platform_campaign_id,
-    0.0 AS spend, 0 AS impressions, 0 AS clicks,
-    CAST(NULL AS STRING) AS creative_type,
-    CAST(NULL AS STRING) AS status
-  FROM (
-    SELECT date, LOWER(TRIM(deal_utm_content)) AS utm_key
-    FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-    WHERE deal_ad_id_sync IS NULL AND deal_utm_content IS NOT NULL
-    GROUP BY 1, 2
-  ) d
-  JOIN (
-    SELECT ad_id, ANY_VALUE(channel) AS channel,
-      ANY_VALUE(campaign_name) AS campaign_name,
-      ANY_VALUE(adset_name) AS adset_name,
-      ANY_VALUE(COALESCE(utm_content, ad_name)) AS utm_content,
-      ANY_VALUE(ad_name) AS ad_name,
-      ANY_VALUE(adset_id) AS platform_adset_id,
-      ANY_VALUE(campaign_id) AS platform_campaign_id,
-      LOWER(TRIM(ANY_VALUE(COALESCE(utm_content, ad_name)))) AS utm_key
-    FROM `{PROJECT_ID}.{DATASET}.ads_daily`
-    GROUP BY ad_id
-  ) am ON am.utm_key = d.utm_key
-  WHERE NOT EXISTS (
-    SELECT 1 FROM `{PROJECT_ID}.{DATASET}.ads_daily` a
-    WHERE a.date = d.date
-      AND LOWER(TRIM(COALESCE(a.utm_content, a.ad_name))) = d.utm_key
-  )
-),
--- LEADS source — AUTHORITATIVE at (date, channel, utm_campaign, utm_audience,
--- utm_content) grain. utm_paid_attribution_daily already resolves HubSpot leads
--- to this exact grain (one row per bucket, no fan-out). 2026-06-09: this view no
--- longer re-joins hubspot_leads_module_daily by ad_id / campaign_id sync. Those
--- fallback (Strategy C/D) re-joins double-counted — they sprayed campaign-level
--- leads across every ad in the campaign ON TOP OF the content-grain leads
--- (snapchat 172 truth -> 316 in the view). The upstream view is the single source.
-hubspot AS (
-  SELECT date, channel, utm_campaign, utm_audience, utm_content,
-    ANY_VALUE(utm_source) AS utm_source,
-    SUM(leads) AS leads,
-    SUM(leads_qualified) AS leads_qualified,
-    SUM(leads_disqualified) AS leads_disqualified
-  FROM `{PROJECT_ID}.{DATASET}.utm_paid_attribution_daily`
-  WHERE utm_campaign != '__no_utm__' AND utm_content IS NOT NULL
-  GROUP BY 1, 2, 3, 4, 5
-),
--- Deals: ID-matched bucket (survives ad renames)
-deals_by_id AS (
-  SELECT date,
-    CASE qoyod_source
-      WHEN 'Meta Ads'      THEN 'meta'
-      WHEN 'Google Ads'    THEN 'google_ads'
-      WHEN 'Snapchat Ads'  THEN 'snapchat'
-      WHEN 'Tiktok Ads'    THEN 'tiktok'
-      WHEN 'LinkedIn Ads'  THEN 'linkedin'
-      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
-      ELSE qoyod_source
-    END AS channel,
-    deal_ad_id_sync AS ad_id,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
-    -- All pipelines
-    SUM(deals_won)    AS all_deals_won,
-    SUM(amount_won)   AS all_revenue_won,
-    SUM(amount_lost)  AS all_amount_lost,
-    SUM(amount_open)  AS all_amount_open,
-    SUM(amount_total) AS all_amount_total
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_ad_id_sync IS NOT NULL
-  GROUP BY 1, 2, 3
-),
--- Deals: name-matched bucket (no sync ID)
-deals_by_name AS (
-  SELECT date,
-    CASE qoyod_source
-      WHEN 'Meta Ads'      THEN 'meta'
-      WHEN 'Google Ads'    THEN 'google_ads'
-      WHEN 'Snapchat Ads'  THEN 'snapchat'
-      WHEN 'Tiktok Ads'    THEN 'tiktok'
-      WHEN 'LinkedIn Ads'  THEN 'linkedin'
-      WHEN 'Microsoft Ads' THEN 'microsoft_ads'
-      ELSE qoyod_source
-    END AS channel,
-    deal_utm_campaign AS utm_campaign,
-    deal_utm_content AS utm_content,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_won   ELSE 0 END) AS new_biz_deals_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_lost  ELSE 0 END) AS new_biz_deals_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_open  ELSE 0 END) AS new_biz_deals_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN deals_total ELSE 0 END) AS new_biz_deals_total,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_won  ELSE 0 END) AS new_biz_revenue_won,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_lost ELSE 0 END) AS new_biz_amount_lost,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_open ELSE 0 END) AS new_biz_amount_open,
-    SUM(CASE WHEN pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')
-             THEN amount_total ELSE 0 END) AS new_biz_amount_total,
-    -- All pipelines
-    SUM(deals_won)    AS all_deals_won,
-    SUM(amount_won)   AS all_revenue_won,
-    SUM(amount_lost)  AS all_amount_lost,
-    SUM(amount_open)  AS all_amount_open,
-    SUM(amount_total) AS all_amount_total
-  FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_daily`
-  WHERE deal_ad_id_sync IS NULL
-    AND deal_utm_content IS NOT NULL
-  GROUP BY 1, 2, 3, 4
-),
-joined AS (
-  SELECT
-    COALESCE(p.date, h.date)                  AS date,
-    COALESCE(p.channel, h.channel)            AS channel,
-    COALESCE(p.campaign_name, h.utm_campaign) AS utm_campaign,
-    COALESCE(p.adset_name, h.utm_audience)    AS utm_audience,
-    COALESCE(p.utm_content, h.utm_content)    AS utm_content,
-    p.ad_name                                 AS ad_name,
-    p.platform_campaign_id                    AS campaign_id,
-    p.platform_adset_id                       AS adset_id,
-    p.platform_ad_id                          AS ad_id,
-    p.spend, p.impressions, p.clicks, p.creative_type, p.status,
-    p.date AS p_date,
-    h.utm_campaign AS h_utm_campaign,
-    h.utm_source,
-    -- raw leads come straight from the authoritative upstream content-grain bucket
-    h.leads              AS leads_raw,
-    h.leads_qualified    AS leads_qualified_raw,
-    h.leads_disqualified AS leads_disqualified_raw,
-    -- dedup key = the upstream bucket's OWN identity (date, channel, utm_campaign,
-    -- utm_audience, utm_content). Constant per upstream row, so a bucket that fans
-    -- across multiple platform ad_id rows (same utm_content, different campaign/
-    -- audience) is counted EXACTLY ONCE. No ID-based fallbacks anymore.
-    CASE
-      WHEN h.leads IS NOT NULL THEN CONCAT('AB|', CAST(IFNULL(h.date, DATE '1900-01-01') AS STRING), '|', IFNULL(h.channel,''),
-                                                '|', IFNULL(h.utm_campaign,''), '|', IFNULL(h.utm_audience,''), '|', IFNULL(h.utm_content,''))
-      ELSE NULL
-    END                                        AS lead_src_key,
-    -- deals: ID + name buckets
-    di.new_biz_deals_won  AS di_deals_won,  di.new_biz_deals_lost  AS di_deals_lost,
-    di.new_biz_deals_open AS di_deals_open, di.new_biz_deals_total AS di_deals_total,
-    di.new_biz_revenue_won AS di_rev_won,   di.new_biz_amount_lost AS di_amt_lost,
-    di.new_biz_amount_open AS di_amt_open,  di.new_biz_amount_total AS di_amt_total,
-    di.all_revenue_won AS di_all_rev_won,   di.all_amount_lost AS di_all_amt_lost,
-    di.all_amount_open AS di_all_amt_open,  di.all_amount_total AS di_all_amt_total,
-    di.ad_id AS di_ad_id,
-    dn.new_biz_deals_won  AS dn_deals_won,  dn.new_biz_deals_lost  AS dn_deals_lost,
-    dn.new_biz_deals_open AS dn_deals_open, dn.new_biz_deals_total AS dn_deals_total,
-    dn.new_biz_revenue_won AS dn_rev_won,   dn.new_biz_amount_lost AS dn_amt_lost,
-    dn.new_biz_amount_open AS dn_amt_open,  dn.new_biz_amount_total AS dn_amt_total,
-    dn.all_revenue_won AS dn_all_rev_won,   dn.all_amount_lost AS dn_all_amt_lost,
-    dn.all_amount_open AS dn_all_amt_open,  dn.all_amount_total AS dn_all_amt_total,
-    dn.utm_campaign AS dn_utm_campaign, dn.utm_content AS dn_utm_content
-  FROM platform p
-  FULL OUTER JOIN hubspot h
-    ON p.date = h.date AND p.channel = h.channel
-    AND LOWER(TRIM(p.utm_content)) = LOWER(TRIM(h.utm_content))
-  -- Deals: ID-match (survives ad renames)
-  LEFT JOIN deals_by_id di
-    ON p.date = di.date AND p.channel = di.channel
-    AND p.platform_ad_id = di.ad_id
-  -- Deals: name-match (no sync ID)
-  LEFT JOIN deals_by_name dn
-    ON COALESCE(p.date, h.date) = dn.date
-    AND COALESCE(p.channel, h.channel) = dn.channel
-    AND LOWER(TRIM(COALESCE(p.campaign_name, h.utm_campaign))) = LOWER(TRIM(dn.utm_campaign))
-    AND LOWER(TRIM(COALESCE(p.utm_content, h.utm_content))) = LOWER(TRIM(dn.utm_content))
-)
 SELECT
-  date, channel,
-  CASE channel
-    WHEN 'google_ads'    THEN 'Google Ads'
-    WHEN 'meta'          THEN 'Meta Ads'
-    WHEN 'snapchat'      THEN 'Snapchat Ads'
-    WHEN 'tiktok'        THEN 'TikTok Ads'
-    WHEN 'linkedin'      THEN 'LinkedIn Ads'
-    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
-    ELSE channel
-  END                                        AS channel_name,
-  utm_campaign, utm_audience, utm_content,
-  COALESCE(ad_name, utm_content) AS ad_name,
-  utm_source,
-  campaign_id, adset_id, ad_id,
-  -- spend/impr/clicks: each platform row already carries its own ad_id's spend.
-  -- The utm_content->hubspot join still fans a platform row across multiple
-  -- hubspot rows, so count platform metrics ONCE per ad_id (per day/channel).
-  IF(ROW_NUMBER() OVER (PARTITION BY date, channel,
-       COALESCE(CAST(ad_id AS STRING), LOWER(TRIM(utm_content)))
-     ORDER BY COALESCE(h_utm_campaign,'')) = 1, spend, 0)               AS spend,
-  IF(ROW_NUMBER() OVER (PARTITION BY date, channel,
-       COALESCE(CAST(ad_id AS STRING), LOWER(TRIM(utm_content)))
-     ORDER BY COALESCE(h_utm_campaign,'')) = 1, COALESCE(impressions,0), 0) AS impressions,
-  IF(ROW_NUMBER() OVER (PARTITION BY date, channel,
-       COALESCE(CAST(ad_id AS STRING), LOWER(TRIM(utm_content)))
-     ORDER BY COALESCE(h_utm_campaign,'')) = 1, COALESCE(clicks,0), 0)      AS clicks,
-  -- LEADS fan-out guard: a single HubSpot source row (lead_src_key) can now match
-  -- MULTIPLE platform ad_id rows sharing the same utm_content. Count each HubSpot
-  -- source row's leads exactly ONCE, on the first platform row it lands on.
-  IF(lead_src_key IS NULL OR
-     ROW_NUMBER() OVER (PARTITION BY lead_src_key ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1,
-     COALESCE(leads_raw, 0), 0)                AS leads,
-  IF(lead_src_key IS NULL OR
-     ROW_NUMBER() OVER (PARTITION BY lead_src_key ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1,
-     COALESCE(leads_qualified_raw, 0), 0)      AS leads_qualified,
-  IF(lead_src_key IS NULL OR
-     ROW_NUMBER() OVER (PARTITION BY lead_src_key ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1,
-     COALESCE(leads_disqualified_raw, 0), 0)   AS leads_disqualified,
-  -- DEALS fan-out guard: each deal source bucket counted once per its own grain.
-  -- ID bucket grain = (date, channel, ad_id); name bucket grain = (date, channel, utm_campaign, utm_content).
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_deals_won,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_deals_won,0), 0) AS new_biz_deals_won,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_deals_lost,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_deals_lost,0), 0) AS new_biz_deals_lost,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_deals_open,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_deals_open,0), 0) AS new_biz_deals_open,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_deals_total,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_deals_total,0), 0) AS new_biz_deals_total,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_rev_won,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_rev_won,0), 0) AS new_biz_revenue_won,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_amt_lost,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_amt_lost,0), 0) AS new_biz_amount_lost,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_amt_open,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_amt_open,0), 0) AS new_biz_amount_open,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_amt_total,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_amt_total,0), 0) AS new_biz_amount_total,
-  -- Ratios + cost: use the RAW (un-zeroed) lead values so per-row CPL/CPQL stay
-  -- correct on every ad row; only the SUM-able lead columns above are deduped.
-  SAFE_DIVIDE(leads_qualified_raw, NULLIF(COALESCE(leads_qualified_raw,0) + COALESCE(leads_disqualified_raw,0), 0)) AS qual_rate,
-  SAFE_DIVIDE(leads_disqualified_raw, NULLIF(COALESCE(leads_qualified_raw,0) + COALESCE(leads_disqualified_raw,0), 0)) AS disq_rate,
-  SAFE_DIVIDE(spend, NULLIF(leads_raw, 0))           AS CPL,
-  SAFE_DIVIDE(spend, NULLIF(leads_qualified_raw, 0)) AS CPQL,
-  SAFE_DIVIDE(IFNULL(di_rev_won,0) + IFNULL(dn_rev_won,0), NULLIF(spend, 0)) AS new_biz_roas,
-  -- All-pipeline amounts (fan-out guard identical to new_biz pattern above)
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_rev_won,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_rev_won,0), 0) AS revenue_won,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_amt_lost,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_amt_lost,0), 0) AS amount_lost,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_amt_open,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_amt_open,0), 0) AS amount_open,
-  IF(di_ad_id IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, di_ad_id ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(di_all_amt_total,0), 0)
-    + IF(dn_utm_content IS NULL OR ROW_NUMBER() OVER (PARTITION BY date, channel, dn_utm_campaign, dn_utm_content ORDER BY COALESCE(CAST(ad_id AS STRING),'')) = 1, IFNULL(dn_all_amt_total,0), 0) AS amount_total,
-  SAFE_DIVIDE(IFNULL(di_all_rev_won,0) + IFNULL(dn_all_rev_won,0), NULLIF(spend, 0)) AS roas,
-  creative_type, status,
-  IF(p_date IS NOT NULL, 'platform', 'utm_proxy')            AS data_source
-FROM joined
+  date,
+  channel,
+  ANY_VALUE(channel_name)                                                      AS channel_name,
+  ANY_VALUE(campaign_name)                                                     AS utm_campaign,
+  ANY_VALUE(adset_name)                                                        AS utm_audience,
+  ANY_VALUE(utm_content)                                                       AS utm_content,
+  ANY_VALUE(ad_name)                                                           AS ad_name,
+  CAST(NULL AS STRING)                                                         AS utm_source,
+  campaign_id,
+  adset_id,
+  ad_id,
+  ROUND(SUM(spend), 2)                                                        AS spend,
+  SUM(impressions)                                                             AS impressions,
+  SUM(clicks)                                                                  AS clicks,
+  SUM(leads_total)                                                             AS leads,
+  SUM(leads_qualified)                                                         AS leads_qualified,
+  SUM(leads_disqualified)                                                      AS leads_disqualified,
+  SUM(new_biz_deals_won)                                                       AS new_biz_deals_won,
+  SUM(new_biz_deals_lost)                                                      AS new_biz_deals_lost,
+  SUM(new_biz_deals_open)                                                      AS new_biz_deals_open,
+  SUM(new_biz_deals_total)                                                     AS new_biz_deals_total,
+  ROUND(SUM(new_biz_revenue_won), 2)                                          AS new_biz_revenue_won,
+  ROUND(SUM(new_biz_amount_lost), 2)                                          AS new_biz_amount_lost,
+  ROUND(SUM(new_biz_amount_open), 2)                                          AS new_biz_amount_open,
+  ROUND(SUM(new_biz_revenue_won)+SUM(new_biz_amount_lost)+SUM(new_biz_amount_open), 2) AS new_biz_amount_total,
+  ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+    NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)), 4)              AS qual_rate,
+  ROUND(SAFE_DIVIDE(SUM(leads_disqualified),
+    NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)), 4)              AS disq_rate,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2)             AS CPL,
+  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2)         AS CPQL,
+  ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)     AS new_biz_roas,
+  ROUND(SUM(all_revenue_won), 2)                                             AS revenue_won,
+  ROUND(SUM(all_amount_lost), 2)                                             AS amount_lost,
+  ROUND(SUM(all_amount_open), 2)                                             AS amount_open,
+  ROUND(SUM(all_revenue_won)+SUM(all_amount_lost)+SUM(all_amount_open), 2)   AS amount_total,
+  ROUND(SAFE_DIVIDE(SUM(all_revenue_won), NULLIF(SUM(spend), 0)), 2)         AS roas,
+  ANY_VALUE(creative_type)                                                    AS creative_type,
+  ANY_VALUE(status)                                                           AS status,
+  'wide_ads'                                                                  AS data_source
+FROM `{PROJECT_ID}.{DATASET}.wide_ads`
+GROUP BY date, channel, campaign_id, adset_id, ad_id
 """
 
 
@@ -1520,15 +971,10 @@ LEFT JOIN deals d
 
 
 def create_views():
-    # NOTE: heavy views (utm_paid_attribution_daily, paid_channel_campaign_daily,
-    # channel_roas_daily, paid_channel_daily, v_adset_performance, v_ad_performance)
-    # are materialized via materialize_heavy_views() in collectors/views.py — not here.
-    # This function handles lightweight views only. Dropped views removed 2026-06-09.
+    # v_adset_performance and v_ad_performance are now in materialize_heavy_views()
+    # (collectors/views.py). utm_paid_attribution_daily was dropped 2026-06-15.
     client = get_client()
     for sql, name in [
-        (UTM_PAID_ATTRIBUTION_VIEW_SQL,       "utm_paid_attribution_daily"),
-        (V_ADSET_PERFORMANCE_SQL,             "v_adset_performance"),
-        (V_AD_PERFORMANCE_SQL,                "v_ad_performance"),
         (V_KEYWORD_PERFORMANCE_SQL,           "v_keyword_performance"),
     ]:
         table_id = f"{PROJECT_ID}.{DATASET}.{name}"
