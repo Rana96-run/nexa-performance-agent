@@ -45,24 +45,13 @@ def _alert_health(surface: str, failures: list[QACheckResult]):
 
 
 def _log_event(surface: str, passed: bool, results: list[QACheckResult]):
-    """Append one row to BQ qa_gate_events (auto-creates on first write)."""
-    try:
-        from collectors.bq_writer import upsert_rows
-        now = datetime.now(timezone.utc).isoformat()
-        rows = [{
-            "event_id":  f"{surface}-{int(time.time()*1000)}",
-            "ts":        now,
-            "surface":   surface,
-            "passed":    passed,
-            "check_name":   r.name,
-            "check_passed": r.passed,
-            "severity":     r.severity,
-            "detail":       r.detail,
-        } for r in results]
-        # best-effort — do not let logging failures cascade
-        upsert_rows("qa_gate_events", rows, key_fields=["event_id", "check_name"])
-    except Exception:
-        log.exception("qa.gate: failed to log event")
+    """Log gate events — no-op since qa_gate_events BQ table was dropped 2026-06-16.
+    Table was a write-only ops sink with 0 decision-logic reads; removed during
+    dataset consolidation (18→12 objects). Log to stdout only."""
+    status_str = "PASS" if passed else "FAIL"
+    for r in results:
+        if not r.passed:
+            log.warning("qa.gate [%s] %s: %s — %s", surface, status_str, r.name, r.detail)
 
 
 class QAGate:

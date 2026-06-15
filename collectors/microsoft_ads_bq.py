@@ -460,8 +460,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
 
     if not all_rows:
         return 0
-    return upsert_rows("adsets_daily", all_rows,
-                       key_fields=["date", "channel", "adset_id"])
+    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
+    return 0  # was: upsert_rows("adsets_daily", all_rows, ...)
 
 
 # ── Keyword level → keywords_daily ───────────────────────────────────────────

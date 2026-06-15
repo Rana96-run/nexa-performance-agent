@@ -288,7 +288,16 @@ def _peak_numbers_lines() -> list[str]:
               GROUP BY date, lead_utm_campaign
             )
             SELECT
-              COALESCE(m.display_name, c.channel)                                   AS channel,
+              COALESCE(CASE c.channel
+                WHEN 'google_ads'    THEN 'Google Ads'
+                WHEN 'meta'         THEN 'Meta Ads'
+                WHEN 'snapchat'     THEN 'Snapchat Ads'
+                WHEN 'tiktok'       THEN 'TikTok Ads'
+                WHEN 'microsoft_ads' THEN 'Microsoft Ads'
+                WHEN 'linkedin'     THEN 'LinkedIn Ads'
+                WHEN 'organic_search' THEN 'Organic Search'
+                ELSE c.channel
+              END, c.channel)                                                        AS channel,
               ROUND(SUM(c.spend), 0)                                                AS spend,
               COALESCE(SUM(hs.leads), 0)                                            AS leads,
               COALESCE(SUM(hs.sqls), 0)                                             AS sqls,
@@ -300,8 +309,6 @@ def _peak_numbers_lines() -> list[str]:
             FROM cd c
             LEFT JOIN hs ON c.date = hs.date
                         AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
-            LEFT JOIN `{PROJECT_ID}.{DATASET}.v_channel_key_map` m
-                   ON c.channel = m.paid_channel
             GROUP BY 1
             ORDER BY spend DESC
         """).result())

@@ -9,7 +9,7 @@ Store tables (source of truth, never queried directly by Python analysers):
 Compat views (ALL_VIEWS — lightweight, refreshed every 6h by refresh_all_views()):
   - hubspot_leads_module_daily  (aggregates from hubspot_leads_individual — backward compat)
   - hubspot_deals_daily         (aggregates from hubspot_deals_individual — backward compat)
-  - v_channel_key_map           (channel slug → display name)
+  - v_channel_key_map           (DROPPED 2026-06-16 — inlined as CASE expressions in consumers)
   - v_new_biz_daily             (DROPPED 2026-06-16 — 0 active consumers)
   - v_agent_activity_dashboard  (DROPPED 2026-06-16 — 0 active consumers)
   - v_keyword_performance       (keyword grain, via _sub_campaign_views())
@@ -319,7 +319,8 @@ GROUP BY 1,2,3,4,5,6,7,8,9,10
 
 
 ALL_VIEWS = [
-    ("v_channel_key_map",              CHANNEL_MAP_SQL),
+    # v_channel_key_map DROPPED 2026-06-16 — inlined as CASE expressions in 3 consumers
+    #   (notifications/daily_summary.py, scripts/reconcile_views.py, collectors/views.py WIDE_ADS_SQL)
     # HubSpot compat views — aggregate from individual store tables (wide-table redesign step 4)
     ("hubspot_leads_module_daily",     HUBSPOT_LEADS_MODULE_COMPAT_SQL),
     ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),

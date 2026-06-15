@@ -158,8 +158,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False):
             print(f"[meta]   adsets account {account_id} error: {e}")
         print(f"[meta]   adsets account {account_id}: {len(rows) - count_before} rows")
 
-    return upsert_rows("adsets_daily", rows,
-                       key_fields=["date", "channel", "adset_id"])
+    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
+    return 0  # was: upsert_rows("adsets_daily", rows, ...)
 
 
 # ── Creative type lookup ──────────────────────────────────────────────────────

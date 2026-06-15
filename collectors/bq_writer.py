@@ -188,11 +188,11 @@ QA_GATE_EVENTS_SCHEMA = [
 
 TABLES = {
     "campaigns_daily":     CAMPAIGNS_DAILY_SCHEMA,
-    "adsets_daily":        ADSETS_DAILY_SCHEMA,
+    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads; 6 collector write calls removed
     "ads_daily":           ADS_DAILY_SCHEMA,
     "keywords_daily":      KEYWORDS_DAILY_SCHEMA,
     "agent_activity_log":  ACTIVITY_LOG_SCHEMA,
-    "qa_gate_events":      QA_GATE_EVENTS_SCHEMA,
+    # qa_gate_events DROPPED 2026-06-16 — write-only ops sink, 0 decision-logic reads
 }
 
 
@@ -200,11 +200,11 @@ TABLES = {
 
 TABLE_CLUSTERS = {
     "campaigns_daily":     ["channel", "campaign_id"],
-    "adsets_daily":        ["channel", "campaign_id", "adset_id"],
+    # adsets_daily DROPPED 2026-06-16
     "ads_daily":           ["channel", "campaign_id", "ad_id"],
     "keywords_daily":      ["channel", "campaign_id", "adgroup_id"],
     "agent_activity_log":  ["role", "status"],
-    "qa_gate_events":      ["surface", "check_name"],
+    # qa_gate_events DROPPED 2026-06-16
 }
 
 
@@ -221,7 +221,7 @@ def ensure_dataset_and_tables():
         raise
 
     # Tables that partition on TIMESTAMP field "ts" instead of DATE "date"
-    _TS_PARTITIONED = {"agent_activity_log", "qa_gate_events"}
+    _TS_PARTITIONED = {"agent_activity_log"}  # qa_gate_events dropped 2026-06-16
 
     for table_name, schema in TABLES.items():
         table_id = f"{PROJECT_ID}.{DATASET}.{table_name}"
@@ -280,7 +280,7 @@ def validate_row(row: dict, table_name: str = "") -> tuple[bool, str]:
     # Tables partitioned on TIMESTAMP `ts` have no `date` field — skip the
     # date-specific checks. Validate-row is per-row so we get the table name
     # via the closure context; keep it via a sentinel.
-    if table_name in {"agent_activity_log", "qa_gate_events"}:
+    if table_name in {"agent_activity_log"}:  # ts-partitioned, no date field
         return True, "ok"
 
     # 1. Date must exist and be parseable
@@ -370,17 +370,15 @@ def upsert_rows(table_name: str, rows: list[dict], key_fields: list[str]):
 
     # QA gate — sanity-check the batch (internal dupes, multi-account presence)
     # before any DELETE fires. Auto-retry-then-block per qa/gate.py policy.
-    # Skipped for the gate's own logging table to avoid recursion.
-    if table_name != "qa_gate_events":
+    try:
+        from qa.gate import gate, QAGateError
         try:
-            from qa.gate import gate, QAGateError
-            try:
-                gate.verify_bq_write(table_name, rows, key_fields)
-            except QAGateError as e:
-                print(f"[bq] QA gate BLOCKED upsert to {table_name}: {e}")
-                raise
-        except ImportError:
-            pass  # qa module not present — degrade gracefully
+            gate.verify_bq_write(table_name, rows, key_fields)
+        except QAGateError as e:
+            print(f"[bq] QA gate BLOCKED upsert to {table_name}: {e}")
+            raise
+    except ImportError:
+        pass  # qa module not present — degrade gracefully
 
     client = get_client()
     table_id = f"{PROJECT_ID}.{DATASET}.{table_name}"

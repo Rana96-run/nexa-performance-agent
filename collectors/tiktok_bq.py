@@ -313,8 +313,8 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> i
             })
         print(f"[tiktok-bq] adgroups account {account_id}: {len(report_rows)} stat rows")
 
-    return upsert_rows("adsets_daily", rows,
-                       key_fields=["date", "channel", "adset_id"])
+    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
+    return 0  # was: upsert_rows("adsets_daily", rows, ...)
 
 
 # ── Ad level → ads_daily ──────────────────────────────────────────────────────

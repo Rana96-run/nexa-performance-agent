@@ -446,8 +446,8 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
                 acct_count += 1
         print(f"[snap]   adsets account {acct}: {acct_count} rows across {len(adsquads)} ad squads")
 
-    return upsert_rows("adsets_daily", rows,
-                       key_fields=["date", "channel", "adset_id"])
+    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
+    return 0  # was: upsert_rows("adsets_daily", rows, ...)
 
 
 # ── Ad (Creative) level → ads_daily ──────────────────────────────────────────

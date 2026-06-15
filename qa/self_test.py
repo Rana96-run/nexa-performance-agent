@@ -9,13 +9,11 @@ For each check, fixtures define:
   - 1 known-bad input (should fail with expected reason)
 
 If a check returns the WRONG outcome for either fixture, the test layer logs
-a CRITICAL row to qa_gate_events with surface='self_test', and pings
-#nexa-health. The gate event log makes it queryable: any row with
-surface='self_test' AND passed=false means a check is broken.
+to stdout and pings #nexa-health. (qa_gate_events BQ table dropped 2026-06-16
+— write-only sink with 0 decision-logic reads, removed in dataset consolidation.)
 """
 from __future__ import annotations
 import os
-from collectors.bq_writer import upsert_rows
 from datetime import datetime, timezone
 
 from .checks import (
@@ -131,22 +129,13 @@ def run_self_test(post_to_bq: bool = True) -> dict:
         if not test_passed:
             broken_checks.append(name)
 
-    # Persist as qa_gate_events rows (surface='self_test')
+    # qa_gate_events BQ table dropped 2026-06-16 (write-only sink, 0 decision reads).
+    # Self-test results are still surfaced via Slack ping below on failures.
     if post_to_bq:
-        try:
-            rows = [{
-                "event_id":     f"self_test-{int(datetime.now().timestamp()*1000)}-{i}",
-                "ts":           now_iso,
-                "surface":      "self_test",
-                "passed":       r["test_passed"],
-                "check_name":   f"{r['check']}::{r['test_name']}",
-                "check_passed": r["test_passed"],
-                "severity":     "block" if not r["test_passed"] else "info",
-                "detail":       r["detail"][:200],
-            } for i, r in enumerate(results)]
-            upsert_rows("qa_gate_events", rows, key_fields=["event_id", "check_name"])
-        except Exception as e:
-            print(f"[qa.self_test] could not log to BQ: {e}")
+        # Log to stdout only — BQ table no longer exists
+        for r in results:
+            if not r["test_passed"]:
+                print(f"[qa.self_test] FAIL {r['check']}::{r['test_name']} — {r['detail'][:200]}")
 
     # Slack ping only on real failures
     if broken_checks:

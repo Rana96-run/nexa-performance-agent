@@ -50,19 +50,29 @@ def _run(client, sql: str) -> list[dict]:
 # ── Queries ───────────────────────────────────────────────────────────────────
 
 def _hs_leads_by_channel(client, start: str, end: str) -> dict[str, int]:
-    """Source of truth: hubspot_leads_module_daily per paid channel."""
+    """Source of truth: hubspot_leads_module_daily per paid channel.
+    v_channel_key_map inlined as a CASE expression (view dropped 2026-06-16)."""
     sql = f"""
     SELECT
-      cnm.channel,
+      CASE hl.lead_qoyod_source
+        WHEN 'Google Ads'     THEN 'google_ads'
+        WHEN 'Meta Ads'       THEN 'meta'
+        WHEN 'Snapchat Ads'   THEN 'snapchat'
+        WHEN 'TikTok Ads'     THEN 'tiktok'
+        WHEN 'Microsoft Ads'  THEN 'microsoft_ads'
+        WHEN 'LinkedIn Ads'   THEN 'linkedin'
+        WHEN 'Organic Search' THEN 'organic_search'
+      END AS channel,
       SUM(hl.leads_total) AS hs_leads
     FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_leads_module_daily` hl
-    JOIN `{BQ_PROJECT}.{BQ_DATASET}.v_channel_key_map` cnm
-      ON hl.lead_qoyod_source = cnm.qoyod_source
     WHERE hl.date BETWEEN '{start}' AND '{end}'
-      AND cnm.channel IN ({', '.join(repr(c) for c in PAID_CHANNELS)})
+      AND hl.lead_qoyod_source IN (
+        'Google Ads', 'Meta Ads', 'Snapchat Ads',
+        'TikTok Ads', 'Microsoft Ads', 'LinkedIn Ads'
+      )
     GROUP BY 1
     """
-    return {r["channel"]: r["hs_leads"] for r in _run(client, sql)}
+    return {r["channel"]: r["hs_leads"] for r in _run(client, sql) if r["channel"]}
 
 
 def _view_leads_by_channel(client, view: str, start: str, end: str) -> dict[str, int]:

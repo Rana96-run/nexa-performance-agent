@@ -70,7 +70,7 @@ CONNECTORS = [
     {"channel": "linkedin",  "bq_table": "campaigns_daily",             "cred_key": "LI_ACCESS_TOKEN",            "cred_type": "60_day", "known_paused": True},
     {"channel": "hubspot_leads", "bq_table": "hubspot_leads_module_daily", "cred_key": "HUBSPOT_ACCESS_TOKEN",    "cred_type": "permanent"},
     {"channel": "hubspot_deals", "bq_table": "hubspot_deals_daily",    "cred_key": "HUBSPOT_ACCESS_TOKEN",        "cred_type": "permanent"},
-    {"channel": "gclid",     "bq_table": "gclid_attribution",           "cred_key": "GOOGLE_ADS_REFRESH_TOKEN",  "cred_type": "permanent"},
+    # gclid: DROPPED 2026-06-16 — gclid_attribution table removed (write-only, no decision reads)
     {"channel": "ga4",       "bq_table": "ga4_sessions_daily",          "cred_key": "GA4_PROPERTY_ID",           "cred_type": "permanent"},
 ]
 
@@ -83,7 +83,7 @@ COLLECTOR_SCRIPTS = {
     "linkedin":      "collectors/linkedin_bq.py",
     "hubspot_leads": "collectors/hubspot_leads_bq.py",
     "hubspot_deals": "collectors/hubspot_deals_bq.py",
-    "gclid":         "collectors/gclid_clickview.py",
+    # gclid DROPPED 2026-06-16
     "ga4":           "collectors/ga4_bq.py",
 }
 

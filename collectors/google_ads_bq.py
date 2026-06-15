@@ -290,8 +290,9 @@ def collect_adgroups_and_write(days: int = None, incremental: bool = False):
     except Exception as e:
         print(f"[google_ads]   pmax asset_groups error (continuing): {e}")
 
-    return upsert_rows("adsets_daily", rows,
-                       key_fields=["date", "channel", "adset_id"])
+    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
+    # Keep rows in memory for caller inspection but do not write to BQ.
+    return 0  # was: upsert_rows("adsets_daily", rows, ...)
 
 
 def _fetch_pmax_asset_groups(days, incremental):

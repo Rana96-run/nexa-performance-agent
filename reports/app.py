@@ -2793,34 +2793,25 @@ def duplicate_candidates():
         camp_names = [r.campaign_name for r in camps]
         names_sql  = ", ".join(f"'{n.replace(chr(39), chr(39)+chr(39))}'" for n in camp_names)
 
+        # wide_ads has adset_id/adset_name/utm_audience + HubSpot leads already joined.
+        # Group to adset grain; leads/sqls sourced from HubSpot (wide_ads.leads_total/qualified).
         adset_sql = f"""
-            WITH hs AS (
-              SELECT date, lead_utm_campaign, lead_utm_audience,
-                     SUM(leads_total)     AS leads,
-                     SUM(leads_qualified) AS sqls
-              FROM `{P}.{D}.hubspot_leads_module_daily`
-              GROUP BY date, lead_utm_campaign, lead_utm_audience
-            )
             SELECT
-              a.campaign_name,
-              a.adset_name,
-              MAX(a.adset_id)                                                AS adset_id,
-              ROUND(SUM(a.spend), 2)                                         AS spend,
-              SUM(hs.leads)                                                   AS leads,
-              SUM(hs.sqls)                                                    AS sqls,
-              ROUND(SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)), 3)   AS qual_rate,
-              ROUND(SAFE_DIVIDE(SUM(a.spend), NULLIF(SUM(hs.sqls),0)), 2)    AS cpql
-            FROM `{P}.{D}.adsets_daily` a
-            LEFT JOIN hs
-              ON  a.date = hs.date
-             AND  LOWER(a.campaign_name) = LOWER(hs.lead_utm_campaign)
-             AND  LOWER(a.utm_audience)  = LOWER(hs.lead_utm_audience)
-            WHERE a.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
-              AND LOWER(a.campaign_name) IN ({names_sql.lower()})
-              AND a.status = 'ACTIVE'
-            GROUP BY a.campaign_name, a.adset_name
-            HAVING SUM(hs.leads) > 0
-               AND SAFE_DIVIDE(SUM(hs.sqls), NULLIF(SUM(hs.leads),0)) >= 0.50
+              w.campaign_name,
+              w.adset_name,
+              MAX(w.adset_id)                                                AS adset_id,
+              ROUND(SUM(w.spend), 2)                                         AS spend,
+              SUM(w.leads_total)                                             AS leads,
+              SUM(w.leads_qualified)                                         AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(w.leads_qualified), NULLIF(SUM(w.leads_total),0)), 3)  AS qual_rate,
+              ROUND(SAFE_DIVIDE(SUM(w.spend), NULLIF(SUM(w.leads_qualified),0)), 2)        AS cpql
+            FROM `{P}.{D}.wide_ads` w
+            WHERE w.date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
+              AND LOWER(w.campaign_name) IN ({names_sql.lower()})
+              AND w.status = 'ACTIVE'
+            GROUP BY w.campaign_name, w.adset_name
+            HAVING SUM(w.leads_total) > 0
+               AND SAFE_DIVIDE(SUM(w.leads_qualified), NULLIF(SUM(w.leads_total),0)) >= 0.50
             ORDER BY qual_rate DESC
         """
         adsets = list(bq.query(adset_sql).result())
