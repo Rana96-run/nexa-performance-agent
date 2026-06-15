@@ -776,18 +776,14 @@ def _heavy_views_list():
     """
     Returns (name, sql) pairs for views materialised as physical tables so Hex
     reads are instant. Listed in dependency order.
+
+    NOTE: paid_channel_campaign_daily, paid_channel_daily, v_adset_performance,
+    and v_ad_performance have been removed from this list — they will be dropped
+    manually after testing. Only the new wide-table chain is rebuilt here.
     """
-    from collectors.bq_writer import (
-        V_ADSET_PERFORMANCE_SQL,
-        V_AD_PERFORMANCE_SQL,
-    )
     return [
-        ("paid_channel_campaign_daily", PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
-        ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
-        ("v_adset_performance",         V_ADSET_PERFORMANCE_SQL),
-        ("v_ad_performance",            V_AD_PERFORMANCE_SQL),
-        ("wide_ads",                    WIDE_ADS_SQL),
-        ("wide_keywords",               WIDE_KEYWORDS_SQL),
+        ("wide_ads",      WIDE_ADS_SQL),
+        ("wide_keywords", WIDE_KEYWORDS_SQL),
     ]
 
 
