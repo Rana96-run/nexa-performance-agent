@@ -716,12 +716,268 @@ def _sub_campaign_views():
     ]
 
 
+# ── Wide-table redesign: new reporting views on store tables ─────────────────
+# Grain: date × channel × ad_id (wide_ads) or keyword_id (wide_keywords).
+# Joins spend ↔ leads ↔ deals directly from the 6 store tables — no intermediate
+# views needed. Pre-aggregating both sides before joining prevents fan-out.
+# id-first join strategy: platform sync ID → utm name fallback (mutually exclusive).
+WIDE_ADS_SQL = f"""
+CREATE OR REPLACE TABLE `{P}.{D}.wide_ads` AS
+-- Ad-grain reporting: spend (ads_daily) + leads (hubspot_leads_individual)
+-- + deals (hubspot_deals_individual). Single grain — safe to GROUP BY up.
+WITH
+
+-- Leads aggregated by ad sync ID (Meta/Snap/TikTok Instantform — survives ad renames)
+leads_by_id AS (
+  SELECT
+    hs_createdate                    AS date,
+    lead_ad_id_sync                  AS ad_id,
+    COUNT(*)                         AS leads_total,
+    COUNTIF(is_qualified)            AS leads_qualified,
+    COUNTIF(is_disqualified)         AS leads_disqualified,
+    COUNTIF(is_open)                 AS leads_open
+  FROM `{P}.{D}.hubspot_leads_individual`
+  WHERE lead_ad_id_sync IS NOT NULL
+  GROUP BY 1, 2
+),
+
+-- Leads aggregated by utm_content (Google/MS/LinkedIn website forms — no sync ID)
+leads_by_name AS (
+  SELECT
+    hs_createdate                        AS date,
+    LOWER(TRIM(lead_utm_content))        AS utm_key,
+    COUNT(*)                             AS leads_total,
+    COUNTIF(is_qualified)                AS leads_qualified,
+    COUNTIF(is_disqualified)             AS leads_disqualified,
+    COUNTIF(is_open)                     AS leads_open
+  FROM `{P}.{D}.hubspot_leads_individual`
+  WHERE lead_ad_id_sync IS NULL AND lead_utm_content IS NOT NULL
+  GROUP BY 1, 2
+),
+
+-- Deals aggregated by ad sync ID
+deals_by_id AS (
+  SELECT
+    createdate                           AS date,
+    deal_ad_id_sync                      AS ad_id,
+    COUNTIF(is_won AND is_new_biz)       AS new_biz_deals_won,
+    COUNTIF(is_lost AND is_new_biz)      AS new_biz_deals_lost,
+    COUNTIF(is_open AND is_new_biz)      AS new_biz_deals_open,
+    COUNTIF(is_new_biz)                  AS new_biz_deals_total,
+    SUM(CASE WHEN is_won  AND is_new_biz THEN amount ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN is_lost AND is_new_biz THEN amount ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN is_open AND is_new_biz THEN amount ELSE 0 END) AS new_biz_amount_open,
+    COUNTIF(is_won)                      AS all_deals_won,
+    SUM(CASE WHEN is_won  THEN amount ELSE 0 END) AS all_revenue_won,
+    SUM(CASE WHEN is_lost THEN amount ELSE 0 END) AS all_amount_lost,
+    SUM(CASE WHEN is_open THEN amount ELSE 0 END) AS all_amount_open
+  FROM `{P}.{D}.hubspot_deals_individual`
+  WHERE deal_ad_id_sync IS NOT NULL
+  GROUP BY 1, 2
+),
+
+-- Deals aggregated by utm_content (name fallback)
+deals_by_name AS (
+  SELECT
+    createdate                           AS date,
+    LOWER(TRIM(deal_utm_content))        AS utm_key,
+    COUNTIF(is_won AND is_new_biz)       AS new_biz_deals_won,
+    COUNTIF(is_lost AND is_new_biz)      AS new_biz_deals_lost,
+    COUNTIF(is_open AND is_new_biz)      AS new_biz_deals_open,
+    COUNTIF(is_new_biz)                  AS new_biz_deals_total,
+    SUM(CASE WHEN is_won  AND is_new_biz THEN amount ELSE 0 END) AS new_biz_revenue_won,
+    SUM(CASE WHEN is_lost AND is_new_biz THEN amount ELSE 0 END) AS new_biz_amount_lost,
+    SUM(CASE WHEN is_open AND is_new_biz THEN amount ELSE 0 END) AS new_biz_amount_open,
+    COUNTIF(is_won)                      AS all_deals_won,
+    SUM(CASE WHEN is_won  THEN amount ELSE 0 END) AS all_revenue_won,
+    SUM(CASE WHEN is_lost THEN amount ELSE 0 END) AS all_amount_lost,
+    SUM(CASE WHEN is_open THEN amount ELSE 0 END) AS all_amount_open
+  FROM `{P}.{D}.hubspot_deals_individual`
+  WHERE deal_ad_id_sync IS NULL AND deal_utm_content IS NOT NULL
+  GROUP BY 1, 2
+)
+
+SELECT
+  a.date,
+  a.channel,
+  CASE a.channel
+    WHEN 'google_ads'    THEN 'Google Ads'
+    WHEN 'meta'          THEN 'Meta Ads'
+    WHEN 'snapchat'      THEN 'Snapchat Ads'
+    WHEN 'tiktok'        THEN 'TikTok Ads'
+    WHEN 'linkedin'      THEN 'LinkedIn Ads'
+    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
+    WHEN 'youtube'       THEN 'YouTube Ads'
+    ELSE INITCAP(REPLACE(a.channel, '_', ' '))
+  END                                                               AS channel_name,
+  a.account_id,
+  a.campaign_id,
+  a.campaign_name,
+  a.adset_id,
+  a.adset_name,
+  a.ad_id,
+  a.ad_name,
+  a.utm_content,
+  a.status,
+  a.creative_type,
+  a.final_url,
+  -- Spend metrics (source: ads_daily)
+  COALESCE(a.spend, 0)                                              AS spend,
+  COALESCE(a.impressions, 0)                                        AS impressions,
+  COALESCE(a.clicks, 0)                                             AS clicks,
+  SAFE_DIVIDE(a.clicks, NULLIF(a.impressions, 0))                   AS ctr,
+  a.leads                                                           AS platform_leads,
+  -- Leads (authoritative: HubSpot) — id-match first, name fallback
+  COALESCE(li.leads_total,        ln.leads_total,        0)         AS leads_total,
+  COALESCE(li.leads_qualified,    ln.leads_qualified,    0)         AS leads_qualified,
+  COALESCE(li.leads_disqualified, ln.leads_disqualified, 0)         AS leads_disqualified,
+  COALESCE(li.leads_open,         ln.leads_open,         0)         AS leads_open,
+  -- Deals — new-biz pipelines (Sales Pipeline / Bookkeeping / Qflavours)
+  COALESCE(di.new_biz_deals_won,   dn.new_biz_deals_won,   0)      AS new_biz_deals_won,
+  COALESCE(di.new_biz_deals_lost,  dn.new_biz_deals_lost,  0)      AS new_biz_deals_lost,
+  COALESCE(di.new_biz_deals_open,  dn.new_biz_deals_open,  0)      AS new_biz_deals_open,
+  COALESCE(di.new_biz_deals_total, dn.new_biz_deals_total, 0)      AS new_biz_deals_total,
+  COALESCE(di.new_biz_revenue_won, dn.new_biz_revenue_won, 0)      AS new_biz_revenue_won,
+  COALESCE(di.new_biz_amount_lost, dn.new_biz_amount_lost, 0)      AS new_biz_amount_lost,
+  COALESCE(di.new_biz_amount_open, dn.new_biz_amount_open, 0)      AS new_biz_amount_open,
+  -- Deals — all pipelines (use for total revenue across Renewal, QoyodK, etc.)
+  COALESCE(di.all_deals_won,       dn.all_deals_won,       0)      AS all_deals_won,
+  COALESCE(di.all_revenue_won,     dn.all_revenue_won,     0)      AS all_revenue_won,
+  COALESCE(di.all_amount_lost,     dn.all_amount_lost,     0)      AS all_amount_lost,
+  COALESCE(di.all_amount_open,     dn.all_amount_open,     0)      AS all_amount_open,
+  -- Derived KPIs (use leads_total/qualified from HubSpot, not platform_leads)
+  SAFE_DIVIDE(a.spend, NULLIF(COALESCE(li.leads_total, ln.leads_total), 0))           AS cpl,
+  SAFE_DIVIDE(a.spend, NULLIF(COALESCE(li.leads_qualified, ln.leads_qualified), 0))   AS cpql,
+  SAFE_DIVIDE(
+    COALESCE(li.leads_qualified, ln.leads_qualified, 0),
+    NULLIF(COALESCE(li.leads_total, ln.leads_total), 0)
+  )                                                                                    AS qual_rate,
+  SAFE_DIVIDE(
+    COALESCE(di.new_biz_revenue_won, dn.new_biz_revenue_won, 0),
+    NULLIF(a.spend, 0)
+  )                                                                                    AS new_biz_roas,
+  SAFE_DIVIDE(
+    COALESCE(di.all_revenue_won, dn.all_revenue_won, 0),
+    NULLIF(a.spend, 0)
+  )                                                                                    AS roas
+
+FROM `{P}.{D}.ads_daily` a
+
+-- Leads: id-first (Instantform — sync ID survives ad renames)
+LEFT JOIN leads_by_id li
+  ON a.date = li.date AND a.ad_id = li.ad_id
+
+-- Leads: name fallback (website forms — only when id-match found nothing)
+LEFT JOIN leads_by_name ln
+  ON li.ad_id IS NULL
+ AND a.date = ln.date
+ AND LOWER(TRIM(a.utm_content)) = ln.utm_key
+
+-- Deals: id-first
+LEFT JOIN deals_by_id di
+  ON a.date = di.date AND a.ad_id = di.ad_id
+
+-- Deals: name fallback
+LEFT JOIN deals_by_name dn
+  ON di.ad_id IS NULL
+ AND a.date = dn.date
+ AND LOWER(TRIM(a.utm_content)) = dn.utm_key
+"""
+
+WIDE_KEYWORDS_SQL = f"""
+CREATE OR REPLACE TABLE `{P}.{D}.wide_keywords` AS
+-- Keyword-grain reporting: spend (keywords_daily) + leads + deals from HubSpot.
+-- Joined by (campaign_name, keyword_text) to avoid fan-out when the same
+-- keyword text appears in multiple campaigns.
+WITH
+
+leads_by_term AS (
+  SELECT
+    hs_createdate                        AS date,
+    LOWER(TRIM(lead_utm_campaign))       AS utm_campaign,
+    LOWER(TRIM(lead_utm_term))           AS utm_term,
+    COUNT(*)                             AS leads_total,
+    COUNTIF(is_qualified)                AS leads_qualified,
+    COUNTIF(is_disqualified)             AS leads_disqualified,
+    COUNTIF(is_open)                     AS leads_open
+  FROM `{P}.{D}.hubspot_leads_individual`
+  WHERE lead_utm_term IS NOT NULL AND lead_utm_term != ''
+  GROUP BY 1, 2, 3
+),
+
+deals_by_term AS (
+  SELECT
+    createdate                           AS date,
+    LOWER(TRIM(deal_utm_campaign))       AS utm_campaign,
+    LOWER(TRIM(deal_utm_term))           AS utm_term,
+    COUNTIF(is_won AND is_new_biz)       AS new_biz_deals_won,
+    COUNTIF(is_new_biz)                  AS new_biz_deals_total,
+    SUM(CASE WHEN is_won AND is_new_biz THEN amount ELSE 0 END) AS new_biz_revenue_won,
+    COUNTIF(is_won)                      AS all_deals_won,
+    SUM(CASE WHEN is_won THEN amount ELSE 0 END) AS all_revenue_won
+  FROM `{P}.{D}.hubspot_deals_individual`
+  WHERE deal_utm_term IS NOT NULL AND deal_utm_term != ''
+  GROUP BY 1, 2, 3
+)
+
+SELECT
+  k.date,
+  k.channel,
+  CASE k.channel
+    WHEN 'google_ads'    THEN 'Google Ads'
+    WHEN 'microsoft_ads' THEN 'Microsoft Ads'
+    ELSE INITCAP(REPLACE(k.channel, '_', ' '))
+  END                                                               AS channel_name,
+  k.account_id,
+  k.campaign_id,
+  k.campaign_name,
+  k.adgroup_id,
+  k.adgroup_name,
+  k.keyword_id,
+  k.keyword_text,
+  k.match_type,
+  k.status,
+  k.quality_score,
+  -- Spend metrics
+  COALESCE(k.spend, 0)                                              AS spend,
+  COALESCE(k.impressions, 0)                                        AS impressions,
+  COALESCE(k.clicks, 0)                                             AS clicks,
+  SAFE_DIVIDE(k.clicks, NULLIF(k.impressions, 0))                   AS ctr,
+  k.avg_cpc,
+  -- Leads (HubSpot) — joined by campaign + keyword text
+  COALESCE(l.leads_total,        0)                                 AS leads_total,
+  COALESCE(l.leads_qualified,    0)                                 AS leads_qualified,
+  COALESCE(l.leads_disqualified, 0)                                 AS leads_disqualified,
+  -- Deals
+  COALESCE(d.new_biz_deals_won,   0)                               AS new_biz_deals_won,
+  COALESCE(d.new_biz_deals_total, 0)                               AS new_biz_deals_total,
+  COALESCE(d.new_biz_revenue_won, 0)                               AS new_biz_revenue_won,
+  COALESCE(d.all_deals_won,       0)                               AS all_deals_won,
+  COALESCE(d.all_revenue_won,     0)                               AS all_revenue_won,
+  -- Derived KPIs
+  SAFE_DIVIDE(k.spend, NULLIF(l.leads_total, 0))                    AS cpl,
+  SAFE_DIVIDE(k.spend, NULLIF(l.leads_qualified, 0))                AS cpql,
+  SAFE_DIVIDE(k.spend, NULLIF(d.new_biz_deals_won, 0))              AS cost_per_deal,
+  SAFE_DIVIDE(d.new_biz_revenue_won, NULLIF(k.spend, 0))            AS new_biz_roas
+
+FROM `{P}.{D}.keywords_daily` k
+
+LEFT JOIN leads_by_term l
+  ON k.date = l.date
+ AND LOWER(TRIM(k.campaign_name)) = l.utm_campaign
+ AND LOWER(TRIM(k.keyword_text))  = l.utm_term
+
+LEFT JOIN deals_by_term d
+  ON k.date = d.date
+ AND LOWER(TRIM(k.campaign_name)) = d.utm_campaign
+ AND LOWER(TRIM(k.keyword_text))  = d.utm_term
+"""
+
+
 def _heavy_views_list():
     """
-    Returns (name, sql) pairs for the 6 views that get materialised as physical
-    tables so Hex reads are instant.  Listed in dependency order:
-      utm_paid_attribution_daily must come before v_adset/v_ad_performance.
-      paid_channel_campaign_daily must come before paid_channel_daily.
+    Returns (name, sql) pairs for views materialised as physical tables so Hex
+    reads are instant. Listed in dependency order.
     """
     from collectors.bq_writer import (
         UTM_PAID_ATTRIBUTION_VIEW_SQL,
@@ -735,6 +991,9 @@ def _heavy_views_list():
         ("paid_channel_daily",          PAID_CHANNEL_DAILY_SQL),
         ("v_adset_performance",         V_ADSET_PERFORMANCE_SQL),
         ("v_ad_performance",            V_AD_PERFORMANCE_SQL),
+        # Wide-table redesign — new clean views on store tables (Step 3)
+        ("wide_ads",                    WIDE_ADS_SQL),
+        ("wide_keywords",               WIDE_KEYWORDS_SQL),
     ]
 
 
