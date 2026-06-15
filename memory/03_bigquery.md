@@ -20,13 +20,12 @@ filter fields. All writes go through `collectors/bq_writer.upsert_rows()`.
 | Databox dataset | BQ view | Notes |
 |---|---|---|
 | Campaign | `paid_channel_campaign_daily` | ID-first attribution — spend + leads + deals stay together through renames. **Not** `utm_paid_attribution_daily`. |
-| Adset | `v_adset_performance` | UTM-grain, powered by `utm_paid_attribution_daily` |
-| Ad | `v_ad_performance` | UTM-grain, powered by `utm_paid_attribution_daily` |
+| Adset | `v_adset_performance` | Sourced from `wide_ads` (as of 2026-06-15) |
+| Ad | `v_ad_performance` | Sourced from `wide_ads` (as of 2026-06-15) |
 | Keyword | `v_keyword_performance` | Keyword grain |
 
-**Do not use `utm_paid_attribution_daily` for the campaign-level Databox dataset.**
-It is the internal attribution spine (UTM grain) that feeds `v_adset_performance`
-and `v_ad_performance`. Campaign reporting uses `paid_channel_campaign_daily`
+**Do not attempt to use `utm_paid_attribution_daily` — it was DROPPED 2026-06-15.**
+Campaign reporting uses `paid_channel_campaign_daily` (now a VIEW sourced from `wide_ads`)
 which uses ID-first attribution and includes deals + ROAS.
 
 Correct Databox SQL for each level (all include `utm_source`):
@@ -126,18 +125,24 @@ ORDER BY date DESC
 ⚠️ Column is `leads_qualified` NOT `sqls` in all views. `status` = ACTIVE / PAUSED from the platform — use to filter in Databox.
 All deal amounts are in USD by deal createdate. New biz = Sales Pipeline + Bookkeeping + Qflavours. All pipelines = every HubSpot pipeline.
 
-## Views (all `CREATE OR REPLACE`, rebuilt by `collectors/views.py`)
+## Views (all `CREATE OR REPLACE VIEW`, rebuilt by `collectors/views.py`)
 
-### Materialized tables (rematerialized every 6h via `materialize_heavy_views()`)
+> **As of 2026-06-15, all reporting views source from `wide_ads`. See `docs/knowledge/bq-naming-convention.md` for the layer map.**
+> `utm_paid_attribution_daily` and `channel_roas_daily` were DROPPED 2026-06-15 and are no longer live.
 
-| Table | Purpose |
+### Reporting VIEWs (sourced from wide_ads, refreshed every 6h via `refresh_all_views()`)
+
+| View | Purpose |
 |---|---|
-| `utm_paid_attribution_daily` | Campaign/adset/ad grain: adsets_daily spend + hubspot_leads_module_daily UTM attribution; includes UTM-proxy CTE for cases where utm_audience is only in HubSpot |
 | `paid_channel_campaign_daily` | Campaign-level blended: spend + leads + deals + CPL/CPQL/ROAS |
-| `channel_roas_daily` | Per (date, channel): spend + leads + deals + CPL/CPQL/ROAS + zones |
-| `paid_channel_daily` | Channel-level daily rollup |
-| `v_adset_performance` | Adset-level performance powered by utm_paid_attribution_daily |
-| `v_ad_performance` | Ad-level performance powered by utm_paid_attribution_daily |
+| `paid_channel_daily` | Channel-level daily rollup (replaces dropped `channel_roas_daily`) |
+| `v_adset_performance` | Adset-level performance sourced from wide_ads |
+| `v_ad_performance` | Ad-level performance sourced from wide_ads |
+
+**Dropped 2026-06-15 (were physical BASE TABLEs in the old chain architecture):**
+- `utm_paid_attribution_daily` — attribution spine replaced by wide_ads materialization
+- `channel_roas_daily` — replaced by `paid_channel_daily` (wide_ads VIEW)
+- `paid_channel_daily`, `paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance` were BASE TABLEs; now VIEWs from wide_ads
 
 ### Lightweight views
 

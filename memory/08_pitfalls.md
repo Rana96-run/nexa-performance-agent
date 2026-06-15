@@ -1,5 +1,17 @@
 # Pitfalls & Known Traps
 
+## [2026-06-15] CREATE OR REPLACE VIEW fails if object is a BASE TABLE
+
+BQ throws "different type" if you try to `CREATE OR REPLACE VIEW` on a name that already exists
+as a BASE TABLE. Fix: drop the physical table first (`not_found_ok=True`), then the VIEW DDL
+succeeds. This happened to `paid_channel_daily`, `paid_channel_campaign_daily`,
+`v_adset_performance`, `v_ad_performance` during the wide-table migration (2026-06-15).
+
+```python
+client.delete_table(table_id, not_found_ok=True)
+# then run CREATE OR REPLACE VIEW ...
+```
+
 ## Cowork scheduled tasks — use .env credentials directly, never MCP connectors (2026-06-13)
 
 - **MCP connectors (Slack, Google, etc.) use separate OAuth tokens** that expire independently of the bot tokens stored in Railway/.env. When a MCP connector returns `invalid_auth`, the task silently fails even though the underlying credentials are fine.

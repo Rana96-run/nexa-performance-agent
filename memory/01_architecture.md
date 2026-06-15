@@ -92,7 +92,7 @@ Nexa Performance Agent/
 │   └── ad_drilldown.py           # ad/keyword drill-down Markdown tables
 ├── collectors/             # BQ collectors (one per data source)
 │   ├── bq_writer.py        # shared: MERGE helper + schemas
-│   ├── views.py            # creates v_channel_key_map, v_agent_activity_dashboard; materializes paid_channel_daily, channel_roas_daily, etc
+│   ├── views.py            # creates all reporting VIEWs (paid_channel_daily, v_adset_performance, etc.) sourced from wide_ads; refresh_all_views() runs every 6h
 │   ├── google_ads_bq.py    # campaign + adgroup + ad + keywords grain
 │   ├── meta_bq.py          # campaign + adset + ad grain
 │   ├── snap_bq.py          # campaign + adset + ad grain
@@ -137,15 +137,36 @@ Nexa Performance Agent/
 | `asana_task_status` | asana_sync.py | task_id |
 | `qa_gate_events` | gate.py | surface, check_name |
 
-### Materialized tables (rebuilt every 6h by `materialize_heavy_views()`)
-| Table | Source views |
-|---|---|
-| `utm_paid_attribution_daily` | campaigns_daily + hubspot_leads_module_daily |
-| `paid_channel_campaign_daily` | campaigns_daily + hubspot_leads_module_daily + hubspot_deals_daily |
-| `channel_roas_daily` | campaigns_daily + hubspot_leads_module_daily + hubspot_deals_daily (spine-anchored) |
-| `paid_channel_daily` | campaigns_daily + hubspot_leads_module_daily + hubspot_deals_daily (spine-anchored) |
-| `v_adset_performance` | adsets_daily + utm_paid_attribution_daily + hubspot_leads_module_daily |
-| `v_ad_performance` | ads_daily + utm_paid_attribution_daily + hubspot_leads_module_daily |
+### Reporting VIEWs (sourced from wide_ads, refreshed every 6h by `refresh_all_views()`)
+
+As of 2026-06-15, all reporting views are `CREATE OR REPLACE VIEW` objects sourced from `wide_ads`
+(not materialized physical tables). They are rebuilt by `refresh_all_views()` in `collectors/views.py`
+every 6h via the reporting scheduler.
+
+| View | Source | Notes |
+|---|---|---|
+| `paid_channel_campaign_daily` | `wide_ads` | Campaign-level blended: spend + leads + deals + CPL/CPQL/ROAS |
+| `paid_channel_daily` | `wide_ads` | Channel-level daily rollup |
+| `v_adset_performance` | `wide_ads` | Adset-level performance |
+| `v_ad_performance` | `wide_ads` | Ad-level performance |
+
+**DROPPED 2026-06-15 (were BASE TABLEs, replaced by VIEWs from wide_ads):**
+- `paid_channel_daily` — was a materialized chain table; now a VIEW sourced from wide_ads
+- `paid_channel_campaign_daily` — same
+- `v_adset_performance` — same
+- `v_ad_performance` — same
+
+**DROPPED 2026-06-15 (no longer used):**
+- `utm_paid_attribution_daily` — attribution spine replaced by wide_ads materialization
+- `channel_roas_daily` — replaced by `paid_channel_daily` (wide_ads-sourced VIEW)
+
+### Current layer summary
+| Layer | Tables/Views | Written by |
+|---|---|---|
+| Layer 0 (store) | `campaigns_daily`, `adsets_daily`, `ads_daily`, `keywords_daily`, `hubspot_leads_module_daily`, `hubspot_deals_daily`, etc. | collectors/* |
+| Layer 1 (individual mirrors) | Per-platform raw rows in the above store tables | same collectors |
+| Layer 2 (wide tables) | `wide_ads`, `wide_keywords` | `collectors/views.py::materialize_wide_tables()` — rebuilt every 6h |
+| Layer 3 (reporting views) | `paid_channel_daily`, `paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance`, `v_keyword_performance`, `v_channel_key_map`, `v_agent_activity_dashboard` | `collectors/views.py::refresh_all_views()` — sourced from wide_ads/wide_keywords |
 
 ### Lightweight views (from `ALL_VIEWS` + `_sub_campaign_views()`)
 | View | Purpose |
@@ -154,12 +175,17 @@ Nexa Performance Agent/
 | `v_agent_activity_dashboard` | Agent activity heatmap (Nexa-Agent-Activity Hex) |
 | `v_keyword_performance` | Keyword grain with QS, IS, leads |
 
-### Dropped tables (removed 2026-06-09 — do not recreate)
+### Dropped tables (do not recreate)
+
+**Dropped 2026-06-09:**
 hubspot_leads_daily, channel_roas_monthly, campaign_performance, campaign_performance_daily,
 campaign_performance_monthly, disqualification_matrix, pipeline_funnel, lead_funnel_by_pipeline,
 lead_utm_performance, v_lp_combined_weekly, v_lp_ga4_daily, v_lp_ga4_funnel_daily,
 v_lp_performance_weekly, v_lp_weekly_summary, v_session_lead_match, v_signup_funnel_weekly,
 v_website_funnel_daily
+
+**Dropped 2026-06-15 (replaced by VIEWs from wide_ads — see reporting VIEWs section above):**
+utm_paid_attribution_daily, channel_roas_daily
 
 ## Tech choices (and why)
 
