@@ -619,12 +619,12 @@ def activity_dashboard():
         """
         kpi_sql = f"""
             WITH latest AS (
-                SELECT MAX(date) AS d FROM {T}.paid_channel_daily
+                SELECT MAX(date) AS d FROM {T}.wide_ads
             ),
             yest AS (
                 SELECT l.d AS data_date, SUM(p.spend) AS spend,
-                       SUM(p.leads_total) AS leads, SUM(p.qualified) AS sqls
-                FROM {T}.paid_channel_daily p, latest l
+                       SUM(p.leads_total) AS leads, SUM(p.leads_qualified) AS sqls
+                FROM {T}.wide_ads p, latest l
                 WHERE p.date = l.d GROUP BY l.d
             ),
             week_avg AS (
@@ -632,20 +632,20 @@ def activity_dashboard():
                        ROUND(AVG(sqls),2) AS sqls_avg
                 FROM (
                     SELECT date, SUM(spend) AS spend,
-                           SUM(leads_total) AS leads, SUM(qualified) AS sqls
-                    FROM {T}.paid_channel_daily
+                           SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls
+                    FROM {T}.wide_ads
                     WHERE date BETWEEN
-                          DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 8 DAY)
-                      AND DATE_SUB((SELECT MAX(date) FROM {T}.paid_channel_daily), INTERVAL 1 DAY)
+                          DATE_SUB((SELECT MAX(date) FROM {T}.wide_ads), INTERVAL 8 DAY)
+                      AND DATE_SUB((SELECT MAX(date) FROM {T}.wide_ads), INTERVAL 1 DAY)
                     GROUP BY date
                 )
             ),
             by_channel AS (
                 SELECT p.channel,
                        ROUND(SUM(p.spend),2) AS spend, SUM(p.leads_total) AS leads,
-                       SUM(p.qualified) AS sqls,
-                       ROUND(SAFE_DIVIDE(SUM(p.spend),NULLIF(SUM(p.qualified),0)),2) AS cpql
-                FROM {T}.paid_channel_daily p, latest l
+                       SUM(p.leads_qualified) AS sqls,
+                       ROUND(SAFE_DIVIDE(SUM(p.spend),NULLIF(SUM(p.leads_qualified),0)),2) AS cpql
+                FROM {T}.wide_ads p, latest l
                 WHERE p.date = l.d AND p.spend > 0 GROUP BY p.channel
             )
             SELECT y.data_date, y.spend, y.leads, y.sqls,

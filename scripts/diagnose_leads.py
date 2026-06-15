@@ -5,10 +5,10 @@ c = get_client(); p = os.getenv("BQ_PROJECT_ID"); d = os.getenv("BQ_DATASET")
 
 PAID = "('Google Ads','Meta Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads','LinkedIn Ads')"
 
-print("=== paid_channel_daily last 7d ===")
+print("=== wide_ads last 7d (channel grain) ===")
 for r in c.query(f"""
-  SELECT channel, SUM(leads) leads, SUM(spend) spend
-  FROM `{p}.{d}.paid_channel_daily`
+  SELECT channel, SUM(leads_total) leads, SUM(spend) spend
+  FROM `{p}.{d}.wide_ads`
   WHERE date BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
                  AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
   GROUP BY 1 ORDER BY 2 DESC

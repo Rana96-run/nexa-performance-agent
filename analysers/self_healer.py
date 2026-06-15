@@ -49,12 +49,12 @@ def _heal_stale_views() -> int:
         c, p, d = _bq()
         rows = list(c.query(
             f"SELECT DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS lag "
-            f"FROM `{p}.{d}.paid_channel_daily`"
+            f"FROM `{p}.{d}.wide_ads`"
         ).result())
         lag = int(rows[0].lag or 0) if rows else 0
         if lag <= 1:
             return 0
-        print(f"[self-healer] paid_channel_daily is {lag}d stale — rebuilding views")
+        print(f"[self-healer] wide_ads is {lag}d stale — rebuilding views")
         from collectors.views import materialize_heavy_views
         materialize_heavy_views()
         _log("self_heal", "success",

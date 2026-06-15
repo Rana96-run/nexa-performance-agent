@@ -134,10 +134,11 @@ def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
     """Pass if BQ paid_channel_daily vs HubSpot live paid-lead counts agree within drift_threshold over last 7 days."""
     def _q():
         c, p, d = _bq()
-        # BQ side: paid leads from the blessed reporting view, last 7 settled days
+        # BQ side: paid leads from wide_ads (ad grain), last 7 settled days.
+        # wide_ads is the primary reporting table — GROUP BY date, channel to get channel totals.
         sql = f"""
         SELECT SUM(leads_total) AS bq_paid_leads
-        FROM `{p}.{d}.paid_channel_daily`
+        FROM `{p}.{d}.wide_ads`
         WHERE date BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
                        AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
         """

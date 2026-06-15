@@ -58,18 +58,18 @@ def _recent_daily_rate(start: date, end: date) -> dict:
           COUNT(DISTINCT date)        AS days,
           ROUND(SUM(spend), 0)        AS spend,
           SUM(leads_total)            AS leads,
-          SUM(qualified)              AS sqls,
-          SUM(deals_won)              AS deals_won,
-          ROUND(SUM(revenue_won), 0)  AS revenue,
+          SUM(leads_qualified)        AS sqls,
+          SUM(all_deals_won)          AS deals_won,
+          ROUND(SUM(all_revenue_won), 0)  AS revenue,
           ROUND(SAFE_DIVIDE(SUM(spend), SUM(leads_total)), 2)    AS cpl,
           ROUND(SAFE_DIVIDE(
-            SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
+            SUM(IF(SAFE_DIVIDE(COALESCE(leads_open,0), NULLIF(leads_total,0)) <= 0.30
                     OR leads_total = 0, spend, 0)),
-            NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
-                           OR leads_total = 0, qualified, 0)), 0)
+            NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(leads_open,0), NULLIF(leads_total,0)) <= 0.30
+                           OR leads_total = 0, leads_qualified, 0)), 0)
           ), 2) AS cpql_lag_aware,
-          ROUND(SAFE_DIVIDE(SUM(revenue_won), SUM(spend)), 2)    AS roas
-        FROM {DS}.paid_channel_daily
+          ROUND(SAFE_DIVIDE(SUM(all_revenue_won), SUM(spend)), 2)    AS roas
+        FROM {DS}.wide_ads
         WHERE date BETWEEN '{start.isoformat()}' AND '{end.isoformat()}'
     """
     rows = list(get_client().query(sql).result())
@@ -100,10 +100,10 @@ def _month_to_date_actual(today: date) -> dict:
           COUNT(DISTINCT date)        AS days,
           ROUND(SUM(spend), 0)        AS spend,
           SUM(leads_total)            AS leads,
-          SUM(qualified)              AS sqls,
-          ROUND(SUM(revenue_won), 0)  AS rev,
-          SUM(deals_won)              AS deals_won
-        FROM {DS}.paid_channel_daily
+          SUM(leads_qualified)        AS sqls,
+          ROUND(SUM(all_revenue_won), 0)  AS rev,
+          SUM(all_deals_won)          AS deals_won
+        FROM {DS}.wide_ads
         WHERE date BETWEEN '{start.isoformat()}' AND '{end.isoformat()}'
     """
     rows = list(get_client().query(sql).result())
@@ -130,9 +130,9 @@ def _per_channel_trend(start: date, end: date) -> list[dict]:
           COUNT(DISTINCT date)      AS days,
           ROUND(SUM(spend), 0)      AS spend,
           SUM(leads_total)          AS leads,
-          SUM(qualified)            AS sqls,
-          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)), 1) AS cpql
-        FROM {DS}.paid_channel_daily
+          SUM(leads_qualified)      AS sqls,
+          ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 1) AS cpql
+        FROM {DS}.wide_ads
         WHERE date BETWEEN '{start.isoformat()}' AND '{end.isoformat()}'
         GROUP BY channel
         ORDER BY spend DESC

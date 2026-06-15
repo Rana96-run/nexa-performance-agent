@@ -99,12 +99,12 @@ def _headline_numbers() -> Optional[dict]:
     # backlog). Volume metrics (spend, leads) still use the full window;
     # only CPQL math is suppressed on lag-affected days.
     from analysers.lag_aware import lag_clean_filter_sql, lag_excluded_days_sql
-    LAG_OK = lag_clean_filter_sql(open_col="open_leads", leads_col="leads_total")
-    LAG_EXC = lag_excluded_days_sql(open_col="open_leads", leads_col="leads_total")
+    LAG_OK = lag_clean_filter_sql(open_col="leads_open", leads_col="leads_total")
+    LAG_EXC = lag_excluded_days_sql(open_col="leads_open", leads_col="leads_total")
     q = f"""
       WITH base AS (
         SELECT *
-        FROM `{PROJECT_ID}.{DATASET}.paid_channel_daily`
+        FROM `{PROJECT_ID}.{DATASET}.wide_ads`
         WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
           AND date <= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
       ),
@@ -112,11 +112,11 @@ def _headline_numbers() -> Optional[dict]:
         SELECT channel,
           ROUND(SUM(spend), 0) AS spend,
           SUM(leads_total) AS leads,
-          SUM(qualified)   AS qual,
+          SUM(leads_qualified)   AS qual,
           ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 0) AS cpl,
           ROUND(SAFE_DIVIDE(
             SUM(IF({LAG_OK}, spend, 0)),
-            NULLIF(SUM(IF({LAG_OK}, qualified, 0)), 0)
+            NULLIF(SUM(IF({LAG_OK}, leads_qualified, 0)), 0)
           ), 0) AS cpql,
           {LAG_EXC} AS lag_excluded_days
         FROM base
@@ -126,11 +126,11 @@ def _headline_numbers() -> Optional[dict]:
         SELECT
           ROUND(SUM(spend), 0)   AS spend,
           SUM(leads_total)       AS leads,
-          SUM(qualified)         AS qual,
+          SUM(leads_qualified)   AS qual,
           ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 0) AS cpl,
           ROUND(SAFE_DIVIDE(
             SUM(IF({LAG_OK}, spend, 0)),
-            NULLIF(SUM(IF({LAG_OK}, qualified, 0)), 0)
+            NULLIF(SUM(IF({LAG_OK}, leads_qualified, 0)), 0)
           ), 0) AS cpql,
           {LAG_EXC} AS lag_excluded_days
         FROM base

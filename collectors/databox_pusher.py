@@ -237,11 +237,18 @@ def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
             camp AS (
               SELECT date, channel,
                      CAST(campaign_id AS STRING) AS campaign_id,
-                     campaign_name,
-                     spend, impressions, clicks,
-                     cpl, cpql, qual_rate_pct, ctr_pct
-              FROM `{proj}.{ds}.paid_channel_campaign_daily`
+                     ANY_VALUE(campaign_name) AS campaign_name,
+                     ROUND(SUM(spend), 2) AS spend,
+                     SUM(impressions) AS impressions,
+                     SUM(clicks) AS clicks,
+                     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2) AS cpl,
+                     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2) AS cpql,
+                     ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+                       NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)) * 100, 2) AS qual_rate_pct,
+                     ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0)) * 100, 4) AS ctr_pct
+              FROM `{proj}.{ds}.wide_ads`
               WHERE date >= '{since}' AND date < '{until}'
+              GROUP BY date, channel, campaign_id
             )
             SELECT c.*, m.lead_utm_medium AS utm_medium
             FROM camp c
@@ -259,14 +266,19 @@ def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
             adset AS (
               SELECT date, channel,
                      CAST(campaign_id AS STRING) AS campaign_id,
-                     utm_campaign  AS campaign_name,
-                     CAST(adset_id AS STRING)   AS adset_id,
-                     utm_audience  AS adset_name,
-                     spend, impressions, clicks,
-                     CPL AS cpl, CPQL AS cpql,
-                     ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-              FROM `{proj}.{ds}.v_adset_performance`
+                     ANY_VALUE(campaign_name) AS campaign_name,
+                     CAST(adset_id AS STRING) AS adset_id,
+                     ANY_VALUE(adset_name) AS adset_name,
+                     ROUND(SUM(spend), 2) AS spend,
+                     SUM(impressions) AS impressions,
+                     SUM(clicks) AS clicks,
+                     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2) AS cpl,
+                     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2) AS cpql,
+                     ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+                       NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)) * 100, 2) AS qual_rate_pct
+              FROM `{proj}.{ds}.wide_ads`
               WHERE date >= '{since}' AND date < '{until}'
+              GROUP BY date, channel, campaign_id, adset_id
             )
             SELECT a.*, m.lead_utm_medium AS utm_medium
             FROM adset a
@@ -285,17 +297,22 @@ def _grain_sql(grain: str, since: str, until: str, proj: str, ds: str) -> str:
             ad AS (
               SELECT date, channel,
                      CAST(campaign_id AS STRING) AS campaign_id,
-                     utm_campaign  AS campaign_name,
-                     CAST(adset_id AS STRING)   AS adset_id,
-                     utm_audience  AS adset_name,
-                     CAST(ad_id AS STRING)      AS ad_id,
-                     utm_content   AS ad_name,
-                     creative_type,
-                     spend, impressions, clicks,
-                     CPL AS cpl, CPQL AS cpql,
-                     ROUND(IFNULL(qual_rate,0)*100,2) AS qual_rate_pct
-              FROM `{proj}.{ds}.v_ad_performance`
+                     ANY_VALUE(campaign_name) AS campaign_name,
+                     CAST(adset_id AS STRING) AS adset_id,
+                     ANY_VALUE(adset_name) AS adset_name,
+                     CAST(ad_id AS STRING) AS ad_id,
+                     ANY_VALUE(utm_content) AS ad_name,
+                     ANY_VALUE(creative_type) AS creative_type,
+                     ROUND(SUM(spend), 2) AS spend,
+                     SUM(impressions) AS impressions,
+                     SUM(clicks) AS clicks,
+                     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)), 2) AS cpl,
+                     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2) AS cpql,
+                     ROUND(SAFE_DIVIDE(SUM(leads_qualified),
+                       NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)) * 100, 2) AS qual_rate_pct
+              FROM `{proj}.{ds}.wide_ads`
               WHERE date >= '{since}' AND date < '{until}'
+              GROUP BY date, channel, campaign_id, adset_id, ad_id
             )
             SELECT a.*, m.lead_utm_medium AS utm_medium
             FROM ad a
@@ -596,10 +613,10 @@ def push_custom_metrics(days: int = 90) -> int:
     SELECT
         date,
         channel,
-        SUM(spend)       AS spend,
-        SUM(leads_total) AS leads,
-        SUM(qualified)   AS sqls
-    FROM `{_proj}.{_ds}.paid_channel_daily`
+        SUM(spend)           AS spend,
+        SUM(leads_total)     AS leads,
+        SUM(leads_qualified) AS sqls
+    FROM `{_proj}.{_ds}.wide_ads`
     WHERE date >= '{since}'
       AND date  < '{today.isoformat()}'
     GROUP BY date, channel

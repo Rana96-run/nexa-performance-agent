@@ -103,9 +103,10 @@ def compare(period_a: tuple[str, str],
               WHEN date BETWEEN '{a_start}' AND '{a_end}' THEN 'A'
               WHEN date BETWEEN '{b_start}' AND '{b_end}' THEN 'B'
             END AS p,
-            date, channel, spend, leads_total, qualified, disqualified,
-            open_leads, deals_won, revenue_won
-          FROM {DS}.paid_channel_daily
+            date, channel, spend, leads_total, leads_qualified AS qualified,
+            leads_disqualified AS disqualified,
+            leads_open, all_deals_won AS deals_won, all_revenue_won AS revenue_won
+          FROM {DS}.wide_ads
           WHERE date BETWEEN '{a_start}' AND '{b_end}'
         )
         SELECT p,
@@ -117,9 +118,9 @@ def compare(period_a: tuple[str, str],
           ROUND(SUM(revenue_won), 0)   AS rev_won,
           ROUND(SAFE_DIVIDE(SUM(spend), SUM(leads_total)), 2)    AS cpl,
           ROUND(SAFE_DIVIDE(
-            SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
+            SUM(IF(SAFE_DIVIDE(COALESCE(leads_open,0), NULLIF(leads_total,0)) <= 0.30
                     OR leads_total = 0, spend, 0)),
-            NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
+            NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(leads_open,0), NULLIF(leads_total,0)) <= 0.30
                            OR leads_total = 0, qualified, 0)), 0)
           ), 2) AS cpql_lag_aware,
           ROUND(SAFE_DIVIDE(SUM(qualified), SUM(leads_total))*100, 1) AS qual_pct,
@@ -151,8 +152,12 @@ def compare(period_a: tuple[str, str],
               WHEN date BETWEEN '{a_start}' AND '{a_end}' THEN 'A'
               WHEN date BETWEEN '{b_start}' AND '{b_end}' THEN 'B'
             END AS p,
-            channel, date, spend, leads_total, qualified, deals_won, revenue_won, open_leads
-          FROM {DS}.paid_channel_daily
+            channel, date, spend, leads_total,
+            leads_qualified AS qualified,
+            all_deals_won AS deals_won,
+            all_revenue_won AS revenue_won,
+            leads_open
+          FROM {DS}.wide_ads
           WHERE date BETWEEN '{a_start}' AND '{b_end}'
         )
         SELECT channel, p,
@@ -160,9 +165,9 @@ def compare(period_a: tuple[str, str],
           SUM(leads_total)             AS leads,
           SUM(qualified)               AS sqls,
           ROUND(SAFE_DIVIDE(
-            SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
+            SUM(IF(SAFE_DIVIDE(COALESCE(leads_open,0), NULLIF(leads_total,0)) <= 0.30
                     OR leads_total = 0, spend, 0)),
-            NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(open_leads,0), NULLIF(leads_total,0)) <= 0.30
+            NULLIF(SUM(IF(SAFE_DIVIDE(COALESCE(leads_open,0), NULLIF(leads_total,0)) <= 0.30
                            OR leads_total = 0, qualified, 0)), 0)
           ), 1) AS cpql,
           ROUND(SAFE_DIVIDE(SUM(revenue_won), SUM(spend)), 2) AS roas
@@ -188,15 +193,15 @@ def compare(period_a: tuple[str, str],
     sql = f"""
         WITH a AS (
           SELECT channel, campaign_id, ANY_VALUE(campaign_name) AS campaign_name,
-                 SUM(spend) AS spend, SUM(qualified) AS sqls
-          FROM {DS}.paid_channel_campaign_daily
+                 SUM(spend) AS spend, SUM(leads_qualified) AS sqls
+          FROM {DS}.wide_ads
           WHERE date BETWEEN '{a_start}' AND '{a_end}'
           GROUP BY channel, campaign_id
         ),
         b AS (
           SELECT channel, campaign_id,
-                 SUM(spend) AS spend, SUM(qualified) AS sqls
-          FROM {DS}.paid_channel_campaign_daily
+                 SUM(spend) AS spend, SUM(leads_qualified) AS sqls
+          FROM {DS}.wide_ads
           WHERE date BETWEEN '{b_start}' AND '{b_end}'
           GROUP BY channel, campaign_id
         )

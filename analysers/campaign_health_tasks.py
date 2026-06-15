@@ -84,16 +84,16 @@ def _get_junk_audience_detail(channel: str, campaign_name: str, days: int) -> st
         safe_campaign = campaign_name.replace("'", "''")
         sql = f"""
             SELECT
-              utm_audience AS ad_group,
-              ROUND(SUM(spend), 2)                                                 AS spend,
-              SUM(leads)                                                           AS leads,
-              SUM(leads_qualified)                                                 AS sqls,
-              ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads),0))*100, 1) AS qual_pct
-            FROM `{PROJECT_ID}.{DATASET}.v_adset_performance`
+              adset_name AS ad_group,
+              ROUND(SUM(spend), 2)                                                    AS spend,
+              SUM(leads_total)                                                        AS leads,
+              SUM(leads_qualified)                                                    AS sqls,
+              ROUND(SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_total),0))*100, 1) AS qual_pct
+            FROM `{PROJECT_ID}.{DATASET}.wide_ads`
             WHERE channel = '{channel}'
-              AND utm_campaign = '{safe_campaign}'
+              AND campaign_name = '{safe_campaign}'
               AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL {days} DAY)
-              AND utm_audience IS NOT NULL AND utm_audience != ''
+              AND adset_name IS NOT NULL AND adset_name != ''
             GROUP BY 1
             ORDER BY qual_pct ASC
             LIMIT 10
@@ -721,8 +721,8 @@ def _send_nightly_digest(scale_findings: list, pause_findings: list, review_find
               channel,
               SUM(spend)          AS spend,
               SUM(leads_total)    AS leads,
-              SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql
-            FROM `{PROJECT_ID}.{DATASET}.paid_channel_daily`
+              SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS cpql
+            FROM `{PROJECT_ID}.{DATASET}.wide_ads`
             WHERE date = '{_yesterday}'
               AND spend > 0
             GROUP BY channel

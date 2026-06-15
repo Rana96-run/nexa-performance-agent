@@ -323,26 +323,19 @@ ALL_VIEWS = [
     # HubSpot compat views — aggregate from individual store tables (wide-table redesign step 4)
     ("hubspot_leads_module_daily",     HUBSPOT_LEADS_MODULE_COMPAT_SQL),
     ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),
-    # Channel + campaign grain rollup views (sourced from wide_ads — rebuilt every 6h)
-    ("paid_channel_campaign_daily",   PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
-    ("paid_channel_daily",            PAID_CHANNEL_DAILY_SQL),
+    # paid_channel_campaign_daily, paid_channel_daily DROPPED 2026-06-16 — all consumers migrated to wide_ads
     # v_new_biz_daily and v_agent_activity_dashboard DROPPED 2026-06-16 (0 active consumers)
     # SQL constants retained above for reference; do NOT re-add to ALL_VIEWS.
 ]
 
-# Sub-campaign views (keyword / adset / ad grain).
-# v_adset_performance and v_ad_performance are defined in bq_writer.py (alongside
-# their table schemas); imported here so refresh_all_views() keeps them in sync.
-# v_keyword_performance likewise lives in bq_writer.py.
+# Sub-campaign views (keyword grain only).
+# v_adset_performance and v_ad_performance DROPPED 2026-06-16 — all consumers migrated to wide_ads.
+# v_keyword_performance is defined in bq_writer.py.
 def _sub_campaign_views():
     from collectors.bq_writer import (
         V_KEYWORD_PERFORMANCE_SQL,
-        V_ADSET_PERFORMANCE_SQL,
-        V_AD_PERFORMANCE_SQL,
     )
     return [
-        ("v_adset_performance",     V_ADSET_PERFORMANCE_SQL),
-        ("v_ad_performance",        V_AD_PERFORMANCE_SQL),
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
     ]
 

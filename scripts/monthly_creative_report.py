@@ -40,19 +40,19 @@ CHANNELS = ["Meta", "Google", "Snapchat", "TikTok", "LinkedIn", "Microsoft"]
 QUERY = f"""
 SELECT
   channel,
-  ad_name,
+  ANY_VALUE(ad_name) AS ad_name,
   ad_id,
-  SUM(clicks)                                                       AS clicks,
-  SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0))            AS ctr,
-  SUM(leads_total)                                                  AS leads,
-  SUM(qualified)                                                    AS qualified_leads,
-  SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total), 0))         AS qual_ratio,
-  SAFE_DIVIDE(SUM(spend),     NULLIF(SUM(leads_total), 0))         AS cpl,
-  SUM(spend)                                                        AS spend
-FROM `{BQ_PROJECT}.{BQ_DATASET}.v_ad_performance`
+  SUM(clicks)                                                             AS clicks,
+  SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0))                  AS ctr,
+  SUM(leads_total)                                                        AS leads,
+  SUM(leads_qualified)                                                    AS qualified_leads,
+  SAFE_DIVIDE(SUM(leads_qualified), NULLIF(SUM(leads_total), 0))         AS qual_ratio,
+  SAFE_DIVIDE(SUM(spend),           NULLIF(SUM(leads_total), 0))         AS cpl,
+  SUM(spend)                                                              AS spend
+FROM `{BQ_PROJECT}.{BQ_DATASET}.wide_ads`
 WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
   AND leads_total > 0
-GROUP BY channel, ad_name, ad_id
+GROUP BY channel, ad_id
 HAVING SUM(leads_total) >= 3
 ORDER BY channel, qual_ratio DESC, cpl ASC
 """
