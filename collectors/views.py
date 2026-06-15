@@ -10,8 +10,8 @@ Compat views (ALL_VIEWS — lightweight, refreshed every 6h by refresh_all_views
   - hubspot_leads_module_daily  (aggregates from hubspot_leads_individual — backward compat)
   - hubspot_deals_daily         (aggregates from hubspot_deals_individual — backward compat)
   - v_channel_key_map           (channel slug → display name)
-  - v_new_biz_daily             (new-biz deals by pipeline)
-  - v_agent_activity_dashboard  (agent activity heatmap for Hex)
+  - v_new_biz_daily             (DROPPED 2026-06-16 — 0 active consumers)
+  - v_agent_activity_dashboard  (DROPPED 2026-06-16 — 0 active consumers)
   - v_keyword_performance       (keyword grain, via _sub_campaign_views())
 
 Materialized tables (rebuilt every 6h by materialize_heavy_views() — all source from wide_ads):
@@ -488,13 +488,11 @@ ALL_VIEWS = [
     # HubSpot compat views — aggregate from individual store tables (wide-table redesign step 4)
     ("hubspot_leads_module_daily",     HUBSPOT_LEADS_MODULE_COMPAT_SQL),
     ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),
-    # All new_biz deals (all sources) — the correct source for dashboard totals
-    ("v_new_biz_daily",                NEW_BIZ_DAILY_SQL),
     # Channel + campaign grain rollup views (sourced from wide_ads — rebuilt every 6h)
     ("paid_channel_campaign_daily",   PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
     ("paid_channel_daily",            PAID_CHANNEL_DAILY_SQL),
-    # Agent activity dashboard — powers Nexa-Agent-Activity Hex heatmap
-    ("v_agent_activity_dashboard",     AGENT_ACTIVITY_DASHBOARD_SQL),
+    # v_new_biz_daily and v_agent_activity_dashboard DROPPED 2026-06-16 (0 active consumers)
+    # SQL constants retained above for reference; do NOT re-add to ALL_VIEWS.
 ]
 
 # Sub-campaign views (keyword / adset / ad grain).

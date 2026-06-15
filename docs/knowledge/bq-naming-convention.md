@@ -56,9 +56,9 @@ They are recreated on every 6h `refresh_all_views()` call.
 | `v_adset_performance` | Adset × day | `wide_ads` |
 | `v_ad_performance` | Ad × day | `wide_ads` |
 | `v_keyword_performance` | Keyword × day | `wide_keywords` + `hubspot_deals_daily` |
-| `v_new_biz_daily` | New-biz deals by pipeline × day | `hubspot_deals_daily` |
-| `v_agent_activity_dashboard` | Agent action heatmap | `agent_activity_log` |
 | `v_channel_key_map` | Channel slug → display name | static UNNEST |
+
+> **Dropped 2026-06-16 (0 active consumers):** `v_new_biz_daily`, `v_agent_activity_dashboard` — do not recreate.
 
 ### Layer 3b — Compat views (BQ VIEWs, aggregate from layer 1 — same name as old physical tables)
 
@@ -123,3 +123,12 @@ Pattern: `{source}_bq.py`
 3. `v_adset_performance` and `v_ad_performance` DDL lived in `bq_writer.py` and were
    only called via `create_views()` which ran one view. They were not wired into the
    6h cycle. **Fix:** import into `_sub_campaign_views()`.
+
+---
+
+## Forward-looking query rule
+
+Any NEW query (n8n, Hex, new scripts) should target `wide_ads` or `wide_keywords` directly
+with an inline GROUP BY — not the reporting views. The reporting views (`paid_channel_daily`,
+`v_adset_performance`, `v_ad_performance`, `v_keyword_performance`) exist for backward compat
+with existing consumers only and will be deprecated once those consumers are migrated.

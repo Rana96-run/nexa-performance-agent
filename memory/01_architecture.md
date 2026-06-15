@@ -125,8 +125,6 @@ Nexa Performance Agent/
 | `adsets_daily` | same collectors | date, channel, campaign_id, adset_id |
 | `ads_daily` | same collectors | date, channel, campaign_id, ad_id |
 | `keywords_daily` | google_ads_bq, microsoft_ads_bq | date, channel, campaign_id, adgroup_id |
-| `pmax_asset_groups_daily` | google_ads_bq | date, channel, campaign_id |
-| `platform_campaign_snapshot` | platform_snapshot.py | channel, campaign_id |
 | `hubspot_leads_module_daily` | hubspot_leads_bq.py | date, qoyod_source, lead_utm_campaign |
 | `hubspot_leads_individual` | hubspot_leads_bq.py | hs_object_id |
 | `hubspot_deals_daily` | hubspot_deals_bq.py | date, pipeline, qoyod_source |
@@ -149,6 +147,7 @@ every 6h via the reporting scheduler.
 | `paid_channel_daily` | `wide_ads` | Channel-level daily rollup |
 | `v_adset_performance` | `wide_ads` | Adset-level performance |
 | `v_ad_performance` | `wide_ads` | Ad-level performance |
+| `v_keyword_performance` | `wide_keywords` | Keyword-level performance |
 
 **DROPPED 2026-06-15 (were BASE TABLEs, replaced by VIEWs from wide_ads):**
 - `paid_channel_daily` — was a materialized chain table; now a VIEW sourced from wide_ads
@@ -166,13 +165,12 @@ every 6h via the reporting scheduler.
 | Layer 0 (store) | `campaigns_daily`, `adsets_daily`, `ads_daily`, `keywords_daily`, `hubspot_leads_module_daily`, `hubspot_deals_daily`, etc. | collectors/* |
 | Layer 1 (individual mirrors) | Per-platform raw rows in the above store tables | same collectors |
 | Layer 2 (wide tables) | `wide_ads`, `wide_keywords` | `collectors/views.py::materialize_wide_tables()` — rebuilt every 6h |
-| Layer 3 (reporting views) | `paid_channel_daily`, `paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance`, `v_keyword_performance`, `v_channel_key_map`, `v_agent_activity_dashboard` | `collectors/views.py::refresh_all_views()` — sourced from wide_ads/wide_keywords |
+| Layer 3 (reporting views) | `paid_channel_daily`, `paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance`, `v_keyword_performance`, `v_channel_key_map` | `collectors/views.py::refresh_all_views()` — sourced from wide_ads/wide_keywords |
 
 ### Lightweight views (from `ALL_VIEWS` + `_sub_campaign_views()`)
 | View | Purpose |
 |---|---|
 | `v_channel_key_map` | Channel slug → display name mapping |
-| `v_agent_activity_dashboard` | Agent activity heatmap (Nexa-Agent-Activity Hex) |
 | `v_keyword_performance` | Keyword grain with QS, IS, leads |
 
 ### Dropped tables (do not recreate)
@@ -186,6 +184,10 @@ v_website_funnel_daily
 
 **Dropped 2026-06-15 (replaced by VIEWs from wide_ads — see reporting VIEWs section above):**
 utm_paid_attribution_daily, channel_roas_daily
+
+**Dropped 2026-06-16 (0 active analysis consumers):**
+platform_campaign_snapshot, pmax_asset_groups_daily, v_agent_activity_dashboard,
+v_agent_consumption_daily, v_new_biz_daily
 
 ## Tech choices (and why)
 
