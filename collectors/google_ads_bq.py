@@ -103,11 +103,11 @@ _RIYADH = timezone(timedelta(hours=3))
 def _date_window(days, incremental):
     end = datetime.now(_RIYADH).date() - timedelta(days=1)   # Google Ads is T-1
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all conversion attribution restatements
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
     return start, end
 
 

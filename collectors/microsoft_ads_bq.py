@@ -242,11 +242,11 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     # IMPORTANT — collect all accounts' rows into ONE buffer before upserting.
     # upsert_rows() DELETE scope is (date, channel) — if we upsert each account
@@ -352,11 +352,11 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     # Multi-account aggregation — same bug as collect_and_write (see comments
     # there). Pool all accounts' rows then upsert once.
@@ -481,11 +481,11 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     # Multi-account aggregation — same bug as collect_and_write.
     all_rows: list[dict] = []
@@ -593,11 +593,11 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     all_rows: list[dict] = []
     for acc in accs:

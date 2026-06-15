@@ -213,11 +213,11 @@ def collect_and_write(days: int = None, incremental: bool = False):
     # Use yesterday as the ceiling so end_exclusive (end+1) = today midnight.
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     now = datetime.now(timezone.utc).isoformat()
     rows = []
@@ -353,11 +353,11 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     now  = datetime.now(timezone.utc).isoformat()
     rows = []
@@ -550,11 +550,11 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     now  = datetime.now(timezone.utc).isoformat()
     rows = []

@@ -167,11 +167,11 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
 
     end = datetime.now(_RIYADH).date()
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     print(f"[li-bq] Window {start} -> {end}")
 
@@ -260,11 +260,11 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
 
     end = datetime.now(_RIYADH).date()
     if incremental:
-        start = end - timedelta(days=2)
+        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
     elif days:
         start = end - timedelta(days=days - 1)
     else:
-        start = date(end.year, 1, 1)
+        start = date(2025, 1, 1)   # full history from campaign launch
 
     print(f"[li-bq] adsets window {start} -> {end}")
 

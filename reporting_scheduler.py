@@ -7,8 +7,9 @@ Runs every 6h (00:00, 06:00, 12:00, 18:00 UTC = 03:00, 09:00, 15:00, 21:00 Riyad
 NOTE: This is separate from the operational agent loop (Slack approvals,
 threshold watchers, optimization decisions) which run always-on.
 
-All collectors run in incremental mode (last 2 days lookback). A full YTD
-backfill can be forced via `python reporting_scheduler.py backfill`.
+All collectors run in incremental mode (last 30 days lookback — covers all
+platform conversion-attribution restatement windows). A full backfill from
+2025-01-01 can be forced via `python reporting_scheduler.py backfill`.
 """
 import sys
 import time
@@ -240,7 +241,7 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     """One pass: run all collectors, then refresh all views.
 
     Args:
-        incremental: True = last 2 days only (fast). False = full historical.
+        incremental: True = last 30 days (covers all restatement windows). False = full from 2025-01-01.
         days:        If set, overrides incremental — pulls last N days for each
                      collector that supports it. e.g. days=30 -> 30-day backfill.
     """
