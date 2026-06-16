@@ -1,4 +1,4 @@
--- TAB 3 / Chart 5 — Lead → Qualified → Won funnel by channel
+-- TAB 3 / Chart 5 - Lead -> Qualified -> Won funnel by channel
 -- Stage progression per channel. Reveals where leakage happens.
 -- Use as horizontal stacked bar (one bar per channel) OR side-by-side columns.
 -- 'qual_rate_pct' = qualified / (qualified + disqualified) * 100
