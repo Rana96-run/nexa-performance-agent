@@ -68,6 +68,8 @@ build/
 *~
 _ms_new_token.tmp
 _ms_rt2_set.bat
+*.bat
+*.xlsx
 
 # Ad-hoc debug dumps from one-off scripts (project root)
 asana_debug.txt

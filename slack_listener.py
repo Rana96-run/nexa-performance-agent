@@ -595,9 +595,8 @@ def handle_general(request: str) -> str:
 
 def post_reply(channel: str, thread_ts: str, text: str):
     """Post a reply in-thread, splitting if needed (Slack 3000-char limit)."""
-    from notifications.quiet import is_quiet, quiet_log
-    if is_quiet():
-        quiet_log("listener", f"{channel}/{thread_ts}", text)
+    if os.getenv("NEXA_QUIET") == "1":
+        print(f"[listener:quiet] {channel}/{thread_ts}: {text[:120]}")
         return
     chunks = [text[i:i+2900] for i in range(0, len(text), 2900)]
     for chunk in chunks:
@@ -734,12 +733,8 @@ def run():
     print("=" * 52)
 
     # Startup heartbeat — confirms the listener came up cleanly after a restart.
-    try:
-        from notifications.notify import send_heartbeat
-        send_heartbeat("slack-listener", status="started",
-                       detail="listener online; polling Slack every 60s")
-    except Exception as e:
-        print(f"[listener] startup heartbeat skipped: {e}")
+    # (notifications.notify removed; heartbeat logged to stdout only)
+    print("[listener] startup heartbeat: listener online; polling Slack every 60s")
 
     since = str((datetime.now(timezone.utc) - timedelta(minutes=5)).timestamp())
     asana_tick   = 0   # poll Asana every 2 Slack cycles

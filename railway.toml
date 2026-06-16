@@ -1,3 +1,5 @@
+# DEPRECATED — Railway is being phased out. Remove this file when Railway service is shut down.
+
 [build]
 builder = "NIXPACKS"
 

@@ -140,14 +140,25 @@ def run_self_test(post_to_bq: bool = True) -> dict:
     # Slack ping only on real failures
     if broken_checks:
         try:
-            from notifications.slack_ping import post_ping
-            post_ping(
-                channel=os.getenv("SLACK_CHANNEL_HEALTH", "#nexa-health"),
-                status="alert",
-                headline=f"QA gate self-test failed: {len(broken_checks)} check(s) broken — {', '.join(broken_checks[:3])}",
-                link=os.getenv("ACTIVITY_SHORT_URL")
-                     or "https://nexa-web-production-6a6b.up.railway.app/activity",
+            import requests as _req
+            token = os.getenv("SLACK_BOT_TOKEN", "")
+            channel = os.getenv("SLACK_CHANNEL_HEALTH", "#nexa-health")
+            link = (os.getenv("ACTIVITY_SHORT_URL")
+                    or "https://nexa-web-production-6a6b.up.railway.app/activity")
+            headline = (
+                f":red_circle: QA gate self-test failed: {len(broken_checks)} "
+                f"check(s) broken — {', '.join(broken_checks[:3])} {link}"
             )
+            if token:
+                _req.post(
+                    "https://slack.com/api/chat.postMessage",
+                    headers={"Authorization": f"Bearer {token}",
+                             "Content-Type": "application/json"},
+                    json={"channel": channel, "text": headline},
+                    timeout=10,
+                )
+            else:
+                print(f"[qa.self_test] Slack ping skipped (no token): {headline}")
         except Exception as e:
             print(f"[qa.self_test] Slack ping failed: {e}")
 
