@@ -205,3 +205,23 @@ LIMIT 100
 - Heatmap SQL has no role filter — any new role auto-appears as a new row.
 - `channel` column distinguishes which platform was audited under `performance_audit`
   (e.g., `performance_audit | scale_task_created | google_ads`).
+
+## QA Audit Feed (new cell — add to Hex)
+
+SQL for qa_audit feed cell (add after the ops_feed section in canvas):
+
+    SELECT
+      FORMAT_DATETIME('%d %b %H:%M', DATETIME(ts, 'Asia/Riyadh')) AS time_riyadh,
+      action,
+      status,
+      JSON_VALUE(details, '$.originating_agent') AS from_agent,
+      JSON_VALUE(details, '$.error') AS error,
+      ROUND(duration_s, 1) AS duration_s
+    FROM `angular-axle-492812-q4.qoyod_marketing.agent_activity_log`
+    WHERE role = 'qa_audit'
+      AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+    ORDER BY ts DESC
+    LIMIT 100
+
+Canvas addition: Add a [Text] "QA Gate" header + [Table] qa_audit_feed after the ops_feed section.
+Status color: success = green (#3fb950), failed = red (#ff7b72).

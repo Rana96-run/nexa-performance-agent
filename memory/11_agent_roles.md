@@ -47,10 +47,19 @@ is the bridge so a change in one is traceable to the others.
 | `developer` | — | `lp_developer` | Tony Helmy (+ Rana follower) |
 | `project-coordinator` *(Project Coordinator)* | — | `health_monitor`, `collector` | Donia Mohamed |
 | `growth-analyst` | `paid_media_analyst` | `bq_refresh`, `spike_detector`, `llm_cadence` | Rana Khalid |
+| `qa-auditor` *(QA gate, cross-dept)* | — | `qa_audit` | Rana Khalid |
 
 **Full coverage — all log-roles owned 1:1 (no orphans, no double-claims).** `user`
 is the human (not a seat). If a NEW log-role appears unowned, that's a police
 finding — assign it before it runs unattended (see `docs/_shared/police-loop.md`).
+
+### qa_audit log-role
+- **Role value:** `qa_audit`
+- **Owned by:** `qa-auditor` (cross-dept, Layer 2)
+- **Description:** Validation checks run on all Layer 3 agent outputs before reaching the Orchestrator. Logs one row per check run.
+- **Status meanings:** `success` = QA_PASSED (output forwarded to Orchestrator); `failed` = QA_FAILED (returned to originating agent for correction).
+- **Receives from:** all Layer 3 agents (`growth-analyst`, `performance-lead`, `campaign-manager`, `creative-strategist`, `cro-specialist`, `ui-ux-designer`, `developer`, `project-coordinator`)
+- **Sends to:** `ai-orchestrator` on pass; originating agent on fail.
 
 **Asana GIDs (confirmed 2026-06-09 via API):**
 - Rana Khalid: `1208007704598388`

@@ -41,6 +41,7 @@ app.register_blueprint(hubspot_bp)
 _AGENT_DEPT: dict[str, tuple[str, str, str]] = {
     # slug → (display name, department label, dept colour)
     "ai-orchestrator":     ("AI Orchestrator",     "Manager",     "#b08800"),
+    "qa-auditor":          ("QA Auditor",           "QA",          "#e3b341"),
     "performance-lead":    ("Performance Lead",     "Performance", "#58a6ff"),
     "campaign-manager":    ("Campaign Manager",     "Performance", "#58a6ff"),
     "creative-strategist": ("Creative Strategist",  "Performance", "#58a6ff"),
@@ -1722,6 +1723,26 @@ def activity_dashboard():
             "receives_from": [],
             "sends_to":      ["Performance Lead", "CRO Specialist", "Project Coordinator", "Growth Analyst"],
             "agent_file":    ".claude/agents/ai-orchestrator.md",
+        },
+        # ── Layer 2 (cross-cutting) ──────────────────────────────────────────
+        {
+            "title":         "QA Auditor",
+            "desc":          "Cross-dept quality gate: verifies naming, pixels, UTMs, BQ reconciliation, and Asana task format before sign-off.",
+            "color":         "#e3b341",
+            "dept":          "QA",
+            "dept_color":    "#e3b341",
+            "is_lead":       False,
+            "roles":         {"qa_audit"},
+            "sprite":        "qa_auditor",
+            "charter":       [
+                "Validates campaign naming against 5-part convention before launch",
+                "Confirms both Meta pixels fire and UTM passthrough is intact",
+                "Reconciles BQ lead/deal counts to HubSpot API on every schema change",
+                "Checks Asana task format (footer, date ranges, seat ownership) before posting",
+            ],
+            "receives_from": ["growth-analyst", "performance-lead", "campaign-manager", "creative-strategist", "cro-specialist", "ui-ux-designer", "developer", "project-coordinator"],
+            "sends_to":      ["AI Orchestrator (QA_PASSED)", "originating agent (QA_FAILED)"],
+            "agent_file":    ".claude/agents/qa-auditor.md",
         },
         # ── Performance dept ────────────────────────────────────────────────
         {
