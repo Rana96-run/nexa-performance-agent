@@ -12,9 +12,8 @@ Env vars required:
 
 Project IDs come from the app URL slug — the alphanumeric part after the
 last dash in the path segment:
-  .../app/Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK/latest
-                                       ↑ human prefix ↑       ↑ token ↑
-  token = 0339sAIgaMNYNW4ffgEBZK
+  .../app/Qoyod-marketing-performance-<token>/latest
+  Set HEX_PERFORMANCE_PROJECT_ID and HEX_ACTIVITY_PROJECT_ID in Railway.
 
 If HEX_API_TOKEN is not set, this module no-ops silently so local dev
 and offline runs are not affected.

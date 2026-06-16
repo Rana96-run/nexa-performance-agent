@@ -146,10 +146,10 @@ Go to https://cloud.airbyte.com → Sign up with your Google account (use rana.k
 | Field | Value |
 |---|---|
 | Source name | `Microsoft Ads` |
-| Developer Token | `120B2818A8270877` |
-| Client ID | `3d17f0ff-f9c0-4734-b6c2-d231c678fba8` |
-| Client Secret | `IN18Q~amX866RjmjVCe4DPVyfcWy3Rv29Xymudmo` |
-| Tenant ID | `8b6fc4da-1c24-432f-b089-2355d22f028d` |
+| Developer Token | *(see Railway env: `MS_DEVELOPER_TOKEN`)* |
+| Client ID | *(see Railway env: `MS_CLIENT_ID`)* |
+| Client Secret | *(see Railway env: `MS_CLIENT_SECRET`)* |
+| Tenant ID | *(see Railway env: `MS_TENANT_ID`)* |
 | Refresh Token | *(run `python scripts/microsoft_oauth.py` first to generate)* |
 | Customer ID | `254476670` |
 | Start Date | `2024-01-01` |

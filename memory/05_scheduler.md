@@ -33,10 +33,10 @@ Railway (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
 **⚠️ Required n8n $var for Databox Sync:** `DATABOX_TOKEN` must be set (PAK token, not push token). Dataset ID: `6158be78`.
 
 **n8n credentials used:**
-- BQ: `kE5RxM61mQkpV21N` (googleApi service account)
-- Google Sheets OAuth2: `kBgcDkRIN5tMoACU`
-- Asana: `iUYNax4N4UkcLiQB` (httpHeaderAuth)
-- Slack: `YwdlGwXs943DQrfh` (httpHeaderAuth)
+- BQ: googleApi service account (see n8n Credentials)
+- Google Sheets OAuth2 (see n8n Credentials)
+- Asana: httpHeaderAuth (see n8n Credentials)
+- Slack: httpHeaderAuth (see n8n Credentials)
 
 **n8n $vars used:** `BQ_PROJECT`, `BQ_DATASET`, `SLACK_CHANNEL_NOTIFY`, `SLACK_CHANNEL_APPROVALS`, `ASANA_WORKSPACE`, `ASANA_PROJECT_PAID` + all ad-platform account IDs.
 
