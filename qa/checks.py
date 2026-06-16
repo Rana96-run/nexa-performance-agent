@@ -124,14 +124,14 @@ def check_dedupe(table: str, key_fields: list[str]) -> QACheckResult:
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. BQ ↔ HubSpot reconciliation — paid leads, 7-day window
 # ─────────────────────────────────────────────────────────────────────────────
-# IMPORTANT: reconciles against `paid_channel_daily.leads_total` (NOT the raw
+# IMPORTANT: reconciles against `wide_ads.leads_total` (NOT the raw
 # `hubspot_leads_module_daily`). The team's reporting only cares about leads
 # attributed to a paid campaign — leads with null/organic utm_campaign are
-# excluded by definition because the view inner-joins to campaigns_daily.
+# excluded by definition because wide_ads inner-joins to campaigns_daily spend.
 # Discovered 2026-05-17: raw lead_module=137 vs paid=74 yesterday; only 74
 # is the reportable number.
 def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
-    """Pass if BQ paid_channel_daily vs HubSpot live paid-lead counts agree within drift_threshold over last 7 days."""
+    """Pass if BQ wide_ads vs HubSpot live paid-lead counts agree within drift_threshold over last 7 days."""
     def _q():
         c, p, d = _bq()
         # BQ side: paid leads from wide_ads (ad grain), last 7 settled days.
@@ -911,3 +911,4 @@ def check_bq_write(table: str, rows: list[dict], key_fields: list[str]) -> QAChe
         detail=detail,
         metrics={"row_count": len(rows), "issues": issues, "warnings": warnings},
     )
+              

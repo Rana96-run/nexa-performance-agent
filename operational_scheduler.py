@@ -803,7 +803,7 @@ def _run_health_check():
 
 
 def _catchup_if_stale():
-    """On container start, check if paid_channel_daily is stale (nightly missed due to redeploy).
+    """On container start, check if source tables are stale (nightly missed due to redeploy).
     If data is > 1 day behind AND it's past 06:00 UTC (nightly window safely past), run a BQ
     refresh in the background — data only, no Slack/Asana actions."""
     from datetime import datetime, timezone
@@ -1315,26 +1315,4 @@ def run():
     print("  Watchdog every ~4h — never let BQ go stale, auto-resync (4h threshold)")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month (+ creative report Google Sheet)")
-    print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
-    print("  Manual:  python main.py on_demand")
-    print("=" * 60)
-
-    # Startup health check — logs to console only; no Slack post.
-    # Only the 07:00 scheduled run posts to Slack (and only on failures).
-    try:
-        from scripts.health_check import main as hc_main
-        hc_main(post_slack=False)  # console-only on startup
-    except Exception as e:
-        print(f"[ops-scheduler] Startup health check error: {e}")
-
-    # Catch-up: if a redeploy happened during the 05:00 UTC nightly window,
-    # the data refresh was killed mid-run. Fix it silently on next startup.
-    _catchup_if_stale()
-
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
-
-
-if __name__ == "__main__":
-    run()
+    print("  Health   09:00–17:00 Riyadh hourly (on-demand outsi

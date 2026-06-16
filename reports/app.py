@@ -282,7 +282,7 @@ _WORKFLOWS = {
         "subtitle": "How the agent sends its nightly performance digest",
         "steps": [
             ("Scheduled at 08:00 Riyadh", "operational_scheduler.py daily cadence post-audit"),
-            ("BQ query", "paid_channel_daily: yesterday spend + HubSpot leads + CPQL per channel"),
+            ("BQ query", "wide_ads: yesterday spend + HubSpot leads + CPQL per channel"),
             ("Top + worst identified", "Lowest and highest CPQL channels selected"),
             ("Main message formatted", "Dashboard URL (plain text) + peak numbers per channel"),
             ("Follow-up message", "Recommendations referencing Asana task GIDs + #approvals link"),
@@ -319,7 +319,7 @@ _WORKFLOWS = {
         "subtitle": "How the agent spots sudden performance changes and alerts the team",
         "steps": [
             ("Runs daily post-refresh", "spike_detector.detect_spikes() in operational_scheduler"),
-            ("BQ query", "paid_channel_daily: yesterday vs 7-day rolling baseline per channel"),
+            ("BQ query", "wide_ads: yesterday vs 7-day rolling baseline per channel"),
             ("Threshold check", "Spend/leads/CPQL deviation > configured threshold (e.g. 30%)"),
             ("Disqualification rate check", "Sudden disqual spike > 15 pp above baseline flagged"),
             ("Slack alert posted", "formatted block to #notify with direction arrows and % change"),
@@ -346,7 +346,7 @@ _WORKFLOWS = {
             ("Platform API called", "Channel-specific collector: google_ads_bq, meta_bq, snap_bq, etc."),
             ("Currency normalized", "Micros → USD; SAR → USD at 3.75 peg where needed"),
             ("MERGE into BQ", "bq_writer.py: MERGE ON date + campaign_id — idempotent, no duplicates"),
-            ("Views refreshed", "collectors/views.py: paid_channel_daily, v_adset_performance, etc."),
+            ("Views refreshed", "collectors/views.py: wide_ads, wide_keywords, v_keyword_performance"),
             ("Logged to BQ", "action=collect_{channel}, rows_affected = rows written"),
         ],
     },
@@ -3742,10 +3742,10 @@ def team_workspace():
         # Yesterday KPIs
         kpi_sql = f"""
             SELECT MAX(date) AS d, ROUND(SUM(spend),0) AS spend,
-                   SUM(leads_total) AS leads, SUM(qualified) AS sqls,
-                   ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified),0)),0) AS cpql
-            FROM {T}.paid_channel_daily
-            WHERE date = (SELECT MAX(date) FROM {T}.paid_channel_daily)
+                   SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls,
+                   ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified),0)),0) AS cpql
+            FROM {T}.wide_ads
+            WHERE date = (SELECT MAX(date) FROM {T}.wide_ads)
         """
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=3) as ex:
@@ -3835,18 +3835,18 @@ def monthly_funnel():
         sql = """
         WITH prior_month AS (
           SELECT DATE_TRUNC(date, MONTH) AS month, channel,
-            SUM(spend) AS spend, SUM(leads_total) AS leads, SUM(qualified) AS qualified_leads,
-            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql,
+            SUM(spend) AS spend, SUM(leads_total) AS leads, SUM(leads_qualified) AS qualified_leads,
+            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS cpql,
             SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total), 0)) AS cpl
-          FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
+          FROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`
           WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)
           GROUP BY 1, 2
         ),
         two_months_ago AS (
           SELECT channel,
-            SUM(spend) AS spend_prior, SUM(leads_total) AS leads_prior, SUM(qualified) AS qualified_prior,
-            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(qualified), 0)) AS cpql_prior
-          FROM `angular-axle-492812-q4.qoyod_marketing.paid_channel_daily`
+            SUM(spend) AS spend_prior, SUM(leads_total) AS leads_prior, SUM(leads_qualified) AS qualified_prior,
+            SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)) AS cpql_prior
+          FROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`
           WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 MONTH), MONTH)
           GROUP BY 1
         ),
@@ -3966,3 +3966,4 @@ _check_pending_on_startup()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
+                       

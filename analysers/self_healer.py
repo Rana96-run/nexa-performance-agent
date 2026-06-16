@@ -5,7 +5,7 @@ Daily self-healing pass. Detects known failure modes and fixes them.
 No alerts — just fixes. Runs after the nightly cycle (09:30 Riyadh / 06:30 UTC).
 
 Healers (each has detect + heal):
-  1. stale_views      — paid_channel_daily behind → materialize_heavy_views()
+  1. stale_views      — wide_ads behind → materialize_heavy_views()
   2. failed_collector — collector status=failed last 24h → retry once
   3. dashboard_errors — /activity threw 500 → clear HTML cache + log traceback
   4. stuck_approval   — pending approval >72h unresolved → re-post digest
@@ -42,7 +42,7 @@ def _log(action: str, status: str, details: dict):
 
 def _heal_stale_views() -> int:
     """
-    If paid_channel_daily is >1 day behind, rebuild all heavy views.
+    If wide_ads is >1 day behind, rebuild all heavy views.
     Returns 1 if healed, 0 if already fresh.
     """
     try:
@@ -312,3 +312,4 @@ def run_self_heal() -> dict:
 
 if __name__ == "__main__":
     run_self_heal()
+                    

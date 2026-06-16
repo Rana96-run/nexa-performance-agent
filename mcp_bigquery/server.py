@@ -179,7 +179,8 @@ async def bq_run_query(params: RunQueryInput) -> str:
     Schema reference:
         Key tables in nexa_performance dataset:
         - campaigns_daily          — daily spend/clicks/impressions by campaign
-        - paid_channel_daily       — pre-joined channel-level KPIs incl. leads/sqls
+        - wide_ads                 — ad-grain KPIs incl. leads/sqls (replaces paid_channel_daily)
+        - wide_keywords            — keyword-grain KPIs
         - hubspot_leads_module_daily — HubSpot lead module (source of truth for leads)
         - hubspot_deals_daily       — deal amounts (USD, already converted)
         - ads_daily                 — ad-level performance
@@ -190,7 +191,7 @@ async def bq_run_query(params: RunQueryInput) -> str:
     Examples:
         - "Channel performance last 7 days" →
           SELECT channel, SUM(spend) AS spend, SUM(leads_total) AS leads
-          FROM `angular-axle-492812-q4.nexa_performance.paid_channel_daily`
+          FROM `angular-axle-492812-q4.nexa_performance.wide_ads`
           WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
           GROUP BY channel ORDER BY spend DESC
     """
