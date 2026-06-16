@@ -3,13 +3,12 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-17:** 12-workflow n8n architecture live (Master + Weekly + Monthly +
-> Data Collection + Approval Listener + QA Gate + 6 sub-flows A–F). 3 stale workflows deleted
-> (Nexa · Databox Sync, Nexa · Monitor Follow-up, Nexa · AI Content Agent — superseded or wrong project).
-> Slack `url_verification` challenge fixed in Approval Listener — webhook now echoes `{challenge}`
-> before routing to reaction logic. Railway deprecated — pending shutdown.
-> GitHub Actions owns all Python BQ collectors (every 6h). QA Gate wired into Master.
-> 3-layer agent hierarchy (AI Orchestrator → QA Auditor + Project Coordinator → 7 agents).
+> **Status as of 2026-06-17 (end of day):** 12-workflow n8n architecture live and healthy.
+> Master workflow `tool_choice:required` bug fixed — runs correctly from tonight 04:00 UTC.
+> Slack Approval Listener url_verification fixed + Event Subscriptions configured.
+> Full desk cleanup done: stale agent refs, memory, docs all updated; clutter deleted.
+> Archive: `D:\Nexa-Performance-Agent-2026-06-17.zip` (0.98 MB, 403 files) — clean and shareable.
+> Remaining blockers: GitHub Secrets migration (blocks GitHub Actions collectors) + Railway shutdown.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
