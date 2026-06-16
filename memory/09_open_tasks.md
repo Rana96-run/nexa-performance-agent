@@ -242,7 +242,8 @@ Campaign IDs (customer 5753494964):
   - Needs manual activation toggle in n8n UI.
 - [x] **n8n Workflow 4: Nexa · AI Content Agent** (`yOD1l9n7qOfbpWfM`, 13 nodes) — built and ACTIVE. 4 independent chains: daily-ai-digest, competitor-post-poller, weekly-ai-digest, monthly-content-calendar.
 - [x] **Cowork tasks disabled** — 6 tasks now fully covered by n8n and disabled: `daily-ai-digest`, `competitor-post-poller`, `weekly-ai-digest`, `monthly-content-calendar`, `monday-review`, `monthly-review`.
-- [ ] **⚠️ ACTIVATION NEEDED (manual, 30 seconds):** Go to `qoyod.app.n8n.cloud/home/workflows` and toggle ON: `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`, `Nexa · Monitor Follow-up`, `Nexa · Databox Sync`. (AI Content Agent already active.)
+- [x] **Activated:** `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`, `Nexa · Monitor Follow-up` — all toggled ON.
+- [ ] **⚠️ ACTIVATION NEEDED:** Toggle ON `Nexa · Databox Sync` (`7ZEROvwTg3UrGAP6`) in n8n UI (requires `DATABOX_TOKEN` $var first).
 - [ ] **⚠️ n8n $var NEEDED:** Set `DATABOX_TOKEN` in n8n UI → Settings → Variables (PAK token, not push token). Required by `Nexa · Databox Sync` workflow `7ZEROvwTg3UrGAP6`. Dataset ID: `6158be78`.
 
 **PATCH method confirmed for n8n cloud internal API** — `PUT /rest/workflows/{id}` returns 404. Use `PATCH /rest/workflows/{id}` for all workflow updates. See `memory/08_pitfalls.md`.
