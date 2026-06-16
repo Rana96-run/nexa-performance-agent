@@ -1,65 +1,72 @@
-# Agents — Nexa Operations HQ · The Team (index + how to use)
+---
+name: _readme
+description: NOT AN AGENT. Index and activation guide for the 3-layer team.
+---
 
-The **real** team: **9 agents** = 1 manager + 3 departments. Each `*.md` here
-(except `README.md` and `_TEMPLATE.md`) is one teammate with its own isolated
-context, playbook, and memory. Isolated context is what cuts hallucination — each
-agent loads only its own small files, not the whole repo.
+# Nexa Agent Team — 3-Layer Hierarchy
 
-> Note: the `agent_activity_log` *function labels* (bq_refresh, health_monitor,
-> performance_audit, ops_scheduler, …) are how work is **logged**, not the team
-> roster. The team is the 9 below.
+## Architecture
 
-## Activation & troubleshooting
-- **Make agents callable:** Claude Code loads `.claude/agents/` at session start. After
-  adding/renaming/editing an agent, run **`/agents`** (or restart the session) so it's
-  dispatchable by name. Until then a *new* agent isn't in the registry.
-- **An agent silently won't load / "agent type not found"?** Its **frontmatter YAML is
-  invalid** — Claude Code drops it. Most common cause: an unquoted `: ` (colon-space)
-  inside `description`. Validate all 9:
-  `python -c "import glob,re,yaml; [yaml.safe_load(re.match(r'^---\n(.*?)\n---',open(f,encoding='utf-8').read(),16).group(1)) for f in glob.glob('.claude/agents/*.md') if 'README' not in f]"`
-  (2026-06-09: this dropped `growth-analyst`, `developer`, `ui-ux-designer` — fixed.)
+```
+Layer 1   AI Orchestrator
+              ↕ only
+Layer 2a  Project Coordinator          Layer 2b  QA Auditor
+          (routing + OPS)                       (output validation)
+                ↓ routes                              ↑ validates all
+Layer 3   ┌─────────────────────────────────────────────────┐
+          │  Growth Analyst                                 │
+          │    └─ triggers → CRO Specialist               │
+          │                    └─ UI/UX Designer           │
+          │                          └─ Developer          │
+          ├─────────────────────────────────────────────────┤
+          │  Performance Lead                               │
+          │    ├─ Campaign Manager                         │
+          │    └─ Creative Strategist                      │
+          └─────────────────────────────────────────────────┘
+```
 
-## How to talk to a teammate
-Name the seat in plain language:
-- *"Ask the **campaign-manager** to build Meta_LeadGen_AR_Invoice_Interests."*
-- *"Have the **growth-analyst** run the weekly period comparison on live BQ."*
-- *"**cro-specialist**: start an LP test for the Invoice page."*
-- *"**ai-orchestrator**: leads are down this month — route it."*
+## Agent roster
 
-## The roster
+| Agent | Layer | Receives from | Sends to |
+|---|---|---|---|
+| ai-orchestrator | 1 | Human, any agent escalating | project-coordinator, qa-auditor |
+| qa-auditor | 2 | Any Layer 3 agent output | Orchestrator (QA_PASSED), originating agent (QA_FAILED) |
+| project-coordinator | 2 | Orchestrator, Layer 3 status | Orchestrator, Layer 3 agents |
+| growth-analyst | 3 | project-coordinator | qa-auditor, cro-specialist |
+| performance-lead | 3 | project-coordinator | campaign-manager, creative-strategist, qa-auditor |
+| campaign-manager | 3 | performance-lead | qa-auditor, performance-lead (escalation) |
+| creative-strategist | 3 | performance-lead | qa-auditor, cro-specialist (LP asset alignment) |
+| cro-specialist | 3 | growth-analyst, performance-lead | ui-ux-designer, qa-auditor |
+| ui-ux-designer | 3 | cro-specialist | developer, qa-auditor |
+| developer | 3 | ui-ux-designer | qa-auditor, cro-specialist (sign-off) |
 
-| Agent | Dept | Role |
-|---|---|---|
-| `ai-orchestrator` | — | Manager over all 3 depts. 8-step loop 08:00, gates writes ✅, owns handoffs. |
-| `performance-lead` | Performance (LEAD) | KPI zones, 14-day min, channel mix + budget, the ✅/❌ sign-off. |
-| `campaign-manager` | Performance | 12-field naming, both Meta pixels, keyword policy buckets. |
-| `creative-strategist` | Performance | OCEAN personas, A/B variants, LP alignment with CRO. |
-| `cro-specialist` | CRO / LP (chain lead) | 8-section LP brief, hypothesis, ZATCA badge, test-result decision. |
-| `ui-ux-designer` | CRO / LP | LP variant design to persona, annotated handoff to Developer. |
-| `developer` | CRO / LP | Build LP, UTM passthrough, pixel fires, deploy, verify in Events Mgr. |
-| `project-coordinator` | Project Coordinator (OPS) | UTM/pixel/GTM/field-map policy, Railway secrets, connector health, #nexa-health on RED. |
-| `growth-analyst` | Support (DATA) | Owns memory/; 8-step loop on live BQ, period compares, forecasts. |
+## Communication rules (non-negotiable)
+1. Orchestrator talks ONLY to project-coordinator and qa-auditor
+2. Every Layer 3 output goes through qa-auditor BEFORE reaching Orchestrator
+3. project-coordinator is the task router — no Layer 3 agent self-assigns
+4. QA Auditor never fixes — returns QA_FAILED to originating agent
+5. CRO chain is strict: cro → ui-ux → developer. No skipping links.
+6. Performance Lead must be the single point receiving performance flags — never bypass to campaign-manager directly
 
-## Parallel vs sequential
-- **Parallel:** campaign-manager ∥ creative-strategist · project-coordinator ∥ growth-analyst.
-- **Sequential (direct handoff):** cro-specialist → ui-ux-designer → developer.
-- Manager `ai-orchestrator` gates every write and routes cross-dept work.
+## Activation
 
-## The map
-- `../../docs/INDEX.md` — **MASTER INDEX**: the one front door to everything (shared + per-role)
-- `../../docs/playbooks/_shared.md` — the **shared playbook** (shared data + activities every role reads)
-- `../../CLAUDE.manager.md` — the **Manager OS**: how `ai-orchestrator` runs the team (loop, routing, gate, cadence)
-- `../../docs/_shared/how-to-use-the-team.md` — **start here:** how to talk to each agent + example asks
-- `../../docs/_shared/org-chart.md` · `handoff-protocol.md` · `communication-rules.md`
-- `_archived/` — retired agent definitions (not active; revive by moving back)
-- `../../docs/playbooks/_index.md` — every agent's playbook
-- `../../memory/agents/` — per-agent memory (`agents/README.md`)
+Dispatch agents via the `Agent` tool with `subagent_type`:
+- `ai-orchestrator` — for routing, daily loop, cross-dept decisions
+- `qa-auditor` — to validate any agent output before it reaches Orchestrator
+- `project-coordinator` — for OPS, task routing, UTM/pixel/connector issues
+- `growth-analyst` — for BQ analysis, period comparisons, LP data pull
+- `performance-lead` — for KPI threshold decisions, triage
+- `campaign-manager` — for campaign optimization, scaling, keyword audit
+- `creative-strategist` — for creative briefs, OCEAN mapping, copy direction
+- `cro-specialist` — for LP briefs, qual ratio analysis, test decisions
+- `ui-ux-designer` — for LP design from brief
+- `developer` — for LP build, deploy, pixel verification
 
-## Adding / renaming a role
-Copy `_TEMPLATE.md`, add a playbook + memory folder, update `org-chart.md` + this
-table. Keep each agent file small. `.claude/agents/` is allowlisted in `.gitignore`.
-
-## Relationship to the production runtime
-These are **dev-time** subagents. The autonomous Railway product runs through
-`claude/roles.py` + `claude/manager.py` (a separate layer). Editing an agent here
-does NOT change Railway.
+## Golden rules
+- No write action without ✅ from human in #approvals
+- Minimum 14 days of data before pause/scale decisions
+- QA Auditor validates before Orchestrator decides
+- HubSpot is read-only (no PATCH/DELETE/POST without Amar's Slack sign-off)
+- Spend always reported in USD
+- CPQL ≤ $60 = scale territory
+- ROAS < 1x on a channel → check qual/CPQL/volume before reallocation
