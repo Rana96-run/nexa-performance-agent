@@ -3,13 +3,13 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-17:** Full n8n migration complete. 7-workflow n8n architecture
-> live (Master + Weekly + Monthly + AI Content Agent + Monitor Follow-up + Databox Sync +
-> Data Collection + Approval Listener). Railway deprecated — pending shutdown.
-> GitHub Actions owns all Python BQ collectors (every 6h). Repo cleaned: analysers/,
-> notifications/, reports/, main.py, operational_scheduler.py, reporting_scheduler.py deleted.
-> QA Gate wired into Master. 3-layer agent hierarchy (AI Orchestrator → QA Auditor + Project
-> Coordinator → 7 agents).
+> **Status as of 2026-06-17:** 12-workflow n8n architecture live (Master + Weekly + Monthly +
+> Data Collection + Approval Listener + QA Gate + 6 sub-flows A–F). 3 stale workflows deleted
+> (Nexa · Databox Sync, Nexa · Monitor Follow-up, Nexa · AI Content Agent — superseded or wrong project).
+> Slack `url_verification` challenge fixed in Approval Listener — webhook now echoes `{challenge}`
+> before routing to reaction logic. Railway deprecated — pending shutdown.
+> GitHub Actions owns all Python BQ collectors (every 6h). QA Gate wired into Master.
+> 3-layer agent hierarchy (AI Orchestrator → QA Auditor + Project Coordinator → 7 agents).
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -252,7 +252,7 @@ Campaign IDs (customer 5753494964):
 
 - [ ] **Add GitHub Secrets to repo** (copy from Railway env vars) — blocks GitHub Actions collectors going live. Required vars: all platform tokens, BQ service account, HubSpot token, etc. Path: GitHub repo → Settings → Secrets and variables → Actions.
 - [ ] **Shut down Railway service** (user approval required) — after GitHub Actions confirmed working. Railway project: `nexa-performance-agent` in Marketing Workspace (`57f124d0`).
-- [ ] **Configure Slack App Event Subscriptions for Approval Listener** — URL: `https://qoyod.app.n8n.cloud/webhook/slack-approval`, event: `reaction_added`. Required for Master workflow approval gate to resume on ✅/❌ reactions.
+- [ ] **Configure Slack App Event Subscriptions for Approval Listener** — URL: `https://qoyod.app.n8n.cloud/webhook/slack-approval`, event: `reaction_added`. Required for Master workflow approval gate to resume on ✅/❌ reactions. ✅ `url_verification` challenge fixed 2026-06-17 — webhook now echoes `{challenge}` before routing real events. Go to Slack App → Event Subscriptions → paste URL → it will verify successfully.
 - [ ] **Add QA feed cell in Hex** — SQL template in `memory/16_activity_dashboard.md`. User doing manually.
 - [ ] **Test Data Collection sub-workflow first run** (`jOnJxdpdaO3Vbi0B`) — verify no runtime errors, all channel data flows into BQ, freshness check fires correctly.
 - [ ] **Activate `Nexa · Databox Sync`** (`7ZEROvwTg3UrGAP6`) — after `DATABOX_TOKEN` n8n $var is set.

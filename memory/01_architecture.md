@@ -79,21 +79,29 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 `operational_scheduler.py`, `reporting_scheduler.py`, `main.py` — **deleted** (2026-06-16 cleanup). n8n and GitHub Actions own all cadences.
 
-### n8n workflow inventory (7 workflows)
+### n8n workflow inventory (12 workflows — canonical)
 
 | Workflow | n8n ID | Schedule | Nodes | Status |
 |---|---|---|---|---|
 | Nexa · Master Performance Workflow | `T8icImtZFLYeCa7e` | Daily 05:00 UTC (08:00 Riyadh) | 84 | ACTIVE |
 | Nexa · Weekly Performance Review | `iNSdpXH7Rc9Lb8h8` | Sunday 05:00 UTC | 26 | ACTIVE |
 | Nexa · Monthly Performance Review | `0Zh45UoTtjjhRn8U` | 1st of month 05:00 UTC | 32 | ACTIVE |
-| Nexa · AI Content Agent | `yOD1l9n7qOfbpWfM` | Various (see 05_scheduler.md) | 13 | ACTIVE |
-| Nexa · Monitor Follow-up | `H6XSFlp1WOUPpgBF` | Daily 06:00 UTC | 11 | ACTIVE |
-| Nexa · Databox Sync | `7ZEROvwTg3UrGAP6` | Every 6h (`0 */6 * * *`) | 11 | ⚠️ NEEDS DATABOX_TOKEN $var |
+| Nexa · Data Collection | `jOnJxdpdaO3Vbi0B` | Called by Master (sub-flow) | 52 | ACTIVE |
+| Nexa · Approval Listener | `5Acqsbxsk0XQ5k9e` | Webhook (Slack reactions) | 7 | ACTIVE |
 | Nexa · QA Gate | `ug3niLKrjPfO9Iz7` | Called by Master (sub-flow) | — | ACTIVE |
+| Nexa · Sub-Flow A (ROAS & Channel Health) | `MHCdIiAtKzHNve1x` | Called by Master Switch | — | ACTIVE |
+| Nexa · Sub-Flow B (CPL Fix) | `Qd5SoGxZbgT1ohYP` | Called by Master Switch | — | ACTIVE |
+| Nexa · Sub-Flow C (CPQL Fix) | `jfE5KKnPJQBf7MCj` | Called by Master Switch | — | ACTIVE |
+| Nexa · Sub-Flow D (Qual Ratio Fix) | `PxFBmtXDVgcNGzIM` | Called by Master Switch | — | ACTIVE |
+| Nexa · Sub-Flow E (Impression Share Fix) | `eL0V6ReftV2U1wNf` | Called by Master Switch | — | ACTIVE |
+| Nexa · Sub-Flow F (Creative & CTR Fix) | `smHaEhWloComRQyz` | Called by Master Switch | — | ACTIVE |
 
-**KPI sub-flows (A–F):** ROAS/CPL/CPQL/Qual/IS/CTR — separate workflows called by the Master Switch node.
+**Deleted 2026-06-17 (stale/superseded):**
+- `7ZEROvwTg3UrGAP6` — Nexa · Databox Sync (pushed to legacy Databox API; superseded by Railway Python pusher + direct BQ integration in Databox)
+- `H6XSFlp1WOUPpgBF` — Nexa · Monitor Follow-up (BQ monitoring covered by Master workflow)
+- `yOD1l9n7qOfbpWfM` — Nexa · AI Content Agent (called `somaa-ai-agent-production.up.railway.app` — different project, not Nexa)
 
-**Approval Listener:** `5Acqsbxsk0XQ5k9e` — Slack webhook at `https://qoyod.app.n8n.cloud/webhook/slack-approval`. Receives `reaction_added` events, resumes waiting executions. Requires Slack App Event Subscriptions configured.
+**Approval Listener:** `5Acqsbxsk0XQ5k9e` — Slack webhook at `https://qoyod.app.n8n.cloud/webhook/slack-approval`. Receives `reaction_added` events, resumes waiting executions. Now handles Slack `url_verification` challenge (responds with `{challenge: <value>}` on `type === url_verification`, routes real events to Extract Reaction). Requires Slack App Event Subscriptions configured.
 
 ### GitHub Actions collector schedule
 
