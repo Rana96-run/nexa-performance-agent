@@ -40,7 +40,6 @@ single concern. Read only what you need.
 | `15_operational_history.md` | Institutional log of one-off learnings/steps/actions (distilled from the retired `scripts/_*.py`). "Have we done/investigated X before?" |
 | `16_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
 | `utm_template.md` | Canonical Google Ads UTM `final_url_suffix` template + custom-param convention. Read BEFORE proposing any UTM string. |
-| `audit_findings.md` | Dated log of automated audit flags (attribution / spend-with-0-leads). Check when investigating a flagged channel/campaign. |
 
 ## The team (agents) — NEW
 
@@ -54,8 +53,6 @@ role labels — those are how work is *logged*, not who the team *is*.) Start he
 | `../docs/_shared/org-chart.md` | Who exists, who manages whom, who owns what |
 | `../docs/_shared/handoff-protocol.md` | How agents pass work to each other |
 | `../docs/_shared/communication-rules.md` | How the team behaves |
-| `../docs/playbooks/_index.md` | Every agent's operational playbook |
-| `agents/<dept>/<role>/` | Each agent's **private memory** (see `agents/README.md`) |
 | `agents/cro/developer/lp-mobile-css-patterns.md` | LP page inventory, template types (qnav/qnav-dark/old-nav), all 7 mobile CSS fix patterns, WP REST API snippets, verification checklist |
 
 The flat `NN_*.md` files in this folder are **shared org memory** — every agent
@@ -64,11 +61,9 @@ production runtime, so they don't move.
 
 ## Knowledge base — curated reference guides
 
-`knowledge_base/` holds longer-form reference docs (see `knowledge_base/README.md`):
-- `knowledge_base/looker_to_bq_mapping.md` — Looker dashboards → BigQuery fields
-- `knowledge_base/organic_setup_guide.md` — organic-channel setup
-
-(Moved here 2026-06-08 from `runtime_personas/` to stop reference docs scattering.)
+`docs/knowledge/` holds longer-form reference docs (see `docs/knowledge/README.md`):
+- `docs/knowledge/looker_to_bq_mapping.md` — Looker dashboards → BigQuery fields
+- `docs/knowledge/organic_setup_guide.md` — organic-channel setup
 
 ## External references (not in repo)
 

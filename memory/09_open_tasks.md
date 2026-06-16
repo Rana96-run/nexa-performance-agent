@@ -3,10 +3,11 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-05-16:** Agent fully operational on Railway Pro (Marketing Workspace).
+> **Status as of 2026-06-16:** Agent fully operational on Railway Pro (Marketing Workspace).
 > All collectors live, health check green, dashboard rendering real data, nightly
 > scheduler running at 08:00 Riyadh. Activity dashboard shows 6-member team roster.
-> Recommendation engine now includes alternatives-considered + pre-execution sanity checks.
+> 6 n8n workflows built (Master, Weekly, Monthly, AI Content Agent, Monitor Follow-up, Databox Sync).
+> QA Auditor agent added. All agent files updated to 3-layer structure.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
