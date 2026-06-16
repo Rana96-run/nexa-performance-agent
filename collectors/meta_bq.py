@@ -49,6 +49,33 @@ def _leads_from_actions(actions):
     return next((int(float(a["value"])) for a in actions if a.get("action_type") == "purchase"), 0)
 
 
+def _fetch_campaign_totals(account, native_cur: str, start, end) -> dict:
+    """Return campaign-level spend/impressions/clicks keyed by (date, campaign_id).
+    Used after the ad-level collection to detect spend not covered by ad rows
+    (Advantage+, dynamic creative, campaigns where all ads had zero impressions).
+    """
+    result = {}
+    try:
+        for ins in account.get_insights(params={
+            "level": "campaign",
+            "time_range": {"since": str(start), "until": str(end)},
+            "time_increment": 1,
+            "fields": ["campaign_id", "campaign_name", "spend", "impressions", "clicks"],
+            "limit": 500,
+        }):
+            spend_native = float(ins.get("spend", 0) or 0)
+            key = (ins.get("date_start"), str(ins.get("campaign_id")))
+            result[key] = {
+                "campaign_name": ins.get("campaign_name"),
+                "spend":         round(to_usd(spend_native, native_cur), 2),
+                "impressions":   int(ins.get("impressions", 0) or 0),
+                "clicks":        int(ins.get("clicks", 0) or 0),
+            }
+    except Exception as e:
+        print(f"[meta]   campaign-level fallback fetch failed: {e}")
+    return result
+
+
 # ── Campaign level → campaigns_daily ─────────────────────────────────────────
 
 def collect_and_write(days: int = None, incremental: bool = False):
@@ -287,6 +314,49 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
         except Exception as e:
             print(f"[meta]   ads account {account_id} error: {e}")
         print(f"[meta]   ads account {account_id}: {len(rows) - count_before} rows")
+
+        # Spend reconciliation — catch campaigns with no ad-level breakdown
+        # (Advantage+, dynamic creative, all-ads-paused). Adds a synthetic
+        # remainder row so ads_daily spend always equals campaign-level spend.
+        camp_totals = _fetch_campaign_totals(account, native_cur, start, end)
+        from collections import defaultdict
+        ad_agg = defaultdict(lambda: {"spend": 0.0, "impressions": 0, "clicks": 0})
+        for row in rows[count_before:]:
+            key = (row["date"], row["campaign_id"])
+            ad_agg[key]["spend"]       += row["spend"]
+            ad_agg[key]["impressions"] += row["impressions"]
+            ad_agg[key]["clicks"]      += row["clicks"]
+        for (d, camp_id), camp in camp_totals.items():
+            covered = ad_agg.get((d, camp_id), {"spend": 0.0, "impressions": 0, "clicks": 0})
+            remainder_spend = round(camp["spend"] - covered["spend"], 2)
+            if remainder_spend > 0.50:
+                rem_imps   = max(0, camp["impressions"] - covered["impressions"])
+                rem_clicks = max(0, camp["clicks"]      - covered["clicks"])
+                date_slug  = (d or "").replace("-", "")
+                rows.append({
+                    "date":          d,
+                    "channel":       "meta",
+                    "account_id":    account_id,
+                    "campaign_id":   camp_id,
+                    "campaign_name": camp["campaign_name"],
+                    "adset_id":      f"meta_unmap_{camp_id}",
+                    "adset_name":    "[Unmapped]",
+                    "ad_id":         f"meta_unmap_{camp_id}_{date_slug}",
+                    "ad_name":       "[Unmapped - no ad breakdown]",
+                    "utm_content":   None,
+                    "status":        None,
+                    "spend":         remainder_spend,
+                    "impressions":   rem_imps,
+                    "clicks":        rem_clicks,
+                    "ctr":           round(rem_clicks / rem_imps, 4) if rem_imps > 0 else 0.0,
+                    "leads":         0,
+                    "conversions":   0.0,
+                    "frequency":     0.0,
+                    "currency":      "USD",
+                    "creative_type": None,
+                    "updated_at":    now,
+                })
+                print(f"[meta]   remainder row: campaign {camp_id} {d} spend=${remainder_spend}")
 
     return upsert_rows("ads_daily", rows,
                        key_fields=["date", "channel", "ad_id"])
