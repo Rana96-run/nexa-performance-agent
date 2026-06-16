@@ -227,6 +227,24 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-06-16) — n8n full build
+
+- [x] **n8n Workflow 1: Nexa · Master Performance Workflow** (`T8icImtZFLYeCa7e`) — already existed, audited and hardened across previous sessions. Needs manual activation toggle in n8n UI.
+- [x] **n8n Workflow 2: Nexa · Weekly Performance Review** (`iNSdpXH7Rc9Lb8h8`, 21 nodes).
+  - Runs Sunday 08:00 Riyadh. BQ 7d vs prior 7d per channel → Claude analysis → Slack + Asana.
+  - Added LP Audit branch (parallel from Schedule): BQ LP SQL → Code format → Sheets create tab `LP-{date}` in sheet `120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg` → write rows → Asana `LP Weekly Review — {date}` draft.
+  - Needs manual activation toggle in n8n UI.
+- [x] **n8n Workflow 3: Nexa · Monthly Performance Review** (`0Zh45UoTtjjhRn8U`, 25 nodes).
+  - Runs 1st of month 08:00 Riyadh. Full-funnel BQ → Claude → Slack + Asana.
+  - Added Phase 2 Creative Report branch: BQ `v_ad_performance` 30d → classify Winner/Optimise/Underperformer → Sheets tab `Creatives-{YYYY-MM}` → Asana `WINNING CREATIVES — {Month}` task.
+  - Added Phase 3 LP Brief branch: BQ best LP prior month → Asana `[DRAFT] LP Duplicate Brief` (skips gracefully if 0 SQLs).
+  - Needs manual activation toggle in n8n UI.
+- [x] **n8n Workflow 4: Nexa · AI Content Agent** (`yOD1l9n7qOfbpWfM`, 13 nodes) — built and ACTIVE. 4 independent chains: daily-ai-digest, competitor-post-poller, weekly-ai-digest, monthly-content-calendar.
+- [x] **Cowork tasks disabled** — 6 tasks now fully covered by n8n and disabled: `daily-ai-digest`, `competitor-post-poller`, `weekly-ai-digest`, `monthly-content-calendar`, `monday-review`, `monthly-review`.
+- [ ] **⚠️ ACTIVATION NEEDED (manual, 30 seconds):** Go to `qoyod.app.n8n.cloud/home/workflows` and toggle ON: `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`. (AI Content Agent already active.)
+
+**PATCH method confirmed for n8n cloud internal API** — `PUT /rest/workflows/{id}` returns 404. Use `PATCH /rest/workflows/{id}` for all workflow updates. See `memory/08_pitfalls.md`.
+
 ## Done this session (2026-06-11)
 
 - [x] **GTM: `MetaPixel_Lead_Event` tag created (Tag ID 331, workspace 60).** Client-side `fbq('track','Lead')` on trigger 279 (HS Thank You Page). Published by user 2026-06-11.
@@ -383,42 +401,4 @@ Campaign IDs (customer 5753494964):
   1. Collector now parses `{_adgroup}` custom param key (not `audience`) for utm_audience
   2. `v_adset_performance` platform CTE: `COALESCE(utm_audience, adset_name)` (was `adset_name` only)
   3. `v_ad_performance` platform CTE: `COALESCE(utm_content, ad_name)` (was `ad_name` only)
-  Verified: `Bing_AR_Brand_Keywords` spend=1365, leads=194, sqls=104 ✓
-- [x] **Microsoft adset rename fix** — "Cloud Accounting" → "Bing_Cloud_Accounting" rename
-  caused BQ history mismatch with HubSpot. Fix: YTD backfill (132 days, 1,045 rows).
-  Microsoft API returns current name for all historical dates → all rows updated.
-  Views rematerialized. Arabic adsets now join correctly.
-- [x] **Microsoft ads YTD backfill** — 132 days for ads level (running/complete).
-- [x] **PMax sector campaigns created** — `scripts/clone_pmax_sectors.py` updated with
-  atomic `GoogleAdsService.mutate()` batch (asset_group + all assets in one call).
-  Fixed: LONG_HEADLINE capped at 5, undersized logos (32×32) filtered out,
-  LOGO/BUSINESS_NAME pulled from campaign-level assets and merged into batch.
-  All 5 campaigns created with full asset groups + search themes copied.
-- [x] **Memory/skill cleanup** — `09_open_tasks.md` condensed; auto-refresh skill added.
-
----
-
-## Archived sessions (condensed)
-
-**2026-05-11:** Full HubSpot mirror sync (no cursor drift), Snapchat channel
-mismatch fix, Riyadh date bucketing fix, BQ view materialization (6 heavy views
-→ physical tables rebuilt every 6h), qual/disq rate formula fixed.
-
-**2026-05-10:** HubSpot deals dual-pass fix, 2025 full backfill (110K deals),
-SDR/Partnerships stale row fix, Eid seasonality confirmed as root cause of
-mid-March dip.
-
-**2026-05-06-07:** All YTD sub-level backfills (TikTok, Meta, Google, Snap ads/adsets),
-keyword policy extended (competitors, language mismatch), Snap 142K rows, Hex
-auto-refresh wired, ROAS close-date fix.
-
-**2026-05-04-05:** HubSpot backfills, LP performance analysis + Hex cell, landing
-page CPQL comparison (HubSpot LP $127 vs WP LP $713), Channel Deep Dive / Leads
-Funnel / Insights & Recommendations Hex cells, no-UTM row in all campaign tables,
-PMax asset-group collector.
-
-**2026-05-03:** Slack cleanup, per-channel Asana assignees, Hex as canonical
-dashboard, deep IS recommendations in keyword audit.
-
-**Earlier:** Campaign naming enforcement, LinkedIn/TikTok/Snap collectors, OAuth
-helpers, 6h reporting scheduler, meta organic collector, memory playbook.
+  Verified: `Bing_AR_Brand_Keywords` spe

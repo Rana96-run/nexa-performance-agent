@@ -1,5 +1,11 @@
 # Pitfalls & Known Traps
 
+## [2026-06-16] n8n cloud internal API: use PATCH not PUT
+
+`PUT /rest/workflows/{id}` returns `404 Cannot PUT`. The correct method for updating a workflow via the browser session is `PATCH /rest/workflows/{id}` with `Content-Type: application/json`. Same applies to partial updates (just `{active:true}` etc.). The public API (`/api/v1/workflows/{id}`) uses `X-N8N-API-KEY` header — different auth path. Activation via PATCH `{active:true}` silently returns `active:false` if the workflow has validation issues; use the n8n UI toggle as fallback.
+
+
+
 ## [2026-06-15] CREATE OR REPLACE VIEW fails if object is a BASE TABLE
 
 BQ throws "different type" if you try to `CREATE OR REPLACE VIEW` on a name that already exists
@@ -1343,10 +1349,4 @@ NULL-channel-with-leads count + distinct channel values present.
   inherits the fix. 0 NULL-channel rows.
 - **v_ad_performance — CLEAN (confirm).** Same — leads only from `utm_paid_attribution_daily`.
   0 NULL-channel rows (2 organic_search leads, intentional).
-- **Why the qoyod_source surfaces are structurally immune:** they map channel via an INNER
-  JOIN on `qoyod_source` against a paid-only (or paid+organic) map, so a non-paid source is
-  dropped at the join — it can never become NULL or a non-paid label. Different mechanism
-  from `utm_paid_attribution_daily`, which matched on UTM and COALESCE-resolved channel
-  (allowed NULLs). **The 9c758c7 source-filter pattern only needs to live in the one UTM-grain
-  view; the channel-grain views already filter implicitly via the INNER join.** No fixes
-  applied, no materialize needed.
+- **Why the qoyod_source surfa
