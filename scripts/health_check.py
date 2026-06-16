@@ -567,9 +567,10 @@ def post_to_slack(results: dict, failures_only: bool = True) -> None:
             f"{fail_count} issue(s) detected  ({ok_count}/{len(results)} passing)"
         )
 
-        from notifications.quiet import is_quiet, quiet_log
-        if is_quiet():
-            quiet_log("health_check", SLACK_CHANNEL_HEALTH, header)
+        _nexa_quiet = os.getenv("NEXA_QUIET", "").lower() in ("true", "1", "yes", "on")
+        if _nexa_quiet:
+            snippet = header.replace("\n", " ")[:120]
+            print(f"[health_check] QUIET — skipped Slack post to {SLACK_CHANNEL_HEALTH}: {snippet}")
         else:
             WebClient(token=SLACK_BOT_TOKEN).chat_postMessage(
                 channel=SLACK_CHANNEL_HEALTH,

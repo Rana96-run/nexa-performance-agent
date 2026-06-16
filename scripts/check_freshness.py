@@ -80,8 +80,9 @@ def post_slack_alert(stale: list[tuple]) -> None:
         return
 
     try:
-        from notifications.slack import client
-        from config import SLACK_CHANNEL_NOTIFY
+        from slack_sdk import WebClient
+        from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
+        client = WebClient(token=SLACK_BOT_TOKEN)
     except Exception as e:
         print(f"[freshness] could not import slack client: {e}")
         return

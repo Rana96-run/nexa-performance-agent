@@ -176,8 +176,6 @@ def send_overdue_reminders(min_days_overdue: int = 1,
     - max_days_overdue=30 → stop reminding after 30 days (likely abandoned)
     - Returns number of overdue tasks found.
     """
-    from notifications.quiet import is_quiet, quiet_log
-
     client   = _get_client()
     overdue: list[dict] = []
 

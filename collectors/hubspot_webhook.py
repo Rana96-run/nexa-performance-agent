@@ -227,10 +227,15 @@ def _now_riyadh() -> str:
     return datetime.now(tz).strftime("%d %b %Y %H:%M")
 
 
+def _is_quiet() -> bool:
+    import os
+    return os.getenv("NEXA_QUIET", "").lower() in ("true", "1", "yes", "on")
+
+
 def _slack_post(blocks: list, text: str) -> None:
-    from notifications.quiet import is_quiet, quiet_log
-    if is_quiet():
-        quiet_log("hubspot-webhook", SLACK_CHANNEL_NOTIFY, text)
+    if _is_quiet():
+        snippet = text.replace("\n", " ")[:120]
+        print(f"[hubspot-webhook] QUIET — skipped Slack post to {SLACK_CHANNEL_NOTIFY}: {snippet}")
         return
     try:
         _SLACK.chat_postMessage(

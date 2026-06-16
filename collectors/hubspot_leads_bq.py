@@ -228,9 +228,9 @@ def collect_and_write(days: int = None, start_date: date = None,
                 disq = _is_disqualified(slabel)
 
                 # Resolve channel through the full fallback chain (see
-                # analysers/channel_inference.py for the full order).  Pass
+                # collectors/channel_inference.py for the full order).  Pass
                 # every signal we have — the resolver decides which to use.
-                from analysers.channel_inference import (
+                from collectors.channel_inference import (
                     resolve_channel, CHANNEL_TO_QOYOD_SOURCE,
                 )
                 explicit_src = (p.get("lead_qoyod_source") or "").strip()
@@ -526,7 +526,7 @@ def _row_from_lead(lead: dict) -> dict | None:
     qual    = _is_qualified(slabel)
     disq    = _is_disqualified(slabel)
 
-    from analysers.channel_inference import resolve_channel, CHANNEL_TO_QOYOD_SOURCE
+    from collectors.channel_inference import resolve_channel, CHANNEL_TO_QOYOD_SOURCE
     explicit_src  = (p.get("lead_qoyod_source") or "").strip()
     inferred_slug = resolve_channel(
         qoyod_source=explicit_src,
