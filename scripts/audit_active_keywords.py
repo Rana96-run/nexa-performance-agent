@@ -349,6 +349,10 @@ def create_review_task(violations: list[dict], csv_path: Path) -> str | None:
         return None
 
 
+# Backwards-compat alias — callers that import run_audit get scan_active_keywords
+run_audit = scan_active_keywords
+
+
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()

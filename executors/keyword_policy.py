@@ -288,6 +288,9 @@ def days_since(yyyy_mm_dd: str | None) -> int:
         return 0
 
 
-# ── Backwards-compat shim ─────────────────────────────────────────────────────
-# Old name used elsewhere in the codebase. Keep importable.
+# ── Backwards-compat shims ────────────────────────────────────────────────────
+# Old names used elsewhere in the codebase. Keep importable.
 NEVER_NEGATIVE_PATTERNS = COMPETITOR_PATTERNS
+
+# Alias: callers that import ALWAYS_NEGATIVE (without _PATTERNS suffix)
+ALWAYS_NEGATIVE = ALWAYS_NEGATIVE_PATTERNS

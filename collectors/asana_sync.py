@@ -511,3 +511,7 @@ def run_full_sync() -> int:
     n = sync_asana_tasks()
     m = sync_user_tasks()
     return n + m
+
+
+# Backwards-compat alias — callers that import sync_tasks get run_full_sync
+sync_tasks = run_full_sync

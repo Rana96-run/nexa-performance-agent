@@ -116,5 +116,9 @@ def main():
     print("\nAll collectors fresh.")
 
 
+# Backwards-compat alias — callers that import check() get audit()
+check = audit
+
+
 if __name__ == "__main__":
     main()

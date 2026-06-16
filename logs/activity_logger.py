@@ -166,6 +166,10 @@ import time as _time
 from contextlib import contextmanager
 
 
+# Backwards-compat alias — callers that import log_action get log_activity
+log_action = log_activity
+
+
 @contextmanager
 def track(role: str, action: str, channel: str | None = None,
           campaign_name: str | None = None, details: Any = None):

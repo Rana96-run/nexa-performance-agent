@@ -114,5 +114,9 @@ def run():
     print(f"\n  TOTAL: BQ={bq_total} HS={hs_total} diff={total_diff:+d} ({pct:.1f}%)")
     print(f"  Won:   BQ={bq_won}   HS={hs_won}   diff={bq_won-hs_won:+d}")
 
+# Backwards-compat alias — callers that import reconcile() get run()
+reconcile = run
+
+
 if __name__ == "__main__":
     run()
