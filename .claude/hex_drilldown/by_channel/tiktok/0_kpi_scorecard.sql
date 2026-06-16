@@ -15,6 +15,8 @@
 -- converted at hubspot_deals_bq.py via to_usd(). Use columns as-is.
 -- Date semantics: every deal row is keyed by createdate (won deals were moved
 -- from closedate to createdate so ROAS attribution aligns with spend period).
+--
+-- Source: wide_ads (ad-grain base table, GROUP BY channel).
 -- ─────────────────────────────────────────────────────────────────────────────
 WITH params AS (
   SELECT
@@ -35,29 +37,29 @@ agg AS (
   SELECT
     p.period,
     p.sort_order,
-    SUM(d.spend)                  AS spend,
-    SUM(d.hs_leads)               AS leads,
-    SUM(d.hs_qualified)           AS qualified,
-    SUM(d.hs_disqualified)        AS disqualified,
+    SUM(d.spend)                    AS spend,
+    SUM(d.leads_total)              AS leads,
+    SUM(d.leads_qualified)          AS qualified,
+    SUM(d.leads_disqualified)       AS disqualified,
     -- All-pipeline deal metrics
-    SUM(d.deals_won)              AS deals_won,
-    SUM(d.deals_lost)             AS deals_lost,
-    SUM(d.deals_open)             AS deals_open,
-    SUM(d.amount_total)           AS amount_total,
-    SUM(d.revenue_won)            AS revenue_won,
-    SUM(d.amount_lost)            AS amount_lost,
-    SUM(d.pipeline_open)          AS amount_open,
+    SUM(d.all_deals_won)            AS deals_won,
+    SUM(d.new_biz_deals_lost)       AS deals_lost,
+    SUM(d.new_biz_deals_open)       AS deals_open,
+    ROUND(SUM(d.all_revenue_won) + SUM(d.all_amount_lost) + SUM(d.all_amount_open), 2) AS amount_total,
+    SUM(d.all_revenue_won)          AS revenue_won,
+    SUM(d.all_amount_lost)          AS amount_lost,
+    SUM(d.all_amount_open)          AS amount_open,
     -- New business: Sales Pipeline + Bookkeeping + Qflavours — full parallel set
-    SUM(d.new_biz_deals_won)      AS new_biz_deals_won,
-    SUM(d.new_biz_deals_lost)     AS new_biz_deals_lost,
-    SUM(d.new_biz_deals_open)     AS new_biz_deals_open,
-    SUM(d.new_biz_deals_total)    AS new_biz_deals_total,
-    SUM(d.new_biz_revenue_won)    AS new_biz_revenue_won,
-    SUM(d.new_biz_amount_lost)    AS new_biz_amount_lost,
-    SUM(d.new_biz_amount_open)    AS new_biz_amount_open,
-    SUM(d.new_biz_amount_total)   AS new_biz_amount_total
+    SUM(d.new_biz_deals_won)        AS new_biz_deals_won,
+    SUM(d.new_biz_deals_lost)       AS new_biz_deals_lost,
+    SUM(d.new_biz_deals_open)       AS new_biz_deals_open,
+    SUM(d.new_biz_deals_total)      AS new_biz_deals_total,
+    SUM(d.new_biz_revenue_won)      AS new_biz_revenue_won,
+    SUM(d.new_biz_amount_lost)      AS new_biz_amount_lost,
+    SUM(d.new_biz_amount_open)      AS new_biz_amount_open,
+    ROUND(SUM(d.new_biz_revenue_won) + SUM(d.new_biz_amount_lost) + SUM(d.new_biz_amount_open), 2) AS new_biz_amount_total
   FROM periods p
-  LEFT JOIN `angular-axle-492812-q4.qoyod_marketing.channel_roas_daily` d
+  LEFT JOIN `angular-axle-492812-q4.qoyod_marketing.wide_ads` d
     ON d.date BETWEEN p.start_d AND p.end_d
    AND d.channel = 'tiktok'
   GROUP BY p.period, p.sort_order

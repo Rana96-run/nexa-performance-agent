@@ -13,6 +13,43 @@ this file is the history of the manual scaffolding behind it.
 - **ACTION** = a change executed once on BQ or an ad account (already permanent).
 
 
+## Session log
+
+### 2026-06-16 — wide_ads migration completed
+
+**What happened:**
+- Old materialized tables dropped: `paid_channel_campaign_daily`, `paid_channel_daily`,
+  `v_adset_performance`, `v_ad_performance`, `v_channel_key_map`, `channel_roas_daily`.
+- Replacement: `wide_ads` — ad-grain denormalized table, single source of truth for all Hex SQL.
+
+**3 bugs fixed (commit 3165206):**
+1. Snapchat/TikTok `campaign_name`/`adset_name` returned None at ad grain — fixed with COALESCE
+   from `campaigns_daily`/`ads_daily` lookups in `WIDE_ADS_SQL`.
+2. 33k ghost rows (spend=0) caused null `ad_name` rows in Hex — fixed with `WHERE spend > 0`.
+3. `v_channel_key_map` was dropped and not recreated — rebuilt as UNNEST view in
+   `collectors/views.py`, added to `ALL_VIEWS` so it auto-recreates every 6h (commit 007ca14).
+
+**Hex cells — 28 SQL files need manual paste:**
+- SQL ready in `.claude/hex_drilldown/by_channel/{channel}/{0..2}.sql` (6 channels × 3 levels)
+- Hex API returns 401 for cell edits (requires paid plan) — manual paste is the only path.
+
+**7-day reconciliation (window 2026-06-09 to 2026-06-15):**
+
+| Channel       | BQ (module) | HubSpot API | Delta   | Status   |
+|---------------|-------------|-------------|---------|----------|
+| google_ads    | 344         | 308         | +11.7%  | FAIL >5% |
+| meta          | 136         | 122         | +11.5%  | FAIL >5% |
+| snapchat      | 135         | 130         | +3.8%   | OK       |
+| tiktok        | 65          | 59          | +10.2%  | FAIL >5% |
+| microsoft_ads | 29          | 31          | -6.5%   | FAIL >5% |
+| linkedin      | 1           | 0           | —       | lag OK   |
+| **TOTAL**     | **710**     | **650**     | **+9.2%** | **FAIL** |
+
+- wide_ads lead totals (google_ads=306, meta=147, snap=79, ms=24, tiktok=13) are materially lower
+  than module table — expected (date-join mismatch, see `08_pitfalls.md`).
+- BQ vs HubSpot gap root cause: sync-timing lag (n8n qoyod_source classification may lag BQ mirror
+  by up to 6h). Not a duplication error. Re-run reconciliation in 24h to confirm.
+
 ## Learnings (investigations & findings)
 
 - `_analyze_workflow.py` - Parse the v4 flow JSON and produce a human-readable summary of the

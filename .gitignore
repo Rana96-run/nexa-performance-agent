@@ -35,6 +35,7 @@ venv/
 !.claude/skills/
 !.claude/agents/
 !.claude/workflows/
+!.claude/hex_drilldown/
 *.swp
 .DS_Store
 Thumbs.db

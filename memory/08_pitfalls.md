@@ -58,6 +58,36 @@ Reference SQL saved at `.claude/hex_drilldown/campaign_list_data.sql`.
 Same applies to `paid_channel_daily`, `v_adset_performance`, `v_ad_performance` —
 all dropped 2026-06-16, all consumers migrated to `wide_ads`.
 
+## [2026-06-16] wide_ads migration — dropped tables, null names, ghost rows
+
+**What changed:**
+- `paid_channel_campaign_daily`, `v_ad_performance`, `v_adset_performance`,
+  `v_channel_key_map`, `channel_roas_daily`, `paid_channel_daily` were all DROPPED.
+- Replacement: `wide_ads` (ad-grain denormalized table, single source of truth for all Hex SQL).
+- Bug 1: Snapchat/TikTok `campaign_name`/`adset_name` came through as None — fixed with
+  COALESCE from `campaigns_daily`/`ads_daily` in the `wide_ads` builder.
+- Bug 2: 33k ghost rows (spend=0) caused null `ad_name` rows in Hex — fixed with `WHERE spend > 0`.
+- Bug 3: `v_channel_key_map` was dropped and not recreated — rebuilt as a static UNNEST view
+  in `collectors/views.py`. Must stay in `ALL_VIEWS` so it auto-recreates every 6h.
+- Hex has no cell-editing API (401, requires paid plan). All 28 SQL files must be pasted manually.
+  Source of truth: `.claude/hex_drilldown/` — one file per Hex cell.
+
+**wide_ads vs hubspot_leads_module_daily mismatch is EXPECTED and SIGNIFICANT:**
+- `wide_ads` joins leads by `(date, ad_id)` — only counts leads where createdate matches spend date.
+- `hubspot_leads_module_daily` groups by `(date, lead_utm_campaign)` — a broader, different join key.
+- Result: wide_ads typically undercounts by 20–80% per channel vs the module table. This is intentional
+  (see Bug 2 note in earlier entry). Do NOT use wide_ads lead totals to validate module table counts.
+- Reconciliation target: BQ module table vs HubSpot API (not wide_ads vs module).
+
+**7-day reconciliation result (2026-06-16, window 2026-06-09 to 2026-06-15):**
+- BQ (module table) total: 710 leads | HubSpot API total: 650 leads | Delta: +9.2% — FAIL >5%
+- By channel: google_ads +11.7%, meta +11.5%, tiktok +10.2%, microsoft_ads -6.5%, snapchat +3.8% (OK)
+- linkedin: 1 in BQ, 0 in HubSpot (1 lead, timing lag acceptable)
+- Root cause of gap: BQ mirror runs every 6h; HubSpot search API only counts contacts where
+  qoyod_source is set. Leads still being classified by n8n workflow will appear in BQ before
+  qoyod_source is written back to HubSpot. This is a sync-timing gap, not a duplication or
+  attribution error. Re-run reconciliation after 24h for a cleaner read.
+
 ## [2026-06-16] n8n cloud internal API: use PATCH not PUT
 
 `PUT /rest/workflows/{id}` returns `404 Cannot PUT`. The correct method for updating a workflow via the browser session is `PATCH /rest/workflows/{id}` with `Content-Type: application/json`. Same applies to partial updates (just `{active:true}` etc.). The public API (`/api/v1/workflows/{id}`) uses `X-N8N-API-KEY` header — different auth path. Activation via PATCH `{active:true}` silently returns `active:false` if the workflow has validation issues; use the n8n UI toggle as fallback.

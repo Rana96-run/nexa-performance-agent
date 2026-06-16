@@ -48,7 +48,7 @@ railway_svc_id  = os.getenv("RAILWAY_SERVICE_ID", "")
 railway_domain  = (
     os.getenv("RAILWAY_PUBLIC_DOMAIN")
     or os.getenv("RAILWAY_STATIC_URL", "").removeprefix("https://")
-    or "nexa-performance-agent.up.railway.app"
+    or "nexa-web-production-6a6b.up.railway.app"
 )
 base_url = f"https://{railway_domain}"
 

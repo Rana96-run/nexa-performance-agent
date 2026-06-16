@@ -894,7 +894,7 @@ WITH platform AS (
 deals AS (
   -- All-pipeline deal aggregates by keyword term (for richer deal columns).
   SELECT
-    date,
+    createdate                               AS date,
     CASE
       WHEN LOWER(TRIM(qoyod_source)) = 'google ads'    THEN 'google_ads'
       WHEN LOWER(TRIM(qoyod_source)) = 'microsoft ads' THEN 'microsoft_ads'
@@ -1013,4 +1013,3 @@ if __name__ == "__main__":
         create_views()
     else:
         print("Usage: python collectors/bq_writer.py [test|bootstrap|views]")
-                                            
