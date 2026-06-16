@@ -97,7 +97,7 @@ Nexa Performance Agent/
 │   ├── meta_bq.py          # campaign + adset + ad grain
 │   ├── snap_bq.py          # campaign + adset + ad grain
 │   ├── tiktok_bq.py        # campaign + adgroup + ad grain
-│   ├── linkedin_bq.py      # campaign grain — CONNECTED (token valid 2026-05-12)
+│   ├── linkedin_bq.py      # campaign + ads grain — CONNECTED (token valid 2026-05-12)
 │   ├── microsoft_ads_bq.py # CONNECTED both accounts (188176729 + 187231519) 2026-05-12
 │   ├── hubspot_leads_bq.py # lead module daily buckets
 │   ├── hubspot_deals_bq.py # deals daily buckets
@@ -122,7 +122,6 @@ Nexa Performance Agent/
 | Table | Collector | Key fields |
 |---|---|---|
 | `campaigns_daily` | google_ads_bq, meta_bq, snap_bq, tiktok_bq, linkedin_bq, microsoft_ads_bq | date, channel, campaign_id |
-| `adsets_daily` | same collectors | date, channel, campaign_id, adset_id |
 | `ads_daily` | same collectors | date, channel, campaign_id, ad_id |
 | `keywords_daily` | google_ads_bq, microsoft_ads_bq | date, channel, campaign_id, adgroup_id |
 | `hubspot_leads_module_daily` | hubspot_leads_bq.py | date, qoyod_source, lead_utm_campaign |
@@ -160,7 +159,7 @@ every 6h via the reporting scheduler.
 ### Current layer summary
 | Layer | Tables/Views | Written by |
 |---|---|---|
-| Layer 0 (store) | `campaigns_daily`, `adsets_daily`, `ads_daily`, `keywords_daily`, `hubspot_leads_module_daily`, `hubspot_deals_daily`, etc. | collectors/* |
+| Layer 0 (store) | `campaigns_daily`, `ads_daily`, `keywords_daily`, `hubspot_leads_module_daily`, `hubspot_deals_daily`, etc. | collectors/* |
 | Layer 1 (individual mirrors) | Per-platform raw rows in the above store tables | same collectors |
 | Layer 2 (wide tables) | `wide_ads`, `wide_keywords` | `collectors/views.py::materialize_wide_tables()` — rebuilt every 6h |
 | Layer 3 (reporting views) | `paid_channel_daily`, `paid_channel_campaign_daily`, `v_adset_performance`, `v_ad_performance`, `v_keyword_performance`, `v_channel_key_map` | `collectors/views.py::refresh_all_views()` — sourced from wide_ads/wide_keywords |
@@ -207,7 +206,7 @@ v_agent_consumption_daily, v_new_biz_daily
   - Activity: `Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`
 - **Railway** for hosting: single dyno runs both schedulers + Flask; env vars
   managed via Railway dashboard or `scripts/sync_railway_env.py`.
-- **Databox** for external BI dashboards: two active datasets pushed by `collectors/databox_pusher.py`.
+- **Databox** for external BI dashboards: two active datasets pushed by the n8n `Nexa · Master Performance Workflow` (Databox chain embedded as parallel branch after Schedule trigger). `collectors/databox_pusher.py` still exists for manual backfills.
   - **Daily Spend** (`199c5297`): channel-day grain. Fields: date (DATETIME), channel (STRING),
     spend/impressions/clicks/leads/sqls/cpl/cpql (NUMBER). Use SUM for volumes, AVG for ratios.
   - **All Grains** (`6158be78`): 4-grain unified dataset (campaign/adset/ad/keyword).
