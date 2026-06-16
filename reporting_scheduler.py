@@ -365,25 +365,10 @@ def run_refresh(incremental: bool = True, days: int | None = None):
     except Exception as e:
         print(f"[scheduler] Hex refresh failed (non-fatal): {e}")
 
-    # ── Push merged metrics to Databox (skip silently if token not set) ──────
-    import os as _os
-    if _os.getenv("DATABOX_TOKEN"):
-        try:
-            from collectors.databox_pusher import run_push
-            push_days = 2 if (days is None and incremental) else (days or 365)
-            n_dp = run_push(days=push_days)
-            results["databox_push"] = (True, n_dp, 0)
-            log_activity_async(
-                role="bq_refresh", action="databox_push", status="success",
-                details={"data_points": n_dp, "days": push_days},
-            )
-        except Exception as e:
-            print(f"[scheduler] Databox push failed (non-fatal): {e}")
-            results["databox_push"] = (False, str(e), 0)
-            log_activity_async(
-                role="bq_refresh", action="databox_push", status="failed",
-                details={"error": str(e)[:300]},
-            )
+    # NOTE 2026-06-16: Databox push moved to n8n workflow "Nexa · Databox Sync"
+    # (ID: 7ZEROvwTg3UrGAP6) — runs every 6h via cron, pushes all 4 grains.
+    # Requires DATABOX_TOKEN set as n8n $var. Railway no longer pushes to Databox.
+    # [databox push block disabled]
 
     # ── Daily BQ ↔ HubSpot reconciliation (Phase 1 stability) ────────────────
     # Runs ONCE per day (only on the morning Riyadh cycle = utc_hour 5).
@@ -450,3 +435,4 @@ if __name__ == "__main__":
         run_loop()
     else:
         print("Usage: python reporting_scheduler.py [once|backfill|loop]")
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
