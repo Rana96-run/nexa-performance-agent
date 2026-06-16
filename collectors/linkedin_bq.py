@@ -342,6 +342,176 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
     return 0  # was: upsert_rows("adsets_daily", rows, ...)
 
 
+def _list_creatives() -> dict:
+    """Return {creative_urn: {campaign_urn, name, status}} for all creatives on the account."""
+    if not AD_ACCT_URN:
+        return {}
+    acct_id = AD_ACCT_URN.rsplit(":", 1)[-1]
+    out = {}
+    start_idx = 0
+    while True:
+        r = requests.get(
+            f"{BASE}/adCreatives",
+            headers=_headers(),
+            params={
+                "q": "search",
+                "search.account.values[0]": AD_ACCT_URN,
+                "count": 100,
+                "start": start_idx,
+            },
+            timeout=15,
+        )
+        if r.status_code >= 400:
+            print(f"[li-bq] adCreatives {r.status_code}: {r.text[:200]}")
+            break
+        items = r.json().get("elements", [])
+        for c in items:
+            urn = f"urn:li:sponsoredCreative:{c.get('id', '')}"
+            out[urn] = {
+                "campaign_urn": c.get("campaign", ""),
+                "name":         c.get("name", urn),
+                "status":       c.get("status", ""),
+            }
+        if len(items) < 100:
+            break
+        start_idx += len(items)
+    return out
+
+
+def _fetch_ad_analytics(start: date, end: date) -> list:
+    """Fetch DAILY analytics pivoted by CREATIVE (ad level)."""
+    if not AD_ACCT_URN:
+        return []
+    params = {
+        "q":                     "analytics",
+        "pivot":                 "CREATIVE",
+        "timeGranularity":       "DAILY",
+        "accounts[0]":           AD_ACCT_URN,
+        "dateRange.start.day":   start.day,
+        "dateRange.start.month": start.month,
+        "dateRange.start.year":  start.year,
+        "dateRange.end.day":     end.day,
+        "dateRange.end.month":   end.month,
+        "dateRange.end.year":    end.year,
+        "fields": "costInLocalCurrency,impressions,clicks,externalWebsiteConversions,dateRange,pivotValues",
+        "count":  1000,
+    }
+    elements = []
+    start_idx = 0
+    while True:
+        params["start"] = start_idx
+        r = requests.get(f"{BASE}/adAnalytics", headers=_headers(),
+                         params=params, timeout=30)
+        if r.status_code >= 400:
+            print(f"[li-bq] ad analytics {r.status_code}: {r.text[:200]}")
+            break
+        data = r.json()
+        page = data.get("elements", [])
+        elements.extend(page)
+        if len(page) < params["count"]:
+            break
+        start_idx += len(page)
+    return elements
+
+
+def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
+    """Ad (creative) grain -> ads_daily. Uses pivot=CREATIVE on adAnalytics."""
+    if not TOKEN or not AD_ACCT_URN:
+        print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping ads")
+        return 0
+
+    end = datetime.now(_RIYADH).date()
+    if incremental:
+        start = end - timedelta(days=29)
+    elif days:
+        start = end - timedelta(days=days - 1)
+    else:
+        start = date(2025, 1, 1)
+
+    print(f"[li-bq] ads window {start} -> {end}")
+
+    native_cur = _account_currency()
+
+    try:
+        group_names = _list_campaign_groups()
+        campaigns   = _list_campaigns(group_names)
+        creatives   = _list_creatives()
+        analytics   = _fetch_ad_analytics(start, end)
+    except Exception as e:
+        print(f"[li-bq] ads API error: {e}")
+        return 0
+
+    now  = datetime.now(timezone.utc).isoformat()
+    rows = []
+
+    for el in analytics:
+        pivot_vals   = el.get("pivotValues", [])
+        creative_urn = pivot_vals[0] if pivot_vals else ""
+        creative     = creatives.get(creative_urn, {})
+        camp_urn     = creative.get("campaign_urn", "")
+        camp_meta    = campaigns.get(camp_urn, {})
+
+        # Reconstruct campaign group URN
+        group_name = camp_meta.get("group_name", "")
+        group_urn  = ""
+        for urn, name in group_names.items():
+            if name == group_name:
+                group_urn = urn
+                break
+
+        dr = el.get("dateRange", {}).get("start", {})
+        if not dr:
+            continue
+        try:
+            day = date(dr["year"], dr["month"], dr["day"]).isoformat()
+        except (KeyError, ValueError):
+            continue
+
+        try:
+            spend_native = float(el.get("costInLocalCurrency") or 0)
+        except (TypeError, ValueError):
+            spend_native = 0.0
+        spend  = to_usd(spend_native, native_cur)
+        clicks = int(el.get("clicks") or 0)
+        impr   = int(el.get("impressions") or 0)
+        try:
+            leads = int(float(el.get("externalWebsiteConversions") or 0))
+        except (TypeError, ValueError):
+            leads = 0
+        ctr = round(clicks / impr * 100, 4) if impr else 0.0
+
+        # Derive numeric creative ID from URN for ad_id
+        creative_id = creative_urn.rsplit(":", 1)[-1] if creative_urn else creative_urn
+
+        rows.append({
+            "date":          day,
+            "channel":       "linkedin",
+            "account_id":    AD_ACCT_URN,
+            "campaign_id":   group_urn or camp_urn,   # Campaign Group = utm_campaign
+            "campaign_name": group_name,
+            "adset_id":      camp_urn,                # LinkedIn Campaign = adset
+            "adset_name":    camp_meta.get("name", camp_urn),
+            "ad_id":         creative_urn,
+            "ad_name":       creative.get("name", creative_urn),
+            "utm_content":   creative.get("name", creative_urn),
+            "status":        creative.get("status", ""),
+            "spend":         round(spend, 2),
+            "impressions":   impr,
+            "clicks":        clicks,
+            "ctr":           ctr,
+            "leads":         leads,
+            "conversions":   float(leads),
+            "currency":      "USD",
+            "spend_native":  round(spend_native, 2),
+            "currency_native": native_cur,
+            "updated_at":    now,
+        })
+
+    print(f"[li-bq] ads: {len(rows)} rows across {len(creatives)} creatives")
+    return upsert_rows("ads_daily", rows,
+                       key_fields=["date", "channel", "ad_id"])
+
+
 if __name__ == "__main__":
     import sys
     cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -350,3 +520,5 @@ if __name__ == "__main__":
         print(f"campaigns: {collect_and_write(days=days)} rows")
     if cmd in ("all", "adsets"):
         print(f"adsets:    {collect_adsets_and_write(days=days)} rows")
+    if cmd in ("all", "ads"):
+        print(f"ads:       {collect_ads_and_write(days=days)} rows")

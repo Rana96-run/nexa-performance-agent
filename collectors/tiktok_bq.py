@@ -340,6 +340,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
         native_cur = _advertiser_currency(account_id)
         # Metadata lookup: ad_id -> {adgroup_id, campaign_id, name}
         ad_meta = _list_ads(account_id)
+        adgroup_meta = _list_adgroups(account_id)
         print(f"[tiktok-bq] ads account {account_id}: {len(ad_meta)} ads in metadata")
         # dimensions must NOT include campaign_id or adgroup_id at AUCTION_AD level
         report_rows = _get_report(
@@ -367,11 +368,10 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "campaign_id":   meta.get("campaign_id", ""),
                 "campaign_name": None,   # not available at ad grain
                 "adset_id":      meta.get("adgroup_id", ""),
-                "adset_name":    None,
+                "adset_name":    adgroup_meta.get(meta.get("adgroup_id", ""), {}).get("name"),
                 "ad_id":         ad_id,
                 "ad_name":       _ad_name,
                 "utm_content":   _ad_name,  # TikTok ad name = utm_content
-                "status":        None,
                 "spend":         round(spend, 2),
                 "impressions":   int(metrics.get("impressions", 0) or 0),
                 "clicks":        int(metrics.get("clicks", 0) or 0),

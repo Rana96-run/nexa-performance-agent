@@ -138,6 +138,7 @@ COLLECTORS = [
     ("snapchat_adsets",      snap_bq.collect_adsets_and_write),
     ("snapchat_ads",         snap_bq.collect_ads_and_write),
     ("linkedin_adsets",      linkedin_bq.collect_adsets_and_write),
+    ("linkedin_ads",         linkedin_bq.collect_ads_and_write),
     ("microsoft_ads_adgroups", microsoft_ads_bq.collect_adsets_and_write),
     ("microsoft_ads_keywords", microsoft_ads_bq.collect_keywords_and_write),
     ("microsoft_ads_ads",      microsoft_ads_bq.collect_ads_and_write),
