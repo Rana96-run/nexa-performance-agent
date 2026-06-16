@@ -4,9 +4,9 @@
 --            start_date, end_date
 -- Row output: utm_content
 --
--- Source: v_ad_performance (materialized). spend from ads_daily; leads from
--- utm_paid_attribution_daily; deals from hubspot_deals_daily (createdate
--- attributed after rebuild). All amounts USD.
+-- Source: wide_ads (ad-grain base table). spend from ads_daily; leads from
+-- hubspot_leads_individual; deals from hubspot_deals_individual.
+-- All amounts USD.
 -- Note: ad_name = utm_content; many Google RSAs have NULL utm_content → blank
 -- rows expected.
 --
@@ -16,16 +16,16 @@
 SELECT * FROM (
   SELECT
     ad_id,
-    MAX(utm_content)                                                                           AS ad_name,
+    COALESCE(MAX(ad_name), MAX(utm_content))                                                   AS ad_name,
     ROUND(SUM(spend), 2)                                                                  AS spend,
     SUM(impressions)                                                                      AS impressions,
     SUM(clicks)                                                                           AS clicks,
     ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions), 0)) * 100, 2)                 AS ctr_pct,
     -- Leads
-    SUM(leads)                                                                            AS leads,
+    SUM(leads_total)                                                                      AS leads,
     SUM(leads_qualified)                                                                  AS sqls,
     SUM(leads_disqualified)                                                               AS disq_leads,
-    ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads),           0)), 2)                    AS cpl,
+    ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total),           0)), 2)              AS cpl,
     ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_qualified), 0)), 2)                    AS cpql,
     ROUND(SAFE_DIVIDE(SUM(leads_qualified),    NULLIF(SUM(leads_qualified) + SUM(leads_disqualified), 0)) * 100, 1) AS qual_rate_pct,
     ROUND(SAFE_DIVIDE(SUM(leads_disqualified), NULLIF(SUM(leads_qualified) + SUM(leads_disqualified), 0)) * 100, 1) AS disq_rate_pct,
@@ -37,21 +37,20 @@ SELECT * FROM (
     ROUND(SUM(new_biz_revenue_won),  2)                                                   AS new_biz_revenue_won,
     ROUND(SUM(new_biz_amount_lost),  2)                                                   AS new_biz_amount_lost,
     ROUND(SUM(new_biz_amount_open),  2)                                                   AS new_biz_amount_open,
-    ROUND(SUM(new_biz_amount_total), 2)                                                   AS new_biz_amount_total,
+    ROUND(SUM(new_biz_revenue_won) + SUM(new_biz_amount_lost) + SUM(new_biz_amount_open), 2) AS new_biz_amount_total,
     ROUND(SAFE_DIVIDE(SUM(new_biz_revenue_won), NULLIF(SUM(spend), 0)), 2)                AS new_biz_roas,
-    -- Creative type: image | video | carousel | collection | story | other (NULL for Google/Microsoft)
+    -- Creative type: image | video (from snap_bq.py creative_type field)
     MAX(creative_type)                                                                    AS creative_type,
     -- Status: ACTIVE | PAUSED (NULL for channels where not collected)
-    MAX(status)                                                                           AS status,
-    MAX(data_source)                                                                      AS spend_source
-  FROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`
+    MAX(status)                                                                           AS status
+  FROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`
   WHERE channel = 'snapchat'
     AND date BETWEEN {{ start_date }} AND {{ end_date }}
     {% if effective_campaign %}
-    AND LOWER(TRIM(utm_campaign)) = LOWER(TRIM({{ effective_campaign }}))
+    AND LOWER(TRIM(campaign_name)) = LOWER(TRIM({{ effective_campaign }}))
     {% endif %}
     {% if selected_adset %}
-    AND LOWER(TRIM(utm_audience)) = LOWER(TRIM({{ selected_adset }}))
+    AND LOWER(TRIM(adset_name)) = LOWER(TRIM({{ selected_adset }}))
     {% endif %}
   GROUP BY ad_id
 ) sub

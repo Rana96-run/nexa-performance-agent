@@ -1,5 +1,63 @@
 # Pitfalls & Known Traps
 
+## [2026-06-16] wide_ads: THREE sources of NULLs at ad/adset level — FIXED
+
+Three distinct root causes produce NULLs in `wide_ads`. All three were fixed 2026-06-16
+in `collectors/views.py` WIDE_ADS_SQL.
+
+**Bug 1 (FIXED) — Snapchat + TikTok ads_daily have `campaign_name = NULL` at ad grain.**
+Both collectors hardcode `None` for campaign_name at the ad-level endpoint — the
+Snapchat/TikTok API does not return campaign metadata at ad grain, and the collectors
+don't look it up from the campaign fetched earlier.
+FIX APPLIED: `WIDE_ADS_SQL` now LEFT JOINs `camp_lookup` (aggregated from `campaigns_daily`)
+and `adset_lookup` (aggregated from `ads_daily` itself where name is not null), then
+COALESCEs `a.campaign_name, camp_lookup.campaign_name`. Verified: 0 NULL campaign_names
+for Snapchat and TikTok in wide_ads after rebuild (2026-06-16).
+NOTE: TikTok `adset_name` remains NULL — TikTok collector never writes `adset_name`,
+so the lookup is also null; fix requires collector-side change (out of scope 2026-06-16).
+NOTE: `adsets_daily` table does NOT exist in BQ — adset lookup uses `ads_daily` itself.
+
+**Bug 2 (NOT FIXED — date join retained intentionally) — wide_ads lead join date mismatch.**
+`leads_by_id` groups by `(hs_createdate, ad_id)`. Lead createdate ≠ spend date in
+~39% of cases (687 of 1,283 leads arrive on different day than spend row). Removing
+the date join causes catastrophic 30x fan-out (lifetime ad leads attached to every
+daily spend row). DECISION: keep date join, accept ~39% lead undercounting as the
+safe trade-off. Undercounting inflates CPQL (conservative); overcounting deflates CPQL
+(dangerous for decisions). The 39% mismatch is documented and known.
+
+**Bug 3 (FIXED) — Snapchat ghost rows: 97.1% of ads_daily rows have zero spend.**
+Snapchat collector pulls all historical ads for every date, generating 34,080 rows/month
+with only ~1,001 having actual spend. Fixed by adding `WHERE a.spend > 0` to the
+FROM clause of WIDE_ADS_SQL. Verified: all channels now have 0 zero-spend rows (2026-06-16).
+
+**Summary — Hex impact after fixes:**
+- Snapchat/TikTok campaign tabs: campaign names now populated (Bug 1 fixed)
+- Snapchat adset/ad tabs: ghost rows eliminated, 97% row count reduction (Bug 3 fixed)
+- Lead counts on id-sync channels (Meta/Snap/TikTok): unchanged — date mismatch is
+  a known limitation, not fixable without overcounting risk
+
+## [2026-06-16] paid_channel_campaign_daily was DROPPED — any Hex cell querying it will crash
+
+`paid_channel_campaign_daily` was dropped 2026-06-16 (migrated to `wide_ads`). Any Hex
+cell or Python script that references it will fail with:
+`Not found: Table angular-axle-492812-q4:qoyod_marketing.paid_channel_campaign_daily`
+The replacement is always `wide_ads`, GROUP BY `campaign_id` to get campaign grain.
+
+Campaign filter/dropdown cells that used `paid_channel_campaign_daily` for listing
+distinct campaign names must use:
+```sql
+SELECT DISTINCT campaign_name
+FROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`
+WHERE date BETWEEN {{ start_date }} AND {{ end_date }}
+  AND campaign_name IS NOT NULL
+  {% if channel_filter %}AND channel = {{ channel_filter }}{% endif %}
+ORDER BY campaign_name
+```
+Reference SQL saved at `.claude/hex_drilldown/campaign_list_data.sql`.
+
+Same applies to `paid_channel_daily`, `v_adset_performance`, `v_ad_performance` —
+all dropped 2026-06-16, all consumers migrated to `wide_ads`.
+
 ## [2026-06-16] n8n cloud internal API: use PATCH not PUT
 
 `PUT /rest/workflows/{id}` returns `404 Cannot PUT`. The correct method for updating a workflow via the browser session is `PATCH /rest/workflows/{id}` with `Content-Type: application/json`. Same applies to partial updates (just `{active:true}` etc.). The public API (`/api/v1/workflows/{id}`) uses `X-N8N-API-KEY` header — different auth path. Activation via PATCH `{active:true}` silently returns `active:false` if the workflow has validation issues; use the n8n UI toggle as fallback.
@@ -1349,4 +1407,10 @@ NULL-channel-with-leads count + distinct channel values present.
   inherits the fix. 0 NULL-channel rows.
 - **v_ad_performance — CLEAN (confirm).** Same — leads only from `utm_paid_attribution_daily`.
   0 NULL-channel rows (2 organic_search leads, intentional).
-- **Why the qoyod_source surfa
+- **Why the qoyod_source surfaces are structurally immune:** they map channel via an INNER
+  JOIN on `qoyod_source` against a paid-only (or paid+organic) map, so a non-paid source is
+  dropped at the join — it can never become NULL or a non-paid label. Different mechanism
+  from `utm_paid_attribution_daily`, which matched on UTM and COALESCE-resolved channel
+  (allowed NULLs). **The 9c758c7 source-filter pattern only needs to live in the one UTM-grain
+  view; the channel-grain views already filter implicitly via the INNER join.** No fixes
+  applied, no materialize needed.

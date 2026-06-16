@@ -350,9 +350,23 @@ WIDE_ADS_SQL = f"""
 CREATE OR REPLACE TABLE `{P}.{D}.wide_ads` AS
 -- Ad-grain reporting: spend (ads_daily) + leads (hubspot_leads_individual)
 -- + deals (hubspot_deals_individual). Single grain — safe to GROUP BY up.
+--
+-- Fix A (2026-06-16): COALESCE campaign_name/adset_name from lookup tables
+--   so Snapchat (100% NULL campaign_name) and TikTok (100% NULL campaign_name)
+--   rows get populated names. camp_lookup/adset_lookup join on (channel, id).
+-- Fix B (2026-06-16): date join RETAINED in leads_by_id to prevent fan-out.
+--   Removing the date caused 30x lead overcounting (lifetime leads attached to
+--   every daily spend row). Known limitation: ~39% of leads arrive on a
+--   different date than spend (hs_createdate ≠ ads_daily.date). Accepted
+--   trade-off — undercounting is safer than overcounting for CPQL decisions.
+-- Fix C (2026-06-16): ads_daily source filtered to spend > 0 to eliminate
+--   Snapchat ghost rows (97.1% of Snap rows had zero spend, polluting counts).
 WITH
 
 -- Leads aggregated by ad sync ID (Meta/Snap/TikTok Instantform — survives ad renames)
+-- Date join retained: removes fan-out (without date, lifetime leads appear on every
+-- daily spend row → 30x overcounting). Leads arriving on different days from spend
+-- are a known limitation (< 39% captured); accepted trade-off vs overcounting.
 leads_by_id AS (
   SELECT
     hs_createdate                    AS date,
@@ -380,7 +394,7 @@ leads_by_name AS (
   GROUP BY 1, 2
 ),
 
--- Deals aggregated by ad sync ID
+-- Deals aggregated by ad sync ID (date retained — prevents fan-out)
 deals_by_id AS (
   SELECT
     createdate                           AS date,
@@ -437,9 +451,10 @@ SELECT
   END                                                               AS channel_name,
   a.account_id,
   a.campaign_id,
-  a.campaign_name,
+  -- Fix A: COALESCE from lookup tables for Snapchat/TikTok which have NULL campaign_name in ads_daily
+  COALESCE(a.campaign_name, camp_lookup.campaign_name)             AS campaign_name,
   a.adset_id,
-  a.adset_name,
+  COALESCE(a.adset_name,    adset_lookup.adset_name)               AS adset_name,
   a.ad_id,
   a.ad_name,
   a.utm_content,
@@ -488,6 +503,21 @@ SELECT
 
 FROM `{P}.{D}.ads_daily` a
 
+-- Fix A: lookup tables to back-fill NULL campaign_name (Snapchat, TikTok) and adset_name
+LEFT JOIN (
+  SELECT channel, campaign_id, ANY_VALUE(campaign_name) AS campaign_name
+  FROM `{P}.{D}.campaigns_daily`
+  WHERE campaign_name IS NOT NULL
+  GROUP BY channel, campaign_id
+) camp_lookup ON a.channel = camp_lookup.channel AND a.campaign_id = camp_lookup.campaign_id
+
+LEFT JOIN (
+  SELECT channel, adset_id, ANY_VALUE(adset_name) AS adset_name
+  FROM `{P}.{D}.ads_daily`
+  WHERE adset_name IS NOT NULL AND adset_id IS NOT NULL
+  GROUP BY channel, adset_id
+) adset_lookup ON a.channel = adset_lookup.channel AND a.adset_id = adset_lookup.adset_id
+
 -- Leads: id-first (Instantform — sync ID survives ad renames)
 LEFT JOIN leads_by_id li
   ON a.date = li.date AND a.ad_id = li.ad_id
@@ -507,6 +537,9 @@ LEFT JOIN deals_by_name dn
   ON di.ad_id IS NULL
  AND a.date = dn.date
  AND LOWER(TRIM(a.utm_content)) = dn.utm_key
+
+-- Fix C: exclude zero-spend ghost rows (eliminates 97% of Snapchat rows + 22% TikTok)
+WHERE a.spend > 0
 """
 
 WIDE_KEYWORDS_SQL = f"""
