@@ -241,9 +241,48 @@ Campaign IDs (customer 5753494964):
   - Needs manual activation toggle in n8n UI.
 - [x] **n8n Workflow 4: Nexa · AI Content Agent** (`yOD1l9n7qOfbpWfM`, 13 nodes) — built and ACTIVE. 4 independent chains: daily-ai-digest, competitor-post-poller, weekly-ai-digest, monthly-content-calendar.
 - [x] **Cowork tasks disabled** — 6 tasks now fully covered by n8n and disabled: `daily-ai-digest`, `competitor-post-poller`, `weekly-ai-digest`, `monthly-content-calendar`, `monday-review`, `monthly-review`.
-- [ ] **⚠️ ACTIVATION NEEDED (manual, 30 seconds):** Go to `qoyod.app.n8n.cloud/home/workflows` and toggle ON: `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`. (AI Content Agent already active.)
+- [ ] **⚠️ ACTIVATION NEEDED (manual, 30 seconds):** Go to `qoyod.app.n8n.cloud/home/workflows` and toggle ON: `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`, `Nexa · Monitor Follow-up`, `Nexa · Databox Sync`. (AI Content Agent already active.)
+- [ ] **⚠️ n8n $var NEEDED:** Set `DATABOX_TOKEN` in n8n UI → Settings → Variables (PAK token, not push token). Required by `Nexa · Databox Sync` workflow `7ZEROvwTg3UrGAP6`. Dataset ID: `6158be78`.
 
 **PATCH method confirmed for n8n cloud internal API** — `PUT /rest/workflows/{id}` returns 404. Use `PATCH /rest/workflows/{id}` for all workflow updates. See `memory/08_pitfalls.md`.
+
+## Done this session (2026-06-16) — n8n hardening: Tasks 2-7
+
+**Spec:** n8n workflow hardening spec (6 tasks, approved same session).
+
+- [x] **Task 2 — Master workflow error resilience (84 nodes).** All 11 platform HTTP nodes
+      now have `onError: continueErrorOutput`. Each has a corresponding `Error Skip · {Channel}`
+      Code node (`return []`) so per-channel Merge still fires with 0 items on failure.
+      Microsoft Ads was the only gap — added `Error Skip · Microsoft Ads` node + wired both
+      MS nodes. Workflow ID: `T8icImtZFLYeCa7e`.
+
+- [x] **Task 3 — BQ freshness guard on Weekly + Monthly.** Both workflows now start:
+      `Schedule → BQ · Freshness Check → IF · Data Fresh? → continue or Slack · Stale Data Alert`.
+      Freshness SQL: `MAX(date)` from `campaigns_daily`, alert if `days_stale > 1`.
+      Weekly: 21→26 nodes. Monthly: 25→32 nodes. IDs: `iNSdpXH7Rc9Lb8h8`, `0Zh45UoTtjjhRn8U`.
+
+- [x] **Task 4 — Nexa · Monitor Follow-up workflow built (11 nodes, ID: `H6XSFlp1WOUPpgBF`).**
+      Daily 06:00 UTC. Queries `agent_activity_log` for actions where 7d or 14d post-action
+      review is pending → fetches current CPQL from BQ → classifies outcome (improved/neutral/
+      regressed/no_data) → posts Asana comment on original task → Slack summary.
+      ⚠️ Needs manual activation in n8n UI.
+
+- [x] **Task 5 — Weekly 2-agent chain.** Added `Build · performance-lead` + `Claude · performance-lead`
+      after `Claude · weekly-analyst`. Performance-lead validates findings, escalates CPQL
+      regressions, adds executive summary. Rewired: analyst → Build PL → Claude PL → Parse · weekly.
+      Weekly now 26 nodes.
+
+- [x] **Task 6 — Monthly 3-agent chain.** Main path: monthly-analyst → performance-lead → Parse.
+      Creative branch: `Code · Format Creative → Build · creative-strategist → Claude · creative-strategist
+      → Sheets · Create Creative Tab`. Creative-strategist classifies Winner / Optimise / Underperformer
+      per ad (qual_ratio + CPL). Monthly now 32 nodes.
+
+- [x] **Task 7 — Databox push migrated to n8n (ID: `7ZEROvwTg3UrGAP6`).** New workflow: every 6h,
+      4 parallel BQ grain queries (campaign/adset/ad/keyword from `wide_ads`) → Merge → Code transform
+      (SOURCE_MAP, strip nulls) → SplitInBatches(100) → HTTP POST to Databox dataset `6158be78`.
+      Railway `reporting_scheduler.py` Databox block disabled (`60807b1`). Memory `05_scheduler.md`
+      updated with all 6 n8n workflows.
+      ⚠️ Needs DATABOX_TOKEN as n8n $var + manual activation.
 
 ## Done this session (2026-06-11)
 
@@ -361,44 +400,4 @@ Campaign IDs (customer 5753494964):
 - [x] **Dashboard load time: 20s → ~2s** — root cause was 14 BQ queries running
   sequentially after a parallel batch that was supposed to replace them. The parallel
   block pre-fetched all 14 results but 7 downstream blocks re-defined the same SQL
-  and re-ran `bq.query().result()` sequentially, overwriting the parallel results.
-  Removed all 7 duplicate sequential blocks (-352 lines). Cold load now runs one
-  14-way `ThreadPoolExecutor` batch (~2s) with no follow-on queries. Full-page HTML
-  cache (5-min TTL) serves warm loads in <100ms. Commits: `5024c55`, `34af5fb`.
-- [x] **Railway canonical domain corrected** — `nexa-performance-agent.up.railway.app`
-  was never provisioned (returns Railway 404). Confirmed via `railway variables` that
-  the live URL is `https://nexa-web-production-6a6b.up.railway.app`. Updated
-  `08_pitfalls.md` and user memory. Commit: `c280ac9`.
-- [x] **Nightly BQ refresh manually triggered** — nightly at 05:00 UTC May 15
-  was missed (service deploy window overlap). Ran `reporting_scheduler once` locally
-  to pull May 14 data into `paid_channel_daily`. Dashboard now shows May 14 data.
-
-## Done this session (2026-05-13)
-
-- [x] **Railway dual-project fix** — found two `nexa-performance-agent` projects (trial + pro)
-  both auto-deploying from GitHub. Deleted the trial personal workspace project. Canonical
-  project: `57f124d0` in Marketing Workspace. Documented in `memory/08_pitfalls.md`.
-- [x] **PMax ads tab fix** — added `AND LOWER(utm_campaign) NOT LIKE '%pmax%'` to Google Ads
-  `3_ads.sql` to remove PMax asset group names that were appearing as ad names with 0 leads.
-- [x] **TikTok/Meta ID-based attribution (Strategy C/D)** — added new matching layers to
-  `v_adset_performance` and `v_ad_performance` for when UTM names break:
-  - Strategy C: adset-ID fallback via `lead_ad_group_id` (future Meta use)
-  - Strategy D (new): TikTok campaign-ID fallback via `lead_campaign_id_sync` →
-    `adsets_daily.campaign_id`. Confirmed `lead_campaign_id_sync` matches `campaigns_daily.campaign_id`
-    exactly for TikTok leads (e.g. `1863074553592178`). `campaign_id` / `ad_group_id` / `ad_id`
-    are NULL for both TikTok and Meta as of 2026-05-13.
-  - New BQ columns: `lead_campaign_id_sync`, `lead_campaign_id`, `lead_ad_group_id`, `lead_ad_id`
-    in both `hubspot_leads_individual` and `hubspot_leads_module_daily`.
-  - `create_views()` updated: auto-drops TABLE before recreating as VIEW (prevents lock).
-  - Cursor sync (`mirror`) running to backfill IDs for all 2026 leads.
-
-## Done this session (2026-05-12)
-
-- [x] **Snap concurrent API** — replaced sequential per-ad calls with
-  ThreadPoolExecutor(8 workers). Added 429 retry with linear backoff in `_snap_get`.
-  Speed: hours → ~5 min for 1,000 ads.
-- [x] **Microsoft utm_audience attribution** — 3-layer fix:
-  1. Collector now parses `{_adgroup}` custom param key (not `audience`) for utm_audience
-  2. `v_adset_performance` platform CTE: `COALESCE(utm_audience, adset_name)` (was `adset_name` only)
-  3. `v_ad_performance` platform CTE: `COALESCE(utm_content, ad_name)` (was `ad_name` only)
-  Verified: `Bing_AR_Brand_Keywords` spe
+  and re-ran `bq.query().result()` sequentially, ove
