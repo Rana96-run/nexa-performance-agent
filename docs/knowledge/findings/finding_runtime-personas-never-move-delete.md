@@ -7,7 +7,11 @@ metadata:
   originSessionId: 284817cb-4507-4772-bfff-6dea3d56e0f5
 ---
 
-What was found: During a dead-code audit, runtime_personas/ files were at risk of deletion. `claude/roles.py` loads 6 specific files from that directory on every Railway startup. Moving or deleting them breaks production immediately.
+**SUPERSEDED 2026-06-16** — `runtime_personas/` and `claude/roles.py` were intentionally deleted on 2026-06-16 as part of the Railway deprecation. Railway is no longer the execution runtime. This finding is historical only.
+
+---
+
+What was found (historical): During a dead-code audit, runtime_personas/ files were at risk of deletion. `claude/roles.py` loads 6 specific files from that directory on every Railway startup. Moving or deleting them breaks production immediately.
 
 Source: memory/08_pitfalls.md "2026-06-08 — Agent-system rebuild (critical gates)".
 

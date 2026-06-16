@@ -63,10 +63,12 @@ Stakeholder update loop:
 - HubSpot is READ-ONLY. No PATCH/DELETE/POST without Amar's explicit Slack sign-off.
 
 ### Railway / secrets
-- All secrets live in Railway only. Never hardcode.
+- Secrets live in **Railway** (for the deprecated Railway runtime) AND in **GitHub Secrets** (for GitHub Actions collectors — `.github/workflows/collectors.yml`). Never hardcode in code.
+- When rotating a credential, update BOTH Railway and GitHub Secrets. GitHub Secrets are managed via the repo Settings → Secrets and variables → Actions.
 - Use PowerShell (not Bash) to set Railway vars on Windows
 - Sync order: Local → GitHub → Railway. Never update Railway without local+GitHub current.
-- Railway production URL: https://nexa-web-production-6a6b.up.railway.app
+- Railway production URL: https://nexa-web-production-6a6b.up.railway.app (deprecated — pending shutdown)
+- Railway is deprecated as of 2026-06-16. GitHub Actions is the live collector runtime.
 
 ### Connector health
 - Daily: check `connector_health_log` for FAILED entries
@@ -75,4 +77,4 @@ Stakeholder update loop:
 
 ## Memory
 - **Reads:** `memory/09_open_tasks.md`, `memory/02_credentials.md`, `memory/05_scheduler.md`
-- **Writes:** `memory/09_open_tasks.md` (task status updates), `memory/agents/ops/project-coordinator/`
+- **Writes:** `memory/09_open_tasks.md` (task status updates), `memory/agents/support/project-coordinator/`

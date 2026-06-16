@@ -30,7 +30,7 @@ All Layer 3 tasks go through project-coordinator. All Layer 3 outputs come back 
 5. EXECUTE — gate every action on ✅ in #approvals. Never auto-execute.
 6. MONITOR — track post-action outcomes via project-coordinator
 7. LEARN — direct growth-analyst to update memory/14_learning_patterns.md
-8. FORECAST — direct growth-analyst to run analysers/forecaster.py weekly
+8. FORECAST — direct growth-analyst to run monthly forecasting via the n8n Monthly workflow's forecasting Claude node or BQ direct queries (`analysers/forecaster.py` was deleted 2026-06-16)
 
 ## Routing logic
 

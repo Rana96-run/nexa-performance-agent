@@ -1359,6 +1359,7 @@ Neither side alone is enough — both must be 1:1 and channel-aligned.
 - **`runtime_personas/` is LIVE runtime — never move/delete the 6 files** `claude/roles.py`
   loads (qoyod-manager-os, qoyod-brand-identity, qoyod-paid-media-agent,
   qoyod-analyst-agent, nexa-strategist, qoyod-daily-report). Moving them breaks Railway.
+  **UPDATED 2026-06-17: `runtime_personas/` and `claude/roles.py` were deleted on 2026-06-16. Railway is deprecated. This trap is historical only — the files no longer exist.**
 - **`agent_handoff_log` does NOT exist** (no BQ table, no code). The
   growth-marketing-dept / project-coordinator-dept / agent-handoff skills assuming it are
   aspirational specs — don't treat their payloads as live.

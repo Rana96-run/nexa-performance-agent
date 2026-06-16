@@ -197,23 +197,23 @@ The team is **9 Claude Code subagents** = 1 manager + 3 departments (see
 - **CRO / Landing Page** (sequential): `cro-specialist` → `ui-ux-designer` → `developer`.
 - **Support** (parallel): `project-coordinator` ∥ `growth-analyst` (owns `memory/`).
 
-> **Two layers:** these dev-time subagents are separate from the **production
-> runtime** (`claude/roles.py`), which loads `runtime_personas/qoyod-*.md` personas at
-> cadence on Railway. The PM/task-flow step is code, not an md file
-> (`main._extract_tasks` + `executors/asana`). Don't confuse them — see
-> `memory/11_agent_roles.md`.
+> **Note:** `claude/roles.py`, `runtime_personas/`, `main.py`, and `reporting_scheduler.py`
+> were all **deleted on 2026-06-16** as part of the Railway deprecation. The dev-time
+> subagents in `.claude/agents/` are now the single active layer. See `memory/11_agent_roles.md`.
 
 **Tech stack** (authoritative — see `memory/` for details)
 - **Data:** BigQuery (project-dataset via `.env`), load-job writes only, no streaming
-- **Orchestration:** Python collectors + `reporting_scheduler.py` (6h cadence)
-+ `main.py daily` (always-on)
+- **Orchestration:** n8n Cloud (daily/weekly/monthly analysis + Slack + Asana + approval gates)
+- **Data collection:** GitHub Actions (`.github/workflows/collectors.yml` — Python BQ collectors every 6h at 00/06/12/18 UTC)
 - **CRM:** HubSpot (Lead module = object `0-136`, standard Deals)
 - **Ads:** Google Ads (MCC + children), Meta (2 ad accounts), Snap, LinkedIn
 - **Organic:** Meta (FB+IG), YouTube, LinkedIn
-- **Dashboard:** Streamlit on Replit
+- **Dashboard:** Hex (internal) + Databox (team-facing external)
+- **AI analysis:** Claude API via n8n HTTP Request nodes (12 workflows)
 - **Ops:** Slack approvals, Asana tasks
 - **Storage:** Google Drive (shared creative + reporting folder — see Drive
   section below)
+- **Hosting:** Railway (deprecated — pending shutdown; GitHub Actions runs collectors independently)
 
 **Never say, assume, or do**
 - Never PATCH/DELETE/CREATE HubSpot objects without explicit Slack approval

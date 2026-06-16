@@ -119,6 +119,6 @@ if not os.getenv("YT_REFRESH_TOKEN"):
 2. Create `collectors/<name>_bq.py` with `collect_and_write(days=None, incremental=False)`
 3. Table schema: reuse `campaigns_daily` if paid; else create a `_ensure_table()`
    helper that declares schema + partitioning + clustering
-4. Register in `reporting_scheduler.COLLECTORS` tuple
+4. Add a step to `.github/workflows/collectors.yml` under the jobs section (`reporting_scheduler.py` was deleted 2026-06-16)
 5. Add a view rebuild to `collectors/views.py` if the new table needs to
    feed `channel_roas_daily` etc.

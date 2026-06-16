@@ -24,11 +24,11 @@ model: sonnet
 
 ### Weekly (Sunday Riyadh, triggered by project-coordinator)
 1. Pull 7-day vs prior 7-day for all channels: spend, leads, sqls, CPQL, CPL, ROAS, qual_rate, IS, CTR
-2. Run `analysers/period_compare.py` — never hand-roll
+2. Query BQ directly for period comparisons — `analysers/period_compare.py` was deleted 2026-06-16; use the n8n Data Collection sub-workflow or write the SQL directly against BQ views (`paid_channel_daily`, `v_adset_performance`, etc.)
 3. Identify flags: CPQL_REGRESSED, ROAS_REGRESSED, QUAL_DROPPED, LAUNCH_WAVE, CREATIVE_DECAY
 4. For each flag: state exact change, contributing factors, root cause
 5. LP analysis: check qual_rate by destination_url — if any LP < 30% qual rate → trigger cro-specialist
-6. Run `analysers/forecaster.py` — project end-of-month spend, leads, SQLs, CPQL, ROAS
+6. For forecasting, use the n8n Monthly workflow's forecasting Claude node, or query BQ directly — `analysers/forecaster.py` was deleted 2026-06-16
 7. Write findings to qa-auditor for validation before forwarding to Orchestrator
 
 ### Monthly (first Monday of month)

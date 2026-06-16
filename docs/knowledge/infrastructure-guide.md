@@ -1,5 +1,7 @@
 # Infrastructure Guide — How Everything Connects
 
+> **DEPRECATED (2026-06-16):** This guide describes the old Railway + Streamlit + `reporting_scheduler.py` + `main.py` architecture. All of those components were deleted on 2026-06-16. The current stack is: GitHub Actions (collectors) → BigQuery → n8n Cloud (analysis/Slack/Asana) + Hex/Databox (dashboards). Kept as historical record only — do not use as a setup guide.
+
 ## 1. The Three Layers
 
 ### GitHub — Code Storage

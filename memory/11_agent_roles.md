@@ -16,9 +16,8 @@
 
 ## Two layers — don't confuse them
 - **Dev-time subagents** (`.claude/agents/*.md`) — the 9-agent team. Isolated
-  context per role → less hallucination.
-- **Production runtime** (`claude/roles.py` + `claude/manager.py`) — the
-  autonomous Railway product; logs under the 13 function-roles above. Untouched.
+  context per role → less hallucination. **This is now the single active layer.**
+- **Production runtime** (`claude/roles.py` + `claude/manager.py`) — **DELETED 2026-06-16** along with `runtime_personas/`. Railway is deprecated. The 13 function-roles in `agent_activity_log` remain as historical log labels only.
 
 ## The 10 agents (3 departments + manager + QA Auditor)
 
@@ -66,22 +65,13 @@ finding — assign it before it runs unattended (see `docs/_shared/police-loop.m
 - Donia Mohamed: `1211896896006183`
 - Tony Helmy (thelmy@qoyod.com): `1211659245827014`
 
-**Dashboard must mirror this.** `reports/app.py` team `roles` sets are the dashboard
-display of this mapping — they must match the column above, or activity shows as
-unattributed. (As of 2026-06-08 app.py had orphans: `task_creator`, `collector`,
-`paid_media_strategist`, `campaign_creator` unassigned — align to this table.)
+**Dashboard must mirror this.** The Hex Agent Activity dashboard (`Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`) mirrors this mapping. (`reports/app.py` was deleted 2026-06-16.)
 
 Shared runtime context: `qoyod-manager-os.md` ↔ `CLAUDE.manager.md`;
 `qoyod-brand-identity.md` ↔ `docs/landing-pages/reference/brand/`.
 
-### Phase-2 unification (NOT done — deliberate)
-Pointing `claude/roles.py` directly at the dev playbooks would shrink the runtime
-prompts (rich ~23KB personas → tight procedures) and **degrade production**. The
-correct unify is to (a) keep `runtime_personas/` as the runtime's rich source, and (b)
-have each persona and its dev playbook cross-reference this table so neither
-drifts — or, if we want true single-source, *grow* the playbooks to runtime depth
-first, then repoint. Either way it's a reviewed change to live code, not a blind
-repoint. Left for an explicit go.
+### Phase-2 unification (MOOT — superseded 2026-06-16)
+`claude/roles.py` and `runtime_personas/` were both **deleted on 2026-06-16** as part of the Railway deprecation cleanup. The Railway runtime no longer runs. Phase-2 unification (pointing `roles.py` at the dev playbooks) is no longer relevant. The dev-time subagents in `.claude/agents/` are now the single source of truth.
 
 ## What's in-house vs external (updated 2026-06-08)
 

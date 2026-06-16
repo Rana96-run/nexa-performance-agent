@@ -91,16 +91,14 @@ These have no n8n equivalent (need Drive MCP / local credentials):
 
 | Situation | Command |
 |---|---|
-| Regular 6h refresh | `incremental=True` (set in scheduler) |
+| Regular 6h refresh | `incremental=True` (set in collector via GitHub Actions) |
 | Missed a day due to outage | `python <collector>.py 3` (3-day lookback) |
 | New integration's first run | `python <collector>.py` (YTD default) |
-| Re-baseline after schema change | `python reporting_scheduler.py backfill` |
+| Re-baseline after schema change | Run the relevant collector directly: `python collectors/<name>_bq.py` (`reporting_scheduler.py` was deleted 2026-06-16) |
 
 ## Cost sanity
 
 6h scheduler one pass scans ≤3 days of partitions. With clustering, query cost
 is trivial (<$0.01/day). Load jobs are **free**. No streaming buffer used.
 
-If the dashboard explodes BQ cost, check `@st.cache_data(ttl=3600)` is intact
-on every page's `query()` call. Streamlit default is no cache → every user
-refresh re-runs the SQL.
+If BQ query costs spike, check the Hex notebook SQL — Hex caches results per cell but re-runs on refresh. Databox pulls from BQ on its own schedule (every 6h via n8n Databox Sync). Streamlit/`@st.cache_data` is no longer relevant — Streamlit was deleted 2026-06-16.

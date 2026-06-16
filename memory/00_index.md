@@ -28,7 +28,7 @@ single concern. Read only what you need.
 | `03_bigquery.md` | Writing SQL, adding/altering tables, debugging views |
 | `04_collectors.md` | Touching `collectors/*.py`, adding a new data source |
 | `05_scheduler.md` | Anything about cadence, 6h refresh, always-on agent |
-| `06_dashboard.md` | Editing `dashboard/*`, Streamlit/Replit questions |
+| `06_dashboard.md` | Dashboard questions (Hex + Databox — Streamlit/Replit deleted 2026-06-16) |
 | `07_attribution.md` | Lead ↔ campaign joins, qoyod_source vs UTM |
 | `08_pitfalls.md` | API deprecations, BQ streaming-buffer trap, Unicode on Windows |
 | `09_open_tasks.md` | "What's next?" — prioritized work queue |
@@ -69,9 +69,7 @@ production runtime, so they don't move.
 
 - Google Drive: https://drive.google.com/drive/folders/1yI0-3TirRuVAxKIKrq2aR-9gVB2UdT74
   (Claude can't read Drive; ask user to paste relevant doc contents if needed)
-- `runtime_personas/` in repo: now **only the 6 runtime persona sources** loaded by
-  `claude/roles.py` (+ `_archived/` for superseded ones). Brand identity lives at
-  `runtime_personas/qoyod-brand-identity.md` (runtime loads it by path).
+- `runtime_personas/` and `claude/roles.py` were **deleted on 2026-06-16**. The Railway runtime is deprecated. Do not reference these paths — they no longer exist.
 
 ## Update discipline
 
