@@ -32,12 +32,9 @@ def _get_token() -> str:
         pass
     return os.getenv("LI_ACCESS_TOKEN", "")
 
-TOKEN = _get_token()
-
-
 def _headers() -> dict:
     return {
-        "Authorization":  f"Bearer {TOKEN}",
+        "Authorization":  f"Bearer {_get_token()}",
         # LinkedIn rolls API versions monthly; their N-12 retirement window
         # means we need to bump this roughly twice a year.  Bumped May 2026
         # because 202502 returned NONEXISTENT_VERSION; verified 202602 works.
@@ -161,7 +158,7 @@ def _fetch_analytics(start: date, end: date) -> list[dict]:
 
 
 def collect_and_write(days: int = None, incremental: bool = False) -> int:
-    if not TOKEN or not AD_ACCT_URN:
+    if not _get_token() or not AD_ACCT_URN:
         print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping")
         return 0
 
@@ -254,7 +251,7 @@ def collect_adsets_and_write(days: int = None, incremental: bool = False) -> int
       Campaign Group  = utm_campaign  → stored as campaign_id
       Campaign        = utm_audience  → stored as adset_id
     """
-    if not TOKEN or not AD_ACCT_URN:
+    if not _get_token() or not AD_ACCT_URN:
         print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping adsets")
         return 0
 
@@ -416,7 +413,7 @@ def _fetch_ad_analytics(start: date, end: date) -> list:
 
 def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     """Ad (creative) grain -> ads_daily. Uses pivot=CREATIVE on adAnalytics."""
-    if not TOKEN or not AD_ACCT_URN:
+    if not _get_token() or not AD_ACCT_URN:
         print("[li-bq] LI_ACCESS_TOKEN or LI_AD_ACCOUNT_URN missing — skipping ads")
         return 0
 
