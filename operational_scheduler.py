@@ -716,8 +716,14 @@ def _post_weekly_summary(spikes: list | None = None,
                           audit_tasks: list | None = None,
                           health_tasks: list | None = None,
                           health_findings: list | None = None):
-    """Post a consolidated weekly summary to #notify every Monday night."""
-    try:
+    """Post a consolidated weekly summary to #notify every Monday night.
+    NOTE 2026-06-16: Disabled — n8n Weekly Performance Review (iNSdpXH7Rc9Lb8h8)
+    now owns the Sunday Slack summary to #performance. Railway no longer posts
+    the weekly digest to prevent duplicates.
+    """
+    print("[ops-scheduler] _post_weekly_summary skipped — handled by n8n Weekly workflow")
+    return
+    try:  # noqa: unreachable
         from slack_sdk import WebClient
         from config import SLACK_BOT_TOKEN, SLACK_CHANNEL_NOTIFY
         from notifications.quiet import is_quiet, quiet_log
@@ -1206,26 +1212,30 @@ def _run_monthly_creative_report():
     Non-fatal — never blocks the monthly cadence.
     Added 2026-06-12.
     """
-    try:
-        import subprocess
-        r = subprocess.run(
-            ["python", "scripts/monthly_creative_report.py"],
-            capture_output=True, timeout=300,
-            cwd=os.path.dirname(__file__),
-        )
-        print(f"[ops-scheduler] Monthly creative report exit={r.returncode}")
-        if r.stdout:
-            tail = r.stdout.decode("utf-8", errors="replace").splitlines()[-20:]
-            for line in tail:
-                print(f"[monthly-creative] {line}")
-        if r.returncode != 0 and r.stderr:
-            tail = r.stderr.decode("utf-8", errors="replace").splitlines()[-10:]
-            for line in tail:
-                print(f"[monthly-creative][err] {line}")
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"[ops-scheduler] Monthly creative report failed (non-fatal): {e}")
+    # NOTE 2026-06-16: Monthly creative report now handled by n8n Monthly Performance
+    # Review workflow (0Zh45UoTtjjhRn8U) — Creative Report branch (BQ v_ad_performance
+    # → classify → Sheets tab + Asana task). Commented out to prevent duplicates.
+    # try:
+    #     import subprocess
+    #     r = subprocess.run(
+    #         ["python", "scripts/monthly_creative_report.py"],
+    #         capture_output=True, timeout=300,
+    #         cwd=os.path.dirname(__file__),
+    #     )
+    #     print(f"[ops-scheduler] Monthly creative report exit={r.returncode}")
+    #     if r.stdout:
+    #         tail = r.stdout.decode("utf-8", errors="replace").splitlines()[-20:]
+    #         for line in tail:
+    #             print(f"[monthly-creative] {line}")
+    #     if r.returncode != 0 and r.stderr:
+    #         tail = r.stderr.decode("utf-8", errors="replace").splitlines()[-10:]
+    #         for line in tail:
+    #             print(f"[monthly-creative][err] {line}")
+    # except Exception as e:
+    #     import traceback
+    #     traceback.print_exc()
+    #     print(f"[ops-scheduler] Monthly creative report failed (non-fatal): {e}")
+    print("[ops-scheduler] Monthly creative report skipped — handled by n8n Monthly workflow")
 
 
 def run():
@@ -1305,26 +1315,4 @@ def run():
     print("  Watchdog every ~4h — never let BQ go stale, auto-resync (4h threshold)")
     print("  Weekly   added Mon mornings")
     print("  Monthly  added on 1st of month (+ creative report Google Sheet)")
-    print("  Health   09:00–17:00 Riyadh hourly (on-demand outside hours)")
-    print("  Manual:  python main.py on_demand")
-    print("=" * 60)
-
-    # Startup health check — logs to console only; no Slack post.
-    # Only the 07:00 scheduled run posts to Slack (and only on failures).
-    try:
-        from scripts.health_check import main as hc_main
-        hc_main(post_slack=False)  # console-only on startup
-    except Exception as e:
-        print(f"[ops-scheduler] Startup health check error: {e}")
-
-    # Catch-up: if a redeploy happened during the 05:00 UTC nightly window,
-    # the data refresh was killed mid-run. Fix it silently on next startup.
-    _catchup_if_stale()
-
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
-
-
-if __name__ == "__main__":
-    run()
+    print("  Health   09:00–17:00 Riyadh hourly (on-demand o

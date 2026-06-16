@@ -739,29 +739,23 @@ def _send_nightly_digest(scale_findings: list, pause_findings: list, review_find
         print(f"[health-tasks] channel_summary fetch failed (non-fatal): {_e}")
         channel_summary = []
 
-    try:
-        from notifications.slack import post_nightly_approvals_digest
-        ts = post_nightly_approvals_digest(
-            scale_findings,
-            pause_findings,
-            review_findings,
-            channel_summary=channel_summary,
-        )
-        print(f"[health-tasks] nightly digest posted "
-              f"(scale={len(scale_findings)}, pause={len(pause_findings)}, "
-              f"review={len(review_findings)}, ts={ts})")
-        log_activity_async(
-            role="daily_digest", action="posted_approvals_digest",
-            status="success",
-            details={"scale": len(scale_findings), "pause": len(pause_findings),
-                     "review": len(review_findings), "slack_ts": ts},
-        )
-    except Exception as e:
-        print(f"[health-tasks] nightly digest failed: {e}")
-
-
-if __name__ == "__main__":
-    created = create_health_tasks()
-    print(f"\nCreated/executed {len(created)} task(s):")
-    for label, gid in created:
-        print(f"  gid={gid}  {label}")
+    # NOTE 2026-06-16: Slack #approvals digest now posted by n8n Master Performance
+    # Workflow (T8icImtZFLYeCa7e) which owns the full nightly Slack output.
+    # Railway keeps Asana task creation (above) but no longer posts to Slack.
+    # Commented out to prevent duplicate digests.
+    # try:
+    #     from notifications.slack import post_nightly_approvals_digest
+    #     ts = post_nightly_approvals_digest(
+    #         scale_findings,
+    #         pause_findings,
+    #         review_findings,
+    #         channel_summary=channel_summary,
+    #     )
+    #     print(f"[health-tasks] nightly digest posted "
+    #           f"(scale={len(scale_findings)}, pause={len(pause_findings)}, "
+    #           f"review={len(review_findings)}, ts={ts})")
+    #     log_activity_async(
+    #         role="daily_digest", action="posted_approvals_digest",
+    #         status="success",
+    #         details={"scale": len(scale_findings), "pause": len(pause_findings),
+    #                  "review": len(revi
