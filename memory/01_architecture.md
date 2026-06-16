@@ -32,9 +32,8 @@
         │ Hex dashboards (2)        │  ← Hex-hosted (read from BQ)
         │   Performance: Qoyod-marketing-performance
         │   Activity:    Nexa-Agent-Activity
-        │ Flask (reports/app.py)    │  ← Railway-hosted
-        │   /health, /api/refresh   │
-        │   /slack/events           │
+        │ n8n Cloud                 │  ← analysis, Slack, Asana, approvals
+        │   7 workflows             │
         └───────────────────────────┘
 
 * = pending / blocked (see 02_credentials.md)
@@ -73,47 +72,67 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 | Runtime | Purpose | Cadence | Where |
 |---|---|---|---|
-| **Operational scheduler** | Daily: BQ refresh, spike detector, keyword approvals, Google Ads audit, campaign health, Asana tasks, Slack daily summary | 08:00 Riyadh daily + 6h health checks | `operational_scheduler.py` → Railway |
-| **Reporting scheduler** | Refresh BQ tables + views for the Hex dashboard | Every 6h | `reporting_scheduler.py loop` → Railway |
+| **n8n Cloud** | All scheduling, analysis, Slack, Asana, Sheets, approval gates | Daily/weekly/monthly + various sub-schedules | n8n Cloud (qoyod.app.n8n.cloud) |
+| **GitHub Actions** | Python BQ collectors — all platform data writes to BigQuery | Every 6h (00/06/12/18 UTC) | `.github/workflows/collectors.yml` |
 
-`main.py` = the LLM analysis layer (paid_media_strategist Claude role). Called by `operational_scheduler.py` for weekly/monthly/quarterly cadences only. Daily work is deterministic (no LLM).
+**Railway:** deprecated — no longer runs schedulers or analysis. Still live pending user decision to shut down and GitHub Secrets migration.
 
-## Repo layout
+`operational_scheduler.py`, `reporting_scheduler.py`, `main.py` — **deleted** (2026-06-16 cleanup). n8n and GitHub Actions own all cadences.
+
+### n8n workflow inventory (7 workflows)
+
+| Workflow | n8n ID | Schedule | Nodes | Status |
+|---|---|---|---|---|
+| Nexa · Master Performance Workflow | `T8icImtZFLYeCa7e` | Daily 05:00 UTC (08:00 Riyadh) | 84 | ACTIVE |
+| Nexa · Weekly Performance Review | `iNSdpXH7Rc9Lb8h8` | Sunday 05:00 UTC | 26 | ACTIVE |
+| Nexa · Monthly Performance Review | `0Zh45UoTtjjhRn8U` | 1st of month 05:00 UTC | 32 | ACTIVE |
+| Nexa · AI Content Agent | `yOD1l9n7qOfbpWfM` | Various (see 05_scheduler.md) | 13 | ACTIVE |
+| Nexa · Monitor Follow-up | `H6XSFlp1WOUPpgBF` | Daily 06:00 UTC | 11 | ACTIVE |
+| Nexa · Databox Sync | `7ZEROvwTg3UrGAP6` | Every 6h (`0 */6 * * *`) | 11 | ⚠️ NEEDS DATABOX_TOKEN $var |
+| Nexa · QA Gate | `ug3niLKrjPfO9Iz7` | Called by Master (sub-flow) | — | ACTIVE |
+
+**KPI sub-flows (A–F):** ROAS/CPL/CPQL/Qual/IS/CTR — separate workflows called by the Master Switch node.
+
+**Approval Listener:** `5Acqsbxsk0XQ5k9e` — Slack webhook at `https://qoyod.app.n8n.cloud/webhook/slack-approval`. Receives `reaction_added` events, resumes waiting executions. Requires Slack App Event Subscriptions configured.
+
+### GitHub Actions collector schedule
+
+`.github/workflows/collectors.yml` — runs all 14 Python BQ collectors at 00:00/06:00/12:00/18:00 UTC.
+`.github/workflows/linkedin_token_refresh.yml` — refreshes LinkedIn token daily at 02:00 UTC.
+
+Collectors are the **only** Python runtime still in active use. All other Python entrypoints (`main.py`, `operational_scheduler.py`, `reporting_scheduler.py`, `app_server.py`) were deleted 2026-06-16.
+
+## Repo layout (as of 2026-06-16 cleanup)
+
+Deleted in 2026-06-16 cleanup: `analysers/` (28 files), `notifications/` (7 files), `reports/` (3 files), `main.py`, `operational_scheduler.py`, `reporting_scheduler.py`, `app_server.py`, `claude/` (legacy roles/personas), `Open PowerShell.bat`, `lp_tracker_formatted.xlsx`, 25+ stale scripts.
 
 ```
 Nexa Performance Agent/
-├── analysers/              # deterministic analysis (no LLM)
-│   ├── campaign_health.py        # 14d CPQL/CPL cross-channel audit
-│   ├── campaign_health_tasks.py  # → Asana tasks + scale/pause execution
-│   ├── google_ads_audit.py       # IS, QS, search terms analysis
-│   ├── google_ads_audit_tasks.py # → Asana tasks
-│   ├── spike_detector.py         # yesterday vs 7d baseline anomaly alerts
-│   ├── creative_performance.py   # per-creative qual rate (utm_content)
-│   └── ad_drilldown.py           # ad/keyword drill-down Markdown tables
-├── collectors/             # BQ collectors (one per data source)
+├── collectors/             # BQ collectors (one per data source) — run by GitHub Actions
 │   ├── bq_writer.py        # shared: MERGE helper + schemas
-│   ├── views.py            # creates all reporting VIEWs (paid_channel_daily, v_adset_performance, etc.) sourced from wide_ads; refresh_all_views() runs every 6h
+│   ├── views.py            # creates all reporting VIEWs; refresh_all_views() called after each collect
 │   ├── google_ads_bq.py    # campaign + adgroup + ad + keywords grain
 │   ├── meta_bq.py          # campaign + adset + ad grain
 │   ├── snap_bq.py          # campaign + adset + ad grain
 │   ├── tiktok_bq.py        # campaign + adgroup + ad grain
-│   ├── linkedin_bq.py      # campaign + ads grain — CONNECTED (token valid 2026-05-12)
-│   ├── microsoft_ads_bq.py # CONNECTED both accounts (188176729 + 187231519) 2026-05-12
+│   ├── linkedin_bq.py      # campaign + ads grain
+│   ├── microsoft_ads_bq.py # CONNECTED both accounts (188176729 + 187231519)
 │   ├── hubspot_leads_bq.py # lead module daily buckets
 │   ├── hubspot_deals_bq.py # deals daily buckets
 │   ├── windsor_bq.py       # Windsor.ai unified channel fallback
-│   └── zapier.py           # Zapier error monitor + auto-replay
+│   ├── ga4_bq.py           # GA4 sessions/conversions
+│   └── databox_pusher.py   # manual backfill only; live push is n8n Databox Sync
 ├── executors/              # write actions (pause, scale, Asana, keywords)
-├── notifications/          # Slack formatters (daily_summary, slack.py)
 ├── logs/                   # activity_logger.py → agent_activity_log BQ
-├── scripts/                # OAuth flows + bulk_ads + bulk_keywords tools
-├── reports/app.py          # Flask: /health, /api/refresh, /slack/events
-├── operational_scheduler.py # daily 08:00 Riyadh orchestrator
-├── reporting_scheduler.py  # 6h BQ refresh for Hex dashboards
-├── main.py                 # LLM cadence runner (weekly/monthly/quarterly)
+├── scripts/                # OAuth flows + audit tools (no schedulers)
+├── .github/
+│   └── workflows/
+│       ├── collectors.yml         # runs all collectors every 6h (00/06/12/18 UTC)
+│       └── linkedin_token_refresh.yml # refreshes LinkedIn token daily 02:00 UTC
 ├── config.py               # env-driven config
-├── memory/                 # ← this folder
-└── .claude/skills/         # reusable skill recipes
+├── memory/                 # ← this folder (shared org memory)
+├── docs/                   # playbooks, knowledge, shared docs
+└── .claude/                # agents, skills, hooks, settings
 ```
 
 ## BQ table inventory (canonical — update when tables are added/dropped)
@@ -204,8 +223,7 @@ v_agent_consumption_daily, v_new_biz_daily
   no separate hosting cost, collaborative editing. Dashboards at:
   - Performance: `Qoyod-marketing-performance-0339sAIgaMNYNW4ffgEBZK`
   - Activity: `Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`
-- **Railway** for hosting: single dyno runs both schedulers + Flask; env vars
-  managed via Railway dashboard or `scripts/sync_railway_env.py`.
+- **Railway** for hosting: **DEPRECATED** (2026-06-16). Was running schedulers + Flask. Now pending shutdown pending GitHub Secrets migration. n8n Cloud owns all scheduling/analysis; GitHub Actions owns collectors.
 - **Databox** for external BI dashboards: two active datasets pushed by the n8n `Nexa · Master Performance Workflow` (Databox chain embedded as parallel branch after Schedule trigger). `collectors/databox_pusher.py` still exists for manual backfills.
   - **Daily Spend** (`199c5297`): channel-day grain. Fields: date (DATETIME), channel (STRING),
     spend/impressions/clicks/leads/sqls/cpl/cpql (NUMBER). Use SUM for volumes, AVG for ratios.

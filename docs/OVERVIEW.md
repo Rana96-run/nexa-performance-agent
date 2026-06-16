@@ -8,11 +8,11 @@ how the manager runs day-to-day use [`../CLAUDE.manager.md`](../CLAUDE.manager.m
 ---
 
 ## 1. What it is
-A **team of 9 AI agents** that runs Qoyod's paid-media + landing-page operation.
+A **team of 10 AI agents** that runs Qoyod's paid-media + landing-page operation.
 One manager (`ai-orchestrator`) over **3 departments** — Performance, CRO/Landing
-Page, and Support. Each agent is a real Claude Code subagent with its own isolated
-context, playbook, and memory. It mirrors the live "NEXA OPERATIONS HQ — The Team"
-org chart.
+Page, and Support — plus a cross-cutting QA Auditor. Each agent is a real Claude
+Code subagent with its own isolated context, playbook, and memory. It mirrors the
+live "NEXA OPERATIONS HQ — The Team" org chart.
 
 ## 2. Why we need it (the problem it solves)
 Before, everything ran as **one giant agent** carrying all context at once — which
@@ -49,7 +49,8 @@ linked to any other (default flow is structured; the orchestrator can wire any p
 | CRO workspace | `docs/landing-pages/` | briefs → designs → specs + LP reference (snapshot of `D:\Landing Page Agent`) |
 | Creative reference | `docs/creative/reference/` | design knowledge (snapshot of `D:\Design Agent`) |
 | Indexes | `docs/INDEX.md` (master) + `playbooks/_index.md` + `memory/00_index.md` | navigation |
-| Production runtime | `claude/roles.py`, `runtime_personas/`, `operational_scheduler.py` | the Railway agent (separate layer) |
+| n8n workflows | 7 workflows in n8n Cloud — see `memory/05_scheduler.md` | all scheduling, analysis, Slack, Asana |
+| GitHub Actions | `.github/workflows/collectors.yml` | Python BQ collector cadence (every 6h) |
 
 ## 5. What it fixes / what it can solve
 - **Hallucination** → isolated per-role context (each agent loads only its files).
@@ -82,14 +83,13 @@ the daily loop + the gate (`ai-orchestrator`).
    design knowledge → `docs/creative/reference/`.
 5. Verified the memory read/write loop end-to-end on real agents; cleaned scratch
    files; hardened `.gitignore` (secrets, node_modules).
-6. Left the **production runtime untouched** (`claude/roles.py` on Railway) — it's
-   a separate layer; see `memory/11_agent_roles.md` for the 3-taxonomy map.
+6. Migrated from Railway monolith → n8n Cloud (7 workflows) + GitHub Actions (14 collectors). Railway deprecated 2026-06-16. See `memory/05_scheduler.md` for the full workflow inventory and `memory/11_agent_roles.md` for the 3-taxonomy map.
 
-## 8. Two layers (don't confuse them)
-- **Dev-time** (this system): the 9 subagents you work with in Claude Code.
-- **Production runtime**: `claude/roles.py` + `runtime_personas/` personas running on Railway.
-  Editing an agent here does NOT change Railway. Unifying them is deferred by design
-  (see `14_learning_patterns.md`).
+## 8. Three layers (don't confuse them)
+- **Dev-time** (this system): the 10 subagents you work with in Claude Code.
+- **n8n Cloud**: 7 workflows that own all scheduling, analysis, Slack posts, Asana tasks, and approval gates. These run autonomously on a cron. See `memory/05_scheduler.md` for the full workflow inventory.
+- **GitHub Actions**: Python BQ collectors only (`collectors/*.py`). Runs every 6h. No analysis, no Slack. See `.github/workflows/collectors.yml`.
+- **Railway**: DEPRECATED (2026-06-16). Pending shutdown. No schedulers or analysis run there anymore.
 
 ## 9. How to use it
 Name a seat (*"ask the `growth-analyst` to…"*) or let `ai-orchestrator` route. New

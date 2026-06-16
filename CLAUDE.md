@@ -32,7 +32,7 @@ Every session begins by reconstructing the current state, not starting fresh:
 1. Run `git log --oneline -10` — read the last 10 commits to know what changed recently
 2. Read `memory/09_open_tasks.md` — find pending/in-progress tasks and continue them
 3. Read `memory/01_architecture.md` — confirm current schema, table names, view names
-4. Check Railway deploy status (health endpoint) and recent log errors
+4. Check n8n workflow statuses (Master `T8icImtZFLYeCa7e` + Data Collection `jOnJxdpdaO3Vbi0B` should be ACTIVE) and recent GitHub Actions runs for collector failures (`.github/workflows/collectors.yml`)
 5. Note any uncommitted local changes (`git status`) — address before new work
 
 Then proceed directly to the most recent open task **without asking Amar to recap**.

@@ -41,9 +41,9 @@ single concern. Read only what you need.
 | `16_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
 | `utm_template.md` | Canonical Google Ads UTM `final_url_suffix` template + custom-param convention. Read BEFORE proposing any UTM string. |
 
-## The team (agents) — NEW
+## The team (agents)
 
-The team is **9 Claude Code subagents** (1 manager + 3 departments), matching the
+The team is **10 Claude Code subagents** (1 manager + 3 departments + QA Auditor), matching the
 live "NEXA OPERATIONS HQ — The Team" dashboard. (NOT the 13 `agent_activity_log`
 role labels — those are how work is *logged*, not who the team *is*.) Start here:
 

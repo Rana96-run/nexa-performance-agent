@@ -1,12 +1,12 @@
 # Agent Roles — What Lives Here vs Elsewhere
 
-> **Canonical roster is `docs/_shared/org-chart.md`.** As of 2026-06-08 the team
-> is **9 agents** (1 manager + 3 departments), matching the live "NEXA OPERATIONS
-> HQ — The Team" dashboard. Each is a Claude Code subagent defined in `.claude/agents/`
-> — that file is the single source of truth for each role (no external playbooks or memory folders).
+> **Canonical roster is `docs/_shared/org-chart.md`.** As of 2026-06-16 the team
+> is **10 agents** (1 manager + 3 departments + 1 QA Auditor cross-cutting), matching
+> the live "NEXA OPERATIONS HQ — The Team" dashboard. Each is a Claude Code subagent
+> defined in `.claude/agents/` — that file is the single source of truth for each role.
 
-## 9 agents ≠ 13 log-roles (the trap that caused a wrong rebuild)
-- **The team = 9 agents** (org chart, below). This is who exists.
+## 10 agents ≠ 13 log-roles (the trap that caused a wrong rebuild)
+- **The team = 10 agents** (org chart, below). This is who exists.
 - **`agent_activity_log` has 13 `role` values** — these are how work is *logged*,
   NOT teammates: infra/system labels (`health_monitor`, `bq_refresh`, `collector`,
   `ops_scheduler`), the human (`user`), and function buckets the agents act under
@@ -20,7 +20,7 @@
 - **Production runtime** (`claude/roles.py` + `claude/manager.py`) — the
   autonomous Railway product; logs under the 13 function-roles above. Untouched.
 
-## The 9 agents (3 departments + manager)
+## The 10 agents (3 departments + manager + QA Auditor)
 
 | Dept | Agent | Parallel/Sequential |
 |---|---|---|

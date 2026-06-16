@@ -3,11 +3,13 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-16:** Agent fully operational on Railway Pro (Marketing Workspace).
-> All collectors live, health check green, dashboard rendering real data, nightly
-> scheduler running at 08:00 Riyadh. Activity dashboard shows 6-member team roster.
-> 6 n8n workflows built (Master, Weekly, Monthly, AI Content Agent, Monitor Follow-up, Databox Sync).
-> QA Auditor agent added. All agent files updated to 3-layer structure.
+> **Status as of 2026-06-17:** Full n8n migration complete. 7-workflow n8n architecture
+> live (Master + Weekly + Monthly + AI Content Agent + Monitor Follow-up + Databox Sync +
+> Data Collection + Approval Listener). Railway deprecated — pending shutdown.
+> GitHub Actions owns all Python BQ collectors (every 6h). Repo cleaned: analysers/,
+> notifications/, reports/, main.py, operational_scheduler.py, reporting_scheduler.py deleted.
+> QA Gate wired into Master. 3-layer agent hierarchy (AI Orchestrator → QA Auditor + Project
+> Coordinator → 7 agents).
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -245,6 +247,15 @@ Campaign IDs (customer 5753494964):
 - [x] **Activated:** `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`, `Nexa · Monitor Follow-up` — all toggled ON.
 - [ ] **⚠️ ACTIVATION NEEDED:** Toggle ON `Nexa · Databox Sync` (`7ZEROvwTg3UrGAP6`) in n8n UI (requires `DATABOX_TOKEN` $var first).
 - [ ] **⚠️ n8n $var NEEDED:** Set `DATABOX_TOKEN` in n8n UI → Settings → Variables (PAK token, not push token). Required by `Nexa · Databox Sync` workflow `7ZEROvwTg3UrGAP6`. Dataset ID: `6158be78`.
+
+## P0 — Post-n8n-migration: pending items (2026-06-17)
+
+- [ ] **Add GitHub Secrets to repo** (copy from Railway env vars) — blocks GitHub Actions collectors going live. Required vars: all platform tokens, BQ service account, HubSpot token, etc. Path: GitHub repo → Settings → Secrets and variables → Actions.
+- [ ] **Shut down Railway service** (user approval required) — after GitHub Actions confirmed working. Railway project: `nexa-performance-agent` in Marketing Workspace (`57f124d0`).
+- [ ] **Configure Slack App Event Subscriptions for Approval Listener** — URL: `https://qoyod.app.n8n.cloud/webhook/slack-approval`, event: `reaction_added`. Required for Master workflow approval gate to resume on ✅/❌ reactions.
+- [ ] **Add QA feed cell in Hex** — SQL template in `memory/16_activity_dashboard.md`. User doing manually.
+- [ ] **Test Data Collection sub-workflow first run** (`jOnJxdpdaO3Vbi0B`) — verify no runtime errors, all channel data flows into BQ, freshness check fires correctly.
+- [ ] **Activate `Nexa · Databox Sync`** (`7ZEROvwTg3UrGAP6`) — after `DATABOX_TOKEN` n8n $var is set.
 
 **PATCH method confirmed for n8n cloud internal API** — `PUT /rest/workflows/{id}` returns 404. Use `PATCH /rest/workflows/{id}` for all workflow updates. See `memory/08_pitfalls.md`.
 

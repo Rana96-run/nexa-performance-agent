@@ -1,23 +1,26 @@
 # Scheduling & Runtime
 
-## Three-layer runtime (as of 2026-06-16)
+## Three-layer runtime (as of 2026-06-17)
 
 ```
-Railway (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
-     ↑                                       ↑
- collectors                         Cowork (Drive/MCP writes for
- run every 6h                       remaining tasks — see below)
+GitHub Actions (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
+  collectors every 6h                              ↑
+  (00/06/12/18 UTC)              Cowork (Drive/MCP writes for
+                                 remaining tasks — see below)
 ```
 
-### What Railway still owns (non-negotiable — Python collectors)
+**Railway: DEPRECATED.** Still live pending GitHub Secrets migration + user shutdown decision. No schedulers or analysis run on Railway anymore.
+
+### What GitHub Actions owns (Python collectors — BQ writes only)
+
+`.github/workflows/collectors.yml` runs every 6h (00/06/12/18 UTC):
 - All ad-platform collectors (`google_ads`, `meta`, `snapchat`, `tiktok`, `microsoft_ads`, `linkedin`)
 - `hubspot_leads_bq.py`, `hubspot_deals_bq.py`
-- `gclid_clickview.py`, `ga4_bq.py`
-- `databox_pusher.py` still exists but Railway no longer calls it — Databox push is n8n (see below)
-- `create_views()` after every collect
-- Health checks + Slack alerts for connector failures
-- Keyword audit + ad pause/scale executors (still Python)
-- Flask app: `/health`, `/activity`, `/api/refresh`, `/slack/events`
+- `ga4_bq.py`
+- `databox_pusher.py` exists for manual backfill only — live Databox push is n8n Databox Sync
+- `create_views()` runs after every collector pass
+
+`.github/workflows/linkedin_token_refresh.yml` — daily 02:00 UTC LinkedIn token refresh.
 
 ### What n8n now owns (analysis, Slack, Asana, Sheets)
 
@@ -29,8 +32,15 @@ Railway (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
 | Nexa · AI Content Agent | `yOD1l9n7qOfbpWfM` | Various (see below) | 13 |
 | Nexa · Monitor Follow-up | `H6XSFlp1WOUPpgBF` | Daily 06:00 UTC | 11 |
 | Nexa · Databox Sync | `7ZEROvwTg3UrGAP6` | Every 6h (`0 */6 * * *`) | 11 |
+| Nexa · Data Collection | `jOnJxdpdaO3Vbi0B` | Every 6h | 52 |
+| Nexa · Approval Listener | `5Acqsbxsk0XQ5k9e` | Webhook (always-on) | — |
+| Nexa · QA Gate | `ug3niLKrjPfO9Iz7` | Sub-flow (called by Master) | — |
 
 **⚠️ Required n8n $var for Databox Sync:** `DATABOX_TOKEN` must be set (PAK token, not push token). Dataset ID: `6158be78`.
+
+**Data Collection workflow (`jOnJxdpdaO3Vbi0B`):** 52 nodes, every 6h. Runs all platform collectors + BQ reconciliation + freshness check. Alerts `#data-health` if any channel stale >1 day.
+
+**Approval Listener (`5Acqsbxsk0XQ5k9e`):** Slack webhook at `https://qoyod.app.n8n.cloud/webhook/slack-approval`. Receives `reaction_added` events, resumes waiting executions from the Master workflow's approval gate. Requires Slack App Event Subscriptions configured (event: `reaction_added`, URL: above).
 
 **n8n credentials used:**
 - BQ: googleApi service account (see n8n Credentials)
@@ -70,39 +80,12 @@ These have no n8n equivalent (need Drive MCP / local credentials):
 
 ---
 
-## Two independent runtimes
+## DELETED runtimes (do not reference)
 
-### 1. Reporting scheduler — `reporting_scheduler.py`
-
-- **Cadence:** every 6h (00:00, 06:00, 12:00, 18:00 UTC → 03:00/09:00/15:00/21:00 Riyadh)
-- **What it does:** runs all collectors in `incremental=True` (2-day lookback)
-  then refreshes all views
-- **Commands:**
-  - `python reporting_scheduler.py once` — one pass, exit
-  - `python reporting_scheduler.py loop` — forever, sleeps 6h between passes
-  - `python reporting_scheduler.py backfill` — one pass in YTD mode
-- **Collector order** (in `COLLECTORS` tuple): google_ads, meta, snapchat,
-  meta_organic, youtube, linkedin, hubspot_leads, hubspot_deals
-- **Fault tolerance:** a failing collector logs + continues; others still run;
-  view refresh still happens at end
-
-### 2. Operational agent — `main.py daily`
-
-- **Cadence:** always-on, reactive
-- **What it does:** Slack approvals, pause/scale watchers, threshold alarms,
-  Asana tasks, HubSpot list building, landing page drafts
-- **Never** touches the reporting cadence. A 6h collector run doesn't block
-  agent activity.
-
-## Deploying to Replit
-
-**Recommended: two separate repls**
-- Repl A: runs `reporting_scheduler.py loop` (Deploy → Reserved VM or Autoscale)
-- Repl B: runs `main.py daily` (Deploy → Reserved VM, always-on)
-
-Both repls share the same `.env` content (copy the secrets in Replit UI).
-
-Alternative single-repl: branch on `RUN_MODE` env var (see `dashboard/README.md`).
+`reporting_scheduler.py`, `operational_scheduler.py`, `main.py`, `app_server.py` — all deleted 2026-06-16.
+- Use GitHub Actions (`.github/workflows/collectors.yml`) for collector cadence.
+- Use n8n for all analysis, Slack, Asana, approval gates.
+- Railway is deprecated (still live, pending shutdown).
 
 ## Incremental vs Backfill — when to use which
 
