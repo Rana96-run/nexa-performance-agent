@@ -894,7 +894,7 @@ WITH platform AS (
 deals AS (
   -- All-pipeline deal aggregates by keyword term (for richer deal columns).
   SELECT
-    createdate                               AS date,
+    date,
     CASE
       WHEN LOWER(TRIM(qoyod_source)) = 'google ads'    THEN 'google_ads'
       WHEN LOWER(TRIM(qoyod_source)) = 'microsoft ads' THEN 'microsoft_ads'

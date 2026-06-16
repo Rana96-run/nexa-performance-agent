@@ -312,4 +312,3 @@ def run_self_heal() -> dict:
 
 if __name__ == "__main__":
     run_self_heal()
-                    

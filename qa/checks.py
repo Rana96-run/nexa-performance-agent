@@ -911,4 +911,3 @@ def check_bq_write(table: str, rows: list[dict], key_fields: list[str]) -> QAChe
         detail=detail,
         metrics={"row_count": len(rows), "issues": issues, "warnings": warnings},
     )
-              
