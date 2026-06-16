@@ -254,7 +254,7 @@ Campaign IDs (customer 5753494964):
 - [ ] **Shut down Railway service** (user approval required) — after GitHub Actions confirmed working. Railway project: `nexa-performance-agent` in Marketing Workspace (`57f124d0`).
 - [x] **Configure Slack App Event Subscriptions for Approval Listener** — DONE 2026-06-17. URL verified, `reaction_added` event wired. Approval gate is fully live.
 - [ ] **Add QA feed cell in Hex** — SQL template in `memory/16_activity_dashboard.md`. User doing manually.
-- [ ] **Test Data Collection sub-workflow first run** (`jOnJxdpdaO3Vbi0B`) — verify no runtime errors, all channel data flows into BQ, freshness check fires correctly.
+- [x] **Test Data Collection sub-workflow first run** — DONE 2026-06-17. Phase 1 (Data Collection) confirmed completing. Root issue was Master crashing post-collection at `Claude · Data Guard` due to `tool_choice:{type:'required'}` invalid Anthropic API value — fixed to `{type:'any'}` across all 5 Claude nodes. BQ channels current except Google Ads (1d stale) and LinkedIn (3mo stale — pre-existing). Next scheduled run: tonight 04:00 UTC.
 - [x] **Nexa · Databox Sync** — DELETED 2026-06-17 (superseded; Databox reads directly from BQ).
 
 **PATCH method confirmed for n8n cloud internal API** — `PUT /rest/workflows/{id}` returns 404. Use `PATCH /rest/workflows/{id}` for all workflow updates. See `memory/08_pitfalls.md`.

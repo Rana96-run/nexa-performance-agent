@@ -1,5 +1,22 @@
 # Pitfalls & Known Traps
 
+## [2026-06-17] n8n Claude nodes: `tool_choice:{type:'required'}` is invalid → 400 crash
+
+**Symptom:** Master workflow crashes at first Claude node (`Claude · Data Guard`) with:
+`400 - tool_choice: Input tag 'required' found using 'type' does not match any of the expected tags`
+
+**Root cause:** Anthropic API `tool_choice.type` valid values are `auto`, `any`, `tool`, `none`.
+`required` is NOT valid — it is a different API's convention.
+
+**Fix:** Replace all `tool_choice:{type:'required'}` with `tool_choice:{type:'any'}` in every
+Claude HTTP Request node in n8n. Applied to all 5 nodes in Master (`T8icImtZFLYeCa7e`) 2026-06-17:
+`Claude · Data Guard`, `Claude · growth-analyst`, `Claude · performance-lead`,
+`Claude · campaign-manager`, `Claude · creative-strategist` — 10 occurrences total (2 per node).
+
+**Rule going forward:** When adding a new Claude node in n8n with forced tool use, always use `any`, never `required`.
+
+
+
 ## [2026-06-16] wide_ads: THREE sources of NULLs at ad/adset level — FIXED
 
 Three distinct root causes produce NULLs in `wide_ads`. All three were fixed 2026-06-16
