@@ -1013,3 +1013,98 @@ if __name__ == "__main__":
         create_views()
     else:
         print("Usage: python collectors/bq_writer.py [test|bootstrap|views]")
+
+
+def reconcile_channel_spend(channel: str, days: int = 30) -> int:
+    """Compare campaigns_daily to ads_daily for a channel; insert synthetic
+    remainder rows into ads_daily for any campaign-day where campaign-level
+    spend exceeds the sum of ad-level spend by more than $0.50.
+
+    Catches spend that the ad-level collector missed (Advantage+ campaigns,
+    campaigns with no ad impressions in the API window, async-report gaps).
+    Should run AFTER both collect_and_write() and collect_ads_and_write()
+    have completed for the channel.
+
+    Returns number of remainder rows inserted (0 if no gaps found).
+    """
+    from datetime import date as _date, timedelta, datetime, timezone
+
+    client = get_client()
+    now    = datetime.now(timezone.utc).isoformat()
+    today  = _date.today()
+    since  = (_date.today() - timedelta(days=days)).isoformat()
+    until  = today.isoformat()
+
+    camp_sql = f"""
+    SELECT
+      CAST(date AS STRING)               AS d,
+      CAST(campaign_id AS STRING)        AS campaign_id,
+      MAX(campaign_name)                 AS campaign_name,
+      SUM(spend)                         AS spend,
+      SUM(impressions)                   AS impressions,
+      SUM(clicks)                        AS clicks
+    FROM `{PROJECT_ID}.{DATASET}.campaigns_daily`
+    WHERE channel = '{channel}'
+      AND date >= '{since}' AND date < '{until}'
+    GROUP BY 1, 2
+    """
+
+    ads_sql = f"""
+    SELECT
+      CAST(date AS STRING)               AS d,
+      CAST(campaign_id AS STRING)        AS campaign_id,
+      SUM(spend)                         AS spend,
+      SUM(impressions)                   AS impressions,
+      SUM(clicks)                        AS clicks
+    FROM `{PROJECT_ID}.{DATASET}.ads_daily`
+    WHERE channel = '{channel}'
+      AND date >= '{since}' AND date < '{until}'
+    GROUP BY 1, 2
+    """
+
+    camp_data = {(r.d, r.campaign_id): r for r in client.query(camp_sql).result()}
+    ads_data  = {(r.d, r.campaign_id): r for r in client.query(ads_sql).result()}
+
+    remainder_rows = []
+    for (d, camp_id), camp in camp_data.items():
+        covered        = ads_data.get((d, camp_id))
+        covered_spend  = float(covered.spend)       if covered else 0.0
+        covered_imps   = int(covered.impressions)   if covered else 0
+        covered_clicks = int(covered.clicks)        if covered else 0
+        remainder_spend = round(float(camp.spend) - covered_spend, 2)
+
+        if remainder_spend > 0.50:
+            rem_imps   = max(0, int(camp.impressions) - covered_imps)
+            rem_clicks = max(0, int(camp.clicks)      - covered_clicks)
+            date_slug  = d.replace("-", "")
+            remainder_rows.append({
+                "date":          d,
+                "channel":       channel,
+                "account_id":    None,
+                "campaign_id":   camp_id,
+                "campaign_name": camp.campaign_name,
+                "adset_id":      f"{channel}_unmap_{camp_id}",
+                "adset_name":    "[Unmapped]",
+                "ad_id":         f"{channel}_unmap_{camp_id}_{date_slug}",
+                "ad_name":       "[Unmapped - no ad breakdown]",
+                "utm_content":   None,
+                "status":        None,
+                "spend":         remainder_spend,
+                "impressions":   rem_imps,
+                "clicks":        rem_clicks,
+                "ctr":           round(rem_clicks / rem_imps, 4) if rem_imps > 0 else 0.0,
+                "leads":         0,
+                "conversions":   0.0,
+                "frequency":     0.0,
+                "currency":      "USD",
+                "creative_type": None,
+                "updated_at":    now,
+            })
+            print(f"[reconcile] {channel} remainder: {camp.campaign_name} {d} ${remainder_spend}")
+
+    if remainder_rows:
+        n = upsert_rows("ads_daily", remainder_rows, key_fields=["date", "channel", "ad_id"])
+        print(f"[reconcile] {channel}: {n} remainder rows written")
+        return n
+    print(f"[reconcile] {channel}: no spend gaps found")
+    return 0

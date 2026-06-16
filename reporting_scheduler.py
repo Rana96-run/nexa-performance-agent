@@ -22,6 +22,7 @@ from collectors import meta_organic_bq, youtube_bq, linkedin_bq
 from collectors import hubspot_leads_bq, hubspot_deals_bq
 from collectors import tiktok_bq, microsoft_ads_bq
 from collectors import ga4_bq
+from collectors import bq_writer
 from collectors.views import refresh_all_views
 from collectors.hex_refresh import refresh_all as refresh_hex
 from logs.logger import get_logger, setup_global_logging
@@ -141,6 +142,16 @@ COLLECTORS = [
     ("microsoft_ads_keywords", microsoft_ads_bq.collect_keywords_and_write),
     ("microsoft_ads_ads",      microsoft_ads_bq.collect_ads_and_write),
     ("google_ads_pmax_assets", google_ads_bq.collect_pmax_asset_groups_and_write),
+
+    # ── Spend reconciliation ──────────────────────────────────────────────────
+    # Runs AFTER both campaign + ad collectors for each channel.
+    # Inserts synthetic remainder rows for any spend the ad-level API missed
+    # (Advantage+, campaigns with 0 ad impressions, async-report gaps).
+    # Meta is excluded — it already reconciles inline in meta_bq.py.
+    ("reconcile_google_ads",  lambda **kw: bq_writer.reconcile_channel_spend("google_ads")),
+    ("reconcile_snapchat",    lambda **kw: bq_writer.reconcile_channel_spend("snapchat")),
+    ("reconcile_tiktok",      lambda **kw: bq_writer.reconcile_channel_spend("tiktok")),
+    ("reconcile_microsoft",   lambda **kw: bq_writer.reconcile_channel_spend("microsoft_ads")),
 ]
 
 
