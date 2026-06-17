@@ -184,7 +184,7 @@ jobs:
         id: hubspot_deals
         if: ${{ inputs.collector == '' || inputs.collector == 'hubspot_deals' }}
         continue-on-error: true
-        run: python collectors/hubspot_deals_bq.py
+        run: python collectors/hubspot_deals_bq.py mirror
 
       - name: Collector — YouTube
         id: youtube
