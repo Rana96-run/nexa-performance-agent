@@ -15,7 +15,11 @@ No secrets, no subprocesses, no background threads.
 """
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
+from typing import Any
+
 import requests
 from flask import Flask, jsonify, redirect, request
 
@@ -57,6 +61,147 @@ ONDEMAND_ROUTES: dict[str, str] = {
 # Tasks that post to #data-health instead of #approvals
 DATA_HEALTH_TASKS = {"connector-health", "utm-validate", "pixel-health"}
 
+# BQ coordinates (fallback to known defaults)
+BQ_PROJECT = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
+BQ_DATASET = os.getenv("BQ_DATASET", "qoyod_marketing")
+
+# Connectors tracked in the health cards
+CONNECTORS = [
+    ("Google Ads",      "google_ads"),
+    ("Meta",            "meta"),
+    ("Snapchat",        "snapchat"),
+    ("TikTok",          "tiktok"),
+    ("LinkedIn",        "linkedin"),
+    ("Microsoft Ads",   "microsoft_ads"),
+    ("HubSpot Leads",   "hubspot_leads"),
+    ("HubSpot Deals",   "hubspot_deals"),
+]
+
+
+# ─── BigQuery helper ──────────────────────────────────────────────────────────
+
+def _bq_query(sql: str) -> list[dict[str, Any]]:
+    """Run a BQ query and return rows as list-of-dicts.
+
+    Uses google-cloud-bigquery (already in requirements.txt).
+    Returns [] silently on any error so the page never crashes.
+    """
+    try:
+        import google.auth
+        from google.oauth2 import service_account
+        from google.cloud import bigquery
+
+        # Prefer JSON blob (Railway env var), then file path (local dev)
+        creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+        if creds_json:
+            info = json.loads(creds_json)
+            creds = service_account.Credentials.from_service_account_info(
+                info,
+                scopes=["https://www.googleapis.com/auth/bigquery.readonly"],
+            )
+            client = bigquery.Client(project=BQ_PROJECT, credentials=creds)
+        elif creds_path:
+            client = bigquery.Client(project=BQ_PROJECT)
+        else:
+            return []
+
+        rows = client.query(sql).result()
+        return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+# ─── Monitoring data fetchers ─────────────────────────────────────────────────
+
+def _get_system_health() -> dict[str, Any]:
+    """Return freshness info for the health bar."""
+    rows = _bq_query(f"""
+        SELECT MAX(ts) AS last_ts
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+    """)
+    last_ts = None
+    if rows and rows[0].get("last_ts"):
+        last_ts = rows[0]["last_ts"]
+        if hasattr(last_ts, "isoformat"):
+            last_ts = last_ts
+    return {"last_ts": last_ts}
+
+
+def _get_connector_health() -> dict[str, Any]:
+    """Return last-seen timestamp per channel from agent_activity_log."""
+    rows = _bq_query(f"""
+        SELECT
+            channel,
+            MAX(ts) AS last_ts
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+        WHERE channel IS NOT NULL
+          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+        GROUP BY channel
+    """)
+    return {r["channel"]: r["last_ts"] for r in rows if r.get("channel")}
+
+
+def _get_heatmap_data() -> list[dict[str, Any]]:
+    """Return activity counts grouped by day-of-week and hour for last 7 days."""
+    return _bq_query(f"""
+        SELECT
+            EXTRACT(DAYOFWEEK FROM ts AT TIME ZONE 'Asia/Riyadh') AS dow,
+            EXTRACT(HOUR     FROM ts AT TIME ZONE 'Asia/Riyadh') AS hr,
+            COUNT(*) AS cnt
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+        WHERE ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        GROUP BY dow, hr
+        ORDER BY dow, hr
+    """)
+
+
+def _get_recent_activity() -> list[dict[str, Any]]:
+    """Return last 20 activity log rows."""
+    return _bq_query(f"""
+        SELECT
+            ts,
+            role,
+            action,
+            status,
+            channel,
+            details
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+        ORDER BY ts DESC
+        LIMIT 20
+    """)
+
+
+# ─── Status helpers ───────────────────────────────────────────────────────────
+
+def _freshness_status(ts: Any) -> tuple[str, str]:
+    """Return (css_color_var, label) from a timestamp."""
+    if ts is None:
+        return "var(--muted)", "No data"
+    now = datetime.now(timezone.utc)
+    if hasattr(ts, "replace"):
+        ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+    delta_h = (now - ts).total_seconds() / 3600
+    if delta_h < 12:
+        return "var(--green)", f"{int(delta_h)}h ago"
+    elif delta_h < 24:
+        return "var(--orange)", f"{int(delta_h)}h ago"
+    else:
+        return "#e05c5c", f"{int(delta_h)}h ago"
+
+
+def _ts_fmt(ts: Any) -> str:
+    """Format a BQ timestamp for display."""
+    if ts is None:
+        return "—"
+    if hasattr(ts, "strftime"):
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts.strftime("%b %d %H:%M UTC")
+    return str(ts)
+
 
 # ─── App factory ─────────────────────────────────────────────────────────────
 
@@ -73,7 +218,11 @@ def create_app() -> Flask:
 
     @app.get("/activity")
     def activity():
-        return _render_dashboard()
+        system_health   = _get_system_health()
+        connector_map   = _get_connector_health()
+        heatmap_rows    = _get_heatmap_data()
+        activity_rows   = _get_recent_activity()
+        return _render_dashboard(system_health, connector_map, heatmap_rows, activity_rows)
 
     @app.post("/api/ondemand/<task>")
     def ondemand(task: str):
@@ -120,92 +269,280 @@ def create_app() -> Flask:
     return app
 
 
+# ─── Monitoring HTML builders ─────────────────────────────────────────────────
+
+def _build_health_bar(system_health: dict[str, Any]) -> str:
+    last_ts = system_health.get("last_ts")
+    color, label = _freshness_status(last_ts)
+    bq_dot = f'<span class="hdot" style="background:{color};box-shadow:0 0 5px {color}"></span>'
+
+    return f"""
+<div class="hbar">
+  <div class="hchip">
+    {bq_dot}
+    <span class="hlabel">BQ Activity</span>
+    <span class="hval" style="color:{color}">{label}</span>
+  </div>
+  <div class="hchip">
+    <span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span>
+    <span class="hlabel">n8n Master</span>
+    <span class="hval" style="color:var(--muted)">Daily 08:00 AST</span>
+  </div>
+  <div class="hchip">
+    <span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span>
+    <span class="hlabel">GitHub Actions</span>
+    <span class="hval" style="color:var(--muted)">Every 6h</span>
+  </div>
+  <div class="hchip">
+    <span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span>
+    <span class="hlabel">Railway</span>
+    <span class="hval" style="color:var(--green)">Serving</span>
+  </div>
+</div>"""
+
+
+def _build_connector_cards(connector_map: dict[str, Any]) -> str:
+    cards = []
+    for name, key in CONNECTORS:
+        ts = connector_map.get(key)
+        color, label = _freshness_status(ts)
+        ts_str = _ts_fmt(ts)
+        cards.append(f"""
+    <div class="conn-card">
+      <div class="conn-top">
+        <span class="conn-name">{name}</span>
+        <span class="conn-dot" style="background:{color};box-shadow:0 0 4px {color}"></span>
+      </div>
+      <div class="conn-ts">{ts_str}</div>
+      <div class="conn-status" style="color:{color}">{label}</div>
+    </div>""")
+    return "\n".join(cards)
+
+
+def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
+    # dow: 1=Sun … 7=Sat in BQ DAYOFWEEK. We show Mon–Sun (2–7, 1).
+    DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    DOW_ORDER  = [2, 3, 4, 5, 6, 7, 1]  # Mon=2 … Sat=7, Sun=1
+
+    # Build lookup: (dow, hr) → count
+    lookup: dict[tuple[int, int], int] = {}
+    for r in heatmap_rows:
+        lookup[(int(r["dow"]), int(r["hr"]))] = int(r["cnt"])
+
+    max_cnt = max(lookup.values(), default=1)
+
+    # Hour axis header
+    hour_headers = "".join(
+        f'<th class="hm-h">{h:02d}</th>' for h in range(24)
+    )
+
+    rows_html = []
+    for i, dow in enumerate(DOW_ORDER):
+        cells = []
+        for hr in range(24):
+            cnt = lookup.get((dow, hr), 0)
+            intensity = int((cnt / max_cnt) * 255) if max_cnt else 0
+            bg = f"rgba(0,255,136,{intensity/255:.2f})" if cnt else "var(--border)"
+            title = f"{cnt} events" if cnt else "no activity"
+            cells.append(
+                f'<td class="hm-cell" style="background:{bg}" title="{title}"></td>'
+            )
+        rows_html.append(
+            f'<tr><th class="hm-row">{DOW_LABELS[i]}</th>{"".join(cells)}</tr>'
+        )
+
+    return f"""
+<div class="hm-wrap">
+  <table class="hm-table">
+    <thead><tr><th></th>{hour_headers}</tr></thead>
+    <tbody>{"".join(rows_html)}</tbody>
+  </table>
+  <div class="hm-legend">
+    <span style="color:var(--muted);font-size:11px">Less</span>
+    <div class="hm-grad"></div>
+    <span style="color:var(--muted);font-size:11px">More</span>
+    <span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh · last 7 days</span>
+  </div>
+</div>"""
+
+
+def _build_activity_feed(activity_rows: list[dict[str, Any]]) -> str:
+    if not activity_rows:
+        return '<div class="feed-empty">No activity in the last 7 days — BQ may be unreachable</div>'
+
+    STATUS_COLOR = {
+        "success":          "var(--green)",
+        "failed":           "#e05c5c",
+        "skipped":          "var(--muted)",
+        "pending_approval": "var(--orange)",
+        "approved":         "var(--green)",
+        "rejected":         "#e05c5c",
+    }
+
+    items = []
+    for r in activity_rows:
+        ts_str  = _ts_fmt(r.get("ts"))
+        role    = r.get("role") or "—"
+        action  = r.get("action") or "—"
+        status  = r.get("status") or "—"
+        channel = r.get("channel") or ""
+        color   = STATUS_COLOR.get(status, "var(--dim)")
+        ch_tag  = f'<span class="feed-ch">{channel}</span>' if channel else ""
+        items.append(f"""
+    <div class="feed-row">
+      <span class="feed-ts">{ts_str}</span>
+      <span class="feed-role">{role}</span>
+      {ch_tag}
+      <span class="feed-action">{action}</span>
+      <span class="feed-badge" style="color:{color};border-color:{color}">{status}</span>
+    </div>""")
+
+    return "\n".join(items)
+
+
 # ─── Dashboard HTML ───────────────────────────────────────────────────────────
 
-def _render_dashboard() -> str:
-    return r"""<!DOCTYPE html>
+def _render_dashboard(
+    system_health: dict[str, Any],
+    connector_map: dict[str, Any],
+    heatmap_rows: list[dict[str, Any]],
+    activity_rows: list[dict[str, Any]],
+) -> str:
+    health_bar       = _build_health_bar(system_health)
+    connector_cards  = _build_connector_cards(connector_map)
+    heatmap          = _build_heatmap(heatmap_rows)
+    activity_feed    = _build_activity_feed(activity_rows)
+
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nexa Performance Agent</title>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+:root{{
   --bg:#0d0d0d;--card:#1a1a1a;--panel:#141414;--border:#2a2a2a;
   --text:#e6e6e6;--dim:#aaa;--muted:#888;
   --blue:#58a6ff;--lblue:#79c0ff;--purple:#d2a8ff;
   --orange:#f0883e;--green:#3fb950;--grey:#8b949e;--accent:#00ff88;
-}
-body{background:var(--bg);color:var(--text);
+}}
+body{{background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  font-size:14px;line-height:1.5;min-height:100vh}
-header{display:flex;align-items:center;gap:10px;padding:16px 24px;
+  font-size:14px;line-height:1.5;min-height:100vh}}
+header{{display:flex;align-items:center;gap:10px;padding:16px 24px;
   border-bottom:1px solid var(--border);background:#111;
-  position:sticky;top:0;z-index:100}
-header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 6px var(--accent);flex-shrink:0}
-.htag{margin-left:auto;font-size:11px;color:var(--muted);background:#222;
-  padding:3px 8px;border-radius:4px;border:1px solid var(--border)}
-main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
-.sec{font-size:11px;font-weight:600;text-transform:uppercase;
+  position:sticky;top:0;z-index:100}}
+header h1{{font-size:16px;font-weight:600;letter-spacing:.3px}}
+.dot{{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 6px var(--accent);flex-shrink:0}}
+.htag{{margin-left:auto;font-size:11px;color:var(--muted);background:#222;
+  padding:3px 8px;border-radius:4px;border:1px solid var(--border)}}
+main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
+.sec{{font-size:11px;font-weight:600;text-transform:uppercase;
   letter-spacing:1.2px;color:var(--muted);margin:32px 0 14px;
-  display:flex;align-items:center;gap:8px}
-.sec::after{content:"";flex:1;height:1px;background:var(--border)}
-/* cadence */
-.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-@media(max-width:700px){.cgrid{grid-template-columns:1fr}}
-.ccard{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  display:flex;align-items:center;gap:8px}}
+.sec::after{{content:"";flex:1;height:1px;background:var(--border)}}
+
+/* ── Health bar ── */
+.hbar{{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px}}
+.hchip{{display:flex;align-items:center;gap:7px;background:var(--card);
+  border:1px solid var(--border);border-radius:20px;padding:6px 14px;
+  font-size:12px}}
+.hdot{{width:8px;height:8px;border-radius:50%;flex-shrink:0}}
+.hlabel{{color:var(--dim)}}
+.hval{{font-weight:600}}
+
+/* ── Connector cards ── */
+.conn-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}
+@media(max-width:900px){{.conn-grid{{grid-template-columns:repeat(2,1fr)}}}}
+@media(max-width:520px){{.conn-grid{{grid-template-columns:1fr}}}}
+.conn-card{{background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:5px}}
+.conn-top{{display:flex;align-items:center;justify-content:space-between}}
+.conn-name{{font-size:13px;font-weight:600}}
+.conn-dot{{width:8px;height:8px;border-radius:50%;flex-shrink:0}}
+.conn-ts{{font-size:11px;color:var(--muted)}}
+.conn-status{{font-size:11px;font-weight:600}}
+
+/* ── Heatmap ── */
+.hm-wrap{{overflow-x:auto}}
+.hm-table{{border-collapse:collapse;font-size:10px}}
+.hm-h{{color:var(--muted);padding:2px 3px;text-align:center;font-weight:400;width:22px}}
+.hm-row{{color:var(--dim);padding:2px 8px 2px 0;text-align:right;
+  font-size:11px;white-space:nowrap;font-weight:500}}
+.hm-cell{{width:22px;height:18px;border-radius:3px;cursor:default}}
+.hm-legend{{display:flex;align-items:center;gap:8px;margin-top:8px}}
+.hm-grad{{width:80px;height:10px;border-radius:4px;
+  background:linear-gradient(to right,var(--border),var(--accent))}}
+
+/* ── Activity feed ── */
+.feed-row{{display:flex;align-items:center;gap:10px;padding:8px 12px;
+  border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap}}
+.feed-row:last-child{{border-bottom:none}}
+.feed-ts{{color:var(--muted);white-space:nowrap;min-width:110px}}
+.feed-role{{color:var(--blue);font-weight:600;min-width:120px}}
+.feed-ch{{background:#1f1f1f;color:var(--dim);border:1px solid var(--border);
+  border-radius:4px;padding:1px 6px;font-size:10px}}
+.feed-action{{flex:1;color:var(--text)}}
+.feed-badge{{font-size:10px;font-weight:700;text-transform:uppercase;
+  padding:2px 7px;border-radius:10px;border:1px solid;white-space:nowrap}}
+.feed-empty{{color:var(--muted);font-size:12px;padding:16px;
+  background:var(--card);border:1px solid var(--border);border-radius:8px}}
+.feed-wrap{{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}}
+
+/* ── Cadence ── */
+.cgrid{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}
+@media(max-width:700px){{.cgrid{{grid-template-columns:1fr}}}}
+.ccard{{background:var(--card);border:1px solid var(--border);border-radius:8px;
   padding:14px 16px;display:flex;justify-content:space-between;
-  align-items:flex-start;gap:12px}
-.cname{font-size:13px;font-weight:600}
-.cdesc{font-size:11px;color:var(--muted);margin-top:3px}
-.csched{font-size:11px;color:var(--muted);background:#111;
-  padding:3px 8px;border-radius:4px;font-family:monospace;white-space:nowrap;flex-shrink:0}
-/* agent panels */
-.agent-panel{border-left:4px solid var(--panel-color,#444);
-  background:var(--panel);border-radius:8px;margin-bottom:18px;overflow:hidden}
-.agent-header{display:flex;align-items:center;gap:10px;
+  align-items:flex-start;gap:12px}}
+.cname{{font-size:13px;font-weight:600}}
+.cdesc{{font-size:11px;color:var(--muted);margin-top:3px}}
+.csched{{font-size:11px;color:var(--muted);background:#111;
+  padding:3px 8px;border-radius:4px;font-family:monospace;white-space:nowrap;flex-shrink:0}}
+
+/* ── Agent panels ── */
+.agent-panel{{border-left:4px solid var(--panel-color,#444);
+  background:var(--panel);border-radius:8px;margin-bottom:18px;overflow:hidden}}
+.agent-header{{display:flex;align-items:center;gap:10px;
   padding:14px 18px;border-bottom:1px solid var(--border);
-  background:color-mix(in srgb,var(--panel-color,#444) 8%,var(--panel))}
-.agent-icon{font-size:18px}
-.agent-name{font-size:15px;font-weight:700;color:var(--panel-color,#e6e6e6)}
-.agent-desc{font-size:12px;color:var(--dim);flex:1}
-.dept-chip{font-size:10px;font-weight:700;text-transform:uppercase;
+  background:color-mix(in srgb,var(--panel-color,#444) 8%,var(--panel))}}
+.agent-icon{{font-size:18px}}
+.agent-name{{font-size:15px;font-weight:700;color:var(--panel-color,#e6e6e6)}}
+.agent-desc{{font-size:12px;color:var(--dim);flex:1}}
+.dept-chip{{font-size:10px;font-weight:700;text-transform:uppercase;
   letter-spacing:.8px;padding:2px 8px;border-radius:10px;
-  border:1px solid currentColor;color:var(--panel-color,#888);opacity:.8;white-space:nowrap}
-.agent-body{padding:16px 18px}
-/* sub-agent */
-.sub-panel{border-left:2px solid var(--sub-color,#444);
+  border:1px solid currentColor;color:var(--panel-color,#888);opacity:.8;white-space:nowrap}}
+.agent-body{{padding:16px 18px}}
+.sub-panel{{border-left:2px solid var(--sub-color,#444);
   background:color-mix(in srgb,var(--sub-color,#444) 5%,#0f0f0f);
-  border-radius:6px;margin-bottom:14px;overflow:hidden}
-.sub-header{display:flex;align-items:center;gap:8px;
-  padding:10px 14px;border-bottom:1px solid var(--border)}
-.sub-label{font-size:11px;color:var(--dim)}
-.sub-name{font-size:13px;font-weight:700;color:var(--sub-color,#e6e6e6)}
-.sub-desc{font-size:11px;color:var(--muted);flex:1}
-.sub-body{padding:12px 14px}
-/* card grid */
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:520px){.grid{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--border);border-radius:7px;
+  border-radius:6px;margin-bottom:14px;overflow:hidden}}
+.sub-header{{display:flex;align-items:center;gap:8px;
+  padding:10px 14px;border-bottom:1px solid var(--border)}}
+.sub-label{{font-size:11px;color:var(--dim)}}
+.sub-name{{font-size:13px;font-weight:700;color:var(--sub-color,#e6e6e6)}}
+.sub-desc{{font-size:11px;color:var(--muted);flex:1}}
+.sub-body{{padding:12px 14px}}
+.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}
+@media(max-width:900px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
+@media(max-width:520px){{.grid{{grid-template-columns:1fr}}}}
+.card{{background:var(--card);border:1px solid var(--border);border-radius:7px;
   padding:14px;display:flex;flex-direction:column;gap:8px;
-  transition:border-color .15s}
-.card:hover{border-color:#3a3a3a}
-.ctitle{font-size:13px;font-weight:600}
-.cdesc2{font-size:12px;color:var(--dim);flex:1}
-.cfoot{display:flex;align-items:center;justify-content:space-between;
-  margin-top:4px;gap:6px}
-.cnote{font-size:11px;color:var(--muted)}
-.btn{font-size:11px;font-weight:600;padding:5px 12px;border-radius:5px;
+  transition:border-color .15s}}
+.card:hover{{border-color:#3a3a3a}}
+.ctitle{{font-size:13px;font-weight:600}}
+.cdesc2{{font-size:12px;color:var(--dim);flex:1}}
+.cfoot{{display:flex;align-items:center;justify-content:space-between;
+  margin-top:4px;gap:6px}}
+.cnote{{font-size:11px;color:var(--muted)}}
+.btn{{font-size:11px;font-weight:600;padding:5px 12px;border-radius:5px;
   border:none;background:var(--btn-color,var(--accent));
-  color:#0d0d0d;cursor:pointer;flex-shrink:0;transition:opacity .15s}
-.btn:hover{opacity:.8}
-.btn:disabled{background:#333;color:var(--muted);cursor:not-allowed}
-.cst{font-size:11px;min-height:15px;transition:color .2s}
-.cst.ok{color:var(--accent)}.cst.err{color:var(--orange)}.cst.spin{color:var(--dim)}
+  color:#0d0d0d;cursor:pointer;flex-shrink:0;transition:opacity .15s}}
+.btn:hover{{opacity:.8}}
+.btn:disabled{{background:#333;color:var(--muted);cursor:not-allowed}}
+.cst{{font-size:11px;min-height:15px;transition:color .2s}}
+.cst.ok{{color:var(--accent)}}.cst.err{{color:var(--orange)}}.cst.spin{{color:var(--dim)}}
 </style>
 </head>
 <body>
@@ -215,6 +552,26 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   <span class="htag">n8n Cloud &bull; Railway</span>
 </header>
 <main>
+
+<!-- ── SYSTEM HEALTH BAR ── -->
+<div class="sec">System Health</div>
+{health_bar}
+
+<!-- ── CONNECTOR HEALTH CARDS ── -->
+<div class="sec">Connector Health</div>
+<div class="conn-grid">
+{connector_cards}
+</div>
+
+<!-- ── ACTIVITY HEAT MAP ── -->
+<div class="sec">Activity Heat Map &mdash; Last 7 Days</div>
+{heatmap}
+
+<!-- ── RECENT AGENT ACTIVITY ── -->
+<div class="sec">Recent Agent Activity</div>
+<div class="feed-wrap">
+{activity_feed}
+</div>
 
 <!-- CADENCE -->
 <div class="sec">Cadence Flows</div>
@@ -499,7 +856,7 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
       </div>
       <div class="card">
         <div class="ctitle">UTM Validation</div>
-        <div class="cdesc2">Scan all live campaign names against naming convention: {Channel}_{Type}_{Language}_{Product}_{Audience}</div>
+        <div class="cdesc2">Scan all live campaign names against naming convention: {{Channel}}_{{Type}}_{{Language}}_{{Product}}_{{Audience}}</div>
         <div class="cfoot">
           <span class="cnote">Results &rarr; #data-health</span>
           <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'utm-validate')">Run &rarr;</button>
@@ -521,32 +878,32 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 
 </main>
 <script>
-async function run(btn, task) {
+async function run(btn, task) {{
   const el = document.getElementById('st-' + task);
   btn.disabled = true; btn.textContent = '...';
   el.className = 'cst spin'; el.textContent = 'Triggering…';
-  try {
-    const r = await fetch('/api/ondemand/' + task, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({triggered_by:'dashboard'})
-    });
+  try {{
+    const r = await fetch('/api/ondemand/' + task, {{
+      method:'POST', headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{triggered_by:'dashboard'}})
+    }});
     const d = await r.json();
-    if (d.status === 'triggered') {
+    if (d.status === 'triggered') {{
       el.className = 'cst ok';
       el.textContent = 'Triggered ✓ — ' + (d.message || 'check Slack');
-    } else if (d.status === 'not_configured') {
+    }} else if (d.status === 'not_configured') {{
       el.className = 'cst err';
       el.textContent = d.message || 'Webhook not configured';
-    } else {
+    }} else {{
       el.className = 'cst err';
       el.textContent = d.message || 'Unknown error';
-    }
-  } catch(e) {
+    }}
+  }} catch(e) {{
     el.className = 'cst err';
     el.textContent = 'Network error — is Railway reachable?';
-  }
+  }}
   btn.textContent = 'Run →'; btn.disabled = false;
-}
+}}
 </script>
 </body>
 </html>"""
