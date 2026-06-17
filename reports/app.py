@@ -29,37 +29,54 @@ from flask import Flask, jsonify, redirect, request
 N8N_BASE = "https://qoyod.app.n8n.cloud/webhook"
 
 ONDEMAND_ROUTES: dict[str, str] = {
-    # Performance Lead
-    "campaign-brief":       f"{N8N_BASE}/od-campaign-brief",
-    "monthly-plan":         f"{N8N_BASE}/od-monthly-plan",
-    "quarterly-plan":       f"{N8N_BASE}/od-quarterly-plan",
-    "kpi-review":           f"{N8N_BASE}/od-kpi-review",
-    # Campaign Manager (under Performance Lead)
-    "keyword-audit":        f"{N8N_BASE}/od-keyword-audit",
-    "ad-audit":             f"{N8N_BASE}/od-ad-audit",
-    "campaign-health":      f"{N8N_BASE}/od-campaign-health",
-    "scale-proposal":       f"{N8N_BASE}/od-scale-proposal",
-    # Creative Strategist (under Performance Lead)
-    "creative-analysis":    f"{N8N_BASE}/od-creative-analysis",
-    "creative-brief":       f"{N8N_BASE}/od-creative-brief",
-    "creative-audit":       f"{N8N_BASE}/od-creative-audit",
-    "ocean-persona":        f"{N8N_BASE}/od-ocean-persona",
-    # CRO Specialist
-    "lp-brief":             f"{N8N_BASE}/od-lp-brief",
-    "lp-analysis":          f"{N8N_BASE}/od-lp-analysis",
-    # Growth Analyst
-    "period-compare":       f"{N8N_BASE}/od-period-compare",
-    "campaign-drilldown":   f"{N8N_BASE}/od-campaign-drilldown",
-    "forecast":             f"{N8N_BASE}/od-forecast",
+    # QA Auditor
+    "qa-check":           f"{N8N_BASE}/od-qa-check",
+
     # Project Coordinator
-    "connector-health":     f"{N8N_BASE}/od-connector-health",
-    "gtm-audit":            f"{N8N_BASE}/od-gtm-audit",
-    "utm-validate":         f"{N8N_BASE}/od-utm-validate",
-    "pixel-health":         f"{N8N_BASE}/od-pixel-health",
+    "connector-health":   f"{N8N_BASE}/od-connector-health",
+    "gtm-audit":          f"{N8N_BASE}/od-gtm-audit",
+    "pixel-health":       f"{N8N_BASE}/od-pixel-health",
+
+    # Performance Lead
+    "campaign-brief":     f"{N8N_BASE}/od-campaign-brief",
+    "monthly-plan":       f"{N8N_BASE}/od-monthly-plan",
+    "quarterly-plan":     f"{N8N_BASE}/od-quarterly-plan",
+    "kpi-review":         f"{N8N_BASE}/od-kpi-review",
+
+    # Campaign Manager (under Performance Lead)
+    "keyword-audit":      f"{N8N_BASE}/od-keyword-audit",
+    "ad-audit":           f"{N8N_BASE}/od-ad-audit",
+    "campaign-health":    f"{N8N_BASE}/od-campaign-health",
+    "scale-proposal":     f"{N8N_BASE}/od-scale-proposal",
+    "utm-validate":       f"{N8N_BASE}/od-utm-validate",
+
+    # Creative Strategist (under Performance Lead)
+    "creative-analysis":  f"{N8N_BASE}/od-creative-analysis",
+    "creative-brief":     f"{N8N_BASE}/od-creative-brief",
+    "creative-audit":     f"{N8N_BASE}/od-creative-audit",
+    "ocean-persona":      f"{N8N_BASE}/od-ocean-persona",
+
+    # CRO Specialist
+    "lp-brief":           f"{N8N_BASE}/od-lp-brief",
+    "lp-analysis":        f"{N8N_BASE}/od-lp-analysis",
+
+    # UI/UX Designer (under CRO Specialist)
+    "design-brief":       f"{N8N_BASE}/od-design-brief",
+
+    # Developer (under UI/UX Designer)
+    "utm-form-check":     f"{N8N_BASE}/od-utm-form-check",
+    "pixel-verify":       f"{N8N_BASE}/od-pixel-verify",
+
+    # Growth Analyst
+    "period-compare":     f"{N8N_BASE}/od-period-compare",
+    "campaign-drilldown": f"{N8N_BASE}/od-campaign-drilldown",
+    "forecast":           f"{N8N_BASE}/od-forecast",
 }
 
 # Tasks that post to #data-health instead of #approvals
-DATA_HEALTH_TASKS = {"connector-health", "utm-validate", "pixel-health"}
+DATA_HEALTH_TASKS = {
+    "connector-health", "utm-form-check", "pixel-verify", "pixel-health"
+}
 
 # BQ coordinates (fallback to known defaults)
 BQ_PROJECT = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
@@ -87,7 +104,6 @@ def _bq_query(sql: str) -> list[dict[str, Any]]:
     Returns [] silently on any error so the page never crashes.
     """
     try:
-        import google.auth
         from google.oauth2 import service_account
         from google.cloud import bigquery
 
@@ -125,8 +141,6 @@ def _get_system_health() -> dict[str, Any]:
     last_ts = None
     if rows and rows[0].get("last_ts"):
         last_ts = rows[0]["last_ts"]
-        if hasattr(last_ts, "isoformat"):
-            last_ts = last_ts
     return {"last_ts": last_ts}
 
 
@@ -324,14 +338,12 @@ def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
     DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     DOW_ORDER  = [2, 3, 4, 5, 6, 7, 1]  # Mon=2 … Sat=7, Sun=1
 
-    # Build lookup: (dow, hr) → count
     lookup: dict[tuple[int, int], int] = {}
     for r in heatmap_rows:
         lookup[(int(r["dow"]), int(r["hr"]))] = int(r["cnt"])
 
     max_cnt = max(lookup.values(), default=1)
 
-    # Hour axis header
     hour_headers = "".join(
         f'<th class="hm-h">{h:02d}</th>' for h in range(24)
     )
@@ -361,7 +373,7 @@ def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
     <span style="color:var(--muted);font-size:11px">Less</span>
     <div class="hm-grad"></div>
     <span style="color:var(--muted);font-size:11px">More</span>
-    <span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh · last 7 days</span>
+    <span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh &middot; last 7 days</span>
   </div>
 </div>"""
 
@@ -425,7 +437,8 @@ def _render_dashboard(
   --bg:#0d0d0d;--card:#1a1a1a;--panel:#141414;--border:#2a2a2a;
   --text:#e6e6e6;--dim:#aaa;--muted:#888;
   --blue:#58a6ff;--lblue:#79c0ff;--purple:#d2a8ff;
-  --orange:#f0883e;--green:#3fb950;--grey:#8b949e;--accent:#00ff88;
+  --orange:#f0883e;--warm-orange:#ffa657;--green:#3fb950;--lgreen:#7ee787;
+  --grey:#8b949e;--red:#f85149;--accent:#00ff88;
 }}
 body{{background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -515,18 +528,40 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   letter-spacing:.8px;padding:2px 8px;border-radius:10px;
   border:1px solid currentColor;color:var(--panel-color,#888);opacity:.8;white-space:nowrap}}
 .agent-body{{padding:16px 18px}}
+
+/* Orchestrator info card (no run buttons) */
+.orch-card{{background:color-mix(in srgb,#f0883e 6%,#111);
+  border:1px solid color-mix(in srgb,#f0883e 20%,var(--border));
+  border-radius:8px;padding:16px 20px}}
+.orch-title{{font-size:13px;font-weight:700;color:#f0883e;margin-bottom:8px}}
+.orch-loop{{list-style:none;counter-reset:loop;display:flex;flex-direction:column;gap:5px}}
+.orch-loop li{{counter-increment:loop;display:flex;align-items:flex-start;gap:8px;
+  font-size:12px;color:var(--dim)}}
+.orch-loop li::before{{content:counter(loop);min-width:18px;height:18px;
+  border-radius:50%;background:color-mix(in srgb,#f0883e 25%,#222);
+  color:#f0883e;font-size:10px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;margin-top:1px}}
+
+/* Sub-panels */
 .sub-panel{{border-left:2px solid var(--sub-color,#444);
   background:color-mix(in srgb,var(--sub-color,#444) 5%,#0f0f0f);
-  border-radius:6px;margin-bottom:14px;overflow:hidden}}
+  border-radius:6px;margin-bottom:14px;overflow:hidden;margin-left:24px}}
 .sub-header{{display:flex;align-items:center;gap:8px;
   padding:10px 14px;border-bottom:1px solid var(--border)}}
-.sub-label{{font-size:11px;color:var(--dim)}}
+.sub-arrow{{font-size:14px;color:var(--dim);flex-shrink:0}}
 .sub-name{{font-size:13px;font-weight:700;color:var(--sub-color,#e6e6e6)}}
 .sub-desc{{font-size:11px;color:var(--muted);flex:1}}
+.sub-chip{{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.8px;padding:2px 8px;border-radius:10px;
+  border:1px solid currentColor;color:var(--sub-color,#888);opacity:.8;white-space:nowrap}}
 .sub-body{{padding:12px 14px}}
+
+/* Task grids and cards */
 .grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}
 @media(max-width:900px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
 @media(max-width:520px){{.grid{{grid-template-columns:1fr}}}}
+.grid-2{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}}
+@media(max-width:600px){{.grid-2{{grid-template-columns:1fr}}}}
 .card{{background:var(--card);border:1px solid var(--border);border-radius:7px;
   padding:14px;display:flex;flex-direction:column;gap:8px;
   transition:border-color .15s}}
@@ -573,7 +608,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 {activity_feed}
 </div>
 
-<!-- CADENCE -->
+<!-- ── CADENCE ── -->
 <div class="sec">Cadence Flows</div>
 <div class="cgrid">
   <div class="ccard">
@@ -599,19 +634,118 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   </div>
 </div>
 
-<!-- ON-DEMAND -->
-<div class="sec">On-Demand &mdash; by Agent</div>
+<!-- ═══════════════════════════════════════════════════════
+     AGENT TEAM — On-Demand
+     ═══════════════════════════════════════════════════════ -->
 
-<!-- ── Performance Lead ── -->
-<div class="agent-panel" style="--panel-color:var(--blue)">
+<!-- ── LAYER 1 — MANAGER ── -->
+<div class="sec">Agent Team</div>
+
+<!-- AI Orchestrator — info card only, no run buttons -->
+<div class="agent-panel" style="--panel-color:#f0883e">
   <div class="agent-header">
     <span class="agent-icon">&#127775;</span>
-    <span class="agent-name">Performance Lead</span>
-    <span class="agent-desc">KPI thresholds &middot; budget allocation &middot; channel mix &middot; triage to Campaign Manager or Creative Strategist</span>
-    <span class="dept-chip">Performance</span>
+    <span class="agent-name">AI Orchestrator</span>
+    <span class="agent-desc">Routes all work &middot; gates every &#10003; &middot; daily 8-step loop at 08:00 Riyadh</span>
+    <span class="dept-chip">MANAGER</span>
   </div>
   <div class="agent-body">
-    <div class="grid" style="margin-bottom:16px">
+    <div class="orch-card">
+      <div class="orch-title">The 8-Step Intelligence Loop (runs every daily cadence)</div>
+      <ol class="orch-loop">
+        <li>OBSERVE &mdash; pull live data from BQ, never yesterday&#39;s recollection</li>
+        <li>COMPARE period-over-period &mdash; last 7d vs prior 7d via period_compare.py</li>
+        <li>INVESTIGATE root cause &mdash; campaign mix, audience, launch waves, silent deaths, LP routing</li>
+        <li>DECIDE with full setup &mdash; complete campaign/adset/creative/LP spec, not just &ldquo;pause this&rdquo;</li>
+        <li>EXECUTE only after &#10003; approval &mdash; #approvals + &#10003;/&#10007; flow</li>
+        <li>MONITOR post-action &mdash; re-evaluate every action at 7d and 14d</li>
+        <li>LEARN &mdash; record outcome in memory/14_learning_patterns.md</li>
+        <li>FORECAST &mdash; end-of-month projection via forecaster.py (spend, leads, SQLs, CPQL, ROAS)</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ── LAYER 2 — OPERATIONS ── -->
+<div class="sec">Layer 2 &mdash; Operations</div>
+
+<!-- QA Auditor -->
+<div class="agent-panel" style="--panel-color:var(--red)">
+  <div class="agent-header">
+    <span class="agent-icon">&#128270;</span>
+    <span class="agent-name">QA Auditor</span>
+    <span class="agent-desc">Validates every agent output &middot; stamps QA_PASSED or QA_FAILED &middot; nothing ships without passing</span>
+    <span class="dept-chip">GATEKEEPER</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid-2">
+      <div class="card">
+        <div class="ctitle">QA Validation Run</div>
+        <div class="cdesc2">Run validation checklist on recent agent outputs: data integrity, task completeness, approval gate, format, technical checks</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--red)" onclick="run(this,'qa-check')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-qa-check"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Project Coordinator -->
+<div class="agent-panel" style="--panel-color:var(--grey)">
+  <div class="agent-header">
+    <span class="agent-icon">&#128295;</span>
+    <span class="agent-name">Project Coordinator</span>
+    <span class="agent-desc">Connector health &middot; GTM audit &middot; pixel audit &middot; Asana task status &middot; secrets rotation</span>
+    <span class="dept-chip">OPS</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid">
+      <div class="card">
+        <div class="ctitle">Connector Health</div>
+        <div class="cdesc2">Check BQ freshness for all source tables. Flag STALE (&gt;12h) or DEAD (&gt;24h) connectors.</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #data-health</span>
+          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'connector-health')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-connector-health"></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">GTM Audit</div>
+        <div class="cdesc2">Audit GTM-TFH26VC2 (web) + GTM-PK6924TJ (server): tags, triggers, UTM passthrough, duplicates</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'gtm-audit')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-gtm-audit"></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Meta Pixel Health</div>
+        <div class="cdesc2">Verify both Meta pixels fire on every LP form submit. Flag gaps in Events Manager.</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #data-health</span>
+          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'pixel-health')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-pixel-health"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── LAYER 3 — PERFORMANCE ── -->
+<div class="sec">Layer 3 &mdash; Performance</div>
+
+<!-- Performance Lead -->
+<div class="agent-panel" style="--panel-color:var(--blue)">
+  <div class="agent-header">
+    <span class="agent-icon">&#127919;</span>
+    <span class="agent-name">Performance Lead</span>
+    <span class="agent-desc">KPI thresholds &middot; budget allocation &middot; channel mix &middot; triage to Campaign Manager or Creative Strategist</span>
+    <span class="dept-chip">PERFORMANCE</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid" style="margin-bottom:18px">
       <div class="card">
         <div class="ctitle">Campaign Brief</div>
         <div class="cdesc2">Full brief for a new campaign: audience, creative direction, budget, naming, KPI gates</div>
@@ -650,13 +784,13 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
       </div>
     </div>
 
-    <!-- Campaign Manager sub-panel -->
+    <!-- &#8618; Campaign Manager sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--lblue)">
       <div class="sub-header">
-        <span style="font-size:13px;color:var(--dim)">&ldquo;</span>
-        <span class="sub-label">&#8618;&nbsp;</span>
+        <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Campaign Manager</span>
-        <span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals</span>
+        <span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span>
+        <span class="sub-chip">PERFORMANCE</span>
       </div>
       <div class="sub-body">
         <div class="grid">
@@ -671,7 +805,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
           </div>
           <div class="card">
             <div class="ctitle">Ad Audit</div>
-            <div class="cdesc2">Scan live ads for pause candidates: zero-conv ($70/7d), junk leads (60%+ disqualified), high CPL (&gt;$50/10d)</div>
+            <div class="cdesc2">Scan live ads: zero-conv ($70/7d), junk leads (60%+ disqualified), high CPL (&gt;$50/10d)</div>
             <div class="cfoot">
               <span class="cnote">Results &rarr; #approvals</span>
               <button class="btn" style="--btn-color:var(--lblue)" onclick="run(this,'ad-audit')">Run &rarr;</button>
@@ -696,17 +830,26 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
             </div>
             <div class="cst spin" id="st-scale-proposal"></div>
           </div>
+          <div class="card">
+            <div class="ctitle">Campaign Naming Audit</div>
+            <div class="cdesc2">Validate all live campaign names against &#123;Channel&#125;_&#123;Type&#125;_&#123;Language&#125;_&#123;Product&#125;_&#123;Audience&#125;. Flag &ldquo;Prospecting&rdquo; audience, wrong product names, LinkedIn UTM mismatches.</div>
+            <div class="cfoot">
+              <span class="cnote">Results &rarr; #approvals</span>
+              <button class="btn" style="--btn-color:var(--lblue)" onclick="run(this,'utm-validate')">Run &rarr;</button>
+            </div>
+            <div class="cst spin" id="st-utm-validate"></div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Creative Strategist sub-panel -->
+    <!-- &#8618; Creative Strategist sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--purple)">
       <div class="sub-header">
-        <span style="font-size:13px;color:var(--dim)">&ldquo;</span>
-        <span class="sub-label">&#8618;&nbsp;</span>
+        <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Creative Strategist</span>
-        <span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; copy direction &middot; LP asset alignment</span>
+        <span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span>
+        <span class="sub-chip">PERFORMANCE</span>
       </div>
       <div class="sub-body">
         <div class="grid">
@@ -753,16 +896,19 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   </div>
 </div>
 
-<!-- ── CRO Specialist ── -->
+<!-- ── LAYER 3 — CRO CHAIN ── -->
+<div class="sec">Layer 3 &mdash; CRO Chain</div>
+
+<!-- CRO Specialist -->
 <div class="agent-panel" style="--panel-color:var(--orange)">
   <div class="agent-header">
-    <span class="agent-icon">&#127919;</span>
+    <span class="agent-icon">&#128200;</span>
     <span class="agent-name">CRO Specialist</span>
-    <span class="agent-desc">LP briefs &middot; qual ratio decisions &middot; A/B test hypotheses &middot; test result calls</span>
-    <span class="dept-chip">CRO Chain</span>
+    <span class="agent-desc">LP briefs &middot; qual ratio decisions (redirect at &lt;30%) &middot; A/B test hypotheses &middot; test result calls</span>
+    <span class="dept-chip">CRO CHAIN</span>
   </div>
   <div class="agent-body">
-    <div class="grid">
+    <div class="grid-2" style="margin-bottom:18px">
       <div class="card">
         <div class="ctitle">LP Brief</div>
         <div class="cdesc2">8-section LP brief: objective, OCEAN audience, hypothesis, success criteria, ZATCA badge, timeline</div>
@@ -782,15 +928,75 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <div class="cst spin" id="st-lp-analysis"></div>
       </div>
     </div>
+
+    <!-- &#8618; UI/UX Designer sub-panel -->
+    <div class="sub-panel" style="--sub-color:var(--warm-orange)">
+      <div class="sub-header">
+        <span class="sub-arrow">&#8618;</span>
+        <span class="sub-name">UI/UX Designer</span>
+        <span class="sub-desc">LP design from CRO brief &middot; OCEAN-aligned visual tone &middot; ZATCA badge above fold &middot; mobile-first 375px</span>
+        <span class="sub-chip">CRO CHAIN</span>
+      </div>
+      <div class="sub-body">
+        <div class="grid-2" style="margin-bottom:14px">
+          <div class="card">
+            <div class="ctitle">Design Brief</div>
+            <div class="cdesc2">Generate LP design brief: OCEAN visual mapping, ZATCA placement, RTL layout, form field names, interaction notes, handoff checklist for Developer</div>
+            <div class="cfoot">
+              <span class="cnote">Results &rarr; #approvals</span>
+              <button class="btn" style="--btn-color:var(--warm-orange)" onclick="run(this,'design-brief')">Run &rarr;</button>
+            </div>
+            <div class="cst spin" id="st-design-brief"></div>
+          </div>
+        </div>
+
+        <!-- &#8618; Developer sub-panel (nested inside UI/UX) -->
+        <div class="sub-panel" style="--sub-color:var(--lgreen);margin-left:0">
+          <div class="sub-header">
+            <span class="sub-arrow">&#8618;</span>
+            <span class="sub-name">Developer</span>
+            <span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span>
+            <span class="sub-chip">CRO CHAIN</span>
+          </div>
+          <div class="sub-body">
+            <div class="grid-2">
+              <div class="card">
+                <div class="ctitle">UTM Form Check</div>
+                <div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div>
+                <div class="cfoot">
+                  <span class="cnote">Results &rarr; #data-health</span>
+                  <button class="btn" style="--btn-color:var(--lgreen)" onclick="run(this,'utm-form-check')">Run &rarr;</button>
+                </div>
+                <div class="cst spin" id="st-utm-form-check"></div>
+              </div>
+              <div class="card">
+                <div class="ctitle">Pixel Verification</div>
+                <div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div>
+                <div class="cfoot">
+                  <span class="cnote">Results &rarr; #data-health</span>
+                  <button class="btn" style="--btn-color:var(--lgreen)" onclick="run(this,'pixel-verify')">Run &rarr;</button>
+                </div>
+                <div class="cst spin" id="st-pixel-verify"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- ── Growth Analyst ── -->
+<!-- ── LAYER 3 — DATA ── -->
+<div class="sec">Layer 3 &mdash; Data</div>
+
+<!-- Growth Analyst -->
 <div class="agent-panel" style="--panel-color:var(--green)">
   <div class="agent-header">
-    <span class="agent-icon">&#128200;</span>
+    <span class="agent-icon">&#128202;</span>
     <span class="agent-name">Growth Analyst</span>
-    <span class="agent-desc">BQ analysis &middot; period comparisons &middot; flag investigations &middot; forecasts &middot; memory ownership</span>
+    <span class="agent-desc">BQ analysis &middot; period comparisons &middot; flag investigations &middot; forecasts &middot; owns memory/08_pitfalls.md</span>
     <span class="dept-chip">DATA</span>
   </div>
   <div class="agent-body">
@@ -821,56 +1027,6 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
           <button class="btn" style="--btn-color:var(--green)" onclick="run(this,'forecast')">Run &rarr;</button>
         </div>
         <div class="cst spin" id="st-forecast"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Project Coordinator ── -->
-<div class="agent-panel" style="--panel-color:var(--grey)">
-  <div class="agent-header">
-    <span class="agent-icon">&#128295;</span>
-    <span class="agent-name">Project Coordinator</span>
-    <span class="agent-desc">Connector health &middot; GTM audit &middot; UTM validation &middot; pixel health &middot; Asana task status</span>
-    <span class="dept-chip">OPS</span>
-  </div>
-  <div class="agent-body">
-    <div class="grid">
-      <div class="card">
-        <div class="ctitle">Connector Health</div>
-        <div class="cdesc2">Check BQ freshness for all source tables. Flag STALE (&gt;12h) or DEAD (&gt;24h) connectors.</div>
-        <div class="cfoot">
-          <span class="cnote">Results &rarr; #data-health</span>
-          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'connector-health')">Run &rarr;</button>
-        </div>
-        <div class="cst spin" id="st-connector-health"></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">GTM Audit</div>
-        <div class="cdesc2">Audit GTM-TFH26VC2 (web) + GTM-PK6924TJ (server): pixel tags, UTM passthrough, duplicates</div>
-        <div class="cfoot">
-          <span class="cnote">Results &rarr; #approvals</span>
-          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'gtm-audit')">Run &rarr;</button>
-        </div>
-        <div class="cst spin" id="st-gtm-audit"></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">UTM Validation</div>
-        <div class="cdesc2">Scan all live campaign names against naming convention: {{Channel}}_{{Type}}_{{Language}}_{{Product}}_{{Audience}}</div>
-        <div class="cfoot">
-          <span class="cnote">Results &rarr; #data-health</span>
-          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'utm-validate')">Run &rarr;</button>
-        </div>
-        <div class="cst spin" id="st-utm-validate"></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Meta Pixel Health</div>
-        <div class="cdesc2">Verify both Meta pixels fire on every LP form submit. Flag gaps in Events Manager.</div>
-        <div class="cfoot">
-          <span class="cnote">Results &rarr; #data-health</span>
-          <button class="btn" style="--btn-color:var(--grey)" onclick="run(this,'pixel-health')">Run &rarr;</button>
-        </div>
-        <div class="cst spin" id="st-pixel-health"></div>
       </div>
     </div>
   </div>
