@@ -3,12 +3,12 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-17 (end of day):** 12-workflow n8n architecture live and healthy.
-> Master workflow `tool_choice:required` bug fixed — runs correctly from tonight 04:00 UTC.
-> Slack Approval Listener url_verification fixed + Event Subscriptions configured.
-> Full desk cleanup done: stale agent refs, memory, docs all updated; clutter deleted.
-> Archive: `D:\Nexa-Performance-Agent-2026-06-17.zip` (0.98 MB, 403 files) — clean and shareable.
-> Remaining blockers: GitHub Secrets migration (blocks GitHub Actions collectors) + Railway shutdown.
+> **Status as of 2026-06-17:** 12-workflow n8n architecture live and healthy.
+> Master workflow `tool_choice:required` bug fixed. Slack Approval Listener + Event Subscriptions live.
+> Full desk cleanup + memory/docs updated. Archive: `D:\Nexa-Performance-Agent-2026-06-17.zip`.
+> Google Ads OAuth re-minted (client secret rotated) — `GOOGLE_ADS_REFRESH_TOKEN` updated in Railway + GitHub Secrets.
+> Collector runs clean; 2026-06-16 data pending Google API finalization (~16:00 Riyadh).
+> Remaining: GitHub Secrets full migration (all vars, not just Google Ads) + Railway shutdown.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
