@@ -285,7 +285,7 @@ def check_conversion_tracking() -> tuple[bool, str]:
     """Verify at least one active Google Ads conversion action exists (existence check).
     Use check_conversion_recording() for the deeper "is it recording?" check."""
     try:
-        from executors.google_ads import get_client
+        from collectors.google_ads import get_client
         from config import GOOGLE_ADS_CONFIG
         client = get_client()
         ga_svc = client.get_service("GoogleAdsService")
