@@ -1,0 +1,3022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Activity — Nexa</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23238636'/><text x='50%25' y='54%25' font-size='18' text-anchor='middle' dominant-baseline='middle' fill='white'>N</text></svg>">
+<style>
+/* ── Reset & base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+     background:#0d1117;color:#e6edf3;font-size:14px;line-height:1.5}
+a{color:#58a6ff;text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Layout ── */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:240px;flex-shrink:0;border-right:1px solid #21262d;
+          padding:20px 16px;background:#161b22;position:sticky;top:0;
+          height:100vh;overflow-y:auto}
+.main{flex:1;padding:24px 28px;min-width:0}
+
+/* ── Header ── */
+.page-header{display:flex;align-items:center;justify-content:space-between;
+              margin-bottom:20px;gap:16px;flex-wrap:wrap}
+.page-title{font-size:22px;font-weight:600;color:#e6edf3}
+.page-title span{color:#8b949e;font-size:14px;font-weight:400;margin-left:8px}
+.date-tabs{display:flex;gap:4px;background:#161b22;border:1px solid #30363d;
+            border-radius:8px;padding:3px}
+.date-tabs a{padding:5px 14px;border-radius:6px;color:#8b949e;font-size:13px;
+              font-weight:500;transition:all .15s}
+.date-tabs a.active{background:#21262d;color:#e6edf3}
+.date-tabs a:hover:not(.active){color:#c9d1d9;text-decoration:none}
+
+/* ── Sidebar ── */
+.sb-title{font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;
+           letter-spacing:.06em;margin-bottom:12px}
+.sb-total{font-size:32px;font-weight:700;color:#e6edf3;margin-bottom:2px}
+.sb-subtitle{font-size:12px;color:#8b949e;margin-bottom:18px}
+.sb-date{font-size:11px;color:#58a6ff;margin-bottom:24px;padding-bottom:16px;
+          border-bottom:1px solid #21262d}
+.sb-list{list-style:none}
+.sb-item{margin-bottom:10px}
+.sb-row{display:flex;justify-content:space-between;align-items:center;
+         margin-bottom:3px}
+.sb-name{font-size:12px;color:#c9d1d9}
+.sb-count{font-size:12px;font-weight:600;color:#e6edf3}
+.sb-bar-bg{height:3px;background:#21262d;border-radius:2px;overflow:hidden}
+.sb-bar-fill{height:3px;background:#238636;border-radius:2px;transition:width .3s}
+.sb-updated{font-size:11px;color:#484f58;margin-top:24px;padding-top:16px;
+             border-top:1px solid #21262d}
+
+/* ── Stat strip ── */
+.stat-strip{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.stat-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
+            padding:14px 18px;flex:1;min-width:130px}
+.stat-num{font-size:26px;font-weight:700;color:#e6edf3}
+.stat-label{font-size:11px;color:#8b949e;margin-top:2px;text-transform:uppercase;
+              letter-spacing:.05em}
+
+/* ── Section header ── */
+.section-head{font-size:13px;font-weight:600;color:#8b949e;
+               text-transform:uppercase;letter-spacing:.06em;
+               margin:28px 0 12px;padding-bottom:8px;
+               border-bottom:1px solid #21262d}
+
+/* ── Heatmap grid ── */
+.heatmap-wrap{overflow-x:auto;margin-bottom:8px}
+.hm-row{display:flex;gap:6px;align-items:center;margin-bottom:10px}
+.hm-cat-label{width:160px;flex-shrink:0;font-size:12px;color:#8b949e;
+               text-align:right;padding-right:10px;cursor:pointer;
+               transition:color .15s}
+.hm-cat-label:hover{color:#58a6ff}
+.hm-total{width:44px;flex-shrink:0;font-size:11px;color:#484f58;
+            text-align:left;padding-left:8px}
+.hm-cells{display:flex;gap:2px;flex-wrap:nowrap;align-items:center}
+.hm-cell{width:11px;height:11px;border-radius:2px;flex-shrink:0;cursor:default;
+          transition:transform .1s;position:relative}
+.hm-cell:hover{transform:scale(1.4)}
+.hm-cell[data-level="-1"]{background:transparent;pointer-events:none}
+.hm-cell[data-level="0"]{background:#161b22;border:1px solid #21262d}
+.hm-cell[data-level="1"]{background:#0e4429}
+.hm-cell[data-level="2"]{background:#006d32}
+.hm-cell[data-level="3"]{background:#26a641}
+.hm-cell[data-level="4"]{background:#39d353}
+.hm-legend{display:flex;align-items:center;gap:4px;margin-top:4px;
+            justify-content:flex-end;font-size:11px;color:#484f58}
+
+/* ── Cell tooltip ── */
+.hm-cell[data-tip]{position:relative}
+.hm-cell[data-tip]:hover::after{content:attr(data-tip);position:absolute;
+  bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:#1f2937;color:#e6edf3;padding:4px 8px;border-radius:4px;
+  font-size:11px;white-space:nowrap;z-index:100;pointer-events:none;
+  border:1px solid #374151}
+
+/* ── Metric cards ── */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+             gap:12px;margin-bottom:24px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden}
+.card-header{display:flex;justify-content:space-between;align-items:center;
+              padding:14px 16px;cursor:pointer;user-select:none}
+.card-header:hover{background:#1c2128}
+.card-left{display:flex;align-items:center;gap:10px}
+.card-icon{display:none}
+.card-name{font-size:13px;font-weight:600;color:#e6edf3}
+.card-counts{font-size:11px;color:#8b949e;margin-top:2px}
+.card-right{display:flex;align-items:center;gap:8px}
+.card-num{font-size:22px;font-weight:700;color:#e6edf3}
+.card-arrow{color:#484f58;font-size:12px;transition:transform .2s}
+.card.open .card-arrow{transform:rotate(180deg)}
+.card-body{display:none;border-top:1px solid #21262d;padding:12px 16px}
+.card.open .card-body{display:block}
+.card-actions{display:flex;gap:6px;margin-bottom:10px}
+.btn-workflow{background:none;border:1px solid #30363d;border-radius:6px;
+               color:#58a6ff;font-size:11px;padding:4px 10px;cursor:pointer;
+               transition:all .15s}
+.btn-workflow:hover{background:#1f6feb22;border-color:#58a6ff}
+
+/* ── Detail table inside card ── */
+.dtable{width:100%;border-collapse:collapse;font-size:12px}
+.dtable th{text-align:left;color:#484f58;font-weight:500;
+            padding:4px 8px 8px;border-bottom:1px solid #21262d}
+.dtable td{padding:5px 8px;border-bottom:1px solid #161b22;color:#c9d1d9}
+.dtable tr:last-child td{border-bottom:none}
+.tag{display:inline-block;background:#21262d;border-radius:4px;
+     padding:1px 6px;font-size:10px;color:#8b949e;font-weight:500}
+.tag.google{background:#1a3a5c;color:#58a6ff}
+.tag.google_ads{background:#1a3a5c;color:#58a6ff}
+.tag.meta{background:#1f2d50;color:#79b8ff}
+.tag.snapchat{background:#3d3010;color:#e3b341}
+.tag.linkedin{background:#0d3050;color:#56b2e6}
+.tag.tiktok{background:#1a1a2e;color:#ee1d52}
+.tag.microsoft_ads{background:#1a2a3a;color:#00a4ef}
+.tag.microsoft{background:#1a2a3a;color:#00a4ef}
+
+/* ── Recent activity table ── */
+.activity-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:40px}
+.activity-table th{text-align:left;color:#484f58;font-weight:500;
+                    padding:6px 10px;border-bottom:1px solid #21262d}
+.activity-table td{padding:6px 10px;border-bottom:1px solid #161b22;color:#c9d1d9}
+.activity-table tr:hover td{background:#1c2128}
+
+/* ── Workflow modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:#00000088;z-index:200;
+                align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:12px;
+        width:460px;max-width:92vw;max-height:88vh;overflow-y:auto;
+        padding:24px;position:relative}
+.modal-close{position:absolute;top:14px;right:16px;background:none;border:none;
+              color:#8b949e;font-size:20px;cursor:pointer;line-height:1}
+.modal-close:hover{color:#e6edf3}
+.modal-title{font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:4px}
+.modal-sub{font-size:12px;color:#8b949e;margin-bottom:20px}
+.flow-steps{display:flex;flex-direction:column}
+.flow-step{display:flex;align-items:stretch;gap:12px}
+.flow-connector{display:flex;flex-direction:column;align-items:center;width:28px;flex-shrink:0}
+.flow-dot{width:12px;height:12px;border-radius:50%;background:#238636;
+           border:2px solid #39d353;flex-shrink:0;margin-top:4px}
+.flow-line{flex:1;width:2px;background:#21262d;margin:2px 0;min-height:12px}
+.flow-step:last-child .flow-line{display:none}
+.flow-content{padding:0 0 20px;flex:1}
+.flow-label{font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:3px}
+.flow-desc{font-size:12px;color:#8b949e;line-height:1.4}
+
+/* ── Pending approvals banner ── */
+.approvals-banner{background:#1c1600;border:1px solid #9e6a03;border-radius:8px;
+                   padding:14px 18px;margin-bottom:16px;display:flex;
+                   align-items:flex-start;gap:14px}
+.approvals-banner-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.approvals-banner-body{flex:1;min-width:0}
+.approvals-banner-title{font-size:13px;font-weight:600;color:#e3b341;margin-bottom:6px}
+.approvals-banner-items{display:flex;flex-direction:column;gap:4px}
+.approvals-banner-item{font-size:12px;color:#c9d1d9;display:flex;align-items:center;gap:8px}
+.approvals-banner-item .ab-dot{width:5px;height:5px;border-radius:50%;background:#9e6a03;flex-shrink:0}
+.approvals-banner-cta{flex-shrink:0;align-self:center}
+.approvals-banner-cta a{display:inline-flex;align-items:center;gap:4px;
+                          background:#9e6a03;color:#fff;border-radius:6px;
+                          padding:6px 14px;font-size:12px;font-weight:600;
+                          text-decoration:none;transition:background .15s}
+.approvals-banner-cta a:hover{background:#b07812;text-decoration:none}
+
+/* ── Agent status bar ── */
+.agent-bar{display:flex;align-items:center;gap:0;background:#161b22;
+            border:1px solid #30363d;border-radius:8px;margin-bottom:16px;
+            overflow:hidden;flex-wrap:wrap}
+.ab-cell{display:flex;align-items:center;gap:8px;padding:10px 18px;
+          border-right:1px solid #21262d;flex-shrink:0}
+.ab-cell:last-child{border-right:none;flex:1}
+.ab-cell-label{font-size:10px;color:#484f58;text-transform:uppercase;
+                letter-spacing:.05em;margin-bottom:1px}
+.ab-cell-val{font-size:13px;font-weight:600;color:#e6edf3}
+.ab-cell-sub{font-size:11px;color:#8b949e}
+.ab-dot-live{width:7px;height:7px;border-radius:50%;background:#39d353;
+              box-shadow:0 0 6px #39d353;flex-shrink:0;animation:pulse 2s infinite}
+.ab-dot-idle{width:7px;height:7px;border-radius:50%;background:#484f58;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── KPI bar ── */
+.kpi-bar{display:flex;gap:0;background:#161b22;border:1px solid #30363d;
+          border-radius:8px;margin-bottom:20px;overflow:hidden;flex-wrap:wrap}
+.kpi-cell{flex:1;min-width:130px;padding:14px 20px;border-right:1px solid #21262d;
+           position:relative;cursor:default;transition:background .15s}
+.kpi-cell:last-child{border-right:none}
+.kpi-cell:hover{background:#1c2128}
+.kpi-cell-label{font-size:10px;color:#484f58;text-transform:uppercase;
+                  letter-spacing:.05em;margin-bottom:4px}
+.kpi-cell-num{font-size:26px;font-weight:700;color:#e6edf3;line-height:1}
+.kpi-cell-delta{font-size:11px;margin-top:4px}
+.kpi-delta-up{color:#39d353}
+.kpi-delta-down{color:#f85149}
+.kpi-date{font-size:10px;color:#484f58;margin-top:2px}
+.kpi-channels{position:absolute;bottom:100%;left:0;z-index:50;background:#1f2937;
+               border:1px solid #374151;border-radius:8px;min-width:340px;
+               padding:12px;display:none;box-shadow:0 8px 24px #00000066}
+.kpi-cell:hover .kpi-channels{display:block}
+.kpi-ch-row{display:flex;align-items:center;justify-content:space-between;
+             padding:4px 0;border-bottom:1px solid #374151;font-size:11px;color:#c9d1d9}
+.kpi-ch-row:last-child{border-bottom:none}
+.kpi-ch-name{font-weight:600;min-width:80px}
+.kpi-ch-nums{display:flex;gap:16px;color:#8b949e}
+.kpi-ch-nums span{min-width:50px;text-align:right}
+.kpi-ch-cpql{color:#e3b341;font-weight:600}
+
+/* ── Countdown chip ── */
+.countdown-chip{display:inline-flex;align-items:center;gap:5px;
+                 background:#161b22;border:1px solid #30363d;border-radius:12px;
+                 padding:3px 10px;font-size:11px;color:#8b949e}
+
+/* ── Agent team hierarchy ── */
+.team-hierarchy{display:flex;flex-direction:column;align-items:center;
+                 gap:0;margin-bottom:28px;width:100%}
+.team-main-wrap{display:flex;flex-direction:column;align-items:center;width:100%}
+.team-main-card{background:#161b22;border:1px solid #7c3aed;border-radius:12px;
+                 padding:18px 24px;position:relative;overflow:hidden;
+                 display:flex;align-items:center;gap:20px;
+                 max-width:540px;width:100%;
+                 box-shadow:0 0 0 1px #7c3aed33,0 4px 24px #7c3aed18}
+.team-main-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+                          background:#7c3aed}
+.tc-stem-down{width:2px;height:24px;background:#30363d;margin:0 auto;flex-shrink:0}
+.tc-bar{position:relative;width:100%;display:flex;justify-content:space-around;padding:0}
+.tc-bar::before{content:'';position:absolute;top:0;left:10%;right:10%;
+                  height:2px;background:#30363d}
+.tc-sub-wrap{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0}
+.tc-node{width:8px;height:8px;border-radius:50%;background:#30363d;
+          margin-top:-4px;flex-shrink:0;z-index:1}
+.tc-stem-up{width:2px;height:18px;background:#30363d;flex-shrink:0}
+.team-subs{display:flex;gap:10px;width:100%;flex-wrap:wrap;justify-content:center}
+.team-sub-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
+                padding:12px 12px 10px;position:relative;overflow:hidden;
+                display:flex;flex-direction:column;align-items:center;gap:6px;
+                transition:border-color .2s,box-shadow .2s}
+.team-sub-card:hover{border-color:var(--tc);box-shadow:0 0 0 1px var(--tc)33}
+.team-sub-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+                         background:var(--tc)}
+.team-sprite{flex-shrink:0;image-rendering:pixelated;display:block}
+.team-card-info{flex:1;min-width:0}
+.team-title{font-size:13px;font-weight:600;color:#e6edf3;line-height:1.3}
+.team-title-sub{font-size:11px;font-weight:600;color:#e6edf3;line-height:1.3;
+                  text-align:center;margin-bottom:2px}
+.team-desc{font-size:11px;color:#8b949e;line-height:1.45}
+.team-desc-sub{font-size:10px;color:#6e7681;line-height:1.4;text-align:center}
+.team-roles{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.team-roles-center{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;justify-content:center}
+.team-role-tag{font-size:10px;background:#21262d;color:#6e7681;border-radius:4px;
+                padding:2px 6px;font-family:"SFMono-Regular",Consolas,monospace}
+.team-stats{display:flex;gap:14px}
+.team-stats-center{display:flex;gap:12px;justify-content:center;margin-top:4px}
+.team-stat-num{font-size:22px;font-weight:700;color:#e6edf3;line-height:1}
+.team-stat-num-sm{font-size:15px;font-weight:700;color:#e6edf3;line-height:1;text-align:center}
+.team-stat-lbl{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+.team-last{font-size:10px;color:#484f58;padding-top:6px;border-top:1px solid #21262d;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.team-last strong{color:#8b949e;font-weight:500}
+.sub-badge{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+            color:#484f58;border:1px solid #21262d;border-radius:10px;padding:1px 7px}
+/* ── Agent modal ── */
+.team-sub-card{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.team-sub-card:hover{border-color:var(--tc,#30363d);
+  box-shadow:0 0 0 1px var(--tc,#30363d)33}
+.team-main-card{cursor:pointer;transition:box-shadow .15s}
+.team-main-card:hover{box-shadow:0 0 0 2px #7c3aed55}
+.agent-modal-backdrop{position:fixed;inset:0;background:#00000088;z-index:900;
+  display:none;align-items:center;justify-content:center;padding:20px}
+.agent-modal-backdrop.open{display:flex}
+.agent-modal{background:#161b22;border:1px solid #30363d;border-radius:12px;
+  max-width:540px;width:100%;max-height:88vh;overflow-y:auto;position:relative}
+.agent-modal-header{padding:20px 22px 14px;border-bottom:1px solid #21262d;
+  display:flex;align-items:flex-start;gap:14px}
+.agent-modal-body{padding:18px 22px 22px}
+.agent-modal-close{position:absolute;top:14px;right:16px;background:none;border:none;
+  color:#8b949e;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;
+  border-radius:4px}
+.agent-modal-close:hover{color:#e6edf3;background:#21262d}
+.am-section{margin-top:16px}
+.am-section-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:#484f58;margin-bottom:8px}
+.am-charter-item{display:flex;gap:8px;font-size:12px;color:#c9d1d9;padding:4px 0;
+  border-bottom:1px solid #21262d22;line-height:1.5}
+.am-charter-item:last-child{border-bottom:none}
+.am-charter-bullet{color:var(--tc,#58a6ff);flex-shrink:0;margin-top:1px}
+.am-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.am-flow-pill{font-size:11px;padding:3px 10px;border-radius:10px;border:1px solid #30363d;
+  color:#8b949e;background:#0d1117}
+.am-flow-arrow{color:#484f58;font-size:12px}
+.am-flow-pill.am-self{color:#e6edf3;border-color:var(--tc,#58a6ff);
+  background:var(--tc,#58a6ff)18}
+.am-role-tag{display:inline-block;font-size:10px;background:#21262d;color:#6e7681;
+  border-radius:4px;padding:2px 8px;font-family:"SFMono-Regular",Consolas,monospace;
+  margin:2px}
+.am-recent-row{display:flex;justify-content:space-between;align-items:center;
+  font-size:11px;padding:5px 0;border-bottom:1px solid #21262d33;color:#c9d1d9}
+.am-recent-row:last-child{border-bottom:none}
+.am-recent-day{color:#484f58;flex-shrink:0;margin-left:10px}
+.am-file{font-size:10px;color:#484f58;font-family:"SFMono-Regular",Consolas,monospace;
+  margin-top:4px}
+/* ── Code Health ── */
+.ch-panel{background:#161b22;border:1px solid #30363d;border-radius:10px;
+           padding:18px 22px;margin-bottom:24px}
+.ch-header{display:flex;align-items:center;justify-content:space-between;
+            flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.ch-title{font-size:13px;font-weight:600;color:#e6edf3}
+.ch-meta{font-size:11px;color:#484f58}
+.ch-stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.ch-stat{background:#0d1117;border:1px solid #21262d;border-radius:7px;
+          padding:10px 16px;min-width:90px;text-align:center}
+.ch-stat-num{font-size:22px;font-weight:700;line-height:1}
+.ch-stat-lbl{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+.ch-violation{border:1px solid #30363d;border-radius:7px;padding:10px 14px;
+               margin-bottom:8px;background:#0d1117}
+.ch-viol-id{font-size:11px;color:#8b949e;font-family:"SFMono-Regular",Consolas,monospace}
+.ch-viol-desc{font-size:12px;color:#e6edf3;margin:4px 0}
+.ch-viol-hint{font-size:11px;color:#484f58;font-style:italic}
+.ch-agent-pill{display:inline-block;font-size:10px;font-weight:600;border-radius:10px;
+                padding:1px 8px;margin-bottom:6px}
+.ch-sev-block{background:#2d1515;border-color:#7f1d1d;color:#fca5a5}
+.ch-sev-warn {background:#2d2415;border-color:#78350f;color:#fcd34d}
+.ch-audit-log{border-top:1px solid #21262d;margin-top:14px;padding-top:12px}
+.ch-audit-entry{font-size:11px;color:#6e7681;font-family:"SFMono-Regular",Consolas,monospace;
+                 padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-scan-btn{padding:6px 14px;font-size:12px;font-weight:600;border-radius:6px;
+              border:1px solid #30363d;background:#21262d;color:#e6edf3;cursor:pointer;
+              transition:background .15s}
+.ch-scan-btn:hover{background:#30363d}
+.ch-clean{color:#39d353;font-size:13px;font-weight:600}
+
+/* ── 4-panel activity layout ── */
+.panels-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:28px}
+@media(max-width:860px){.panels-grid{grid-template-columns:1fr}}
+.panel-card{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+.panel-card.panel-primary{border-color:#238636;box-shadow:0 0 0 1px #23863622}
+.panel-card.panel-placeholder{opacity:.7}
+.panel-card.panel-full{grid-column:1/-1}
+.panel-header{display:flex;align-items:center;justify-content:space-between;
+               padding:12px 16px;cursor:pointer;user-select:none;
+               border-bottom:1px solid #21262d}
+.panel-header:hover{background:#1c2128}
+.panel-title{font-size:13px;font-weight:600;color:#e6edf3;display:flex;align-items:center;gap:8px}
+.panel-badge{font-size:10px;background:#21262d;color:#8b949e;border-radius:10px;
+              padding:2px 8px;font-weight:500}
+.panel-badge.primary{background:#0e4429;color:#39d353}
+.panel-badge.red{background:#2d1515;color:#f85149}
+.panel-count{font-size:11px;color:#484f58}
+.panel-arrow{color:#484f58;font-size:11px;transition:transform .2s;margin-left:6px}
+.panel-card.panel-open .panel-arrow{transform:rotate(180deg)}
+.panel-body{padding:12px 16px;display:none}
+.panel-card.panel-open .panel-body{display:block}
+.tg-field{margin-bottom:8px;color:#c9d1d9;line-height:1.6}
+.tg-label{font-weight:700;color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-right:5px}
+.panel-table{width:100%;border-collapse:collapse;font-size:12px}
+.panel-table th{text-align:left;color:#484f58;font-weight:500;
+                 padding:4px 8px 8px;border-bottom:1px solid #21262d}
+.panel-table td{padding:5px 8px;border-bottom:1px solid #161b22;color:#c9d1d9;
+                 max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panel-table tr:last-child td{border-bottom:none}
+.panel-empty{color:#484f58;font-size:12px;padding:12px 0;text-align:center}
+.status-success{color:#39d353}
+.status-failed{color:#f85149}
+.status-skipped{color:#8b949e}
+.p3-row{display:flex;align-items:center;justify-content:space-between;
+          padding:8px 0;border-bottom:1px solid #21262d}
+.p3-row:last-child{border-bottom:none}
+.p3-role{font-size:12px;font-weight:600;color:#e6edf3}
+.p3-meta{font-size:11px;color:#8b949e}
+.p3-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-right:8px}
+.p3-dot.green{background:#39d353}
+.p3-dot.red{background:#f85149}
+.p3-dot.grey{background:#484f58}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sb-title">Agent Activity</div>
+  <div class="sb-total">{{ totals.total_actions }}</div>
+  <div class="sb-subtitle">actions · last 30 days</div>
+  <div class="sb-date">{{ date_label }}</div>
+
+  <ul class="sb-list">
+    {% for cat in sidebar_cats %}
+    <li class="sb-item">
+      <div class="sb-row">
+        <span class="sb-name">{{ cat.name }}</span>
+        <span class="sb-count">{{ cat.count }}</span>
+      </div>
+      <div class="sb-bar-bg">
+        <div class="sb-bar-fill" style="width:{{ cat.pct }}%"></div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <div class="sb-updated">Updated {{ last_updated }} AST</div>
+</aside>
+
+<!-- ── Main content ── -->
+<main class="main">
+
+  <!-- ── Pending Approvals Banner ── -->
+  {% if pending_approvals %}
+  <div class="approvals-banner">
+    <div class="approvals-banner-icon">⚡</div>
+    <div class="approvals-banner-body">
+      <div class="approvals-banner-title">
+        {{ pending_approvals|length }} approval{% if pending_approvals|length != 1 %}s{% endif %} waiting in #approvals — react ✅ to execute or ❌ to skip
+      </div>
+      <div class="approvals-banner-items">
+        {% for ap in pending_approvals %}
+        <div class="approvals-banner-item">
+          <div class="ab-dot"></div>
+          <span>
+            <strong>{{ ap.label }}</strong>
+            {% if ap.findings %}
+              —
+              {% for f in ap.findings[:3] %}
+                <span style="color:#8b949e">{{ f.action|title }} {{ f.channel }}</span>{% if not loop.last %}, {% endif %}
+              {% endfor %}
+              {% if ap.findings|length > 3 %}<span style="color:#484f58"> +{{ ap.findings|length - 3 }} more</span>{% endif %}
+            {% endif %}
+          </span>
+          <span style="color:#484f58;font-size:11px">posted {{ ap.posted_at }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="approvals-banner-cta">
+      <a href="https://slack.com/app_redirect?channel={{ pending_approvals[0].channel_id }}" target="_blank">
+        Open in Slack ↗
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Header -->
+  <div class="page-header">
+    <div class="page-title">
+      Agent Activity
+      <span>{{ totals.active_days }} active days</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <nav class="date-tabs" id="date-tabs-nav">
+        <a href="?days=7"   {% if days == 7   %}class="active"{% endif %}>7d</a>
+        <a href="?days=30"  {% if days == 30  %}class="active"{% endif %}>30d</a>
+        <a href="?days=90"  {% if days == 90  %}class="active"{% endif %}>90d</a>
+        <a href="?days=365" {% if days == 365 %}class="active"{% endif %}>1yr</a>
+      </nav>
+      <a href="{{ hex_performance_url }}" target="_blank" rel="noopener"
+        style="padding:5px 14px;border-radius:6px;border:1px solid #1f6feb;
+               background:#0d1b2e;color:#58a6ff;font-size:13px;font-weight:500;
+               text-decoration:none;display:flex;align-items:center;gap:6px;
+               transition:all .15s"
+        onmouseover="this.style.background='#1f6feb22'"
+        onmouseout="this.style.background='#0d1b2e'">
+        ↗ Performance Dashboard
+      </a>
+      <button onclick="scrollToAgents()"
+        style="padding:5px 14px;border-radius:6px;border:1px solid #30363d;
+               background:#161b22;color:#8b949e;font-size:13px;font-weight:500;
+               cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px">
+        Agents
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Activity view (default) ── -->
+  <div id="activity-view">
+
+  <!-- ── Agent Status Bar ── -->
+  {% if agent_status %}
+  <div class="agent-bar">
+    <div class="ab-cell" style="min-width:140px">
+      <div {% if agent_status.last_action and agent_status.last_action.mins_ago < 120 %}class="ab-dot-live"{% else %}class="ab-dot-idle"{% endif %}></div>
+      <div>
+        <div class="ab-cell-label">Status</div>
+        <div class="ab-cell-val">{% if agent_status.last_action and agent_status.last_action.mins_ago < 120 %}Active{% else %}Idle{% endif %}</div>
+      </div>
+    </div>
+    {% if agent_status.last_action %}
+    <div class="ab-cell" style="flex:2;min-width:200px">
+      <div>
+        <div class="ab-cell-label">Last Action</div>
+        <div class="ab-cell-val" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">
+          {{ agent_status.last_action.action }}
+          {% if agent_status.last_action.channel %}<span style="color:#8b949e;font-weight:400"> · {{ agent_status.last_action.channel }}</span>{% endif %}
+        </div>
+        <div class="ab-cell-sub">{{ agent_status.last_action.age }}</div>
+      </div>
+    </div>
+    {% endif %}
+    <div class="ab-cell">
+      <div>
+        <div class="ab-cell-label">Next Scheduled Run</div>
+        <div class="ab-cell-val">{{ agent_status.next_run }}</div>
+        <div class="ab-cell-sub">in {{ agent_status.next_in }}</div>
+      </div>
+    </div>
+    <div class="ab-cell">
+      <div>
+        <div class="ab-cell-label">Uptime</div>
+        <div class="ab-cell-val">{{ agent_status.uptime }}</div>
+        <div class="ab-cell-sub">this deployment</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Live data-staleness banner (fetched fresh on every load, bypasses HTML cache) ── -->
+  <div id="freshness-banner" style="display:none;padding:8px 16px;border-radius:6px;
+       margin-bottom:12px;font-size:13px;font-weight:600;background:#2d1b1b;
+       border:1px solid #f85149;color:#f85149"></div>
+
+  <!-- ── Yesterday's KPI Bar ── -->
+  {% if today_kpis %}
+  <div class="kpi-bar">
+    <div class="kpi-cell" style="position:relative">
+      <div class="kpi-cell-label">Spend · {{ today_kpis.date_label }}</div>
+      <div class="kpi-cell-num">${{ "{:,.0f}".format(today_kpis.spend) }}</div>
+      {% if today_kpis.d_spend %}
+      <div class="kpi-cell-delta {% if today_kpis.d_spend.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
+        {% if today_kpis.d_spend.up %}▲{% else %}▼{% endif %} {{ today_kpis.d_spend.pct|abs }}% vs 7d avg
+      </div>
+      {% endif %}
+      <div class="kpi-date">{{ today_kpis.date_label }}</div>
+      {% if today_kpis.channels %}
+      <div class="kpi-channels">
+        <div style="font-size:10px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By Channel</div>
+        <div style="display:flex;justify-content:flex-end;gap:16px;font-size:10px;color:#484f58;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #374151">
+          <span style="min-width:50px;text-align:right">Spend</span>
+          <span style="min-width:40px;text-align:right">Leads</span>
+          <span style="min-width:40px;text-align:right">SQLs</span>
+          <span style="min-width:50px;text-align:right">CPQL</span>
+        </div>
+        {% for c in today_kpis.channels %}
+        <div class="kpi-ch-row">
+          <span class="kpi-ch-name">
+            <span class="tag {{ c.channel|lower }}" style="font-size:10px;padding:1px 6px">{{ c.channel }}</span>
+          </span>
+          <div class="kpi-ch-nums">
+            <span>${{ "{:,.0f}".format(c.spend) }}</span>
+            <span>{{ c.leads }}</span>
+            <span>{{ c.sqls }}</span>
+            <span class="kpi-ch-cpql">{% if c.cpql %}${{ c.cpql }}{% else %}—{% endif %}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-cell-label">Leads · {{ today_kpis.date_label }}</div>
+      <div class="kpi-cell-num">{{ today_kpis.leads }}</div>
+      {% if today_kpis.d_leads %}
+      <div class="kpi-cell-delta {% if today_kpis.d_leads.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
+        {% if today_kpis.d_leads.up %}▲{% else %}▼{% endif %} {{ today_kpis.d_leads.pct|abs }}% vs 7d avg
+      </div>
+      {% endif %}
+      <div class="kpi-date">HubSpot lead module</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-cell-label">SQLs · {{ today_kpis.date_label }}</div>
+      <div class="kpi-cell-num">{{ today_kpis.sqls }}</div>
+      {% if today_kpis.d_sqls %}
+      <div class="kpi-cell-delta {% if today_kpis.d_sqls.up %}kpi-delta-up{% else %}kpi-delta-down{% endif %}">
+        {% if today_kpis.d_sqls.up %}▲{% else %}▼{% endif %} {{ today_kpis.d_sqls.pct|abs }}% vs 7d avg
+      </div>
+      {% endif %}
+      <div class="kpi-date">qualified leads</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-cell-label">CPQL Yesterday</div>
+      <div class="kpi-cell-num">{% if today_kpis.cpql %}${{ today_kpis.cpql }}{% else %}—{% endif %}</div>
+      <div class="kpi-date" style="margin-top:6px">
+        {% if today_kpis.cpql %}
+          {% if today_kpis.cpql < 60 %}<span style="color:#39d353;font-size:11px">● Scale zone</span>
+          {% elif today_kpis.cpql < 80 %}<span style="color:#3fb950;font-size:11px">● Acceptable</span>
+          {% elif today_kpis.cpql < 95 %}<span style="color:#e3b341;font-size:11px">● Warning</span>
+          {% else %}<span style="color:#f85149;font-size:11px">● Pause zone</span>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Stat strip -->
+  <div class="stat-strip">
+    <div class="stat-card">
+      <div class="stat-num">{{ totals.total_actions }}</div>
+      <div class="stat-label">Actions (30d)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ totals.asana_tasks }}</div>
+      <div class="stat-label">Asana Tasks (30d)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ totals.slack_messages }}</div>
+      <div class="stat-label">Slack Messages (30d)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ totals.active_days }}</div>
+      <div class="stat-label">Active Days (30d)</div>
+    </div>
+  </div>
+
+  <!-- ── Agent Team — Nexa Operations HQ ── -->
+  {% if team_roster %}
+  <div class="section-head" id="team-section-head" onclick="toggleSection('team-section-body','team-section-chev')"
+       style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between">
+    <span>Nexa Operations HQ &nbsp;<span style="color:#484f58;font-weight:400;font-size:11px">9 agents · 3 departments</span></span>
+    <span id="team-section-chev" style="font-size:11px;color:#484f58">▲</span>
+  </div>
+  <div id="team-section-body">
+
+  {# ── Pixel-art sprite macro ── #}
+  {% macro sprite(name, size) %}{% set s = size|default(56) %}
+  {%- if name == "orchestrator" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6"  y="0"  width="6"  height="6"  fill="#a78bfa"/><rect x="21" y="0"  width="6"  height="6"  fill="#a78bfa"/><rect x="36" y="0"  width="6"  height="6"  fill="#a78bfa"/>
+    <rect x="0"  y="6"  width="48" height="6"  fill="#7c3aed"/><rect x="21" y="6"  width="6"  height="6"  fill="#f0abfc"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#4c1d95"/><rect x="27" y="18" width="6"  height="6"  fill="#4c1d95"/>
+    <rect x="15" y="24" width="18" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#7c3aed"/><rect x="21" y="30" width="6"  height="12" fill="#ede9fe"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#7c3aed"/><rect x="42" y="30" width="6"  height="12" fill="#7c3aed"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#4c1d95"/><rect x="27" y="42" width="9"  height="6"  fill="#4c1d95"/>
+  </svg>
+  {%- elif name == "perf_lead" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="9"  y="0"  width="30" height="12" fill="#dc2626"/><rect x="18" y="3"  width="12" height="6"  fill="#fef2f2"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#dc2626"/>
+    <rect x="19" y="32" width="10" height="8"  fill="#fbbf24"/><rect x="22" y="31" width="4"  height="2"  fill="#fbbf24"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#dc2626"/><rect x="42" y="30" width="6"  height="12" fill="#dc2626"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#7f1d1d"/><rect x="27" y="42" width="9"  height="6"  fill="#7f1d1d"/>
+  </svg>
+  {%- elif name == "campaign_mgr" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="6"  fill="#f97316"/><rect x="6"  y="6"  width="36" height="6"  fill="#f97316"/>
+    <rect x="21" y="0"  width="6"  height="12" fill="#fed7aa"/><rect x="6"  y="6"  width="36" height="3"  fill="#fed7aa"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#f97316"/><rect x="21" y="30" width="6"  height="12" fill="#ffedd5"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#f97316"/><rect x="42" y="30" width="6"  height="12" fill="#f97316"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#7c2d12"/><rect x="27" y="42" width="9"  height="6"  fill="#7c2d12"/>
+  </svg>
+  {%- elif name == "creative" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="21" y="0"  width="6"  height="6"  fill="#f59e0b"/><rect x="15" y="6"  width="18" height="6"  fill="#f59e0b"/><rect x="9"  y="12" width="30" height="6"  fill="#f59e0b"/>
+    <rect x="21" y="3"  width="6"  height="3"  fill="#fef9c3"/>
+    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
+    <rect x="15" y="21" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="21" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#f59e0b"/>
+    <rect x="9"  y="33" width="6"  height="6"  fill="#ec4899"/><rect x="18" y="33" width="6"  height="6"  fill="#3b82f6"/><rect x="27" y="33" width="6"  height="6"  fill="#22c55e"/><rect x="36" y="33" width="6"  height="6"  fill="#a855f7"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#f59e0b"/><rect x="42" y="30" width="6"  height="12" fill="#f59e0b"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#78350f"/><rect x="27" y="42" width="9"  height="6"  fill="#78350f"/>
+  </svg>
+  {%- elif name == "cro" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6"  y="0"  width="36" height="6"  fill="#059669"/><rect x="12" y="6"  width="24" height="6"  fill="#059669"/><rect x="18" y="12" width="12" height="6"  fill="#059669"/>
+    <rect x="21" y="3"  width="6"  height="12" fill="#34d399"/>
+    <rect x="12" y="18" width="24" height="12" fill="#fde68a"/>
+    <rect x="15" y="21" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="21" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#059669"/><rect x="21" y="30" width="6"  height="12" fill="#d1fae5"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#059669"/><rect x="42" y="30" width="6"  height="12" fill="#059669"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#064e3b"/><rect x="27" y="42" width="9"  height="6"  fill="#064e3b"/>
+  </svg>
+  {%- elif name == "designer" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="12" fill="#0d9488"/>
+    <rect x="9"  y="3"  width="6"  height="6"  fill="#ec4899"/><rect x="21" y="3"  width="6"  height="6"  fill="#f59e0b"/><rect x="33" y="3"  width="6"  height="6"  fill="#3b82f6"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#0d9488"/><rect x="15" y="33" width="18" height="6"  fill="#99f6e4"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#0d9488"/><rect x="42" y="30" width="6"  height="12" fill="#0d9488"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#134e4a"/><rect x="27" y="42" width="9"  height="6"  fill="#134e4a"/>
+  </svg>
+  {%- elif name == "developer" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6"  y="0"  width="36" height="12" fill="#0891b2"/>
+    <rect x="6"  y="3"  width="6"  height="6"  fill="#67e8f9"/><rect x="36" y="3"  width="6"  height="6"  fill="#67e8f9"/>
+    <rect x="15" y="3"  width="18" height="6"  fill="#083344"/>
+    <rect x="15" y="4"  width="3"  height="4"  fill="#22d3ee"/><rect x="30" y="4"  width="3"  height="4"  fill="#22d3ee"/><rect x="21" y="5"  width="6"  height="3"  fill="#67e8f9"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#0e7490"/><rect x="18" y="33" width="12" height="6"  fill="#22d3ee"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#0891b2"/><rect x="42" y="30" width="6"  height="12" fill="#0891b2"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#164e63"/><rect x="27" y="42" width="9"  height="6"  fill="#164e63"/>
+  </svg>
+  {%- elif name == "ops" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="12" fill="#4f46e5"/>
+    <rect x="9"  y="3"  width="6"  height="6"  fill="#c7d2fe"/><rect x="33" y="3"  width="6"  height="6"  fill="#c7d2fe"/>
+    <rect x="18" y="0"  width="12" height="12" fill="#4338ca"/>
+    <rect x="21" y="3"  width="6"  height="6"  fill="#a5b4fc"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="15" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="27" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="18" y="24" width="12" height="3"  fill="#c47a3a"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#4f46e5"/>
+    <rect x="9"  y="33" width="30" height="3"  fill="#818cf8"/><rect x="9"  y="38" width="30" height="1"  fill="#818cf8"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#4f46e5"/><rect x="42" y="30" width="6"  height="12" fill="#4f46e5"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#312e81"/><rect x="27" y="42" width="9"  height="6"  fill="#312e81"/>
+  </svg>
+  {%- elif name == "analyst" -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="0"  width="24" height="12" fill="#1e1b4b"/>
+    <rect x="12" y="12" width="24" height="18" fill="#fde68a"/>
+    <rect x="6"  y="15" width="15" height="9"  fill="#7c3aed"/><rect x="27" y="15" width="15" height="9"  fill="#7c3aed"/>
+    <rect x="9"  y="18" width="9"  height="6"  fill="#ede9fe"/><rect x="30" y="18" width="9"  height="6"  fill="#ede9fe"/>
+    <rect x="12" y="18" width="6"  height="6"  fill="#1e1b4b"/><rect x="30" y="18" width="6"  height="6"  fill="#1e1b4b"/>
+    <rect x="21" y="18" width="6"  height="3"  fill="#7c3aed"/>
+    <rect x="6"  y="30" width="36" height="12" fill="#6d28d9"/>
+    <rect x="12" y="39" width="4"  height="3"  fill="#c4b5fd"/><rect x="18" y="36" width="4"  height="6"  fill="#c4b5fd"/><rect x="24" y="33" width="4"  height="9"  fill="#c4b5fd"/><rect x="30" y="35" width="4"  height="7"  fill="#c4b5fd"/>
+    <rect x="0"  y="30" width="6"  height="12" fill="#6d28d9"/><rect x="42" y="30" width="6"  height="12" fill="#6d28d9"/>
+    <rect x="12" y="42" width="9"  height="6"  fill="#2e1065"/><rect x="27" y="42" width="9"  height="6"  fill="#2e1065"/>
+  </svg>
+  {%- else -%}
+  <svg viewBox="0 0 48 48" width="{{ s }}" height="{{ s }}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+    <rect x="12" y="6"  width="24" height="24" fill="#30363d"/><rect x="15" y="15" width="6"  height="6"  fill="#58a6ff"/><rect x="27" y="15" width="6"  height="6"  fill="#58a6ff"/><rect x="6"  y="30" width="36" height="12" fill="#21262d"/>
+  </svg>
+  {%- endif %}
+  {% endmacro %}
+
+  {# ── Org chart: orchestrator → 3 departments ── #}
+  <div class="team-hierarchy">
+    {% set main = team_roster | selectattr("is_main") | first %}
+    <script>window._AGENT_ROSTER = {{ team_roster | tojson }};</script>
+
+    {% if main %}
+    <div class="team-main-wrap">
+      <div class="team-main-card" onclick="openAgentModal(0)" style="cursor:pointer">
+        <div class="team-sprite">{{ sprite(main.sprite, 72) }}</div>
+        <div class="team-card-info">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa;margin-bottom:4px">✦ ORCHESTRATOR · ALL DEPTS</div>
+          <div class="team-title" style="font-size:15px">{{ main.title }}</div>
+          <div class="team-desc" style="margin-top:3px">{{ main.desc }}</div>
+          <div class="team-stats" style="margin-top:10px;gap:20px">
+            <div><div class="team-stat-num">{{ main.actions_30d }}</div><div class="team-stat-lbl">actions 30d</div></div>
+            <div><div class="team-stat-num">{{ main.actions_7d }}</div><div class="team-stat-lbl">actions 7d</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tc-stem-down"></div>
+      <div class="tc-bar">
+        <div class="tc-sub-wrap"><div class="tc-node" style="background:#dc2626"></div></div>
+        <div class="tc-sub-wrap"><div class="tc-node" style="background:#059669"></div></div>
+        <div class="tc-sub-wrap"><div class="tc-node" style="background:#6366f1"></div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:18px auto;gap:0 16px;width:100%">
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+        <div style="display:flex;justify-content:center"><div class="tc-stem-up"></div></div>
+
+        {# Performance dept #}
+        {% set perf_members = team_roster | selectattr("dept", "equalto", "Performance") | list %}
+        <div>
+          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;background:#7f1d1d;border:1px solid #dc2626;border-bottom:none;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fca5a5">⚡ Performance</div>
+          <div style="border:1px solid #dc262644;border-radius:0 0 8px 8px;padding:10px;background:#161b22;display:flex;flex-direction:column;gap:8px">
+            {% for member in perf_members %}
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')">
+              {% if member.is_lead %}<div class="sub-badge" style="color:#fca5a5;border-color:#dc2626">DEPT LEAD</div>{% else %}<div class="sub-badge">SUBAGENT</div>{% endif %}
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
+                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
+                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
+                </div>
+              </div>
+              <div class="team-last">{% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}{% else %}<span style="color:#484f58">No activity in window</span>{% endif %}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# CRO / LP dept #}
+        {% set cro_members = team_roster | selectattr("dept", "equalto", "CRO / LP") | list %}
+        <div>
+          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;background:#064e3b;border:1px solid #059669;border-bottom:none;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6ee7b7">🎯 CRO / LP</div>
+          <div style="border:1px solid #05966944;border-radius:0 0 8px 8px;padding:10px;background:#161b22;display:flex;flex-direction:column;gap:8px">
+            {% for member in cro_members %}
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')">
+              {% if member.is_lead %}<div class="sub-badge" style="color:#6ee7b7;border-color:#059669">DEPT LEAD</div>{% else %}<div class="sub-badge">SUBAGENT</div>{% endif %}
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
+                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
+                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
+                </div>
+              </div>
+              <div class="team-last">{% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}{% else %}<span style="color:#484f58">No activity in window</span>{% endif %}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Support dept #}
+        {% set support_members = team_roster | selectattr("dept", "equalto", "Support") | list %}
+        <div>
+          <div style="text-align:center;padding:6px 14px;border-radius:6px 6px 0 0;background:#1e1b4b;border:1px solid #6366f1;border-bottom:none;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#a5b4fc">🔧 Support</div>
+          <div style="border:1px solid #6366f144;border-radius:0 0 8px 8px;padding:10px;background:#161b22;display:flex;flex-direction:column;gap:8px">
+            {% for member in support_members %}
+            <div class="team-sub-card" style="--tc:{{ member.color }};max-width:100%;flex:none;width:100%" onclick="openAgentByTitle('{{ member.title }}')">
+              <div class="sub-badge">SUBAGENT</div>
+              <div style="display:flex;align-items:center;gap:10px;width:100%">
+                <div class="team-sprite">{{ sprite(member.sprite, 44) }}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="team-title-sub" style="text-align:left;font-size:11px">{{ member.title }}</div>
+                  <div class="team-desc-sub" style="text-align:left;margin-top:2px">{{ member.desc }}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:16px;font-weight:700;color:#e6edf3">{{ member.actions_30d }}</div>
+                  <div style="font-size:9px;color:#484f58;text-transform:uppercase">30d</div>
+                </div>
+              </div>
+              <div class="team-last">{% if member.last_day %}<strong>Last:</strong> {{ member.last_action }} · {{ member.last_day }}{% else %}<span style="color:#484f58">No activity in window</span>{% endif %}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+      </div>{# end 3-col depts #}
+    </div>{# end main-wrap #}
+    {% endif %}
+  </div>{# end team-hierarchy #}
+  </div>{# /team-section-body #}
+  {% endif %}
+
+  <!-- ── Code Health ── -->
+  {% if code_health is defined %}
+  <div class="section-head" onclick="toggleSection('code-health-body','code-health-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Code Health — Dashboard Violations
+    <span id="code-health-chev" style="font-size:11px;color:#484f58">{%- if code_health.open_count > 0 %}▼{% else %}▶{% endif %}</span></div>
+  <div id="code-health-body" style="{%- if code_health.open_count > 0 %}{% else %}display:none{% endif %}">
+  <div class="ch-panel">
+    <div class="ch-header">
+      <div>
+        <span class="ch-title">Agent Source Guard</span>
+        <span class="ch-meta" style="margin-left:10px">
+          {% if code_health.last_scan %}Last scan: {{ code_health.last_scan }}{% else %}Never scanned{% endif %}
+        </span>
+      </div>
+      <button class="ch-scan-btn" id="ch-scan-btn" onclick="runDashboardScan()">Run Scan</button>
+    </div>
+
+    <div class="ch-stats">
+      <div class="ch-stat">
+        <div class="ch-stat-num" style="color:{% if code_health.open_count > 0 %}#f85149{% else %}#39d353{% endif %}">
+          {{ code_health.open_count }}
+        </div>
+        <div class="ch-stat-lbl">Open</div>
+      </div>
+      <div class="ch-stat">
+        <div class="ch-stat-num" style="color:#39d353">{{ code_health.fixed_count }}</div>
+        <div class="ch-stat-lbl">Fixed</div>
+      </div>
+      <div class="ch-stat">
+        <div class="ch-stat-num" style="color:#8b949e">{{ code_health.open_count + code_health.fixed_count }}</div>
+        <div class="ch-stat-lbl">Total</div>
+      </div>
+    </div>
+
+    {% if code_health.never_scanned %}
+    <div style="color:#484f58;font-size:12px">No scan data yet. Click <em>Run Scan</em> to check for violations.</div>
+    {% elif code_health.clean %}
+    <div class="ch-clean">✓ All checks passing — no open violations</div>
+    {% else %}
+      {% for agent_name, violations in code_health.by_agent.items() %}
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#8b949e;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">
+          {{ agent_name }}
+          <span style="font-weight:400;color:#484f58">({{ violations|length }})</span>
+        </div>
+        {% for v in violations %}
+        <div class="ch-violation">
+          <span class="ch-agent-pill {% if v.severity == 'block' %}ch-sev-block{% else %}ch-sev-warn{% endif %}" style="border:1px solid">
+            {{ v.severity|upper }}
+          </span>
+          <div class="ch-viol-id">{{ v.id }}</div>
+          <div class="ch-viol-desc">{{ v.description }}</div>
+          {% if v.fix_hint %}
+          <div class="ch-viol-hint">Fix: {{ v.fix_hint }}</div>
+          {% endif %}
+          <div style="font-size:10px;color:#484f58;margin-top:4px">{{ v.file }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if code_health.audit_log %}
+    <div class="ch-audit-log">
+      <div style="font-size:11px;color:#8b949e;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Recent Audit Log</div>
+      {% for entry in code_health.audit_log %}
+      <div class="ch-audit-entry">{{ entry }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <script>
+  function runDashboardScan() {
+    var btn = document.getElementById('ch-scan-btn');
+    btn.disabled = true; btn.textContent = 'Scanning…';
+    fetch('/api/ondemand/dashboard-scan', {method:'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var poll = d.poll || '/api/ondemand/status/dashboard_scan';
+        var iv = setInterval(function(){
+          fetch(poll).then(function(r){ return r.json(); }).then(function(s){
+            if (!s.running) {
+              clearInterval(iv);
+              window.location.reload();
+            }
+          });
+        }, 1200);
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent='Run Scan'; });
+  }
+  </script>
+  </div>
+  {% endif %}
+
+  <!-- ── Heatmap ── -->
+  <div class="section-head" onclick="toggleSection('heatmap-body','heatmap-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Contribution Heatmap — {{ date_label }}
+    <span id="heatmap-chev" style="font-size:11px;color:#484f58">▶</span></div>
+  <div id="heatmap-body" style="display:none">
+  <div class="heatmap-wrap">
+    {% for cat, cells, total in heatmap_rows_p1 %}
+    <div class="hm-row">
+      <div class="hm-cat-label" onclick="scrollToCard('{{ cat|lower|replace(' ','_') }}')">{{ cat }}</div>
+      <div class="hm-cells">
+        {% for cell in cells %}
+        <div class="hm-cell"
+             data-level="{{ cell.level }}"
+             {% if cell.date %}data-tip="{{ cell.date }}: {{ cell.count }}"{% endif %}>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="hm-total">{{ total }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="hm-legend">
+    Less
+    <div class="hm-cell" data-level="0"></div>
+    <div class="hm-cell" data-level="1"></div>
+    <div class="hm-cell" data-level="2"></div>
+    <div class="hm-cell" data-level="3"></div>
+    <div class="hm-cell" data-level="4"></div>
+    More
+  </div>
+  </div>
+
+
+  <!-- ── Asana Task Completion ── -->
+  <div class="section-head" onclick="toggleSection('asana-body','asana-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Asana Tasks — Created by Agent
+    <span id="asana-chev" style="font-size:11px;color:#484f58">▶</span></div>
+  <div id="asana-body" style="display:none">
+
+  {% if asana_completion.total == 0 %}
+  <div style="color:#484f58;font-size:12px;margin-bottom:24px">
+    No Asana tasks logged yet for this period. Tasks are logged every time the agent creates one.
+  </div>
+  {% else %}
+
+  <!-- Summary bar -->
+  <div style="display:flex;align-items:center;gap:24px;margin-bottom:16px;flex-wrap:wrap">
+    <!-- Progress bar -->
+    <div style="flex:1;min-width:200px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <div style="font-size:13px;color:#e6edf3;font-weight:600">
+          {{ asana_completion.completed }}/{{ asana_completion.total }} completed
+          <span style="color:#8b949e;font-weight:400"> ({{ asana_completion.pct_done }}%)</span>
+        </div>
+        {% if not asana_completion.synced %}
+        <span style="font-size:11px;color:#8b949e;background:#21262d;border:1px solid #30363d;border-radius:10px;padding:1px 8px">
+          completion sync pending
+        </span>
+        {% endif %}
+      </div>
+      <div style="height:8px;background:#21262d;border-radius:4px;overflow:hidden">
+        <div style="height:8px;background:#238636;border-radius:4px;width:{{ asana_completion.pct_done }}%;transition:width .4s"></div>
+      </div>
+    </div>
+    <!-- Per-project pills -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% for proj, counts in asana_completion.projects %}
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 14px;font-size:12px;text-align:center">
+        <div style="color:#8b949e;margin-bottom:2px">{{ proj }}</div>
+        <div style="color:#e6edf3;font-weight:600">{{ counts.total }} tasks
+          {% if counts.done > 0 %}<span style="color:#39d353"> · {{ counts.done }} done</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+
+    <!-- Completed tasks card -->
+    <div class="card" style="flex:1;min-width:300px" id="tasks_completed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">✅</div>
+          <div>
+            <div class="card-name">Completed by Team</div>
+            <div class="card-counts">{{ asana_completion.completed }} tasks marked done</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#39d353">{{ asana_completion.completed }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if asana_completion.completed_rows %}
+        <table class="dtable">
+          <tr><th>Completed</th><th>Task</th><th>Project</th><th>Level</th><th>By</th></tr>
+          {% for r in asana_completion.completed_rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.completed_at[:10] if r.completed_at and r.completed_at != 'None' else r.created_day }}</td>
+            <td>{{ r.title }}</td>
+            <td><span class="tag">{{ r.project_key }}</span></td>
+            <td>{{ r.asset_level or '—' }}</td>
+            <td>{{ r.assignee }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="color:#484f58;font-size:12px;padding:4px 0">
+          No completed tasks yet{% if not asana_completion.synced %} — completion status syncs every 6h from Asana{% endif %}.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Open tasks card -->
+    <div class="card" style="flex:1;min-width:300px" id="tasks_open">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">⏳</div>
+          <div>
+            <div class="card-name">Open Tasks</div>
+            <div class="card-counts">{{ asana_completion.open }} awaiting action</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#e3b341">{{ asana_completion.open }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if asana_completion.open_rows %}
+        <table class="dtable">
+          <tr><th>Created</th><th>Task</th><th>Project</th><th>Level</th><th>Due</th></tr>
+          {% for r in asana_completion.open_rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.created_day }}</td>
+            <td>{{ r.title }}</td>
+            <td><span class="tag">{{ r.project_key }}</span></td>
+            <td>{{ r.asset_level or '—' }}</td>
+            <td style="{% if r.due_on and r.due_on != 'None' and r.due_on < today|string %}color:#f85149{% endif %}">
+              {{ r.due_on if r.due_on and r.due_on != 'None' else '—' }}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}<div style="color:#484f58;font-size:12px;padding:4px 0">All tasks completed — great work!</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Executed Actions card -->
+    <div class="card" style="margin-bottom:16px" id="asana_executed">
+      <div class="card-header" onclick="toggleCard(this)">
+        <div class="card-left">
+          <div class="card-icon">⚡</div>
+          <div>
+            <div class="card-name">Executed Actions</div>
+            <div class="card-counts">Campaigns paused / scaled · keywords paused · budget changes</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div class="card-num" style="color:#58a6ff">{{ asana_completion.executed_rows|length }}</div>
+          <div class="card-arrow">▾</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if asana_completion.executed_rows %}
+        <table class="dtable">
+          <tr><th>Date</th><th>Action</th><th>Channel</th><th>Campaign</th><th>#</th><th>Detail</th></tr>
+          {% for r in asana_completion.executed_rows %}
+          <tr>
+            <td style="white-space:nowrap">{{ r.action_date }}</td>
+            <td>{{ r.verb }}</td>
+            <td>{{ r.channel }}</td>
+            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.campaign }}</td>
+            <td>{{ r.cnt }}</td>
+            <td style="color:#8b949e;font-size:12px">{{ r.detail }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div style="color:#484f58;font-size:12px;padding:4px 0">No executed actions logged for this period.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  </div>
+
+  <!-- ── Channel Follow-up ── -->
+  <div class="section-head" onclick="toggleSection('followup-body','followup-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Channel Follow-up — {{ date_label }}
+    <span id="followup-chev" style="font-size:11px;color:#484f58">▶</span></div>
+  <div id="followup-body" style="display:none">
+
+
+  <!-- Campaign actions outcome table -->
+  <div class="card" style="margin-bottom:16px" id="followup_campaigns">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-left">
+        <div class="card-icon">📋</div>
+        <div>
+          <div class="card-name">Campaign Action Outcomes</div>
+          <div class="card-counts">{{ followup.campaign_actions|length }} tracked · scale / pause / create</div>
+        </div>
+      </div>
+      <div class="card-right">
+        <div class="card-num">{{ followup.campaign_actions|length }}</div>
+        <div class="card-arrow">▾</div>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if followup.campaign_actions %}
+      <table class="dtable">
+        <tr>
+          <th>Date</th><th>Action</th><th>Type</th><th>Channel</th><th>Campaign</th>
+          <th>Spend Before</th><th>Spend After</th><th>Outcome</th>
+        </tr>
+        {% for r in followup.campaign_actions %}
+        <tr>
+          <td style="white-space:nowrap">{{ r.action_date }}</td>
+          <td>
+            {% if r.action == 'campaign_paused' %}<span style="color:#f85149">Pause</span>
+            {% elif r.action == 'campaign_scaled' %}<span style="color:#39d353">Scale</span>
+            {% elif r.action == 'campaign_created' %}<span style="color:#58a6ff">Create</span>
+            {% elif r.action == 'ads_paused' %}<span style="color:#f85149">Ads Paused</span>
+            {% else %}<span>{{ r.action }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.action_type == 'executed' %}
+            <span style="color:#39d353;font-size:11px">Executed</span>
+            {% else %}
+            <span style="color:#e3b341;font-size:11px">Recommended</span>
+            {% endif %}
+          </td>
+          <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.campaign_name }}">{{ r.campaign_name }}</td>
+          <td>{% if r.avg_spend_before %}${{ r.avg_spend_before }}/d{% else %}—{% endif %}</td>
+          <td>{% if r.avg_spend_after %}${{ r.avg_spend_after }}/d{% else %}—{% endif %}</td>
+          <td>
+            {% if r.outcome == 'Pending approval' %}<span style="color:#e3b341">{{ r.outcome }}</span>
+            {% elif r.outcome == 'Confirmed paused' %}<span style="color:#484f58">✓ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Re-enabled' %}<span style="color:#e3b341">⚠ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Spend increased' %}<span style="color:#39d353">✓ {{ r.outcome }}</span>
+            {% elif r.outcome == 'Running' %}<span style="color:#58a6ff">● {{ r.outcome }}</span>
+            {% else %}<span style="color:#8b949e">{{ r.outcome }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="color:#484f58;font-size:12px;padding:4px 0">
+        No campaign actions recorded yet. Executed pauses/scales and pending Asana recommendations both appear here.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- New ads / creatives detected in platform -->
+  <div class="card" style="margin-bottom:24px" id="followup_new_ads">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-left">
+        <div class="card-icon">🆕</div>
+        <div>
+          <div class="card-name">New Creatives in Platform (last 14d)</div>
+          <div class="card-counts">{{ followup.new_ads|length }} ads first seen recently</div>
+        </div>
+      </div>
+      <div class="card-right">
+        <div class="card-num">{{ followup.new_ads|length }}</div>
+        <div class="card-arrow">▾</div>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if followup.new_ads %}
+      <p style="font-size:11px;color:#484f58;margin-bottom:8px">
+        Ads that started spending in the last 14 days — likely user-added creatives.
+      </p>
+      <table class="dtable">
+        <tr><th>First Seen</th><th>Channel</th><th>Campaign</th><th>Ad Name</th><th>Spend</th><th>Impressions</th></tr>
+        {% for r in followup.new_ads %}
+        <tr>
+          <td style="white-space:nowrap">{{ r.first_seen }}</td>
+          <td><span class="tag {{ (r.channel or '')|lower }}">{{ r.channel }}</span></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.campaign_name }}">{{ r.campaign_name }}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.ad_name }}">{{ r.ad_name }}</td>
+          <td>${{ r.total_spend }}</td>
+          <td>{{ "{:,}".format(r.impressions) }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="color:#484f58;font-size:12px;padding:4px 0">No new ads detected in the last 14 days.</div>
+      {% endif %}
+    </div>
+  </div>
+  </div>
+
+  <!-- ── Data Hygiene ── -->
+  <div class="card" id="data_hygiene_card" style="margin-bottom:20px;margin-top:32px">
+    <div class="card-header" onclick="toggleCard(this)" style="cursor:pointer">
+      <div class="card-left">
+        <div class="card-icon">🩺</div>
+        <div>
+          <div class="card-name">Data Hygiene</div>
+          <div class="card-counts">
+            {% if hygiene.checks %}
+            {% set fails = hygiene.checks | rejectattr('ok') | list | length %}
+            {% set total = hygiene.checks | length %}
+            {{ total - fails }}/{{ total }} passing
+            {% if fails %} &nbsp;·&nbsp; <span style="color:#f85149">{{ fails }} failing</span>{% endif %}
+            &nbsp;·&nbsp; {{ hygiene.run_ts or 'no run yet' }}
+            {% else %}No check run yet — click Run now{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-right">
+        <button id="hc-btn" onclick="event.stopPropagation();runHealthCheck()"
+                style="background:none;border:1px solid #30363d;border-radius:6px;
+                       color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;margin-right:8px">
+          {% if hc_running %}Running…{% else %}Run now{% endif %}
+        </button>
+        <div class="card-arrow">▾</div>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if hygiene.checks %}
+      {% for cat in ['Infrastructure', 'Connectors', 'Data', 'Other'] %}
+      {% set cat_checks = hygiene.checks | selectattr('category', 'equalto', cat) | list %}
+      {% if cat_checks %}
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:8px">{{ cat }}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          {% for c in cat_checks %}
+          <div onclick="showCheckDetail('{{ c.name | e }}', {{ c.ok | tojson }}, '{{ c.msg | replace("'", "\\'") | e }}')"
+               style="background:#0d1117;border:1px solid {% if c.ok %}#238636{% else %}#f85149{% endif %};
+                      border-radius:6px;padding:8px 12px;min-width:150px;max-width:260px;flex:1;
+                      cursor:pointer;transition:background .15s"
+               onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='#0d1117'">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{% if c.ok %}#238636{% else %}#f85149{% endif %}"></span>
+              <span style="font-size:12px;font-weight:600;color:#e6edf3">{{ c.name }}</span>
+            </div>
+            <div style="font-size:11px;color:{% if c.ok %}#8b949e{% else %}#f85149{% endif %};
+                        overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">
+              {{ c.msg | truncate(72, True, '…') }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      {% if hygiene.freshness %}
+      <div style="margin-top:4px">
+        <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:8px">Data Freshness</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          {% for f in hygiene.freshness %}
+          <div style="background:#0d1117;border:1px solid {% if f.ok %}#21262d{% else %}#f85149{% endif %};
+                      border-radius:6px;padding:8px 14px;text-align:center;min-width:110px">
+            <div style="font-size:11px;color:#8b949e;margin-bottom:2px">{{ f.channel }}</div>
+            <div style="font-size:13px;font-weight:600;color:{% if f.ok %}#e6edf3{% else %}#f85149{% endif %}">
+              {{ f.last_date }}
+            </div>
+            <div style="font-size:10px;color:{% if f.ok %}#8b949e{% else %}#f85149{% endif %}">
+              {% if f.days_ago == 0 %}today{% elif f.days_ago == 1 %}yesterday{% else %}{{ f.days_ago }}d ago ⚠{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% else %}
+      <div style="color:#484f58;font-size:12px;padding:4px 0">
+        No results yet. Click <strong style="color:#58a6ff;cursor:pointer" onclick="runHealthCheck()">Run now</strong>.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Check detail mini-modal -->
+  <div id="hc-detail-overlay" onclick="closeHcDetail()"
+       style="display:none;position:fixed;inset:0;background:#00000088;z-index:300;
+              align-items:center;justify-content:center">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                width:500px;max-width:92vw;padding:22px;position:relative"
+         onclick="event.stopPropagation()">
+      <button onclick="closeHcDetail()"
+              style="position:absolute;top:12px;right:14px;background:none;border:none;
+                     color:#8b949e;font-size:18px;cursor:pointer;line-height:1">✕</button>
+      <div id="hc-detail-icon" style="font-size:20px;margin-bottom:6px"></div>
+      <div id="hc-detail-name" style="font-size:15px;font-weight:600;color:#e6edf3;margin-bottom:10px"></div>
+      <div id="hc-detail-msg"
+           style="font-size:12px;color:#c9d1d9;background:#0d1117;border:1px solid #21262d;
+                  border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-all;
+                  max-height:260px;overflow-y:auto;font-family:monospace"></div>
+    </div>
+  </div>
+
+  <!-- ── On-Demand Actions ── -->
+  <div class="card open" id="ondemand_card" style="margin-bottom:20px;margin-top:32px">
+    <div class="card-header" onclick="toggleCard(this)" style="cursor:pointer">
+      <div class="card-left">
+        <div class="card-icon" style="display:none"></div>
+        <div>
+          <div class="card-name">On-Demand Actions</div>
+          <div class="card-counts">Run audits, find campaign candidates, or trigger data operations manually</div>
+        </div>
+      </div>
+      <div class="card-right"><div class="card-arrow">▾</div></div>
+    </div>
+    <div class="card-body">
+
+      <!-- Row 1: Campaign actions -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px">Campaign Operations</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">
+
+        <!-- Find Duplicate Candidates -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Find Best Campaign to Duplicate</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Qual rate &ge;45% &nbsp;&bull;&nbsp; CPQL &lt;$95 &nbsp;&bull;&nbsp; ROAS &gt;0.5<br>
+            Includes adsets with &ge;50% qual rate &amp; converting leads
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="dup-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+            </select>
+            <button id="dup-btn" onclick="runDuplicateFinder()"
+                    style="background:none;border:1px solid #238636;border-radius:6px;
+                           color:#3fb950;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Find Candidates
+            </button>
+          </div>
+          <div id="dup-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
+        </div>
+
+        <!-- Search / PMax Duplicate Finder -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Duplicate Search / PMax Campaign</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Finds top Search &amp; PMax campaigns, extracts winning keywords<br>
+            (policy-filtered) and winning ads &mdash; creates Asana task blueprint
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="search-dup-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+            </select>
+            <button id="search-dup-btn" onclick="runSearchDupFinder()"
+                    style="background:none;border:1px solid #238636;border-radius:6px;
+                           color:#3fb950;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Find Candidates
+            </button>
+          </div>
+          <div id="search-dup-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
+        </div>
+
+        <!-- BQ Refresh -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">BQ Data Refresh</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Re-sync all channels to BigQuery.<br>
+            Incremental (last 2 days) or full backfill
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="refresh-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="">Incremental (2d)</option>
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <button id="refresh-btn" onclick="runBqRefresh()"
+                    style="background:none;border:1px solid #30363d;border-radius:6px;
+                           color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Refresh
+            </button>
+          </div>
+          <div id="refresh-ondemand-status" style="font-size:11px;color:#8b949e;min-height:16px"></div>
+        </div>
+      </div>
+
+      <!-- Row 2: Audit actions -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px">Audits (Read-only — creates Asana tasks + Slack approvals)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+
+        <!-- Keyword Audit -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Keyword Policy Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Scans all enabled keywords for policy violations:<br>
+            always-negative-as-keyword, brand-in-non-brand,<br>
+            competitor-in-generic, language mismatch
+          </div>
+          <button id="kw-audit-btn" onclick="runAudit('keyword_audit','kw-audit-btn','kw-audit-status')"
+                  style="background:none;border:1px solid #30363d;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Keyword Audit
+          </button>
+          <div id="kw-audit-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+        <!-- Ad Audit -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Ad Pause Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Finds ads meeting pause criteria:<br>
+            spend &gt;$70 with 0 conv, 60%+ junk leads,<br>
+            or CPL &gt;$50 for 10+ days — posts to #approvals
+          </div>
+          <button id="ad-audit-btn" onclick="runAudit('ad_audit','ad-audit-btn','ad-audit-status')"
+                  style="background:none;border:1px solid #30363d;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Ad Audit
+          </button>
+          <div id="ad-audit-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+        <!-- Asana Backfill -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Asana Backfill</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Re-scans all Asana projects and seeds missing tasks<br>
+            into BQ. Run if activity dashboard looks stale.
+          </div>
+          <button onclick="runAsanaBackfill()"
+                  style="background:none;border:1px solid #30363d;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Backfill
+          </button>
+          <div id="asana-backfill-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+      </div>
+
+      <!-- Row 3: Creative & Landing Pages -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px;margin-top:20px">Creative &amp; Landing Pages</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+
+        <!-- Creative Performance Audit -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Creative Performance Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Ranks all social creatives by qual rate &amp; SQLs.<br>
+            Identifies best to scale + worst to replace.<br>
+            Creates Asana task for Creative Strategist.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <select id="creative-audit-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+            </select>
+            <button id="creative-audit-btn" onclick="runCreativeAudit()"
+                    style="background:none;border:1px solid #6e40c9;border-radius:6px;
+                           color:#a371f7;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Audit
+            </button>
+          </div>
+          <div id="creative-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+        <!-- Creative Variants Brief -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">New Creative Variants Brief</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Based on best-performing creative × audience tier data.<br>
+            Scopes A/B variants per segment — creates Asana task<br>
+            for Creative Strategist with OCEAN persona notes.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <select id="creative-brief-channel" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="">All channels</option>
+              <option value="meta">Meta</option>
+              <option value="snapchat">Snapchat</option>
+              <option value="tiktok">TikTok</option>
+              <option value="linkedin">LinkedIn</option>
+            </select>
+            <select id="creative-brief-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+            </select>
+            <button id="creative-brief-btn" onclick="runCreativeBrief()"
+                    style="background:none;border:1px solid #6e40c9;border-radius:6px;
+                           color:#a371f7;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Create Brief
+            </button>
+          </div>
+          <div id="creative-brief-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+        <!-- New LP Brief from Performance -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">New Landing Page Brief</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Finds campaigns with CPQL above warning threshold.<br>
+            Generates CRO brief + Asana task chain:<br>
+            CRO Specialist → UI/UX Designer → Developer.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <select id="lp-brief-product" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="Invoice">Invoice</option>
+              <option value="Bookkeeping">Bookkeeping</option>
+              <option value="Qflavours">Qflavours</option>
+              <option value="General">General</option>
+            </select>
+            <select id="lp-brief-days" style="background:#161b22;border:1px solid #30363d;border-radius:4px;
+                    color:#e6edf3;font-size:11px;padding:3px 6px">
+              <option value="14" selected>Last 14 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <button id="lp-brief-btn" onclick="runLpBrief()"
+                    style="background:none;border:1px solid #1f6feb;border-radius:6px;
+                           color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Create Brief
+            </button>
+          </div>
+          <div id="lp-brief-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+        <!-- Conversion Recording Audit -->
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:6px">Conversion Recording Audit</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px">
+            Checks Google Ads, Microsoft Ads (both accounts), Meta web pixel Lead event,
+            GTM tag status, and GA4 data freshness. Creates an Asana task for any platform
+            not recording — routed to Marketing Ops → Growth Analyst review chain.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <button id="conv-audit-btn" onclick="runConversionAudit()"
+                    style="background:none;border:1px solid #f78166;border-radius:6px;
+                           color:#ff7b72;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Audit
+            </button>
+          </div>
+          <div id="conv-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+        <!-- GTM Full Tag Audit -->
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:6px">GTM Tag Audit — Both Containers</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px">
+            Reviews every tag in GTM-TFH26VC2 (web) and GTM-PK6924TJ (server) line by line.
+            Checks status, triggers, pixel IDs, event names, and missing required tags.
+            Flags Priority 1 blockers. Creates Asana tasks — reported to manager.
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+            <button id="gtm-audit-btn" onclick="runGtmAudit()"
+                    style="background:none;border:1px solid #f78166;border-radius:6px;
+                           color:#ff7b72;font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap">
+              Run Audit
+            </button>
+          </div>
+          <div id="gtm-audit-status" style="font-size:11px;color:#8b949e;margin-top:4px;min-height:16px"></div>
+        </div>
+
+      </div>
+
+      <!-- Row 4: Performance Lead Plans (NEW) -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px;margin-top:20px">Performance Lead Plans</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+
+        <!-- Campaign Brief -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Campaign Brief</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Build full campaign setup brief from live BQ CPQL data.<br>
+            Includes channel, targeting, naming convention, budget, KPI targets.
+          </div>
+          <button id="campaign-brief-btn" onclick="runN8nTask('campaign-brief','campaign-brief-btn','campaign-brief-status')"
+                  style="background:none;border:1px solid #58a6ff;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Create Brief
+          </button>
+          <div id="campaign-brief-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+        <!-- Monthly Plan -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Monthly Plan</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Draft channel budget allocation + targets for next 30 days.<br>
+            Based on current ROAS and CPQL per channel.
+          </div>
+          <button id="monthly-plan-btn" onclick="runN8nTask('monthly-plan','monthly-plan-btn','monthly-plan-status')"
+                  style="background:none;border:1px solid #58a6ff;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Draft Plan
+          </button>
+          <div id="monthly-plan-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+        <!-- Quarterly Plan -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Quarterly Plan</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Full quarterly strategy: channel mix, KPI targets, creative roadmap.<br>
+            90-day budget ramp-up and per-milestone projections.
+          </div>
+          <button id="quarterly-plan-btn" onclick="runN8nTask('quarterly-plan','quarterly-plan-btn','quarterly-plan-status')"
+                  style="background:none;border:1px solid #58a6ff;border-radius:6px;
+                         color:#58a6ff;font-size:11px;padding:4px 12px;cursor:pointer">
+            Draft Plan
+          </button>
+          <div id="quarterly-plan-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+      </div>
+
+      <!-- Row 5: Creative Analysis (NEW) -->
+      <div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px;margin-top:20px">Creative Analysis</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+
+        <!-- Creative Performance Analysis -->
+        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:4px">Creative Performance Analysis</div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5">
+            Rank all creatives by qual leads, CTR, video views.<br>
+            Classifies: Winner / Optimise / Underperformer per audience.<br>
+            Surfaces top 3 to scale + top 3 to replace.
+          </div>
+          <button id="creative-analysis-btn" onclick="runN8nTask('creative-analysis','creative-analysis-btn','creative-analysis-status')"
+                  style="background:none;border:1px solid #a371f7;border-radius:6px;
+                         color:#a371f7;font-size:11px;padding:4px 12px;cursor:pointer">
+            Run Analysis
+          </button>
+          <div id="creative-analysis-status" style="font-size:11px;color:#8b949e;margin-top:8px;min-height:16px"></div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Search/PMax duplicate modal -->
+  <div id="search-dup-overlay" onclick="closeSearchDupModal()"
+       style="display:none;position:fixed;inset:0;background:#00000099;z-index:400;
+              align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                width:100%;max-width:920px;padding:24px;position:relative"
+         onclick="event.stopPropagation()">
+      <button onclick="closeSearchDupModal()"
+              style="position:absolute;top:12px;right:14px;background:none;border:none;
+                     color:#8b949e;font-size:18px;cursor:pointer">✕</button>
+      <div style="font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:4px">Search / PMax Duplicate Blueprint</div>
+      <div id="search-dup-sub" style="font-size:12px;color:#8b949e;margin-bottom:18px"></div>
+      <div id="search-dup-body"></div>
+    </div>
+  </div>
+
+  <!-- Duplicate candidates modal -->
+  <div id="dup-modal-overlay" onclick="closeDupModal()"
+       style="display:none;position:fixed;inset:0;background:#00000099;z-index:400;
+              align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                width:100%;max-width:860px;padding:24px;position:relative"
+         onclick="event.stopPropagation()">
+      <button onclick="closeDupModal()"
+              style="position:absolute;top:12px;right:14px;background:none;border:none;
+                     color:#8b949e;font-size:18px;cursor:pointer">✕</button>
+      <div style="font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:4px">Campaign Duplicate Candidates</div>
+      <div id="dup-modal-sub" style="font-size:12px;color:#8b949e;margin-bottom:18px"></div>
+      <div id="dup-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ── 4-Panel Activity Layout ── -->
+  <div class="section-head" onclick="toggleSection('activity-panels-body','activity-panels-chev')" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center">Agent Activity — {{ date_label }}
+    <span id="activity-panels-chev" style="font-size:11px;color:#484f58">▼</span></div>
+  <div id="activity-panels-body">
+  <div class="panels-grid">
+
+    {# ── Scheduled Skills Panel ── #}
+    <div class="panel-card panel-full panel-open" id="panel-scheduled-skills">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">Scheduled Skills</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">6 auto-run · Cowork</span>
+          <span class="panel-arrow">▾</span>
+        </div>
+      </div>
+      <div class="panel-body" style="display:block;padding:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#161b22;border-bottom:1px solid #21262d">
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Skill</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Agent</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">When (Riyadh)</th>
+              <th style="padding:6px 10px;text-align:left;color:#8b949e;font-weight:500">Output</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">anomaly-alerts</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#d2a8ff22;color:#d2a8ff;border:1px solid #d2a8ff44">Growth Analyst</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Every day · 07:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Slack alert if spend / leads / CPQL anomaly detected</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">daily-loop</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#b0880022;color:#b08800;border:1px solid #b0880044">AI Orchestrator</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Every day · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Slack #approvals digest + Asana tasks</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">daily-slack-audit</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#3fb95022;color:#3fb950;border:1px solid #3fb95044">Project Coordinator</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Every day · 10:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Asana task if #approvals digest unanswered &gt; 24h</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">keyword-autofix</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Campaign Manager</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Sunday · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Pauses policy-violating keywords + Asana weekly review task</td>
+            </tr>
+            <tr style="border-bottom:1px solid #21262d">
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">weekly-lp-review</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO Specialist</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Monday · 06:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">Google Sheet tab LP-YYYY-MM-DD + Asana draft</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px"><span style="font-weight:600;color:#e6edf3">weekly-review</span></td>
+              <td style="padding:6px 10px"><span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#b0880022;color:#b08800;border:1px solid #b0880044">AI Orchestrator</span></td>
+              <td style="padding:6px 10px;color:#8b949e;white-space:nowrap">Monday · 08:00</td>
+              <td style="padding:6px 10px;color:#8b949e;font-size:11px">5-section weekly ops summary (performance + connector health + forecast)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# ── Panel 4: Agent Directory ── #}
+    <div class="panel-card panel-open" id="panel-agents">
+      <div class="panel-header" onclick="togglePanel(this)">
+        <div class="panel-title">Agent Workflow</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="panel-count">{{ agents|length }} agents · 3 departments</span>
+          <span class="panel-arrow">▾</span>
+        </div>
+      </div>
+      <div class="panel-body" style="display:block;padding:16px">
+
+        {# n8n-style workflow canvas #}
+        <div style="margin:-16px;overflow-x:auto">
+          <div style="position:relative;width:640px;height:470px;background:#0d1117;border-radius:0 0 6px 6px">
+
+            <svg style="position:absolute;top:0;left:0;width:640px;height:470px;pointer-events:none" viewBox="0 0 640 470">
+              <defs>
+                <pattern id="wf-dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <circle cx="1" cy="1" r="0.5" fill="#21262d"/>
+                </pattern>
+                <marker id="wfa-gray" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#484f58"/></marker>
+                <marker id="wfa-purple" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#d2a8ff"/></marker>
+                <marker id="wfa-green" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#3fb950"/></marker>
+                <marker id="wfa-blue" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#58a6ff"/></marker>
+                <marker id="wfa-orange" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,1 L7,4 L0,7 Z" fill="#f0883e"/></marker>
+              </defs>
+              <rect width="640" height="470" fill="url(#wf-dots)"/>
+
+              <!-- 1: Trigger → Orchestrator -->
+              <line x1="320" y1="40" x2="320" y2="56" stroke="#484f58" stroke-width="1.5" marker-end="url(#wfa-gray)"/>
+
+              <!-- 2: Orchestrator → Growth Analyst -->
+              <path d="M 320,94 C 320,124 97,124 97,150" stroke="#d2a8ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-purple)"/>
+
+              <!-- 3: Orchestrator → Project Coordinator -->
+              <path d="M 320,94 C 320,124 537,124 537,150" stroke="#3fb95055" stroke-width="1.5" fill="none" marker-end="url(#wfa-green)"/>
+
+              <!-- 4: Growth Analyst → Orchestrator (QA pass, dashed) -->
+              <path d="M 97,150 C 30,105 185,68 240,76" stroke="#d2a8ff55" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-purple)"/>
+              <rect x="8" y="98" width="42" height="14" rx="3" fill="#150e22" stroke="#d2a8ff33"/>
+              <text x="29" y="108" text-anchor="middle" font-size="9" fill="#d2a8ffaa" font-family="system-ui,sans-serif">QA pass</text>
+
+              <!-- 5: Growth Analyst → Performance Lead (flags + analysis) -->
+              <path d="M 97,186 C 97,228 245,228 245,250" stroke="#58a6ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-blue)"/>
+              <rect x="98" y="217" width="72" height="14" rx="3" fill="#0d1b2e" stroke="#58a6ff22"/>
+              <text x="134" y="227" text-anchor="middle" font-size="9" fill="#58a6ff99" font-family="system-ui,sans-serif">flags + analysis</text>
+
+              <!-- 6: Project Coordinator → Performance Lead (reminders, dashed) -->
+              <path d="M 537,186 C 537,228 395,228 395,250" stroke="#3fb95055" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-green)"/>
+              <rect x="452" y="217" width="54" height="14" rx="3" fill="#0a1f10" stroke="#3fb95022"/>
+              <text x="479" y="227" text-anchor="middle" font-size="9" fill="#3fb95099" font-family="system-ui,sans-serif">reminders</text>
+
+              <!-- 7: Project Coordinator → Growth Analyst (monitors all, dashed) -->
+              <path d="M 450,162 C 350,148 280,182 175,168" stroke="#3fb95044" stroke-width="1.2" fill="none" stroke-dasharray="3,3" marker-end="url(#wfa-green)"/>
+              <rect x="284" y="148" width="62" height="14" rx="3" fill="#0d1117" stroke="#3fb95022"/>
+              <text x="315" y="158" text-anchor="middle" font-size="9" fill="#3fb95077" font-family="system-ui,sans-serif">monitors all</text>
+
+              <!-- 8: Performance Lead → Campaign Manager -->
+              <path d="M 320,286 C 320,315 132,315 132,330" stroke="#58a6ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-blue)"/>
+
+              <!-- 9: Performance Lead → Creative Strategist -->
+              <path d="M 320,286 C 320,315 472,315 472,330" stroke="#58a6ff55" stroke-width="1.5" fill="none" marker-end="url(#wfa-blue)"/>
+
+              <!-- 10: Campaign Manager → CRO Specialist (CPQL > warning, dashed) -->
+              <path d="M 132,366 C 132,398 85,398 85,420" stroke="#f0883e55" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-orange)"/>
+              <rect x="28" y="381" width="82" height="14" rx="3" fill="#1f0e00" stroke="#f0883e33"/>
+              <text x="69" y="391" text-anchor="middle" font-size="9" fill="#f0883eaa" font-family="system-ui,sans-serif">CPQL &gt; warning</text>
+
+              <!-- 11: Creative Strategist → UI/UX Designer (CPQL > warning, dashed) -->
+              <path d="M 472,366 C 472,398 270,398 270,420" stroke="#f0883e44" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#wfa-orange)"/>
+
+              <!-- 12: CRO Specialist → UI/UX Designer -->
+              <line x1="150" y1="438" x2="198" y2="438" stroke="#f0883e55" stroke-width="1.5" marker-end="url(#wfa-orange)"/>
+
+              <!-- 13: UI/UX Designer → Developer -->
+              <line x1="340" y1="438" x2="433" y2="438" stroke="#f0883e55" stroke-width="1.5" marker-end="url(#wfa-orange)"/>
+            </svg>
+
+            <!-- Trigger pill -->
+            <div style="position:absolute;left:240px;top:8px;width:160px;height:32px;background:#161b22;border:1px solid #30363d;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:10px;font-weight:600;color:#6e7681;letter-spacing:.04em">
+              ⏰ Daily Loop · 08:00
+            </div>
+
+            <!-- AI Orchestrator -->
+            <div style="position:absolute;left:240px;top:58px;width:160px;height:36px;background:#1c1700;border:1px solid #b0880044;border-left:3px solid #b08800;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#b08800">
+              🎯 AI Orchestrator
+            </div>
+
+            <!-- Growth Analyst -->
+            <div style="position:absolute;left:20px;top:150px;width:155px;height:36px;background:#150e22;border:1px solid #d2a8ff44;border-left:3px solid #d2a8ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#d2a8ff">
+              📊 Growth Analyst
+            </div>
+
+            <!-- Project Coordinator -->
+            <div style="position:absolute;left:450px;top:150px;width:175px;height:36px;background:#0a1f10;border:1px solid #3fb95044;border-left:3px solid #3fb950;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#3fb950">
+              🔧 Project Coordinator
+            </div>
+
+            <!-- Performance Lead -->
+            <div style="position:absolute;left:245px;top:250px;width:150px;height:36px;background:#0d1b2e;border:1px solid #58a6ff44;border-left:3px solid #58a6ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#58a6ff">
+              📈 Performance Lead
+            </div>
+
+            <!-- Campaign Manager -->
+            <div style="position:absolute;left:55px;top:330px;width:155px;height:36px;background:#0d1b2e;border:1px solid #58a6ff44;border-left:3px solid #58a6ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#58a6ff">
+              📢 Campaign Manager
+            </div>
+
+            <!-- Creative Strategist -->
+            <div style="position:absolute;left:390px;top:330px;width:165px;height:36px;background:#0d1b2e;border:1px solid #58a6ff44;border-left:3px solid #58a6ff;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#58a6ff">
+              ✏️ Creative Strategist
+            </div>
+
+            <!-- CRO Specialist -->
+            <div style="position:absolute;left:20px;top:420px;width:130px;height:36px;background:#1f0e00;border:1px solid #f0883e44;border-left:3px solid #f0883e;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#f0883e">
+              🔬 CRO Specialist
+            </div>
+
+            <!-- UI/UX Designer -->
+            <div style="position:absolute;left:200px;top:420px;width:140px;height:36px;background:#1f0e00;border:1px solid #f0883e44;border-left:3px solid #f0883e;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;font-weight:600;color:#f0883e">
+              🎨 UI/UX Designer
+            </div>
+
+            <!-- Developer -->
+            <div style="position:absolute;left:435px;top:420px;width:110px;height:36px;background:#1f0e00;border:1px solid #f0883e44;border-left:3px solid #f0883e;border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;font-weight:600;color:#f0883e">
+              💻 Developer
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /panels-grid -->
+  </div>
+
+
+  <!-- Agent Team Guide content moved into agent modal (click any sprite card) -->
+  <div id="team-guide-body" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:8px">
+
+      <!-- AI Orchestrator -->
+      <div class="panel-card" id="tg-orchestrator">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#b08800">AI Orchestrator</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#b0880022;color:#b08800;border:1px solid #b0880044">Manager</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Manager of all 3 departments. Runs the 8-step daily intelligence loop, assembles and posts the nightly #approvals digest, routes cross-department handoffs, and gates all write actions via ✅/❌.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Entry point of the daily loop → dispatches Growth Analyst for BQ analysis → routes flags to Performance Lead → receives gated specs from all depts → posts #approvals digest → monitors outcomes.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Any request needing routing, the daily 08:00 Riyadh loop, anything crossing departments, assembling the nightly #approvals digest, or reacting to a ✅/❌ approval.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Single orchestration point so no agent acts without a decision-maker checking the full picture first. Prevents conflicting actions across departments.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "run the daily loop", "route this flag", "post the approvals digest", or any cross-department request. Read-only tools (no Write/Edit/Bash) — model: claude-opus.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Routes and gates, never executes directly. Never skip the ✅ gate for scale/pause actions. Triage all flags in one pass. Trust the HANDOFF packet; only re-pull data when a number is missing from it.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>CLAUDE.manager.md</code>, <code>docs/_shared/handoff-protocol.md</code>, <code>docs/_shared/communication-rules.md</code>. Writes: <code>memory/agents/orchestrator/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>Slack <code>#approvals</code> channel, Asana (routing + task creation), all agent files in <code>.claude/agents/</code>.</div>
+        </div>
+      </div>
+
+      <!-- Performance Lead -->
+      <div class="panel-card" id="tg-performance-lead">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#58a6ff">Performance Lead</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>LEAD of the Performance department. Sets KPI thresholds in <code>config.py</code> (CPQL/CPL zones), allocates budget across channels, gates all Performance dept writes via ✅/❌. Owns the sign-off — no campaign launches without it.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Receives analysis + flags from Growth Analyst → classifies flags (scale/pause/optimize) → routes to Campaign Manager + Creative Strategist in parallel → gates specs → hands gated drafts up to Orchestrator for #approvals.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Set or update KPI thresholds in config.py, channel mix or budget allocation decisions, triage a paid-media flag, or react to the #approvals digest.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Department-level sign-off so no campaign change happens without an explicit decision on thresholds and budget — not just data, but a judgement call with full context.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch after Growth Analyst delivers a period comparison + flags. Say "triage these flags", "update CPQL threshold to $X", "allocate budget across channels for next month". Always read <code>config.py</code> live.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>CPQL before CPL always. 14-day minimum decision window — never act on fewer than 14 days of data. Read <code>config.py</code> live every time (never from memory). Triage ALL flags in one pass (not one-by-one). Never re-read what the Orchestrator already summarised.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>config.py</code> (live every session). Writes: <code>memory/agents/performance/performance-lead/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span><code>config.py</code> (KPI zones), Slack <code>#approvals</code>, Meta + Google Ads indirectly via Campaign Manager.</div>
+        </div>
+      </div>
+
+      <!-- Campaign Manager -->
+      <div class="panel-card" id="tg-campaign-manager">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#58a6ff">Campaign Manager</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Builds and configures paid campaigns. Owns the 5-part naming spec <code>{Channel}_{Type}_{Language}_{Product}_{Audience}</code>, Meta pixel wiring on new placements, keyword policy bucket enforcement, and audience/targeting setup.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Receives from Performance Lead → runs PARALLEL with Creative Strategist (no handoff between them) → delivers build/pause spec back to Performance Lead for gating → never executes without ✅.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Apply naming spec to a new campaign, configure Meta pixels on a new placement, enforce keyword policy buckets, build/pause/scale a campaign spec after Performance Lead gates it.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Dedicated execution agent so naming + pixel + keyword rules are applied consistently every time — no manual checklist needed per campaign.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch after Performance Lead gates a build spec. Provide: channel, type, language, product, audience, targeting setup. Runs in parallel with Creative Strategist — no need to wait for creative spec.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Always delegate naming to <code>executors/naming.py::prefixed()</code> — never bypass it. Pre-aggregate HubSpot before any join. Prospecting must use Interests or Lookalike (never "Prospecting" alone). LinkedIn UTM mapping differs: Group=utm_campaign, Campaign=utm_audience, Ad=utm_content. Never auto-execute without ✅.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>executors/naming.py</code>, <code>executors/keyword_policy.py</code>, <code>config.py</code>, <code>memory/CRITICAL_KPI_RULES.md</code>. Writes: <code>memory/agents/performance/campaign-manager/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>Meta Ads, Google Ads, Snapchat, TikTok, LinkedIn, Microsoft Ads (ad platform APIs). Asana for task logging.</div>
+        </div>
+      </div>
+
+      <!-- Creative Strategist -->
+      <div class="panel-card" id="tg-creative-strategist">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#58a6ff">Creative Strategist</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44">Performance</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Owns copy and creative strategy. Maps audiences to OCEAN personas, scopes A/B creative variants per channel per audience segment, aligns LP assets with CRO Specialist before a test goes live.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Receives from Performance Lead → runs PARALLEL with Campaign Manager (no handoff between them) → delivers creative spec/A/B variants. Monthly winning creative report runs auto-scheduled (Cowork, 1st of month 08:00 Riyadh).</div>
+          <div class="tg-field"><span class="tg-label">When</span>OCEAN persona mapping, A/B creative variant scoping per channel, LP asset alignment before a test, monthly creative performance report.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Separates creative judgement from campaign mechanics — copy and persona decisions have dedicated ownership with the right playbook, applied consistently.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "write creative brief for [channel]", "scope A/B variants for [campaign]", "map [audience] to OCEAN persona". Monthly report is auto-scheduled in Cowork (<code>monthly-creative-report</code> skill).</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Never post ad names to Slack — Asana + Google Sheet only. Qual ratio is primary sort; CPL is secondary. Monthly report: winners = qual&gt;50% AND CPL≤$25. Covers channels with ≥1 ad with ≥3 leads. Underperformers highlighted red; winners green.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>docs/PLAYBOOK.md</code>, <code>.claude/skills/cowork/monthly-creative-report.md</code>. Writes: monthly creative Sheet to <code>$GDRIVE_CREATIVE_REPORTS_FOLDER_ID</code>, <code>memory/agents/performance/creative-strategist/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>Meta/Google/Snapchat/TikTok/LinkedIn ad creatives. Google Drive (Creative Reports folder). Asana. Cowork (monthly-creative-report skill).</div>
+        </div>
+      </div>
+
+      <!-- CRO Specialist -->
+      <div class="panel-card" id="tg-cro-specialist">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#f0883e">CRO Specialist</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Leads the CRO / Landing Page chain. Writes the 8-section LP brief + test hypothesis, defines success criteria from 14-day CPQL + destination_url data, owns test-result decisions. First link in the CRO → UI/UX → Developer chain.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Step 1 of 3. Writes brief → hands to UI/UX Designer → Designer hands to Developer → Developer returns verified deploy result → CRO Specialist calls the test outcome. Also runs auto-scheduled: weekly LP review (Monday 06:00 Riyadh) + monthly LP duplicate brief (1st 08:00 Riyadh).</div>
+          <div class="tg-field"><span class="tg-label">When</span>Write LP brief, define test hypothesis, weekly LP review (auto), monthly LP duplicate brief (auto), or decide test outcome after 14 days of BQ data.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Test hypothesis discipline — every LP change starts with a documented brief and ends with a data-based decision, preventing opinion-driven LP changes.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "write LP brief for [product]", "run LP review", "call test outcome for [LP URL]". Auto-scheduled in Cowork: <code>weekly-lp-review</code> (Monday) + <code>monthly-lp-duplicate</code> (1st of month).</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>LP brief always has 8 sections. Success criteria: 14-day CPQL + CVR from <code>campaigns_daily.destination_url</code> joined to <code>hubspot_leads_module_daily</code>. Monthly duplicate is DRAFT only — never auto-starts the design chain without approval. Never dispatch UI/UX Designer without a signed-off brief.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>docs/landing-pages/briefs/</code>, BQ <code>campaigns_daily</code> + <code>hubspot_leads_module_daily</code>. Writes: briefs to <code>docs/landing-pages/briefs/</code>, LP data to Sheet <code>120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg</code> (tab LP-YYYY-MM-DD), Asana draft tasks.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>BQ (<code>campaigns_daily</code>, <code>hubspot_leads_module_daily</code>), Google Sheet (LP review tab), Asana, <code>docs/landing-pages/</code> folder tree.</div>
+        </div>
+      </div>
+
+      <!-- UI/UX Designer -->
+      <div class="panel-card" id="tg-ui-ux-designer">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#f0883e">UI/UX Designer</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Designs landing-page variants in the CRO chain. Turns LP brief into annotated design aligned to OCEAN personas, with ZATCA compliance badge above the fold, and interaction notes for the Developer. Middle link — receives from CRO Specialist, hands to Developer.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Step 2 of 3. Receives signed-off brief from CRO Specialist → produces fully annotated design → hands to Developer. Shared resource from product, coordinated by CRO Specialist.</div>
+          <div class="tg-field"><span class="tg-label">When</span>CRO Specialist has a signed-off LP brief and needs it turned into a buildable, annotated design before Developer can build.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Dedicated design step ensures OCEAN persona alignment, brand consistency, and ZATCA compliance before any code is written — prevents costly rework mid-build.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch with brief file path from <code>docs/landing-pages/briefs/</code> + target OCEAN persona from the brief. Output goes to <code>docs/landing-pages/designs/</code> with same filename as the brief.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>ZATCA badge above fold — mandatory on every design, no exceptions. RTL layout for Arabic. Design all sections in one pass (never section-by-section). Annotate as you design (not a separate second pass). Never design outside what the brief specifies — no unbriefed creative decisions.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>docs/PLAYBOOK.md</code>, <code>docs/landing-pages/reference/lp-design-system.md</code>, brief from <code>docs/landing-pages/briefs/</code>. Writes: annotated design to <code>docs/landing-pages/designs/</code>, <code>memory/agents/cro/ui-ux-designer/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span><code>docs/landing-pages/</code> folder tree (brief → design files), design system at <code>docs/landing-pages/reference/</code>.</div>
+        </div>
+      </div>
+
+      <!-- Developer -->
+      <div class="panel-card" id="tg-developer">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#f0883e">Developer</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#f0883e22;color:#f0883e;border:1px solid #f0883e44">CRO</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>Builds and ships the LP variant. Implements annotated design, wires UTM passthrough on every form field, fires both Meta pixels, deploys to production at <code>lp.qoyod.com</code>, and verifies pixel fires in Events Manager before sign-off. Last link in the CRO chain.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>Step 3 of 3 (last link). Receives annotated design from UI/UX Designer → builds → deploys → verifies pixels observed in Events Manager → reports verified deploy result back to CRO Specialist.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Implement a LP design, wire UTM passthrough on all form fields, fire both Meta pixels, deploy LP variant to production.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Hard gate at last-mile (pixel verification in Events Manager) so no LP goes live with broken tracking. A missing UTM breaks the lead→campaign join and corrupts CPQL for the entire test.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch when UI/UX Designer hands off annotated design from <code>docs/landing-pages/designs/</code>. Provide design file path. Never sign off until pixels observed firing — not assumed. If pixel fires incorrectly → escalate GTM investigation to Project Coordinator.</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>UTM passthrough on EVERY form field — no exceptions. Both pixels must fire on form submit: CRM <code>1782671302631317</code> + Web <code>3036579196577051</code>. Verification = observed in Events Manager, never assumed. Complete ZATCA checklist at <code>docs/landing-pages/_templates/zatca-checklist.md</code> before sign-off.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: design from <code>docs/landing-pages/designs/</code>. Writes: deploy spec to <code>docs/landing-pages/specs/</code>, fills <code>docs/landing-pages/_templates/zatca-checklist.md</code>, <code>memory/agents/cro/developer/</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span><code>lp.qoyod.com</code> production, Meta Events Manager (pixel verification), <code>docs/landing-pages/</code> folder tree.</div>
+        </div>
+      </div>
+
+      <!-- Growth Analyst -->
+      <div class="panel-card" id="tg-growth-analyst">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#d2a8ff">Growth Analyst</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#d2a8ff22;color:#d2a8ff;border:1px solid #d2a8ff44">Support · DATA</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div class="tg-field"><span class="tg-label">Description</span>The single DATA analyst for both departments. Runs the 8-step intelligence loop on live BQ, period comparisons, CRO A/B result analysis, monthly forecasts. Owns <code>memory/</code> — writes <code>08_pitfalls.md</code> on every new API trap and updates <code>14_learning_patterns.md</code> after every action outcome.</div>
+          <div class="tg-field"><span class="tg-label">Flow</span>No internal handoff (support function, serves both depts). Orchestrator dispatches → queries live BQ → delivers analysis + flags to Performance Lead (or A/B results to CRO Specialist) → writes to shared memory. After a connector fix: runs 7-day BQ ↔ HubSpot reconciliation for Project Coordinator.</div>
+          <div class="tg-field"><span class="tg-label">When</span>Run the 8-step loop, period comparison, root-cause analysis ("why did X happen?"), monthly forecast, CRO A/B result analysis, connector fix data integrity review.</div>
+          <div class="tg-field"><span class="tg-label">Why</span>Single analyst means consistent methodology — same period comparison tool, same attribution rules, same memory writes every session. Prevents duplicate or conflicting analysis.</div>
+          <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "run period compare [YYYY-MM-DD to YYYY-MM-DD]", "why did CPQL spike?", "forecast month-end spend + leads + CPQL", "analyse A/B test results for [LP URL]". Always provide explicit date ranges — never relative ("last 7 days").</div>
+          <div class="tg-field"><span class="tg-label">Playbook</span>Never report without live BQ. Always use <code>analysers/period_compare.py</code> — never hand-roll period comparisons. Pre-aggregate HubSpot before any join (avoid spend fan-out). Write every new API trap to <code>memory/08_pitfalls.md</code> immediately. Reconciliation = observed match, not assumed.</div>
+          <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>memory/07_attribution.md</code>, <code>memory/14_learning_patterns.md</code>, <code>memory/01_architecture.md</code>. Writes (shared): <code>memory/08_pitfalls.md</code>, <code>memory/14_learning_patterns.md</code>, <code>memory/16_activity_dashboard.md</code>. Scripts: <code>analysers/period_compare.py</code>, <code>analysers/forecaster.py</code>, <code>analysers/connector_tracker.py</code>.</div>
+          <div class="tg-field"><span class="tg-label">Where</span>BigQuery (<code>nexa_performance</code> dataset), HubSpot API (live reconciliation pulls), Asana (task handoff from Project Coordinator), <code>memory/</code> directory.</div>
+        </div>
+      </div>
+
+      <!-- Project Coordinator -->
+      <div class="panel-card panel-full" id="tg-project-coordinator">
+        <div class="panel-header" onclick="togglePanel(this)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:#3fb950">Project Coordinator</span>
+            <span style="border-radius:4px;padding:1px 7px;font-size:10px;background:#3fb95022;color:#3fb950;border:1px solid #3fb95044">Support · OPS</span>
+          </div>
+          <span class="panel-arrow">▾</span>
+        </div>
+        <div class="panel-body" style="font-size:12px;line-height:1.7">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+            <div>
+              <div class="tg-field"><span class="tg-label">Description</span>Support OPS function serving both departments. Owns UTM structure policy, Meta pixel health (both pixels), HubSpot <code>lead_utm_campaign</code> field mapping, Railway env vars + credential rotation, GTM containers (web + server), connector failure diagnosis and fix, activity dashboard health.</div>
+              <div class="tg-field"><span class="tg-label">Flow</span>No internal handoff (support, serves both depts). Receives from Orchestrator (connector failure escalation) or Campaign Manager (new pixel need) or Developer (GTM issue) → diagnoses and fixes → hands Asana task to Growth Analyst for 7-day BQ ↔ HubSpot reconciliation.</div>
+              <div class="tg-field"><span class="tg-label">When</span>UTM policy audit, Meta pixel health check, Railway credential rotation, GTM container audit, connector failure diagnosis and fix, conversion recording health audit.</div>
+              <div class="tg-field"><span class="tg-label">Why</span>Dedicated OPS function so tracking, credentials, and connector health have a single accountable owner — prevents silent tracking failures that corrupt CPQL without any visible error.</div>
+            </div>
+            <div>
+              <div class="tg-field"><span class="tg-label">How to</span>Dispatch for "audit GTM containers", "rotate Railway credential [VAR_NAME]", "fix broken connector [name]", "check pixel health", "verify UTM mapping". Use PowerShell (not Bash) on Windows for Railway vars — Bash causes shell expansion issues with env var values.</div>
+              <div class="tg-field"><span class="tg-label">Playbook</span>PowerShell for Railway vars on Windows. Secrets in Railway only — never hardcode. Web GTM: <code>GTM-TFH26VC2</code>. Server GTM: <code>GTM-PK6924TJ</code>. After connector fix → hand Asana task to Growth Analyst for 7-day BQ ↔ HubSpot reconciliation. Activity dashboard reviewed hourly 09:00–17:00 Riyadh.</div>
+              <div class="tg-field"><span class="tg-label">Index</span>Reads: <code>memory/02_credentials.md</code>, <code>memory/07_attribution.md</code>, <code>.claude/skills/railway-sync.md</code>. Writes: <code>connector_health_log</code> in BQ, <code>memory/agents/support/project-coordinator/</code>.</div>
+              <div class="tg-field"><span class="tg-label">Where</span>Railway (env vars + logs), GTM UI (web <code>GTM-TFH26VC2</code> + server <code>GTM-PK6924TJ</code>), Meta Events Manager (pixel health), HubSpot (field mapping), BQ <code>connector_health_log</code> table.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /team-guide-grid -->
+  </div><!-- /team-guide-body -->
+
+  </div><!-- /activity-view -->
+
+  <!-- team-view removed: team section lives on the main activity page -->
+
+</main>
+</div><!-- /shell -->
+
+<!-- ── Workflow modal ── -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeWorkflow(event)">
+  <div class="modal" id="modal-box">
+    <button class="modal-close" onclick="closeWorkflowDirect()">✕</button>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-sub" id="modal-sub"></div>
+    <div class="flow-steps" id="flow-steps"></div>
+  </div>
+</div>
+
+<script>
+function toggleCard(header) {
+  header.closest('.card').classList.toggle('open');
+}
+
+function togglePanel(header) {
+  header.closest('.panel-card').classList.toggle('panel-open');
+}
+
+function scrollToCard(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    el.classList.add('open');
+  }
+}
+
+const WORKFLOWS = {{ workflows | tojson }};
+
+function openWorkflow(key) {
+  const wf = WORKFLOWS[key];
+  if (!wf) return;
+  document.getElementById('modal-title').textContent = wf.title;
+  document.getElementById('modal-sub').textContent = wf.subtitle;
+  const stepsEl = document.getElementById('flow-steps');
+  stepsEl.innerHTML = '';
+  wf.steps.forEach(function([label, desc]) {
+    const step = document.createElement('div');
+    step.className = 'flow-step';
+    step.innerHTML =
+      '<div class="flow-connector">' +
+        '<div class="flow-dot"></div>' +
+        '<div class="flow-line"></div>' +
+      '</div>' +
+      '<div class="flow-content">' +
+        '<div class="flow-label">' + label + '</div>' +
+        '<div class="flow-desc">' + desc + '</div>' +
+      '</div>';
+    stepsEl.appendChild(step);
+  });
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeWorkflow(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeWorkflowDirect();
+}
+
+function closeWorkflowDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function showCheckDetail(name, ok, msg) {
+  document.getElementById('hc-detail-icon').textContent = ok ? '✅' : '❌';
+  document.getElementById('hc-detail-name').textContent = name;
+  // If msg contains the WHY separator, split into explanation + raw detail
+  var msgEl = document.getElementById('hc-detail-msg');
+  var parts = msg.split('\n\n');
+  if (!ok && parts.length >= 2) {
+    var why = parts[0];
+    var raw = parts.slice(1).join('\n\n');
+    msgEl.innerHTML =
+      '<div style="color:#e6edf3;font-weight:600;margin-bottom:8px;font-size:12px;font-family:inherit">' +
+        why.replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+      '</div>' +
+      '<div style="color:#8b949e;font-size:11px;font-family:monospace;white-space:pre-wrap;word-break:break-all">' +
+        raw.replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+      '</div>';
+  } else {
+    msgEl.textContent = msg;
+  }
+  var overlay = document.getElementById('hc-detail-overlay');
+  overlay.style.display = 'flex';
+}
+
+function closeHcDetail() {
+  document.getElementById('hc-detail-overlay').style.display = 'none';
+}
+
+function runHealthCheck() {
+  const btn = document.getElementById('hc-btn');
+  if (!btn || btn.textContent.includes('Running')) return;
+  btn.textContent = 'Running…';
+  btn.disabled = true;
+  fetch('/api/run-health-check', {method: 'POST'})
+    .then(function() {
+      // Poll every 5s for up to 2 minutes, then reload
+      let tries = 0;
+      const t = setInterval(function() {
+        tries++;
+        if (tries > 24) { clearInterval(t); location.reload(); return; }
+        fetch('/activity?_hc=1').then(function(r) {
+          if (r.ok) { clearInterval(t); location.reload(); }
+        });
+      }, 5000);
+    })
+    .catch(function() { btn.textContent = '▶ Run now'; btn.disabled = false; });
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { closeWorkflowDirect(); closeDupModal(); closeSearchDupModal(); }
+});
+
+// ── On-demand: Duplicate Campaign Finder ──────────────────────────────────────
+function runDuplicateFinder() {
+  const btn  = document.getElementById('dup-btn');
+  const stat = document.getElementById('dup-status');
+  const days = document.getElementById('dup-days').value;
+  btn.textContent = 'Searching…';
+  btn.disabled = true;
+  stat.textContent = 'Querying BQ…';
+  fetch('/api/duplicate-candidates?days=' + days)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = 'Find Candidates';
+      btn.disabled = false;
+      if (data.error) { stat.style.color='#f85149'; stat.textContent = 'Error: ' + data.error; return; }
+      stat.style.color = '#8b949e';
+      stat.textContent = (data.candidates||[]).length + ' candidate(s) found — last ' + data.period_days + ' days';
+      showDupModal(data);
+    })
+    .catch(function(e) {
+      btn.textContent = 'Find Candidates'; btn.disabled = false;
+      stat.style.color='#f85149'; stat.textContent = 'Request failed';
+    });
+}
+
+function showDupModal(data) {
+  const overlay = document.getElementById('dup-modal-overlay');
+  const body    = document.getElementById('dup-modal-body');
+  const sub     = document.getElementById('dup-modal-sub');
+  sub.textContent = (data.candidates.length) + ' campaign(s) meet criteria — last ' + data.period_days + ' days  ·  Qual ≥45%  ·  CPQL <$95  ·  ROAS >0.5';
+
+  if (!data.candidates.length) {
+    body.innerHTML = '<div style="color:#8b949e;font-size:13px;padding:8px 0">No campaigns meet all three criteria in this period. Try a longer window.</div>';
+  } else {
+    body.innerHTML = data.candidates.map(function(c) {
+      const adsetRows = (c.qualifying_adsets||[]).map(function(a) {
+        return '<tr>' +
+          '<td style="padding:5px 10px;color:#c9d1d9;font-family:monospace;font-size:11px">' + a.adset_name + '</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#3fb950">' + a.qual_rate + '%</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#e6edf3">' + (a.cpql ? '$'+a.cpql.toFixed(0) : '—') + '</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#8b949e">' + a.sqls + '/' + a.leads + '</td>' +
+          '<td style="padding:5px 10px;text-align:right;color:#8b949e">$' + a.spend.toFixed(0) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      const adsetSection = c.qualifying_adsets.length
+        ? '<div style="margin-top:10px;font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Qualifying Ad Sets (' + c.qualifying_adsets.length + ')</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="color:#484f58;font-size:10px;text-transform:uppercase">' +
+          '<th style="padding:4px 10px;text-align:left">Ad Set</th>' +
+          '<th style="padding:4px 10px;text-align:right">Qual%</th>' +
+          '<th style="padding:4px 10px;text-align:right">CPQL</th>' +
+          '<th style="padding:4px 10px;text-align:right">SQL/Lead</th>' +
+          '<th style="padding:4px 10px;text-align:right">Spend</th>' +
+          '</tr>' + adsetRows + '</table>'
+        : '<div style="font-size:11px;color:#484f58;margin-top:8px">No adsets individually meet the 50% threshold — check at campaign level only.</div>';
+
+      return '<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:14px;margin-bottom:12px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">' +
+          '<div>' +
+            '<span style="background:#21262d;border-radius:4px;padding:2px 7px;font-size:10px;color:#8b949e;text-transform:uppercase;margin-right:8px">' + c.channel + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#e6edf3">' + c.campaign_name + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:12px;font-size:12px">' +
+            '<span style="color:#3fb950">Qual <strong>' + c.qual_rate + '%</strong></span>' +
+            '<span style="color:#e6edf3">CPQL <strong>$' + (c.cpql ? c.cpql.toFixed(0) : '—') + '</strong></span>' +
+            '<span style="color:#58a6ff">ROAS <strong>' + (c.roas ? c.roas.toFixed(2) : '—') + '</strong></span>' +
+            '<span style="color:#8b949e">$' + c.spend.toFixed(0) + ' · ' + c.sqls + ' SQLs</span>' +
+          '</div>' +
+        '</div>' +
+        adsetSection +
+        '<div style="margin-top:10px;font-size:11px;color:#484f58">Campaign ID: ' + (c.campaign_id||'—') + ' · Account: ' + (c.account_id||'—') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  overlay.style.display = 'flex';
+}
+
+function closeDupModal() {
+  document.getElementById('dup-modal-overlay').style.display = 'none';
+}
+
+// ── On-demand: Search / PMax Duplicate Finder ────────────────────────────────
+function runSearchDupFinder() {
+  const btn  = document.getElementById('search-dup-btn');
+  const stat = document.getElementById('search-dup-status');
+  const days = document.getElementById('search-dup-days').value;
+  btn.textContent = 'Searching…'; btn.disabled = true;
+  stat.style.color = '#8b949e'; stat.textContent = 'Querying BQ…';
+  fetch('/api/search-duplicate-candidates?days=' + days)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = 'Find Candidates'; btn.disabled = false;
+      if (data.error) { stat.style.color='#f85149'; stat.textContent='Error: '+data.error; return; }
+      stat.style.color = '#8b949e';
+      stat.textContent = (data.candidates||[]).length + ' candidate(s) — last ' + data.period_days + ' days';
+      showSearchDupModal(data);
+    })
+    .catch(function() {
+      btn.textContent = 'Find Candidates'; btn.disabled = false;
+      stat.style.color='#f85149'; stat.textContent='Request failed';
+    });
+}
+
+function showSearchDupModal(data) {
+  const overlay = document.getElementById('search-dup-overlay');
+  const body    = document.getElementById('search-dup-body');
+  const sub     = document.getElementById('search-dup-sub');
+  sub.textContent = data.candidates.length + ' campaign(s) · Qual ≥35% · CPQL <$130 · has keywords · last ' + data.period_days + ' days';
+
+  if (!data.candidates.length) {
+    body.innerHTML = '<div style="color:#8b949e;font-size:13px;padding:8px 0">No qualifying Search/PMax campaigns found. Try a longer window.</div>';
+  } else {
+    body.innerHTML = data.candidates.map(function(c, ci) {
+      // Keywords table
+      const winKws = c.winning_keywords || [];
+      const exclKws = c.excluded_keywords || [];
+      const kwRows = winKws.map(function(k) {
+        return '<tr>' +
+          '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:#c9d1d9">' + k.keyword + '</td>' +
+          '<td style="padding:4px 8px;font-size:11px;color:#8b949e;text-transform:uppercase">' + (k.match_type||'') + '</td>' +
+          '<td style="padding:4px 8px;font-size:11px;color:#8b949e;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (k.adgroup||'') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:' + (k.qs>=7?'#3fb950':k.qs>=5?'#d29922':'#f85149') + '">' + (k.qs||'—') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#e6edf3">' + k.conv + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:' + (k.qual_rate>=50?'#3fb950':'#e6edf3') + '">' + (k.qual_rate!=null?k.qual_rate+'%':'—') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#8b949e">' + (k.hs_cpql?'$'+k.hs_cpql.toFixed(0):'—') + '</td>' +
+        '</tr>';
+      }).join('');
+
+      const kwSection = winKws.length
+        ? '<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Winning Keywords (' + winKws.length + ')' + (exclKws.length?' <span style="color:#f85149;font-weight:400">· ' + exclKws.length + ' excluded by policy</span>':'') + '</div>' +
+          '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="color:#484f58;font-size:10px;text-transform:uppercase">' +
+          '<th style="padding:4px 8px;text-align:left">Keyword</th><th style="padding:4px 8px;text-align:left">Match</th>' +
+          '<th style="padding:4px 8px;text-align:left">Ad Group</th><th style="padding:4px 8px;text-align:right">QS</th>' +
+          '<th style="padding:4px 8px;text-align:right">Conv</th><th style="padding:4px 8px;text-align:right">Qual%</th>' +
+          '<th style="padding:4px 8px;text-align:right">CPQL</th></tr>' +
+          kwRows + '</table></div></div>'
+        : '<div style="font-size:11px;color:#484f58;margin-top:8px">No winning keywords found for this period.</div>';
+
+      // Ads table
+      const winAds = c.winning_ads || [];
+      const adRows = winAds.map(function(a) {
+        return '<tr>' +
+          '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:#c9d1d9;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + a.ad_name + '</td>' +
+          '<td style="padding:4px 8px;font-size:11px;color:#8b949e;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (a.adgroup||'') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#3fb950">' + a.qual_rate + '%</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#e6edf3">' + a.sqls + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#8b949e">' + (a.hs_cpql?'$'+a.hs_cpql.toFixed(0):'—') + '</td>' +
+          '<td style="padding:4px 8px;text-align:right;font-size:11px;color:#8b949e">$' + a.spend.toFixed(0) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      const adSection = winAds.length
+        ? '<div style="margin-top:12px"><div style="font-size:11px;color:#484f58;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Winning Ads (' + winAds.length + ')</div>' +
+          '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<tr style="color:#484f58;font-size:10px;text-transform:uppercase">' +
+          '<th style="padding:4px 8px;text-align:left">Ad</th><th style="padding:4px 8px;text-align:left">Ad Group</th>' +
+          '<th style="padding:4px 8px;text-align:right">Qual%</th><th style="padding:4px 8px;text-align:right">SQLs</th>' +
+          '<th style="padding:4px 8px;text-align:right">CPQL</th><th style="padding:4px 8px;text-align:right">Spend</th></tr>' +
+          adRows + '</table></div></div>'
+        : '<div style="font-size:11px;color:#484f58;margin-top:8px">No qualifying ads (qual ≥40%) found.</div>';
+
+      return '<div style="background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:16px;margin-bottom:14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">' +
+          '<div>' +
+            '<span style="background:#21262d;border-radius:4px;padding:2px 7px;font-size:10px;color:#8b949e;text-transform:uppercase;margin-right:8px">' + c.channel.replace('_',' ') + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#e6edf3">' + c.campaign_name + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:12px;font-size:12px;flex-wrap:wrap">' +
+            '<span style="color:#3fb950">Qual <strong>' + c.qual_rate + '%</strong></span>' +
+            '<span style="color:#e6edf3">CPQL <strong>' + (c.cpql?'$'+c.cpql.toFixed(0):'—') + '</strong></span>' +
+            '<span style="color:#58a6ff">ROAS <strong>' + (c.roas?c.roas.toFixed(2):'—') + '</strong></span>' +
+            '<span style="color:#8b949e">$' + c.spend.toFixed(0) + ' · ' + c.sqls + ' SQLs</span>' +
+          '</div>' +
+        '</div>' +
+        kwSection + adSection +
+        '<div style="margin-top:12px;display:flex;align-items:center;gap:10px">' +
+          '<button onclick="createSearchDupTask(' + ci + ', this)" data-campaign=\'' + JSON.stringify(c).replace(/'/g,"&#39;") + '\'' +
+          ' style="background:#238636;border:none;border-radius:6px;color:#fff;font-size:11px;' +
+          'padding:5px 14px;cursor:pointer;font-weight:600">Create Asana Task</button>' +
+          '<span id="search-dup-task-status-' + ci + '" style="font-size:11px;color:#8b949e"></span>' +
+        '</div>' +
+        '<div style="margin-top:6px;font-size:10px;color:#484f58">Campaign ID: ' + (c.campaign_id||'—') + ' · Account: ' + (c.account_id||'—') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  overlay.style.display = 'flex';
+}
+
+function createSearchDupTask(idx, btn) {
+  const stat = document.getElementById('search-dup-task-status-' + idx);
+  const campaign = JSON.parse(btn.getAttribute('data-campaign'));
+  const periodDays = parseInt(document.getElementById('search-dup-days').value);
+  btn.disabled = true; btn.textContent = 'Creating…';
+  stat.style.color = '#8b949e'; stat.textContent = '';
+  fetch('/api/ondemand/create-search-duplicate-task', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({campaign: campaign, period_days: periodDays})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    btn.disabled = false; btn.textContent = 'Create Asana Task';
+    if (d.error) { stat.style.color='#f85149'; stat.textContent='Error: '+d.error.slice(0,80); return; }
+    stat.style.color = '#3fb950';
+    stat.innerHTML = 'Task created — <a href="' + d.task_url + '" target="_blank" style="color:#58a6ff">open in Asana</a>';
+  })
+  .catch(function() {
+    btn.disabled=false; btn.textContent='Create Asana Task';
+    stat.style.color='#f85149'; stat.textContent='Request failed';
+  });
+}
+
+function closeSearchDupModal() {
+  document.getElementById('search-dup-overlay').style.display = 'none';
+}
+
+// ── On-demand: Generic audit runner ───────────────────────────────────────────
+
+
+// Load on page init
+
+
+function runAudit(key, btnId, statusId) {
+  const btn  = document.getElementById(btnId);
+  const stat = document.getElementById(statusId);
+  const endpoint = key === 'keyword_audit' ? '/api/ondemand/keyword-audit' : '/api/ondemand/ad-audit';
+  btn.disabled = true;
+  btn.style.color = '#8b949e';
+  stat.style.color = '#8b949e';
+  stat.textContent = 'Running…';
+  fetch(endpoint, {method:'POST'})
+    .then(function() {
+      const poll = setInterval(function() {
+        fetch('/api/ondemand/status/' + key)
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (!d.running) {
+              clearInterval(poll);
+              btn.disabled = false; btn.style.color = '#58a6ff';
+              if (d.error) { stat.style.color='#f85149'; stat.textContent='Error: '+d.error.slice(0,120); }
+              else {
+                const rc = d.result && d.result.returncode;
+                stat.style.color = rc === 0 ? '#3fb950' : '#f85149';
+                stat.textContent = rc === 0 ? 'Done — check Asana / #approvals' : 'Finished with errors (rc='+rc+')';
+              }
+            }
+          });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.style.color='#58a6ff'; stat.textContent='Request failed'; stat.style.color='#f85149'; });
+}
+
+// ── On-demand: BQ Refresh button ─────────────────────────────────────────────
+function runBqRefresh() {
+  const btn  = document.getElementById('refresh-btn');
+  const stat = document.getElementById('refresh-ondemand-status');
+  const days = document.getElementById('refresh-days').value;
+  const url  = days ? '/api/refresh?days=' + days : '/api/refresh';
+  btn.disabled = true; btn.style.color = '#8b949e';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued…';
+  fetch(url, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.queued) { btn.disabled=false; btn.style.color='#58a6ff'; stat.textContent='Already running'; return; }
+      stat.textContent = 'Running (' + (days ? days+'d' : 'incremental') + ')…';
+      const poll = setInterval(function() {
+        fetch('/api/refresh/status').then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(poll);
+            btn.disabled=false; btn.style.color='#58a6ff';
+            stat.style.color = s.error ? '#f85149' : '#3fb950';
+            stat.textContent = s.error ? 'Error: '+s.error.slice(0,80) : 'Done — data refreshed';
+          }
+        });
+      }, 5000);
+    })
+    .catch(function() { btn.disabled=false; btn.style.color='#58a6ff'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Asana Backfill ─────────────────────────────────────────────────
+function runAsanaBackfill() {
+  const stat = document.getElementById('asana-backfill-status');
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~60s…';
+  fetch('/api/asana-backfill', {method:'POST'})
+    .then(function() { stat.textContent = 'Running in background — reload in ~60s to see results'; })
+    .catch(function() { stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Creative Performance Audit ────────────────────────────────────
+function runCreativeAudit() {
+  var btn  = document.getElementById('creative-audit-btn');
+  var stat = document.getElementById('creative-audit-status');
+  var days = document.getElementById('creative-audit-days').value;
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~30s…';
+  fetch('/api/ondemand/creative-audit?days=' + days, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~30s';
+        btn.disabled = false; btn.textContent = 'Run Audit'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/creative_audit';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Run Audit';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var r = s.result || {};
+            stat.style.color = r.returncode === 0 ? '#3fb950' : '#f85149';
+            stat.textContent = r.summary || (r.returncode === 0 ? 'Done — Asana task created' : 'Finished with errors');
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Creative Variants Brief ────────────────────────────────────────
+function runCreativeBrief() {
+  var btn  = document.getElementById('creative-brief-btn');
+  var stat = document.getElementById('creative-brief-status');
+  var days = document.getElementById('creative-brief-days').value;
+  var ch   = document.getElementById('creative-brief-channel').value;
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~30s…';
+  var qs = '?days=' + days + (ch ? '&channel=' + encodeURIComponent(ch) : '');
+  fetch('/api/ondemand/creative-brief' + qs, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~30s';
+        btn.disabled = false; btn.textContent = 'Create Brief'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/creative_brief';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Create Brief';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var r = s.result || {};
+            stat.style.color = '#3fb950';
+            stat.textContent = r.summary || 'Done — Asana task created for Creative Strategist';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Create Brief'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Create Brief'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: New LP Brief ────────────────────────────────────────────────────
+function runLpBrief() {
+  var btn  = document.getElementById('lp-brief-btn');
+  var stat = document.getElementById('lp-brief-status');
+  var prod = document.getElementById('lp-brief-product').value;
+  var days = document.getElementById('lp-brief-days').value;
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Queued — takes ~30s…';
+  fetch('/api/ondemand/lp-brief?product=' + encodeURIComponent(prod) + '&days=' + days, {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~30s';
+        btn.disabled = false; btn.textContent = 'Create Brief'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/lp_brief';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Create Brief';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var r = s.result || {};
+            stat.style.color = '#3fb950';
+            stat.textContent = r.summary || 'Done — LP brief + Asana chain created';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Create Brief'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Create Brief'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: Conversion Recording Audit ────────────────────────────────────
+function runConversionAudit() {
+  var btn  = document.getElementById('conv-audit-btn');
+  var stat = document.getElementById('conv-audit-status');
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Checking all platforms — takes ~45s…';
+  fetch('/api/ondemand/conversion-audit', {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~60s';
+        btn.disabled = false; btn.textContent = 'Run Audit'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/conv_audit';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Run Audit';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var res = s.result || {};
+            stat.style.color = res.has_issues ? '#f0883e' : '#3fb950';
+            stat.textContent = res.summary || 'Done — Asana task created';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+// ── On-demand: GTM Tag Audit ──────────────────────────────────────────────────
+function runGtmAudit() {
+  var btn  = document.getElementById('gtm-audit-btn');
+  var stat = document.getElementById('gtm-audit-status');
+  btn.disabled = true; btn.textContent = 'Running…';
+  stat.style.color = '#8b949e'; stat.textContent = 'Reading both containers — takes ~60s…';
+  fetch('/api/ondemand/gtm-audit', {method:'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'already_running') {
+        stat.textContent = 'Already running — check back in ~60s';
+        btn.disabled = false; btn.textContent = 'Run Audit'; return;
+      }
+      var poll = d.poll || '/api/ondemand/status/gtm_audit';
+      var iv = setInterval(function() {
+        fetch(poll).then(function(r) { return r.json(); }).then(function(s) {
+          if (!s.running) {
+            clearInterval(iv);
+            btn.disabled = false; btn.textContent = 'Run Audit';
+            if (s.error) { stat.style.color='#f85149'; stat.textContent='Error: '+s.error; return; }
+            var res = s.result || {};
+            stat.style.color = res.has_issues ? '#f0883e' : '#3fb950';
+            stat.textContent = res.summary || 'Done — Asana tasks created';
+          }
+        }).catch(function() { clearInterval(iv); btn.disabled=false; btn.textContent='Run Audit'; });
+      }, 3000);
+    })
+    .catch(function() { btn.disabled=false; btn.textContent='Run Audit'; stat.style.color='#f85149'; stat.textContent='Request failed'; });
+}
+
+
+// ── Generic n8n webhook proxy trigger (fire-and-forget, results in Slack) ──────
+// Used by the new on-demand rows that proxy to n8n webhooks instead of
+// running local subprocess commands.
+function runN8nTask(taskKey, btnId, statusId) {
+  var btn  = document.getElementById(btnId);
+  var stat = document.getElementById(statusId);
+  if (!btn || !stat) return;
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  stat.style.color = '#8b949e';
+  stat.textContent = 'Triggering n8n — results will appear in Slack #approvals…';
+  fetch('/api/ondemand/' + taskKey, {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.disabled = false;
+      // Restore sensible button label from taskKey
+      var labels = {
+        'campaign-brief':    'Create Brief',
+        'monthly-plan':      'Draft Plan',
+        'quarterly-plan':    'Draft Plan',
+        'creative-analysis': 'Run Analysis',
+        'campaign-health':   'Run Audit',
+        'connector-health':  'Run Check',
+      };
+      btn.textContent = labels[taskKey] || 'Run';
+      if (d.status === 'started') {
+        stat.style.color = '#3fb950';
+        stat.textContent = d.message || 'Started — results will appear in Slack #approvals';
+      } else if (d.error) {
+        stat.style.color = '#f85149';
+        stat.textContent = 'Error: ' + d.error;
+      } else {
+        stat.style.color = '#8b949e';
+        stat.textContent = d.message || d.status || 'Queued';
+      }
+    })
+    .catch(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
+      if (stat) { stat.style.color = '#f85149'; stat.textContent = 'Request failed — check network'; }
+    });
+}
+
+function toggleSection(bodyId, chevId) {
+  var el = document.getElementById(bodyId);
+  var ch = document.getElementById(chevId);
+  if (!el) return;
+  var nowHidden = el.style.display === 'none';
+  el.style.display = nowHidden ? '' : 'none';
+  if (ch) ch.textContent = nowHidden ? '▼' : '▶';
+}
+function scrollToAgents() {
+  var el = document.getElementById('panel-agents');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Live freshness check — bypasses the 5-min HTML page cache ───────────────
+(function() {
+  fetch('/api/freshness')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) return; // all channels fresh — banner stays hidden
+      var stale = (data.channels || []).filter(function(c) { return !c.ok; });
+      if (!stale.length) return;
+      var worst = stale.reduce(function(a, b) { return b.days_ago > a.days_ago ? b : a; });
+      var names = stale.map(function(c) { return c.channel + ' (' + c.last_date + ')'; }).join(', ');
+      var banner = document.getElementById('freshness-banner');
+      if (banner) {
+        banner.textContent = '⚠ Data is ' + worst.days_ago + ' day(s) behind. Stale: ' + names
+          + ' — nightly refresh may have been missed. Reload after a few minutes.';
+        banner.style.display = 'block';
+      }
+    })
+    .catch(function() {}); // silent — never break the page
+})();
+</script>
+
+<!-- ── Agent detail modal ── -->
+<div class="agent-modal-backdrop" id="agent-modal-backdrop" onclick="closeAgentModal(event)">
+  <div class="agent-modal" id="agent-modal" style="--tc:#58a6ff">
+    <button class="agent-modal-close" onclick="closeAgentModal()">✕</button>
+    <div class="agent-modal-header" id="am-header"></div>
+    <div class="agent-modal-body" id="am-body"></div>
+  </div>
+</div>
+
+<script>
+function openAgentModal(idx) {
+  var a = window._AGENT_ROSTER[idx];
+  if (!a) return;
+  _renderAgentModal(a);
+}
+function openAgentByTitle(title) {
+  var roster = window._AGENT_ROSTER || [];
+  for (var i = 0; i < roster.length; i++) {
+    if (roster[i].title === title) { openAgentModal(i); return; }
+  }
+}
+function closeAgentModal(e) {
+  if (e && e.target !== document.getElementById('agent-modal-backdrop')) return;
+  document.getElementById('agent-modal-backdrop').classList.remove('open');
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') document.getElementById('agent-modal-backdrop').classList.remove('open'); });
+
+window._AGENT_GUIDE = {
+  "AI Orchestrator": {
+    description: "Manager of all 3 departments. Runs the 8-step daily intelligence loop, assembles and posts the nightly #approvals digest, routes cross-department handoffs, and gates all write actions via ✅/❌.",
+    flow: "Entry point of the daily loop → dispatches Growth Analyst for BQ analysis → routes flags to Performance Lead → receives gated specs from all depts → posts #approvals digest → monitors outcomes.",
+    when: "Any request needing routing, the daily 08:00 Riyadh loop, anything crossing departments, assembling the nightly #approvals digest, or reacting to a ✅/❌ approval.",
+    why: "Single orchestration point so no agent acts without a decision-maker checking the full picture first. Prevents conflicting actions across departments.",
+    howto: "Dispatch for \"run the daily loop\", \"route this flag\", \"post the approvals digest\", or any cross-department request. Read-only tools (no Write/Edit/Bash) — model: claude-opus.",
+    playbook: "Routes and gates, never executes directly. Never skip the ✅ gate for scale/pause actions. Triage all flags in one pass. Trust the HANDOFF packet; only re-pull data when a number is missing from it.",
+    index: "Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>CLAUDE.manager.md</code>, <code>docs/_shared/handoff-protocol.md</code>. Writes: <code>memory/agents/orchestrator/</code>.",
+    where: "Slack <code>#approvals</code> channel, Asana (routing + task creation), all agent files in <code>.claude/agents/</code>."
+  },
+  "Performance Lead": {
+    description: "LEAD of the Performance department. Sets KPI thresholds in <code>config.py</code> (CPQL/CPL zones), allocates budget across channels, gates all Performance dept writes via ✅/❌. Owns the sign-off — no campaign launches without it.",
+    flow: "Receives analysis + flags from Growth Analyst → classifies flags (scale/pause/optimize) → routes to Campaign Manager + Creative Strategist in parallel → gates specs → hands gated drafts up to Orchestrator for #approvals.",
+    when: "Set or update KPI thresholds in config.py, channel mix or budget allocation decisions, triage a paid-media flag, or react to the #approvals digest.",
+    why: "Department-level sign-off so no campaign change happens without an explicit decision on thresholds and budget — not just data, but a judgement call with full context.",
+    howto: "Dispatch after Growth Analyst delivers a period comparison + flags. Say \"triage these flags\", \"update CPQL threshold to $X\", \"allocate budget across channels\". Always read <code>config.py</code> live.",
+    playbook: "CPQL before CPL always. 14-day minimum decision window — never act on fewer than 14 days of data. Read <code>config.py</code> live every time (never from memory). Triage ALL flags in one pass (not one-by-one).",
+    index: "Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>config.py</code> (live every session). Writes: <code>memory/agents/performance/performance-lead/</code>.",
+    where: "<code>config.py</code> (KPI zones), Slack <code>#approvals</code>, Meta + Google Ads indirectly via Campaign Manager."
+  },
+  "Campaign Manager": {
+    description: "Builds and configures paid campaigns. Owns the 5-part naming spec <code>{Channel}_{Type}_{Language}_{Product}_{Audience}</code>, Meta pixel wiring, keyword policy bucket enforcement, and audience/targeting setup.",
+    flow: "Receives from Performance Lead → runs PARALLEL with Creative Strategist (no handoff between them) → delivers build/pause spec back to Performance Lead for gating → never executes without ✅.",
+    when: "Apply naming spec to a new campaign, configure Meta pixels on a new placement, enforce keyword policy buckets, build/pause/scale a campaign spec after Performance Lead gates it.",
+    why: "Dedicated execution agent so naming + pixel + keyword rules are applied consistently every time — no manual checklist needed per campaign.",
+    howto: "Dispatch after Performance Lead gates a build spec. Provide: channel, type, language, product, audience, targeting setup. Runs in parallel with Creative Strategist.",
+    playbook: "Always delegate naming to <code>executors/naming.py::prefixed()</code> — never bypass it. Prospecting must use Interests or Lookalike (never \"Prospecting\" alone). LinkedIn UTM mapping: Group=utm_campaign, Campaign=utm_audience, Ad=utm_content. Never auto-execute without ✅.",
+    index: "Reads: <code>executors/naming.py</code>, <code>executors/keyword_policy.py</code>, <code>config.py</code>, <code>memory/CRITICAL_KPI_RULES.md</code>. Writes: <code>memory/agents/performance/campaign-manager/</code>.",
+    where: "Meta Ads, Google Ads, Snapchat, TikTok, LinkedIn, Microsoft Ads. Asana for task logging."
+  },
+  "Creative Strategist": {
+    description: "Owns copy and creative strategy. Maps audiences to OCEAN personas, scopes A/B creative variants per channel per audience segment, aligns LP assets with CRO Specialist before a test goes live.",
+    flow: "Receives from Performance Lead → runs PARALLEL with Campaign Manager (no handoff between them) → delivers creative spec/A/B variants. Monthly winning creative report runs auto-scheduled (Cowork, 1st of month 08:00 Riyadh).",
+    when: "OCEAN persona mapping, A/B creative variant scoping per channel, LP asset alignment before a test, monthly creative performance report.",
+    why: "Separates creative judgement from campaign mechanics — copy and persona decisions have dedicated ownership with the right playbook, applied consistently.",
+    howto: "Dispatch for \"write creative brief for [channel]\", \"scope A/B variants for [campaign]\", \"map [audience] to OCEAN persona\". Monthly report is auto-scheduled in Cowork (<code>monthly-creative-report</code> skill).",
+    playbook: "Never post ad names to Slack — Asana + Google Sheet only. Qual ratio is primary sort; CPL is secondary. Monthly report: winners = qual&gt;50% AND CPL≤$25. Underperformers highlighted red; winners green.",
+    index: "Reads: <code>docs/PLAYBOOK.md</code>, <code>.claude/skills/cowork/monthly-creative-report.md</code>. Writes: monthly creative Sheet, <code>memory/agents/performance/creative-strategist/</code>.",
+    where: "Meta/Google/Snapchat/TikTok/LinkedIn ad creatives. Google Drive (Creative Reports folder). Asana. Cowork monthly-creative-report skill."
+  },
+  "CRO Specialist": {
+    description: "Leads the CRO / Landing Page chain. Writes the 8-section LP brief + test hypothesis, defines success criteria from 14-day CPQL + destination_url data, owns test-result decisions. First link in the CRO → UI/UX → Developer chain.",
+    flow: "Step 1 of 3. Writes brief → hands to UI/UX Designer → Designer hands to Developer → Developer returns verified deploy result → CRO Specialist calls the test outcome. Also auto-scheduled: weekly LP review (Monday) + monthly LP duplicate brief (1st of month).",
+    when: "Write LP brief, define test hypothesis, weekly LP review (auto), monthly LP duplicate brief (auto), or decide test outcome after 14 days of BQ data.",
+    why: "Test hypothesis discipline — every LP change starts with a documented brief and ends with a data-based decision, preventing opinion-driven LP changes.",
+    howto: "Dispatch for \"write LP brief for [product]\", \"run LP review\", \"call test outcome for [LP URL]\". Auto-scheduled in Cowork: <code>weekly-lp-review</code> (Monday) + <code>monthly-lp-duplicate</code> (1st of month).",
+    playbook: "LP brief always has 8 sections. Success criteria: 14-day CPQL + CVR from <code>campaigns_daily.destination_url</code> joined to <code>hubspot_leads_module_daily</code>. Monthly duplicate is DRAFT only — never auto-starts the design chain without approval.",
+    index: "Reads: <code>docs/landing-pages/briefs/</code>, BQ <code>campaigns_daily</code> + <code>hubspot_leads_module_daily</code>. Writes: briefs to <code>docs/landing-pages/briefs/</code>, LP data to Sheet, Asana draft tasks.",
+    where: "BQ (<code>campaigns_daily</code>, <code>hubspot_leads_module_daily</code>), Google Sheet (LP review tab), Asana, <code>docs/landing-pages/</code>."
+  },
+  "UI/UX Designer": {
+    description: "Designs landing-page variants in the CRO chain. Turns LP brief into annotated design aligned to OCEAN personas, with ZATCA compliance badge above the fold, and interaction notes for the Developer. Middle link — receives from CRO Specialist, hands to Developer.",
+    flow: "Step 2 of 3. Receives signed-off brief from CRO Specialist → produces fully annotated design → hands to Developer. Shared resource from product, coordinated by CRO Specialist.",
+    when: "CRO Specialist has a signed-off LP brief and needs it turned into a buildable, annotated design before Developer can build.",
+    why: "Dedicated design step ensures OCEAN persona alignment, brand consistency, and ZATCA compliance before any code is written — prevents costly rework mid-build.",
+    howto: "Dispatch with brief file path from <code>docs/landing-pages/briefs/</code> + target OCEAN persona from the brief. Output goes to <code>docs/landing-pages/designs/</code>.",
+    playbook: "ZATCA badge above fold — mandatory on every design, no exceptions. RTL layout for Arabic. Design all sections in one pass. Annotate as you design. Never design outside what the brief specifies.",
+    index: "Reads: <code>docs/PLAYBOOK.md</code>, <code>docs/landing-pages/reference/lp-design-system.md</code>, brief from <code>docs/landing-pages/briefs/</code>. Writes: annotated design to <code>docs/landing-pages/designs/</code>.",
+    where: "<code>docs/landing-pages/</code> folder tree (brief → design files), design system at <code>docs/landing-pages/reference/</code>."
+  },
+  "Developer": {
+    description: "Builds and ships the LP variant. Implements annotated design, wires UTM passthrough on every form field, fires both Meta pixels, deploys to production at <code>lp.qoyod.com</code>, and verifies pixel fires in Events Manager before sign-off. Last link in the CRO chain.",
+    flow: "Step 3 of 3 (last link). Receives annotated design from UI/UX Designer → builds → deploys → verifies pixels observed in Events Manager → reports verified deploy result back to CRO Specialist.",
+    when: "Implement a LP design, wire UTM passthrough on all form fields, fire both Meta pixels, deploy LP variant to production.",
+    why: "Hard gate at last-mile (pixel verification in Events Manager) so no LP goes live with broken tracking. A missing UTM breaks the lead→campaign join and corrupts CPQL for the entire test.",
+    howto: "Dispatch when UI/UX Designer hands off annotated design from <code>docs/landing-pages/designs/</code>. Never sign off until pixels observed firing — not assumed. Pixel issues → escalate GTM to Project Coordinator.",
+    playbook: "UTM passthrough on EVERY form field — no exceptions. Both pixels must fire on form submit: CRM <code>1782671302631317</code> + Web <code>3036579196577051</code>. Verification = observed in Events Manager, never assumed.",
+    index: "Reads: design from <code>docs/landing-pages/designs/</code>. Writes: deploy spec to <code>docs/landing-pages/specs/</code>, ZATCA checklist, <code>memory/agents/cro/developer/</code>.",
+    where: "<code>lp.qoyod.com</code> production, Meta Events Manager (pixel verification), <code>docs/landing-pages/</code> folder tree."
+  },
+  "Growth Analyst": {
+    description: "Cross-cutting QA reviewer and DATA analyst for both departments. Reviews every agent's output before it reaches the Orchestrator — returns to owner if gaps, approves if clean. Also runs the 8-step intelligence loop on live BQ, period comparisons, CRO A/B result analysis, monthly forecasts. Owns <code>memory/</code> — writes <code>08_pitfalls.md</code> on every new API trap and updates <code>14_learning_patterns.md</code> after every action outcome.",
+    flow: "Every agent's completed output → QA gate (quality, completeness, rule compliance, memory writes) → return to owner if issues OR approve + forward to Orchestrator if clean. Separately: Orchestrator dispatches for BQ analysis → delivers flags to Performance Lead or A/B results to CRO Specialist → writes to shared memory.",
+    when: "Run the 8-step loop, period comparison, root-cause analysis (\"why did X happen?\"), monthly forecast, CRO A/B result analysis, connector fix data integrity review.",
+    why: "Single analyst means consistent methodology — same period comparison tool, same attribution rules, same memory writes every session.",
+    howto: "Dispatch for \"run period compare [YYYY-MM-DD to YYYY-MM-DD]\", \"why did CPQL spike?\", \"forecast month-end spend + leads + CPQL\", \"analyse A/B test results for [LP URL]\". Always provide explicit date ranges.",
+    playbook: "Never report without live BQ. Always use <code>analysers/period_compare.py</code> — never hand-roll period comparisons. Pre-aggregate HubSpot before any join. Write every new API trap to <code>memory/08_pitfalls.md</code> immediately.",
+    index: "Reads: <code>memory/CRITICAL_KPI_RULES.md</code>, <code>memory/07_attribution.md</code>, <code>memory/14_learning_patterns.md</code>. Scripts: <code>analysers/period_compare.py</code>, <code>analysers/forecaster.py</code>.",
+    where: "BigQuery (<code>qoyod_marketing</code> dataset), HubSpot API (live reconciliation pulls), Asana, <code>memory/</code> directory."
+  },
+  "Project Coordinator": {
+    description: "Cross-cutting OPS layer monitoring all team comms, Asana task statuses, and reminders — plus all technical plumbing. Owns UTM structure policy, Meta pixel health (both pixels), HubSpot <code>lead_utm_campaign</code> field mapping, Railway env vars + credential rotation, GTM containers (web + server), connector failure diagnosis and fix. You are the connective tissue keeping the team accountable.",
+    flow: "Passively monitors all Slack channels + all Asana tasks daily — scans for overdue, stalled (&gt;2 days in-progress), or unassigned items → sends targeted reminders to responsible agent → escalates to Orchestrator after 2 missed reminders. Also: receives technical OPS tasks from Orchestrator / Campaign Manager / Developer → diagnoses and fixes → hands Asana task to Growth Analyst for BQ ↔ HubSpot reconciliation.",
+    when: "Overdue task reminders, comms coordination between agents, UTM policy audit, Meta pixel health check, Railway credential rotation, GTM container audit, connector failure diagnosis and fix, conversion recording health audit.",
+    why: "Dedicated OPS layer so both comms accountability AND technical tracking health have a single owner — prevents silent failures (stalled tasks, broken connectors, corrupt CPQL) from going unnoticed.",
+    howto: "Dispatch for \"audit GTM containers\", \"rotate Railway credential [VAR_NAME]\", \"fix broken connector [name]\", \"check pixel health\", \"verify UTM mapping\". Use PowerShell (not Bash) on Windows for Railway vars.",
+    playbook: "PowerShell for Railway vars on Windows. Secrets in Railway only — never hardcode. Web GTM: <code>GTM-TFH26VC2</code>. Server GTM: <code>GTM-PK6924TJ</code>. After connector fix → hand Asana task to Growth Analyst for BQ ↔ HubSpot reconciliation.",
+    index: "Reads: <code>memory/02_credentials.md</code>, <code>memory/07_attribution.md</code>, <code>.claude/skills/railway-sync.md</code>. Writes: <code>connector_health_log</code> in BQ, <code>memory/agents/support/project-coordinator/</code>.",
+    where: "Railway (env vars + logs), GTM UI (web <code>GTM-TFH26VC2</code> + server <code>GTM-PK6924TJ</code>), Meta Events Manager, HubSpot (field mapping), BQ <code>connector_health_log</code>."
+  }
+};
+
+function _renderAgentModal(a) {
+  var modal = document.getElementById('agent-modal');
+  modal.style.setProperty('--tc', a.color || '#58a6ff');
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  var deptBadge = '';
+  if (a.is_main) {
+    deptBadge = '<span style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#a78bfa">✦ ORCHESTRATOR · ALL DEPTS</span>';
+  } else if (a.dept) {
+    var dc = a.dept_color || '#8b949e';
+    var badge = a.is_lead ? 'DEPT LEAD' : 'SUBAGENT';
+    deptBadge = '<span style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:'+dc+'">'+a.dept+' · '+badge+'</span>';
+  }
+  document.getElementById('am-header').innerHTML =
+    '<div style="flex-shrink:0" id="am-sprite-wrap"></div>' +
+    '<div style="flex:1;min-width:0">' +
+      deptBadge +
+      '<div style="font-size:16px;font-weight:700;color:#e6edf3;margin-top:3px">'+_esc(a.title)+'</div>' +
+      '<div style="font-size:12px;color:#8b949e;margin-top:4px;line-height:1.5">'+_esc(a.desc)+'</div>' +
+      '<div style="display:flex;gap:14px;margin-top:10px">' +
+        '<div><span style="font-size:18px;font-weight:700;color:'+a.color+'">'+a.actions_30d+'</span> <span style="font-size:10px;color:#484f58;text-transform:uppercase">actions 30d</span></div>' +
+        '<div><span style="font-size:18px;font-weight:700;color:'+a.color+'">'+a.actions_7d+'</span> <span style="font-size:10px;color:#484f58;text-transform:uppercase">7d</span></div>' +
+      '</div>' +
+    '</div>';
+
+  // ── Body ────────────────────────────────────────────────────────────────
+  var html = '';
+
+  // Charter
+  if (a.charter && a.charter.length) {
+    html += '<div class="am-section"><div class="am-section-title">Charter</div>';
+    a.charter.forEach(function(line){
+      html += '<div class="am-charter-item"><span class="am-charter-bullet">▸</span><span>'+_esc(line)+'</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // Handoff flow
+  var hasPrev = a.receives_from && a.receives_from.length;
+  var hasNext = a.sends_to && a.sends_to.length;
+  if (hasPrev || hasNext) {
+    html += '<div class="am-section"><div class="am-section-title">Handoff Chain</div><div class="am-flow">';
+    if (hasPrev) {
+      a.receives_from.forEach(function(t,i){
+        html += '<span class="am-flow-pill">'+_esc(t)+'</span>';
+        if (i < a.receives_from.length-1) html += '<span class="am-flow-arrow">·</span>';
+      });
+      html += '<span class="am-flow-arrow">→</span>';
+    }
+    html += '<span class="am-flow-pill am-self">'+_esc(a.title)+'</span>';
+    if (hasNext) {
+      html += '<span class="am-flow-arrow">→</span>';
+      a.sends_to.forEach(function(t,i){
+        html += '<span class="am-flow-pill">'+_esc(t)+'</span>';
+        if (i < a.sends_to.length-1) html += '<span class="am-flow-arrow">·</span>';
+      });
+    }
+    html += '</div></div>';
+  }
+
+  // Activity log roles
+  if (a.roles && a.roles.length) {
+    html += '<div class="am-section"><div class="am-section-title">Activity Log Roles</div><div>';
+    a.roles.forEach(function(r){
+      html += '<span class="am-role-tag">'+_esc(r)+'</span>';
+    });
+    html += '</div></div>';
+  }
+
+  // Recent actions
+  if (a.recent_actions && a.recent_actions.length) {
+    html += '<div class="am-section"><div class="am-section-title">Recent Activity</div>';
+    a.recent_actions.forEach(function(r){
+      html += '<div class="am-recent-row"><span>'+_esc(r.action)+'</span><span class="am-recent-day">'+(r.day||'—')+'</span></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="am-section"><div class="am-section-title">Recent Activity</div><div style="font-size:12px;color:#484f58">No activity in selected window</div></div>';
+  }
+
+  // Role guide (from Agent Team Guide)
+  var guide = window._AGENT_GUIDE && window._AGENT_GUIDE[a.title];
+  if (guide) {
+    var gfields = [
+      ['Description', guide.description],
+      ['Flow', guide.flow],
+      ['When', guide.when],
+      ['Why', guide.why],
+      ['How to', guide.howto],
+      ['Playbook', guide.playbook],
+      ['Index', guide.index],
+      ['Where', guide.where]
+    ];
+    html += '<div class="am-section"><div class="am-section-title">Role Guide</div>';
+    gfields.forEach(function(f){
+      if (f[1]) html += '<div class="tg-field"><span class="tg-label">'+f[0]+'</span>'+f[1]+'</div>';
+    });
+    html += '</div>';
+  }
+
+  // Agent file path
+  if (a.agent_file) {
+    html += '<div class="am-section"><div class="am-section-title">Agent Definition</div><div class="am-file">'+_esc(a.agent_file)+'</div></div>';
+  }
+
+  document.getElementById('am-body').innerHTML = html;
+  document.getElementById('agent-modal-backdrop').classList.add('open');
+}
+
+function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
