@@ -97,7 +97,7 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 | Nexa · Sub-Flow F (Creative & CTR Fix) | `smHaEhWloComRQyz` | Called by Master Switch | — | ACTIVE |
 
 **Deleted 2026-06-17 (stale/superseded):**
-- `7ZEROvwTg3UrGAP6` — Nexa · Databox Sync (pushed to legacy Databox API; superseded by Railway Python pusher + direct BQ integration in Databox)
+- `7ZEROvwTg3UrGAP6` — Nexa · Databox Sync (superseded; Databox reads directly from BQ via native connector)
 - `H6XSFlp1WOUPpgBF` — Nexa · Monitor Follow-up (BQ monitoring covered by Master workflow)
 - `yOD1l9n7qOfbpWfM` — Nexa · AI Content Agent (called `somaa-ai-agent-production.up.railway.app` — different project, not Nexa)
 
@@ -105,7 +105,7 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 ### GitHub Actions collector schedule
 
-`.github/workflows/collectors.yml` — runs all 14 Python BQ collectors at 00:00/06:00/12:00/18:00 UTC.
+`.github/workflows/collectors.yml` — runs all 13 Python BQ collectors at 00:00/06:00/12:00/18:00 UTC. `google_ads_bq.py` is called with `all 35` (35-day rolling window to avoid full-history timeout in CI).
 `.github/workflows/linkedin_token_refresh.yml` — refreshes LinkedIn token daily at 02:00 UTC.
 
 Collectors are the **only** Python runtime still in active use. All other Python entrypoints (`main.py`, `operational_scheduler.py`, `reporting_scheduler.py`, `app_server.py`) were deleted 2026-06-16.
@@ -128,7 +128,7 @@ Nexa Performance Agent/
 │   ├── hubspot_leads_bq.py # lead module daily buckets
 │   ├── hubspot_deals_bq.py # deals daily buckets
 │   ├── ga4_bq.py           # GA4 sessions/conversions
-│   └── databox_pusher.py   # manual backfill only; live push is n8n Databox Sync
+│   └── databox_pusher.py   # manual backfill only; Databox reads directly from BQ via native connector
 ├── executors/              # write actions (pause, scale, Asana, keywords)
 ├── logs/                   # activity_logger.py → agent_activity_log BQ
 ├── scripts/                # OAuth flows + audit tools (no schedulers)
@@ -152,7 +152,8 @@ Nexa Performance Agent/
 | `keywords_daily` | google_ads_bq, microsoft_ads_bq | date, channel, campaign_id, adgroup_id |
 | `hubspot_leads_module_daily` | hubspot_leads_bq.py | date, qoyod_source, lead_utm_campaign |
 | `hubspot_leads_individual` | hubspot_leads_bq.py | hs_object_id |
-| `hubspot_deals_daily` | hubspot_deals_bq.py | date, pipeline, qoyod_source |
+| `hubspot_deals_daily` | hubspot_deals_bq.py (VIEW — compat wrapper over `hubspot_deals_individual`; collector writes via `mirror` subcommand) | date, pipeline, qoyod_source |
+| `hubspot_deals_individual` | hubspot_deals_bq.py (`mirror` subcommand) | hs_object_id |
 | `organic_page_daily` | meta_organic_bq, youtube_bq | date, channel |
 | `agent_activity_log` | activity_logger.py | role, status |
 | `connector_health_log` | connector_tracker.py | connector, check_type |

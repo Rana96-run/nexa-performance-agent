@@ -229,6 +229,16 @@ Campaign IDs (customer 5753494964):
 
 ---
 
+## Done this session (2026-06-18) — collector fixes + n8n hardening
+
+- [x] **HubSpot Deals collector fixed.** `hubspot_deals_daily` was converted to a VIEW (commit `2cbe6ec`), breaking direct table writes. Fixed `collectors.yml` to call `python collectors/hubspot_deals_bq.py mirror` (writes to `hubspot_deals_individual`; view reflects automatically). Verified: 116,970 rows written, data current to 2026-06-17. Commit: `a37fb6e`.
+- [x] **Google Ads credential fixed.** `GOOGLE_ADS_CLIENT_SECRET` was stored with literal `<>` angle brackets in Railway — caused `invalid_client` OAuth error. Removed brackets; collector now runs clean. Data current to 2026-06-17.
+- [x] **Google Ads CI timeout fix.** Added `all 35` days limit to `collectors.yml` Google Ads step to prevent full 17-month history pull on each 6h run. Commit: `29ab190`.
+- [x] **4 KPI sub-flows credential fixed.** kpi_cpl, kpi_cpql, kpi_impression_share, kpi_creative_ctr had `genericCredentialType` instead of `predefinedCredentialType` for Anthropic API calls. All 10 Claude nodes across 12 workflows now use `Anthropic account` credential (id: `yLwrXNzxReOM4Fgn`). Commit: `e79ce0a`.
+- [x] **n8n architecture enforced: 12 workflows.** Deleted 30 on-demand webhook workflows + 9 stale/superseded workflows. Architecture is exactly 12: 3 cadence + 3 infra + 6 KPI sub-flows. On-demand = click "Execute workflow" in n8n UI.
+- [x] **Dashboard: removed on-demand proxy layer.** Deleted ONDEMAND_ROUTES, `/api/ondemand/<task>` route, Run buttons, JS fetch block from `reports/app.py`. Connector health now queries `campaigns_daily MAX(date)` directly (independent of Daily Performance workflow). Added n8n links + actions/tasks section.
+- [x] **n8n UTF-8 BOM pitfall documented.** `memory/08_pitfalls.md` updated. All PUT operations must use `[System.Text.UTF8Encoding]::new($false)` to avoid BOM bytes that silently fail the n8n API.
+
 ## Done this session (2026-06-16) — n8n full build
 
 - [x] **n8n Workflow 1: Nexa · Master Performance Workflow** (`T8icImtZFLYeCa7e`) — already existed, audited and hardened across previous sessions. Needs manual activation toggle in n8n UI.
@@ -249,7 +259,7 @@ Campaign IDs (customer 5753494964):
 
 ## P0 — Post-n8n-migration: pending items (2026-06-17)
 
-- [ ] **Add GitHub Secrets to repo** (copy from Railway env vars) — blocks GitHub Actions collectors going live. Required vars: all platform tokens, BQ service account, HubSpot token, etc. Path: GitHub repo → Settings → Secrets and variables → Actions.
+- [x] **Add GitHub Secrets to repo** — DONE 2026-06-18. All secrets confirmed in GitHub Actions. HUBSPOT_ACCESS_TOKEN and GOOGLE_ADS_REFRESH_TOKEN verified working.
 - [ ] **Shut down Railway service** (user approval required) — after GitHub Actions confirmed working. Railway project: `nexa-performance-agent` in Marketing Workspace (`57f124d0`).
 - [x] **Configure Slack App Event Subscriptions for Approval Listener** — DONE 2026-06-17. URL verified, `reaction_added` event wired. Approval gate is fully live.
 - [ ] **Add QA feed cell in Hex** — SQL template in `memory/16_activity_dashboard.md`. User doing manually.

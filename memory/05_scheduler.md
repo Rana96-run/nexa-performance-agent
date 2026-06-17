@@ -17,7 +17,7 @@ GitHub Actions (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
 - All ad-platform collectors (`google_ads`, `meta`, `snapchat`, `tiktok`, `microsoft_ads`, `linkedin`)
 - `hubspot_leads_bq.py`, `hubspot_deals_bq.py`
 - `ga4_bq.py`
-- `databox_pusher.py` exists for manual backfill only — live Databox push is n8n Databox Sync
+- `databox_pusher.py` exists for manual backfill only — Databox reads directly from BQ via native connector
 - `create_views()` runs after every collector pass
 
 `.github/workflows/linkedin_token_refresh.yml` — daily 02:00 UTC LinkedIn token refresh.
@@ -29,14 +29,17 @@ GitHub Actions (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
 | Nexa · Master Performance Workflow | `T8icImtZFLYeCa7e` | Daily 05:00 UTC (08:00 Riyadh) | 84 |
 | Nexa · Weekly Performance Review | `iNSdpXH7Rc9Lb8h8` | Sunday 05:00 UTC | 26 (2-agent chain) |
 | Nexa · Monthly Performance Review | `0Zh45UoTtjjhRn8U` | 1st of month 05:00 UTC | 32 (3-agent chain) |
-| Nexa · AI Content Agent | `yOD1l9n7qOfbpWfM` | Various (see below) | 13 |
-| Nexa · Monitor Follow-up | `H6XSFlp1WOUPpgBF` | Daily 06:00 UTC | 11 |
-| Nexa · Databox Sync | `7ZEROvwTg3UrGAP6` | Every 6h (`0 */6 * * *`) | 11 |
 | Nexa · Data Collection | `jOnJxdpdaO3Vbi0B` | Every 6h | 52 |
 | Nexa · Approval Listener | `5Acqsbxsk0XQ5k9e` | Webhook (always-on) | — |
 | Nexa · QA Gate | `ug3niLKrjPfO9Iz7` | Sub-flow (called by Master) | — |
+| Nexa · Sub-Flow A (ROAS & Channel Health) | `MHCdIiAtKzHNve1x` | Called by Master Switch | — |
+| Nexa · Sub-Flow B (CPL Fix) | `Qd5SoGxZbgT1ohYP` | Called by Master Switch | — |
+| Nexa · Sub-Flow C (CPQL Fix) | `jfE5KKnPJQBf7MCj` | Called by Master Switch | — |
+| Nexa · Sub-Flow D (Qual Ratio Fix) | `PxFBmtXDVgcNGzIM` | Called by Master Switch | — |
+| Nexa · Sub-Flow E (Impression Share Fix) | `eL0V6ReftV2U1wNf` | Called by Master Switch | — |
+| Nexa · Sub-Flow F (Creative & CTR Fix) | `smHaEhWloComRQyz` | Called by Master Switch | — |
 
-**⚠️ Required n8n $var for Databox Sync:** `DATABOX_TOKEN` must be set (PAK token, not push token). Dataset ID: `6158be78`.
+**Deleted 2026-06-17:** `yOD1l9n7qOfbpWfM` (AI Content Agent), `H6XSFlp1WOUPpgBF` (Monitor Follow-up), `7ZEROvwTg3UrGAP6` (Databox Sync). Total active n8n workflows: 12.
 
 **Data Collection workflow (`jOnJxdpdaO3Vbi0B`):** 52 nodes, every 6h. Runs all platform collectors + BQ reconciliation + freshness check. Alerts `#data-health` if any channel stale >1 day.
 
@@ -49,12 +52,6 @@ GitHub Actions (ETL)   →   BigQuery   →   n8n cloud (analysis/Slack/Asana)
 - Slack: httpHeaderAuth (see n8n Credentials)
 
 **n8n $vars used:** `BQ_PROJECT`, `BQ_DATASET`, `SLACK_CHANNEL_NOTIFY`, `SLACK_CHANNEL_APPROVALS`, `ASANA_WORKSPACE`, `ASANA_PROJECT_PAID` + all ad-platform account IDs.
-
-**AI Content Agent schedules (all UTC):**
-- `daily-ai-digest`: 05:02 UTC daily
-- `competitor-post-poller`: 05:03 UTC daily
-- `weekly-ai-digest`: 06:35 UTC Sunday
-- `monthly-content-calendar`: 05:00 UTC 1st of month
 
 ### What Cowork still runs (MCP-dependent tasks)
 These have no n8n equivalent (need Drive MCP / local credentials):
@@ -101,4 +98,4 @@ These have no n8n equivalent (need Drive MCP / local credentials):
 6h scheduler one pass scans ≤3 days of partitions. With clustering, query cost
 is trivial (<$0.01/day). Load jobs are **free**. No streaming buffer used.
 
-If BQ query costs spike, check the Hex notebook SQL — Hex caches results per cell but re-runs on refresh. Databox pulls from BQ on its own schedule (every 6h via n8n Databox Sync). Streamlit/`@st.cache_data` is no longer relevant — Streamlit was deleted 2026-06-16.
+If BQ query costs spike, check the Hex notebook SQL — Hex caches results per cell but re-runs on refresh. Databox pulls from BQ directly via native connector on its own schedule. Streamlit/`@st.cache_data` is no longer relevant — Streamlit was deleted 2026-06-16.
