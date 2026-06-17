@@ -15,6 +15,8 @@ Claude HTTP Request node in n8n. Applied to all 5 nodes in Master (`T8icImtZFLYe
 
 **Rule going forward:** When adding a new Claude node in n8n with forced tool use, always use `any`, never `required`.
 
+**Full scope of the fix (2026-06-17):** Found in 3 separate workflows across 8 nodes (10 occurrences in Master, 2 in Data Collection sub-workflow, 2 in Weekly, 2 in Monthly). The sub-workflow and Weekly/Monthly nodes were missed in the first pass because the fix was scoped only to Master. Always scan ALL workflows when fixing this pattern.
+
 
 
 ## [2026-06-16] wide_ads: THREE sources of NULLs at ad/adset level — FIXED
