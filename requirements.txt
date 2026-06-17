@@ -11,3 +11,4 @@ google-cloud-bigquery>=3.17.0
 google-api-python-client>=2.120.0
 flask>=3.0         # serves reports/latest.html behind a tiny route on Railway
 gunicorn>=21.2.0   # production WSGI server (Railway web dyno)
+pytz>=2024.1       # timezone support in _build_health_bar (Asia/Riyadh next-run countdown)
