@@ -127,7 +127,6 @@ Nexa Performance Agent/
 │   ├── microsoft_ads_bq.py # CONNECTED both accounts (188176729 + 187231519)
 │   ├── hubspot_leads_bq.py # lead module daily buckets
 │   ├── hubspot_deals_bq.py # deals daily buckets
-│   ├── windsor_bq.py       # Windsor.ai unified channel fallback
 │   ├── ga4_bq.py           # GA4 sessions/conversions
 │   └── databox_pusher.py   # manual backfill only; live push is n8n Databox Sync
 ├── executors/              # write actions (pause, scale, Asana, keywords)
