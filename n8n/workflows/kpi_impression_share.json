@@ -1,0 +1,543 @@
+﻿{
+    "updatedAt":  "2026-06-17T12:53:44.722Z",
+    "createdAt":  "2026-06-16T19:46:04.897Z",
+    "id":  "eL0V6ReftV2U1wNf",
+    "name":  "Nexa � [KPI] Impression Share",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "ee3fc70d-0a6d-5eb2-b5de-ec272985ae38",
+                      "name":  "Trigger",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "parameters":  {
+
+                                     }
+                  },
+                  {
+                      "id":  "e03ec6aa-ad57-5281-bf57-71ef5e641a36",
+                      "name":  "BQ - IS Campaign Drill",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "typeVersion":  2,
+                      "position":  [
+                                       250,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "projectId":  "angular-axle-492812-q4",
+                                         "sqlQuery":  "SELECT c.channel, c.campaign_id, c.campaign_name,\n       AVG(c.impression_share) AS avg_is,\n       AVG(c.lost_is_budget) AS lost_is_budget,\n       AVG(c.lost_is_rank) AS lost_is_rank,\n       SUM(c.spend) AS spend_14d\nFROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\nWHERE c.date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 14 DAY)\n  AND c.impression_share IS NOT NULL\nGROUP BY c.channel, c.campaign_id, c.campaign_name\nORDER BY avg_is ASC",
+                                         "authentication":  "serviceAccount",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "d0689b3b-9f5c-5b58-9bda-d632c19bbe08",
+                      "name":  "Build Claude Prompt",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       500,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const rows=$input.all().map(i=\u003ei.json);\nconst ch=$(\u0027Trigger\u0027).first().json.channel, t=new Date().toISOString().slice(0,10);\nreturn [{json:{\n  system:`You are a paid media analyst for Qoyod. Sub-flow E: Impression Share analysis.\n\nGLOBAL RULES:\n- All actions queue to #approvals. Execute only after checkmark reaction.\n- Bid increases 10% or less auto-execute (no approval needed). Everything else requires #approvals.\n- 14-day minimum data window before any action.\n\nQS THRESHOLDS (Google Ads keywords):\n- QS \u003c 5 triggers review (threshold is 5, not 6).\n- Converting keyword exception: if QS \u003c 5 AND \u003e80% lost IS BUT conv \u003e 4 AND $10 \u003c= CPA \u003c= $70 -\u003e LEAVE ENABLED (keyword is converting despite low QS).\n- Minimum 10-day keyword age before any pause -- keywords younger than 10 days: monitor only, no action.\n- Never delete a keyword -- only pause.\n- Zero-active-keyword guard: never pause the last enabled keyword in an ad group (would kill the campaign silently).\n\nBID CHANGE APPROVAL THRESHOLDS:\n- 10% or less bid increase: auto-execute (no approval needed).\n- +15% bid increase: requires performance-lead approval via #approvals.\n- Maximum 3 bid increase attempts before escalating to budget review.\n- Budget increases \u003e$5,000 USD require performance-lead approval via #approvals.\n\nDISAPPROVAL CHECKLIST (when a campaign is not serving / limited by policy):\n1. Check Google Ads policy review queue (is it under review?).\n2. Check account payment status (billing issue?).\n3. Check budget cap (is daily budget exhausted before end of day?).\n4. Check pacing rate (is campaign spending evenly or front-loading?).\n\nAWARENESS CAMPAIGNS:\n- For WebsiteTraffic / ImpressionShare / Reach objective campaigns: report IS% as the primary KPI, not CPQL/CPL.\n\nAnalyze the 14-day IS data. Determine if IS is lost to budget or rank/quality. Output JSON only:\n{\"is_lost_to\":\"budget|rank|both\",\"root_cause\":\"string\",\"campaigns_to_fix\":[{\"campaign_name\":\"string\",\"recommendation\":\"string\",\"approval_required\":true}],\"channel_recommendation\":\"string\",\"asana_title\":\"string\"}`,\n  messages:[{role:\u0027user\u0027,content:`Channel: ${ch}\\nDate: ${t}\\n\\nCampaign IS breakdown (last 14d):\\n${JSON.stringify(rows,null,2)}`}]\n}}];"
+                                     }
+                  },
+                  {
+                      "id":  "94fa89a2-3c19-5f40-827a-a1cb9382bd35",
+                      "name":  "Claude - IS Analyst",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       750,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "anthropicApi":  {
+                                                               "id":  "yLwrXNzxReOM4Fgn",
+                                                               "name":  "Anthropic account"
+                                                           }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.anthropic.com/v1/messages",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "anthropicApi",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "anthropic-version",
+                                                                                         "value":  "2023-06-01"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ model:\u0027claude-sonnet-4-6\u0027, max_tokens:2000, system:$json.system, messages:$json.messages }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "f549ebdc-4f1a-5327-b3ab-55084f3c779e",
+                      "name":  "Parse Claude",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1000,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "\nconst raw=$json.content?.find(b=\u003eb.type===\u0027text\u0027)?.text||\u0027{}\u0027;\nconst ch=$(\u0027Trigger\u0027).first().json.channel, t=new Date().toISOString().slice(0,10);\ntry{\n  const r=JSON.parse(raw);\n  return [{json:{\n    task_name: r.asana_title||`[IS FIX] ${ch} - Impression Share at floor`,\n    task_notes:`Channel: ${ch}\\n\\nIS Lost To: ${r.is_lost_to}\\nRoot Cause: ${r.root_cause}\\n\\nCampaigns:\\n${(r.campaigns_to_fix||[]).map(c=\u003e`. ${c.campaign_name}: ${c.recommendation}`).join(\u0027\\n\u0027)}\\n\\nRecommendation:\\n${r.channel_recommendation}\\n\\nCreated: ${t} | Due: +2d | Priority: P2 | Type: IS Fix | Channel: ${ch} | Asset level: Campaign | Action: optimize ? [campaign-manager]`,\n    due_on: new Date(Date.now()+2*86400000).toISOString().slice(0,10)\n  }}];\n}catch(e){return [{json:{task_name:`IS Fix parse error`,task_notes:raw,due_on:t}}];}\n"
+                                     }
+                  },
+                  {
+                      "id":  "1207743f-e45e-59de-b6c1-8e1b1046feed",
+                      "name":  "Create Asana Task",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       1250,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "iUYNax4N4UkcLiQB",
+                                                                 "name":  "Asana (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://app.asana.com/api/1.0/tasks",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "34f86e62-795d-5eed-83fb-4fe3a4856153",
+                      "name":  "Return Result",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       1500,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "manual",
+                                         "fields":  {
+                                                        "values":  [
+                                                                       {
+                                                                           "name":  "sub_flow",
+                                                                           "stringValue":  "E_IS"
+                                                                       },
+                                                                       {
+                                                                           "name":  "status",
+                                                                           "stringValue":  "={{ $json.data?\u0027created\u0027:\u0027error\u0027 }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "channel",
+                                                                           "stringValue":  "={{ $(\u0027Trigger\u0027).first().json.channel }}"
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Trigger":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "BQ - IS Campaign Drill",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "BQ - IS Campaign Drill":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Build Claude Prompt",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "Build Claude Prompt":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Claude - IS Analyst",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Claude - IS Analyst":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Parse Claude",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Parse Claude":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Create Asana Task",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Create Asana Task":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Return Result",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "timezone":  "Asia/Riyadh",
+                     "saveManualExecutions":  true,
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  true
+                 },
+    "staticData":  null,
+    "meta":  null,
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  null,
+    "versionId":  "5d6279c7-cf41-41a1-8da2-f984a3787c8f",
+    "activeVersionId":  "5d6279c7-cf41-41a1-8da2-f984a3787c8f",
+    "versionCounter":  3,
+    "triggerCount":  0,
+    "sourceWorkflowId":  null,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-06-16T19:46:04.898Z",
+                       "createdAt":  "2026-06-16T19:46:04.898Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "eL0V6ReftV2U1wNf",
+                       "projectId":  "adzgqz9cb5avvdf1",
+                       "project":  {
+                                       "updatedAt":  "2026-05-28T17:50:33.321Z",
+                                       "createdAt":  "2026-05-28T17:50:26.370Z",
+                                       "id":  "adzgqz9cb5avvdf1",
+                                       "name":  "Mohamed Irshaid \u003cmohammad.irsheid@qoyod.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-06-17T12:53:44.724Z",
+                          "createdAt":  "2026-06-17T12:53:44.724Z",
+                          "versionId":  "5d6279c7-cf41-41a1-8da2-f984a3787c8f",
+                          "workflowId":  "eL0V6ReftV2U1wNf",
+                          "nodes":  [
+                                        {
+                                            "id":  "ee3fc70d-0a6d-5eb2-b5de-ec272985ae38",
+                                            "name":  "Trigger",
+                                            "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                                            "typeVersion":  1,
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+
+                                                           }
+                                        },
+                                        {
+                                            "id":  "e03ec6aa-ad57-5281-bf57-71ef5e641a36",
+                                            "name":  "BQ - IS Campaign Drill",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             250,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "operation":  "executeQuery",
+                                                               "projectId":  "angular-axle-492812-q4",
+                                                               "sqlQuery":  "SELECT c.channel, c.campaign_id, c.campaign_name,\n       AVG(c.impression_share) AS avg_is,\n       AVG(c.lost_is_budget) AS lost_is_budget,\n       AVG(c.lost_is_rank) AS lost_is_rank,\n       SUM(c.spend) AS spend_14d\nFROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\nWHERE c.date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 14 DAY)\n  AND c.impression_share IS NOT NULL\nGROUP BY c.channel, c.campaign_id, c.campaign_name\nORDER BY avg_is ASC",
+                                                               "authentication":  "serviceAccount",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "d0689b3b-9f5c-5b58-9bda-d632c19bbe08",
+                                            "name":  "Build Claude Prompt",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             500,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const rows=$input.all().map(i=\u003ei.json);\nconst ch=$(\u0027Trigger\u0027).first().json.channel, t=new Date().toISOString().slice(0,10);\nreturn [{json:{\n  system:`You are a paid media analyst for Qoyod. Sub-flow E: Impression Share analysis.\n\nGLOBAL RULES:\n- All actions queue to #approvals. Execute only after checkmark reaction.\n- Bid increases 10% or less auto-execute (no approval needed). Everything else requires #approvals.\n- 14-day minimum data window before any action.\n\nQS THRESHOLDS (Google Ads keywords):\n- QS \u003c 5 triggers review (threshold is 5, not 6).\n- Converting keyword exception: if QS \u003c 5 AND \u003e80% lost IS BUT conv \u003e 4 AND $10 \u003c= CPA \u003c= $70 -\u003e LEAVE ENABLED (keyword is converting despite low QS).\n- Minimum 10-day keyword age before any pause -- keywords younger than 10 days: monitor only, no action.\n- Never delete a keyword -- only pause.\n- Zero-active-keyword guard: never pause the last enabled keyword in an ad group (would kill the campaign silently).\n\nBID CHANGE APPROVAL THRESHOLDS:\n- 10% or less bid increase: auto-execute (no approval needed).\n- +15% bid increase: requires performance-lead approval via #approvals.\n- Maximum 3 bid increase attempts before escalating to budget review.\n- Budget increases \u003e$5,000 USD require performance-lead approval via #approvals.\n\nDISAPPROVAL CHECKLIST (when a campaign is not serving / limited by policy):\n1. Check Google Ads policy review queue (is it under review?).\n2. Check account payment status (billing issue?).\n3. Check budget cap (is daily budget exhausted before end of day?).\n4. Check pacing rate (is campaign spending evenly or front-loading?).\n\nAWARENESS CAMPAIGNS:\n- For WebsiteTraffic / ImpressionShare / Reach objective campaigns: report IS% as the primary KPI, not CPQL/CPL.\n\nAnalyze the 14-day IS data. Determine if IS is lost to budget or rank/quality. Output JSON only:\n{\"is_lost_to\":\"budget|rank|both\",\"root_cause\":\"string\",\"campaigns_to_fix\":[{\"campaign_name\":\"string\",\"recommendation\":\"string\",\"approval_required\":true}],\"channel_recommendation\":\"string\",\"asana_title\":\"string\"}`,\n  messages:[{role:\u0027user\u0027,content:`Channel: ${ch}\\nDate: ${t}\\n\\nCampaign IS breakdown (last 14d):\\n${JSON.stringify(rows,null,2)}`}]\n}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "94fa89a2-3c19-5f40-827a-a1cb9382bd35",
+                                            "name":  "Claude - IS Analyst",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             750,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "anthropicApi":  {
+                                                                                     "id":  "yLwrXNzxReOM4Fgn",
+                                                                                     "name":  "Anthropic account"
+                                                                                 }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://api.anthropic.com/v1/messages",
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "anthropicApi",
+                                                               "sendHeaders":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "name":  "anthropic-version",
+                                                                                                               "value":  "2023-06-01"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ model:\u0027claude-sonnet-4-6\u0027, max_tokens:2000, system:$json.system, messages:$json.messages }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "f549ebdc-4f1a-5327-b3ab-55084f3c779e",
+                                            "name":  "Parse Claude",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             1000,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "\nconst raw=$json.content?.find(b=\u003eb.type===\u0027text\u0027)?.text||\u0027{}\u0027;\nconst ch=$(\u0027Trigger\u0027).first().json.channel, t=new Date().toISOString().slice(0,10);\ntry{\n  const r=JSON.parse(raw);\n  return [{json:{\n    task_name: r.asana_title||`[IS FIX] ${ch} - Impression Share at floor`,\n    task_notes:`Channel: ${ch}\\n\\nIS Lost To: ${r.is_lost_to}\\nRoot Cause: ${r.root_cause}\\n\\nCampaigns:\\n${(r.campaigns_to_fix||[]).map(c=\u003e`. ${c.campaign_name}: ${c.recommendation}`).join(\u0027\\n\u0027)}\\n\\nRecommendation:\\n${r.channel_recommendation}\\n\\nCreated: ${t} | Due: +2d | Priority: P2 | Type: IS Fix | Channel: ${ch} | Asset level: Campaign | Action: optimize ? [campaign-manager]`,\n    due_on: new Date(Date.now()+2*86400000).toISOString().slice(0,10)\n  }}];\n}catch(e){return [{json:{task_name:`IS Fix parse error`,task_notes:raw,due_on:t}}];}\n"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "1207743f-e45e-59de-b6c1-8e1b1046feed",
+                                            "name":  "Create Asana Task",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             1250,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "iUYNax4N4UkcLiQB",
+                                                                                       "name":  "Asana (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://app.asana.com/api/1.0/tasks",
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "34f86e62-795d-5eed-83fb-4fe3a4856153",
+                                            "name":  "Return Result",
+                                            "type":  "n8n-nodes-base.set",
+                                            "typeVersion":  3.4,
+                                            "position":  [
+                                                             1500,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "manual",
+                                                               "fields":  {
+                                                                              "values":  [
+                                                                                             {
+                                                                                                 "name":  "sub_flow",
+                                                                                                 "stringValue":  "E_IS"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "status",
+                                                                                                 "stringValue":  "={{ $json.data?\u0027created\u0027:\u0027error\u0027 }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "channel",
+                                                                                                 "stringValue":  "={{ $(\u0027Trigger\u0027).first().json.channel }}"
+                                                                                             }
+                                                                                         ]
+                                                                          }
+                                                           }
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Trigger":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "BQ - IS Campaign Drill",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                                              "BQ - IS Campaign Drill":  {
+                                                                             "main":  [
+                                                                                          [
+                                                                                              {
+                                                                                                  "node":  "Build Claude Prompt",
+                                                                                                  "type":  "main",
+                                                                                                  "index":  0
+                                                                                              }
+                                                                                          ]
+                                                                                      ]
+                                                                         },
+                                              "Build Claude Prompt":  {
+                                                                          "main":  [
+                                                                                       [
+                                                                                           {
+                                                                                               "node":  "Claude - IS Analyst",
+                                                                                               "type":  "main",
+                                                                                               "index":  0
+                                                                                           }
+                                                                                       ]
+                                                                                   ]
+                                                                      },
+                                              "Claude - IS Analyst":  {
+                                                                          "main":  [
+                                                                                       [
+                                                                                           {
+                                                                                               "node":  "Parse Claude",
+                                                                                               "type":  "main",
+                                                                                               "index":  0
+                                                                                           }
+                                                                                       ]
+                                                                                   ]
+                                                                      },
+                                              "Parse Claude":  {
+                                                                   "main":  [
+                                                                                [
+                                                                                    {
+                                                                                        "node":  "Create Asana Task",
+                                                                                        "type":  "main",
+                                                                                        "index":  0
+                                                                                    }
+                                                                                ]
+                                                                            ]
+                                                               },
+                                              "Create Asana Task":  {
+                                                                        "main":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "Return Result",
+                                                                                             "type":  "main",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ]
+                                                                                 ]
+                                                                    }
+                                          },
+                          "nodeGroups":  [
+
+                                         ],
+                          "authors":  "Mohamed Irshaid",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-06-17T12:53:44.845Z",
+                                                             "id":  191,
+                                                             "workflowId":  "eL0V6ReftV2U1wNf",
+                                                             "versionId":  "5d6279c7-cf41-41a1-8da2-f984a3787c8f",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T12:53:44.816Z",
+                                                             "id":  190,
+                                                             "workflowId":  "eL0V6ReftV2U1wNf",
+                                                             "versionId":  "5d6279c7-cf41-41a1-8da2-f984a3787c8f",
+                                                             "event":  "deactivated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         }
+                                                     ]
+                      }
+}

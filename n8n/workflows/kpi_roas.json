@@ -1,0 +1,531 @@
+﻿{
+    "updatedAt":  "2026-06-17T12:55:59.454Z",
+    "createdAt":  "2026-06-16T19:46:00.699Z",
+    "id":  "MHCdIiAtKzHNve1x",
+    "name":  "Nexa ? [KPI] ROAS \u0026 Channel Health",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "1b44747d-a3e8-5d1a-a3b6-8d89750b42df",
+                      "name":  "Trigger",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "parameters":  {
+
+                                     }
+                  },
+                  {
+                      "id":  "106de951-a2e5-5443-8734-5b5d4fafb22c",
+                      "name":  "Evaluate 3 Factors",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       250,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "// KPI zones (USD) -- CPL: scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\n// CPQL zones (USD): scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\n// ROAS: pause threshold \u003c 2.0x AND spend \u003e $500 over 14-day window (3-day dip = flag only)\n// Awareness gate: WebsiteTraffic / ImpressionShare / Reach -\u003e skip CPL/CPQL checks\n// 14-day gate: need \u003e=14 days data before any action; else flag for monitoring only\n// Approval: ALL actions -\u003e #approvals + react. Exception: bid \u003c=10% auto-executes.\nconst d = $input.first().json;\nconst qual_ok   = (d.qual_rate_pct || 0) \u003e= 45;\nconst cpql_ok   = (d.cpql || 999)        \u003c= 85;   // CPQL scale zone: \u003c$85 USD\nconst volume_ok = (d.leads_total || 0)   \u003e= (d.prior_leads_total || 0);\n// ROAS: flag if \u003c 2.0x AND spend \u003e $500 over 14-day window; 3-day dip = investigation only\nconst roas_ok   = (d.roas || 0) \u003e= 2.0 || (d.spend_14d || 0) \u003c= 500;\nreturn [{json:{...d, qual_ok, cpql_ok, volume_ok, roas_ok, all_green: qual_ok\u0026\u0026cpql_ok\u0026\u0026volume_ok\u0026\u0026roas_ok,\n               today: new Date().toISOString().slice(0,10)}}];\n"
+                                     }
+                  },
+                  {
+                      "id":  "ba535e94-42f9-510f-a030-a088b9d2c678",
+                      "name":  "All Green?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       500,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "loose"
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "269fa199-354e-59ea-8c61-2320843a2a1e",
+                                                                                   "leftValue":  "={{ $json.all_green === true ? 1 : 0 }}",
+                                                                                   "rightValue":  "1",
+                                                                                   "operator":  {
+                                                                                                    "type":  "number",
+                                                                                                    "operation":  "equal"
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "9712ea25-9b5d-5cad-aa3e-5f47af462c88",
+                      "name":  "Build - Sales Escalation",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       750,
+                                       -200
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const d=$json, t=new Date().toISOString().slice(0,10);\n// ROAS pause threshold: \u003c 2.0x AND spend \u003e $500 USD over 14-day window\n// 3-day ROAS dip = investigation flag only, NOT a pause action\n// ROAS = hubspot_deals_daily.amount_total (USD) / campaigns_daily.spend (USD) via channel_roas_daily view\n// NEVER use platform-reported ROAS. NEVER divide deal amounts by 3.75 (already USD in BQ).\n// AOV = AVG(hubspot_deals_daily.amount_total) vs prior 30-day window; report count delta AND avg deal size delta.\n// KPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\n// KPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\n// Approval: ALL actions (pause/scale/budget shift) -\u003e #approvals + emoji reaction. Bid \u003c=10% auto-executes.\nreturn [{json:{\n  task_name:`[SALES ESCALATION] ${d.channel} - Qualified leads not closing (ROAS ${d.roas}x)`,\n  task_notes:`Channel: ${d.channel}\\nROAS: ${d.roas}x (below 2.0x threshold)\\n\\n3-Factor Check - ALL GREEN:\\n- Qual Rate: ${d.qual_rate_pct}% \u003e= 45%\\n- CPQL: $${d.cpql} \u003c= $85 (scale zone)\\n- Lead Volume: ${d.leads_total} vs prior ${d.prior_leads_total}\\n\\nKPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\\nKPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\\n\\nChannel is generating qualified leads at good cost. Deals NOT closing = sales process issue.\\nROAS source: channel_roas_daily view. Deal amounts are USD in BQ - do NOT divide by 3.75.\\n\\nAction Required:\\n-\u003e FLAG TO PERFORMANCE-LEAD: investigate deal stage in HubSpot for this channel\\n-\u003e Do NOT reduce budget or reallocate channel without root-cause confirmation\\n-\u003e Post findings to #approvals for team decision - do NOT auto-pause or reallocate\\n-\u003e Execution only after emoji reaction from approver (except bid \u003c=10% which auto-executes)\\n\\nCreated: ${t} | Due: +2d | Priority: P1 | Type: Sales Escalation | Channel: ${d.channel} | Asset level: Channel | Action: sales-review -\u003e [performance-lead]`,\n  due_on: new Date(Date.now()+2*86400000).toISOString().slice(0,10)\n}}];"
+                                     }
+                  },
+                  {
+                      "id":  "30e0dbea-70dd-5caa-9e27-48cade7db774",
+                      "name":  "Build - Campaign Fix",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       750,
+                                       200
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const d=$json, t=new Date().toISOString().slice(0,10);\nconst issues=[];\nif(!d.qual_ok)   issues.push(`Qual ${d.qual_rate_pct}% \u003c 45%`);\nif(!d.cpql_ok)   issues.push(`CPQL $${d.cpql} \u003e $85 (scale zone threshold)`);\nif(!d.volume_ok) issues.push(`Volume ${d.leads_total} \u003c prior ${d.prior_leads_total}`);\nif(d.roas_ok===false) issues.push(`ROAS ${d.roas}x \u003c 2.0x AND spend \u003e $500 over 14d`);\n// ROAS pause threshold: \u003c 2.0x AND spend \u003e $500 USD over 14-day window\n// 3-day ROAS dip = investigation flag only, NOT an action\n// ROAS = channel_roas_daily view (hubspot_deals_daily.amount_total USD / campaigns_daily.spend USD)\n// NEVER use platform-reported ROAS. NEVER divide deal amounts by 3.75 (already USD in BQ).\n// AOV check: report count delta AND avg deal size delta vs prior 30-day window.\n// KPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\n// KPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\n// Approval: ALL actions -\u003e #approvals + emoji reaction. Bid \u003c=10% auto-executes.\nreturn [{json:{\n  task_name:`[ROAS FIX] ${d.channel} - ROAS ${d.roas}x, issues: ${issues.join(\u0027, \u0027)}`,\n  task_notes:`Channel: ${d.channel}\\nROAS: ${d.roas}x (below 2.0x threshold)\\n\\nKPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\\nKPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\\nROAS source: channel_roas_daily view. Deal amounts are USD in BQ. NEVER divide by 3.75.\\nROAS pause threshold: \u003c 2.0x AND spend \u003e $500 USD over 14-day window.\\n3-day ROAS dip = investigation flag only - NOT a pause action.\\n\\n3-Factor Check FAILED:\\n${issues.map(i=\u003e \u0027- \u0027 + i).join(\u0027\\n\u0027)}\\n\\nAction Required:\\n-\u003e FLAG TO PERFORMANCE-LEAD: drill to campaign/adset level for root cause\\n-\u003e Run CPQL/Qual sub-flows for detailed analysis\\n-\u003e Post findings + proposed action to #approvals channel\\n-\u003e Execution only after emoji reaction from approver (except bid \u003c=10% which auto-executes)\\n-\u003e Do NOT reallocate budget without confirmed root cause\\n\\nCreated: ${t} | Due: +1d | Priority: P1 | Type: ROAS Fix | Channel: ${d.channel} | Asset level: Channel | Action: investigate -\u003e [campaign-manager]`,\n  due_on: new Date(Date.now()+1*86400000).toISOString().slice(0,10)\n}}];"
+                                     }
+                  },
+                  {
+                      "id":  "4d41c2c3-2c35-505e-bdfb-09b5991f1cc8",
+                      "name":  "Create Asana Task",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       1000,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "iUYNax4N4UkcLiQB",
+                                                                 "name":  "Asana (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://app.asana.com/api/1.0/tasks",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "c1d8ccc3-3011-59e9-9ac3-4b6e80234ed0",
+                      "name":  "Return Result",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       1250,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "manual",
+                                         "fields":  {
+                                                        "values":  [
+                                                                       {
+                                                                           "name":  "sub_flow",
+                                                                           "stringValue":  "A_ROAS"
+                                                                       },
+                                                                       {
+                                                                           "name":  "status",
+                                                                           "stringValue":  "={{ $json.data ? \u0027created\u0027 : \u0027error\u0027 }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "channel",
+                                                                           "stringValue":  "={{ $(\u0027Evaluate 3 Factors\u0027).first().json.channel }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "action",
+                                                                           "stringValue":  "={{ $(\u0027Evaluate 3 Factors\u0027).first().json.all_green ? \u0027sales_escalation\u0027 : \u0027campaign_fix\u0027 }}"
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Trigger":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Evaluate 3 Factors",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Evaluate 3 Factors":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "All Green?",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "All Green?":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "Build - Sales Escalation",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ],
+                                                        [
+                                                            {
+                                                                "node":  "Build - Campaign Fix",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "Build - Sales Escalation":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Create Asana Task",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Build - Campaign Fix":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Create Asana Task",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Create Asana Task":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Return Result",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "timezone":  "Asia/Riyadh",
+                     "saveManualExecutions":  true,
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  true
+                 },
+    "staticData":  null,
+    "meta":  null,
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  null,
+    "versionId":  "621a5096-cf4b-4c16-acb3-89de5357405e",
+    "activeVersionId":  "621a5096-cf4b-4c16-acb3-89de5357405e",
+    "versionCounter":  4,
+    "triggerCount":  0,
+    "sourceWorkflowId":  null,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-06-16T19:46:00.703Z",
+                       "createdAt":  "2026-06-16T19:46:00.703Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "MHCdIiAtKzHNve1x",
+                       "projectId":  "adzgqz9cb5avvdf1",
+                       "project":  {
+                                       "updatedAt":  "2026-05-28T17:50:33.321Z",
+                                       "createdAt":  "2026-05-28T17:50:26.370Z",
+                                       "id":  "adzgqz9cb5avvdf1",
+                                       "name":  "Mohamed Irshaid \u003cmohammad.irsheid@qoyod.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-06-17T12:55:59.457Z",
+                          "createdAt":  "2026-06-17T12:55:59.457Z",
+                          "versionId":  "621a5096-cf4b-4c16-acb3-89de5357405e",
+                          "workflowId":  "MHCdIiAtKzHNve1x",
+                          "nodes":  [
+                                        {
+                                            "id":  "1b44747d-a3e8-5d1a-a3b6-8d89750b42df",
+                                            "name":  "Trigger",
+                                            "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                                            "typeVersion":  1,
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+
+                                                           }
+                                        },
+                                        {
+                                            "id":  "106de951-a2e5-5443-8734-5b5d4fafb22c",
+                                            "name":  "Evaluate 3 Factors",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             250,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "// KPI zones (USD) -- CPL: scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\n// CPQL zones (USD): scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\n// ROAS: pause threshold \u003c 2.0x AND spend \u003e $500 over 14-day window (3-day dip = flag only)\n// Awareness gate: WebsiteTraffic / ImpressionShare / Reach -\u003e skip CPL/CPQL checks\n// 14-day gate: need \u003e=14 days data before any action; else flag for monitoring only\n// Approval: ALL actions -\u003e #approvals + react. Exception: bid \u003c=10% auto-executes.\nconst d = $input.first().json;\nconst qual_ok   = (d.qual_rate_pct || 0) \u003e= 45;\nconst cpql_ok   = (d.cpql || 999)        \u003c= 85;   // CPQL scale zone: \u003c$85 USD\nconst volume_ok = (d.leads_total || 0)   \u003e= (d.prior_leads_total || 0);\n// ROAS: flag if \u003c 2.0x AND spend \u003e $500 over 14-day window; 3-day dip = investigation only\nconst roas_ok   = (d.roas || 0) \u003e= 2.0 || (d.spend_14d || 0) \u003c= 500;\nreturn [{json:{...d, qual_ok, cpql_ok, volume_ok, roas_ok, all_green: qual_ok\u0026\u0026cpql_ok\u0026\u0026volume_ok\u0026\u0026roas_ok,\n               today: new Date().toISOString().slice(0,10)}}];\n"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "ba535e94-42f9-510f-a030-a088b9d2c678",
+                                            "name":  "All Green?",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             500,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "options":  {
+                                                                                                  "caseSensitive":  true,
+                                                                                                  "leftValue":  "",
+                                                                                                  "typeValidation":  "loose"
+                                                                                              },
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "id":  "269fa199-354e-59ea-8c61-2320843a2a1e",
+                                                                                                         "leftValue":  "={{ $json.all_green === true ? 1 : 0 }}",
+                                                                                                         "rightValue":  "1",
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "number",
+                                                                                                                          "operation":  "equal"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "combinator":  "and"
+                                                                              }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "9712ea25-9b5d-5cad-aa3e-5f47af462c88",
+                                            "name":  "Build - Sales Escalation",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             750,
+                                                             -200
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const d=$json, t=new Date().toISOString().slice(0,10);\n// ROAS pause threshold: \u003c 2.0x AND spend \u003e $500 USD over 14-day window\n// 3-day ROAS dip = investigation flag only, NOT a pause action\n// ROAS = hubspot_deals_daily.amount_total (USD) / campaigns_daily.spend (USD) via channel_roas_daily view\n// NEVER use platform-reported ROAS. NEVER divide deal amounts by 3.75 (already USD in BQ).\n// AOV = AVG(hubspot_deals_daily.amount_total) vs prior 30-day window; report count delta AND avg deal size delta.\n// KPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\n// KPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\n// Approval: ALL actions (pause/scale/budget shift) -\u003e #approvals + emoji reaction. Bid \u003c=10% auto-executes.\nreturn [{json:{\n  task_name:`[SALES ESCALATION] ${d.channel} - Qualified leads not closing (ROAS ${d.roas}x)`,\n  task_notes:`Channel: ${d.channel}\\nROAS: ${d.roas}x (below 2.0x threshold)\\n\\n3-Factor Check - ALL GREEN:\\n- Qual Rate: ${d.qual_rate_pct}% \u003e= 45%\\n- CPQL: $${d.cpql} \u003c= $85 (scale zone)\\n- Lead Volume: ${d.leads_total} vs prior ${d.prior_leads_total}\\n\\nKPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\\nKPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\\n\\nChannel is generating qualified leads at good cost. Deals NOT closing = sales process issue.\\nROAS source: channel_roas_daily view. Deal amounts are USD in BQ - do NOT divide by 3.75.\\n\\nAction Required:\\n-\u003e FLAG TO PERFORMANCE-LEAD: investigate deal stage in HubSpot for this channel\\n-\u003e Do NOT reduce budget or reallocate channel without root-cause confirmation\\n-\u003e Post findings to #approvals for team decision - do NOT auto-pause or reallocate\\n-\u003e Execution only after emoji reaction from approver (except bid \u003c=10% which auto-executes)\\n\\nCreated: ${t} | Due: +2d | Priority: P1 | Type: Sales Escalation | Channel: ${d.channel} | Asset level: Channel | Action: sales-review -\u003e [performance-lead]`,\n  due_on: new Date(Date.now()+2*86400000).toISOString().slice(0,10)\n}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "30e0dbea-70dd-5caa-9e27-48cade7db774",
+                                            "name":  "Build - Campaign Fix",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             750,
+                                                             200
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const d=$json, t=new Date().toISOString().slice(0,10);\nconst issues=[];\nif(!d.qual_ok)   issues.push(`Qual ${d.qual_rate_pct}% \u003c 45%`);\nif(!d.cpql_ok)   issues.push(`CPQL $${d.cpql} \u003e $85 (scale zone threshold)`);\nif(!d.volume_ok) issues.push(`Volume ${d.leads_total} \u003c prior ${d.prior_leads_total}`);\nif(d.roas_ok===false) issues.push(`ROAS ${d.roas}x \u003c 2.0x AND spend \u003e $500 over 14d`);\n// ROAS pause threshold: \u003c 2.0x AND spend \u003e $500 USD over 14-day window\n// 3-day ROAS dip = investigation flag only, NOT an action\n// ROAS = channel_roas_daily view (hubspot_deals_daily.amount_total USD / campaigns_daily.spend USD)\n// NEVER use platform-reported ROAS. NEVER divide deal amounts by 3.75 (already USD in BQ).\n// AOV check: report count delta AND avg deal size delta vs prior 30-day window.\n// KPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\n// KPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\n// Approval: ALL actions -\u003e #approvals + emoji reaction. Bid \u003c=10% auto-executes.\nreturn [{json:{\n  task_name:`[ROAS FIX] ${d.channel} - ROAS ${d.roas}x, issues: ${issues.join(\u0027, \u0027)}`,\n  task_notes:`Channel: ${d.channel}\\nROAS: ${d.roas}x (below 2.0x threshold)\\n\\nKPI zones: CPL scale \u003c$25 | acceptable $25-$38 | warning $40-$49 | pause \u003e$50\\nKPI zones: CPQL scale \u003c$85 | acceptable $80-$95 | warning $95-$130 | pause \u003e$160\\nROAS source: channel_roas_daily view. Deal amounts are USD in BQ. NEVER divide by 3.75.\\nROAS pause threshold: \u003c 2.0x AND spend \u003e $500 USD over 14-day window.\\n3-day ROAS dip = investigation flag only - NOT a pause action.\\n\\n3-Factor Check FAILED:\\n${issues.map(i=\u003e \u0027- \u0027 + i).join(\u0027\\n\u0027)}\\n\\nAction Required:\\n-\u003e FLAG TO PERFORMANCE-LEAD: drill to campaign/adset level for root cause\\n-\u003e Run CPQL/Qual sub-flows for detailed analysis\\n-\u003e Post findings + proposed action to #approvals channel\\n-\u003e Execution only after emoji reaction from approver (except bid \u003c=10% which auto-executes)\\n-\u003e Do NOT reallocate budget without confirmed root cause\\n\\nCreated: ${t} | Due: +1d | Priority: P1 | Type: ROAS Fix | Channel: ${d.channel} | Asset level: Channel | Action: investigate -\u003e [campaign-manager]`,\n  due_on: new Date(Date.now()+1*86400000).toISOString().slice(0,10)\n}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "4d41c2c3-2c35-505e-bdfb-09b5991f1cc8",
+                                            "name":  "Create Asana Task",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             1000,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "iUYNax4N4UkcLiQB",
+                                                                                       "name":  "Asana (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://app.asana.com/api/1.0/tasks",
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "c1d8ccc3-3011-59e9-9ac3-4b6e80234ed0",
+                                            "name":  "Return Result",
+                                            "type":  "n8n-nodes-base.set",
+                                            "typeVersion":  3.4,
+                                            "position":  [
+                                                             1250,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "manual",
+                                                               "fields":  {
+                                                                              "values":  [
+                                                                                             {
+                                                                                                 "name":  "sub_flow",
+                                                                                                 "stringValue":  "A_ROAS"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "status",
+                                                                                                 "stringValue":  "={{ $json.data ? \u0027created\u0027 : \u0027error\u0027 }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "channel",
+                                                                                                 "stringValue":  "={{ $(\u0027Evaluate 3 Factors\u0027).first().json.channel }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "action",
+                                                                                                 "stringValue":  "={{ $(\u0027Evaluate 3 Factors\u0027).first().json.all_green ? \u0027sales_escalation\u0027 : \u0027campaign_fix\u0027 }}"
+                                                                                             }
+                                                                                         ]
+                                                                          }
+                                                           }
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Trigger":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Evaluate 3 Factors",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                                              "Evaluate 3 Factors":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "All Green?",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                                     },
+                                              "All Green?":  {
+                                                                 "main":  [
+                                                                              [
+                                                                                  {
+                                                                                      "node":  "Build - Sales Escalation",
+                                                                                      "type":  "main",
+                                                                                      "index":  0
+                                                                                  }
+                                                                              ],
+                                                                              [
+                                                                                  {
+                                                                                      "node":  "Build - Campaign Fix",
+                                                                                      "type":  "main",
+                                                                                      "index":  0
+                                                                                  }
+                                                                              ]
+                                                                          ]
+                                                             },
+                                              "Build - Sales Escalation":  {
+                                                                               "main":  [
+                                                                                            [
+                                                                                                {
+                                                                                                    "node":  "Create Asana Task",
+                                                                                                    "type":  "main",
+                                                                                                    "index":  0
+                                                                                                }
+                                                                                            ]
+                                                                                        ]
+                                                                           },
+                                              "Build - Campaign Fix":  {
+                                                                           "main":  [
+                                                                                        [
+                                                                                            {
+                                                                                                "node":  "Create Asana Task",
+                                                                                                "type":  "main",
+                                                                                                "index":  0
+                                                                                            }
+                                                                                        ]
+                                                                                    ]
+                                                                       },
+                                              "Create Asana Task":  {
+                                                                        "main":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "Return Result",
+                                                                                             "type":  "main",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ]
+                                                                                 ]
+                                                                    }
+                                          },
+                          "nodeGroups":  [
+
+                                         ],
+                          "authors":  "Mohamed Irshaid",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-06-17T12:55:59.576Z",
+                                                             "id":  199,
+                                                             "workflowId":  "MHCdIiAtKzHNve1x",
+                                                             "versionId":  "621a5096-cf4b-4c16-acb3-89de5357405e",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T12:55:59.546Z",
+                                                             "id":  198,
+                                                             "workflowId":  "MHCdIiAtKzHNve1x",
+                                                             "versionId":  "621a5096-cf4b-4c16-acb3-89de5357405e",
+                                                             "event":  "deactivated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         }
+                                                     ]
+                      }
+}

@@ -1,0 +1,480 @@
+﻿{
+    "updatedAt":  "2026-06-17T08:22:24.341Z",
+    "createdAt":  "2026-06-16T22:20:17.153Z",
+    "id":  "5Acqsbxsk0XQ5k9e",
+    "name":  "Nexa · [Infra] Approval Listener",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "approval-webhook-001",
+                      "name":  "Slack Webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "slack-approval",
+                                         "responseMode":  "responseNode"
+                                     },
+                      "webhookId":  "f09d14f9-9c83-4347-99d0-bc5aff9a28cc"
+                  },
+                  {
+                      "id":  "handle-challenge-001",
+                      "name":  "Handle Challenge",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       250,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "leftValue":  "={{ $json.body.type }}",
+                                                                                   "rightValue":  "url_verification",
+                                                                                   "operator":  {
+                                                                                                    "type":  "string",
+                                                                                                    "operation":  "equals"
+                                                                                                }
+                                                                               }
+                                                                           ]
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "respond-challenge-001",
+                      "name":  "Respond Challenge",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1,
+                      "position":  [
+                                       500,
+                                       -150
+                                   ],
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ JSON.stringify({ challenge: $(\u0027Slack Webhook\u0027).first().json.body.challenge }) }}"
+                                     }
+                  },
+                  {
+                      "id":  "extract-reaction-001",
+                      "name":  "Extract Reaction",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       500,
+                                       150
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const body = $input.first().json.body;\nconst event = body.event || {};\nconst reaction = event.reaction || \u0027\u0027;\nconst approved = reaction === \u0027white_check_mark\u0027;\nconst rejected = reaction === \u0027x\u0027;\nconst messageTs = event.item?.ts || \u0027\u0027;\nconst channel = event.item?.channel || \u0027\u0027;\nreturn [{ json: { approved, rejected, reaction, messageTs, channel, raw: body } }];"
+                                     }
+                  },
+                  {
+                      "id":  "if-approved-001",
+                      "name":  "IF Approved",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       750,
+                                       150
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "leftValue":  "={{ $json.approved }}",
+                                                                                   "rightValue":  true,
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true"
+                                                                                                }
+                                                                               }
+                                                                           ]
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "resume-execution-001",
+                      "name":  "Resume Waiting Execution",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       1000,
+                                       50
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "=https://qoyod.app.n8n.cloud/webhook/{{ $(\u0027Extract Reaction\u0027).first().json.messageTs }}-approval/resume",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={ \"approved\": true, \"reaction\": \"{{ $json.reaction }}\" }"
+                                     }
+                  },
+                  {
+                      "id":  "post-rejected-001",
+                      "name":  "Post Rejected",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       1000,
+                                       250
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/chat.postMessage",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={ \"channel\": \"{{ $(\u0027Extract Reaction\u0027).first().json.channel }}\", \"text\": \":x: Action rejected — skipped.\", \"thread_ts\": \"{{ $(\u0027Extract Reaction\u0027).first().json.messageTs }}\" }"
+                                     },
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "YwdlGwXs943DQrfh",
+                                                                 "name":  "Slack (Qoyod)"
+                                                             }
+                                      }
+                  }
+              ],
+    "connections":  {
+                        "Slack Webhook":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Handle Challenge",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Handle Challenge":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Respond Challenge",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ],
+                                                              [
+                                                                  {
+                                                                      "node":  "Extract Reaction",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Extract Reaction":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "IF Approved",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "IF Approved":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Resume Waiting Execution",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ],
+                                                         [
+                                                             {
+                                                                 "node":  "Post Rejected",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "availableInMCP":  true
+                 },
+    "staticData":  null,
+    "meta":  null,
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  null,
+    "versionId":  "340184f4-a792-4aec-8be8-13fa5aa24847",
+    "activeVersionId":  "340184f4-a792-4aec-8be8-13fa5aa24847",
+    "versionCounter":  3,
+    "triggerCount":  1,
+    "sourceWorkflowId":  null,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-06-16T22:20:17.155Z",
+                       "createdAt":  "2026-06-16T22:20:17.155Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "5Acqsbxsk0XQ5k9e",
+                       "projectId":  "adzgqz9cb5avvdf1",
+                       "project":  {
+                                       "updatedAt":  "2026-05-28T17:50:33.321Z",
+                                       "createdAt":  "2026-05-28T17:50:26.370Z",
+                                       "id":  "adzgqz9cb5avvdf1",
+                                       "name":  "Mohamed Irshaid \u003cmohammad.irsheid@qoyod.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-06-16T22:34:47.004Z",
+                          "createdAt":  "2026-06-16T22:34:47.004Z",
+                          "versionId":  "340184f4-a792-4aec-8be8-13fa5aa24847",
+                          "workflowId":  "5Acqsbxsk0XQ5k9e",
+                          "nodes":  [
+                                        {
+                                            "id":  "approval-webhook-001",
+                                            "name":  "Slack Webhook",
+                                            "type":  "n8n-nodes-base.webhook",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "httpMethod":  "POST",
+                                                               "path":  "slack-approval",
+                                                               "responseMode":  "responseNode"
+                                                           },
+                                            "webhookId":  "f09d14f9-9c83-4347-99d0-bc5aff9a28cc"
+                                        },
+                                        {
+                                            "id":  "handle-challenge-001",
+                                            "name":  "Handle Challenge",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             250,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "leftValue":  "={{ $json.body.type }}",
+                                                                                                         "rightValue":  "url_verification",
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "string",
+                                                                                                                          "operation":  "equals"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ]
+                                                                              }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "respond-challenge-001",
+                                            "name":  "Respond Challenge",
+                                            "type":  "n8n-nodes-base.respondToWebhook",
+                                            "typeVersion":  1,
+                                            "position":  [
+                                                             500,
+                                                             -150
+                                                         ],
+                                            "parameters":  {
+                                                               "respondWith":  "json",
+                                                               "responseBody":  "={{ JSON.stringify({ challenge: $(\u0027Slack Webhook\u0027).first().json.body.challenge }) }}"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "extract-reaction-001",
+                                            "name":  "Extract Reaction",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             500,
+                                                             150
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const body = $input.first().json.body;\nconst event = body.event || {};\nconst reaction = event.reaction || \u0027\u0027;\nconst approved = reaction === \u0027white_check_mark\u0027;\nconst rejected = reaction === \u0027x\u0027;\nconst messageTs = event.item?.ts || \u0027\u0027;\nconst channel = event.item?.channel || \u0027\u0027;\nreturn [{ json: { approved, rejected, reaction, messageTs, channel, raw: body } }];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "if-approved-001",
+                                            "name":  "IF Approved",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             750,
+                                                             150
+                                                         ],
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "leftValue":  "={{ $json.approved }}",
+                                                                                                         "rightValue":  true,
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "boolean",
+                                                                                                                          "operation":  "true"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ]
+                                                                              }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "resume-execution-001",
+                                            "name":  "Resume Waiting Execution",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             1000,
+                                                             50
+                                                         ],
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "=https://qoyod.app.n8n.cloud/webhook/{{ $(\u0027Extract Reaction\u0027).first().json.messageTs }}-approval/resume",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={ \"approved\": true, \"reaction\": \"{{ $json.reaction }}\" }"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "post-rejected-001",
+                                            "name":  "Post Rejected",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             1000,
+                                                             250
+                                                         ],
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://slack.com/api/chat.postMessage",
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={ \"channel\": \"{{ $(\u0027Extract Reaction\u0027).first().json.channel }}\", \"text\": \":x: Action rejected — skipped.\", \"thread_ts\": \"{{ $(\u0027Extract Reaction\u0027).first().json.messageTs }}\" }"
+                                                           },
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "YwdlGwXs943DQrfh",
+                                                                                       "name":  "Slack (Qoyod)"
+                                                                                   }
+                                                            }
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Slack Webhook":  {
+                                                                    "main":  [
+                                                                                 [
+                                                                                     {
+                                                                                         "node":  "Handle Challenge",
+                                                                                         "type":  "main",
+                                                                                         "index":  0
+                                                                                     }
+                                                                                 ]
+                                                                             ]
+                                                                },
+                                              "Handle Challenge":  {
+                                                                       "main":  [
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Respond Challenge",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ],
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Extract Reaction",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                                ]
+                                                                   },
+                                              "Extract Reaction":  {
+                                                                       "main":  [
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "IF Approved",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                                ]
+                                                                   },
+                                              "IF Approved":  {
+                                                                  "main":  [
+                                                                               [
+                                                                                   {
+                                                                                       "node":  "Resume Waiting Execution",
+                                                                                       "type":  "main",
+                                                                                       "index":  0
+                                                                                   }
+                                                                               ],
+                                                                               [
+                                                                                   {
+                                                                                       "node":  "Post Rejected",
+                                                                                       "type":  "main",
+                                                                                       "index":  0
+                                                                                   }
+                                                                               ]
+                                                                           ]
+                                                              }
+                                          },
+                          "nodeGroups":  [
+
+                                         ],
+                          "authors":  "Mohamed Irshaid",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-06-16T22:34:55.767Z",
+                                                             "id":  59,
+                                                             "workflowId":  "5Acqsbxsk0XQ5k9e",
+                                                             "versionId":  "340184f4-a792-4aec-8be8-13fa5aa24847",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T08:22:24.465Z",
+                                                             "id":  81,
+                                                             "workflowId":  "5Acqsbxsk0XQ5k9e",
+                                                             "versionId":  "340184f4-a792-4aec-8be8-13fa5aa24847",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T08:22:24.412Z",
+                                                             "id":  80,
+                                                             "workflowId":  "5Acqsbxsk0XQ5k9e",
+                                                             "versionId":  "340184f4-a792-4aec-8be8-13fa5aa24847",
+                                                             "event":  "deactivated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         }
+                                                     ]
+                      }
+}

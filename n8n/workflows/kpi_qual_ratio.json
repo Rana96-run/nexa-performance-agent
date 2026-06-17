@@ -1,0 +1,553 @@
+﻿{
+    "updatedAt":  "2026-06-17T12:53:54.630Z",
+    "createdAt":  "2026-06-16T19:46:04.140Z",
+    "id":  "PxFBmtXDVgcNGzIM",
+    "name":  "Nexa � [KPI] Qual Ratio",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "66fbbac2-8e2d-5e89-ae93-b6d79b1e48ab",
+                      "name":  "Trigger",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "parameters":  {
+
+                                     }
+                  },
+                  {
+                      "id":  "556fc0e2-7b65-5852-a103-8ef2865b3751",
+                      "name":  "BQ - Qual Drill",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "typeVersion":  2,
+                      "position":  [
+                                       250,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "projectId":  "angular-axle-492812-q4",
+                                         "sqlQuery":  "WITH hs AS (\n  SELECT LOWER(lead_utm_campaign) AS campaign_key,\n         SUM(leads_total) AS leads_total,\n         SUM(leads_qualified) AS leads_qualified,\n         SUM(leads_disqualified) AS leads_disqualified,\n         SAFE_DIVIDE(SUM(leads_qualified), SUM(leads_total)) AS qual_rate\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 14 DAY)\n  GROUP BY LOWER(lead_utm_campaign)\n)\nSELECT c.channel, c.campaign_name,\n       SUM(c.spend) AS spend,\n       MAX(hs.leads_total) AS leads_total,\n       MAX(hs.leads_qualified) AS leads_qualified,\n       MAX(hs.leads_disqualified) AS leads_disqualified,\n       MAX(hs.qual_rate) AS qual_rate\nFROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\nLEFT JOIN hs ON LOWER(c.campaign_name) = hs.campaign_key\nWHERE c.date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 14 DAY)\nGROUP BY c.channel, c.campaign_name\nHAVING leads_total \u003e 0\nORDER BY qual_rate ASC",
+                                         "authentication":  "serviceAccount",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "e3eced91-4025-5f6b-a533-a9f18c3107c2",
+                      "name":  "Qual \u003c 30%?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       500,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "loose"
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "98ca5de6-4999-5772-8ed8-bc870207a7cf",
+                                                                                   "leftValue":  "={{ $(\u0027Trigger\u0027).first().json.qual_rate_pct }}",
+                                                                                   "rightValue":  "30",
+                                                                                   "operator":  {
+                                                                                                    "type":  "number",
+                                                                                                    "operation":  "smallerEqual"
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "3ace7adc-2682-5314-9d79-43ad823baf36",
+                      "name":  "Build - LP Redirect Urgent",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       750,
+                                       -200
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const rows=$input.all().map(i=\u003ei.json);\nconst ch=$(\u0027Trigger\u0027).first().json.channel, q=$(\u0027Trigger\u0027).first().json.qual_rate_pct;\nconst t=new Date().toISOString().slice(0,10);\nconst worst=rows.filter(r=\u003e(r.qual_rate||0)\u003c0.30).slice(0,5);\n\n// Qual rate source: hubspot_leads_module_daily ONLY - NEVER platform conversion counts\n// Qual rate = SUM(leads_qualified) / SUM(leads_total) from HubSpot CTE join\n// #approvals required - this node outputs recommendation only, never auto-executes\n// HubSpot READ-ONLY - any field/pipeline/stage changes require Rana/Amar sign-off via Slack\n\nconst worstLines = worst.map(r =\u003e {\n  const pct = r.qual_rate != null ? (r.qual_rate*100).toFixed(1) : \u0027n/a\u0027;\n  return `. ${r.campaign_name||\u0027unknown\u0027} - ${pct}% qual (${r.leads_total||0} leads, ${r.spend?\u0027$\u0027+r.spend.toFixed(0):\u0027-\u0027} spend)`;\n}).join(\u0027\\n\u0027);\n\nreturn [{json:{\n  task_name:`[URGENT - QUAL CRITICAL] ${ch} - Qual ${q}% below 30% threshold`,\n  task_notes:`Channel: ${ch}\nQual Rate: ${q}% - CRITICAL (\u003c 30% threshold)\nData source: hubspot_leads_module_daily (14-day window, CTE-joined to campaigns_daily)\n\nACTION REQUIRED (via #approvals - ? to execute, ? to skip):\n? Redirect traffic to best same-category LP immediately\n? Do NOT wait for a new LP - redirect existing best performer\n? Budget cut or campaign pause requires #approvals ? first\n\nWorst-performing campaigns (\u003c 30% qual):\n${worstLines}\n\nCRO Handoff Chain:\n? CRO Specialist creates LP brief\n? UI/UX Designer reviews layout\n? Developer implements changes\n? Pixel verification: BOTH Meta pixels must fire on form submit + UTM passthrough confirmed on hidden fields\n? LP sign-off ONLY after both conditions met\n\nLinkedIn note: seniority/company-size filters map to utm_audience (Ad Set level).\nConfirm UTM passthrough via HubSpot form fields before deploying any LinkedIn audience segment.\n\nESCALATE TO GROWTH-ANALYST for any HubSpot field changes, pipeline changes, or stage changes.\nHubSpot is READ-ONLY without explicit Rana/Amar sign-off via Slack.\n\nCreated: ${t} | Due: TODAY | Priority: P0 | Type: LP Redirect | Channel: ${ch} | Asset level: Landing Page | Action: redirect ? [cro-specialist]`,\n  due_on: t\n}}];"
+                                     }
+                  },
+                  {
+                      "id":  "5757befe-d4fa-57a8-8db8-c0aac0b14ccd",
+                      "name":  "Build - Qual Improvement",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       750,
+                                       200
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const rows=$input.all().map(i=\u003ei.json);\nconst ch=$(\u0027Trigger\u0027).first().json.channel, q=$(\u0027Trigger\u0027).first().json.qual_rate_pct;\nconst t=new Date().toISOString().slice(0,10);\nconst low=rows.filter(r=\u003e(r.qual_rate||0)\u003c0.45).slice(0,5);\n\n// Qual rate source: hubspot_leads_module_daily ONLY - NEVER platform conversion counts\n// Qual rate = SUM(leads_qualified) / SUM(leads_total) via CTE join\n// Join key for creative comparison: LOWER(TRIM(utm_content)) on both GROUP BY and join predicate\n// (Snapchat produces casing variants - e.g. \"VideoV1_AR\" vs \"videov1_ar\")\n// #approvals required - this node outputs recommendation only, never auto-executes\n// HubSpot READ-ONLY - pipeline/stage/field changes require Rana/Amar Slack sign-off\n\nconst lowLines = low.map(r =\u003e {\n  const pct = r.qual_rate != null ? (r.qual_rate*100).toFixed(1) : \u0027n/a\u0027;\n  return `. ${r.campaign_name} (${r.channel}) - ${pct}% qual | ${r.leads_total||0} leads | $${r.spend?r.spend.toFixed(0):\u0027-\u0027} spend`;\n}).join(\u0027\\n\u0027);\n\nreturn [{json:{\n  task_name:`[QUAL FIX] ${ch} - Qual rate ${q}% below 45% target`,\n  task_notes:`Channel: ${ch}\nQual Rate: ${q}% - Below 45% target\nData source: hubspot_leads_module_daily (14-day window)\nQual rate formula: SUM(leads_qualified) / SUM(leads_total) - NOT platform conversions\n\nLow-performing campaigns (\u003c 45% qual):\n${lowLines}\n\nPossible root causes to investigate:\n1. Audience mismatch - wrong seniority/industry targeting\n2. Ad-to-LP messaging disconnect - promise vs form mismatch\n3. Wrong LP routing - sending to non-relevant landing page\n4. LinkedIn: confirm utm_audience maps to Ad Set level (NOT Campaign Group level)\n   ? seniority/company-size filters are at Ad Set (utm_audience), confirm UTM passthrough in HubSpot\n\nCreative comparison note:\nWhen comparing creatives across channels, use LOWER(TRIM(utm_content)) on both GROUP BY and join.\nSnapchat produces casing variants (e.g. \"VideoV1_AR\" vs \"videov1_ar\") - normalize before joining.\n\nESCALATE TO GROWTH-ANALYST - any HubSpot field changes, pipeline changes, or stage changes\nrequire explicit Rana/Amar sign-off via Slack. HubSpot is READ-ONLY without approval.\n\nAll budget cuts and campaign pauses go to #approvals first - ? to execute, ? to skip.\nThis task is a recommendation only - no auto-execution.\n\nCreated: ${t} | Due: +2d | Priority: P1 | Type: Qual Fix | Channel: ${ch} | Asset level: Ad Set | Action: investigate ? [campaign-manager]`,\n  due_on: new Date(Date.now()+2*86400000).toISOString().slice(0,10)\n}}];"
+                                     }
+                  },
+                  {
+                      "id":  "73cc7217-9e7e-56c5-94a0-2fa8a2cb3765",
+                      "name":  "Create Asana Task",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       1000,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "iUYNax4N4UkcLiQB",
+                                                                 "name":  "Asana (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://app.asana.com/api/1.0/tasks",
+                                         "authentication":  "genericCredentialType",
+                                         "genericAuthType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "c7d4545d-efab-5407-89ab-f48e56ea0cb0",
+                      "name":  "Return Result",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       1250,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "manual",
+                                         "fields":  {
+                                                        "values":  [
+                                                                       {
+                                                                           "name":  "sub_flow",
+                                                                           "stringValue":  "D_QUAL"
+                                                                       },
+                                                                       {
+                                                                           "name":  "status",
+                                                                           "stringValue":  "={{ $json.data?\u0027created\u0027:\u0027error\u0027 }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "channel",
+                                                                           "stringValue":  "={{ $(\u0027Trigger\u0027).first().json.channel }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "action",
+                                                                           "stringValue":  "={{ $(\u0027Trigger\u0027).first().json.qual_rate_pct \u003c= 30 ? \u0027lp_redirect\u0027 : \u0027qual_fix\u0027 }}"
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Trigger":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "BQ - Qual Drill",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "BQ - Qual Drill":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Qual \u003c 30%?",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Qual \u003c 30%?":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Build - LP Redirect Urgent",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ],
+                                                              [
+                                                                  {
+                                                                      "node":  "Build - Qual Improvement",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Build - LP Redirect Urgent":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Create Asana Task",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       },
+                        "Build - Qual Improvement":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Create Asana Task",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Create Asana Task":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Return Result",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "timezone":  "Asia/Riyadh",
+                     "saveManualExecutions":  true,
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  true
+                 },
+    "staticData":  null,
+    "meta":  null,
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  null,
+    "versionId":  "6d46ba78-44dc-4673-b603-021a0f43ded1",
+    "activeVersionId":  "6d46ba78-44dc-4673-b603-021a0f43ded1",
+    "versionCounter":  3,
+    "triggerCount":  0,
+    "sourceWorkflowId":  null,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-06-16T19:46:04.142Z",
+                       "createdAt":  "2026-06-16T19:46:04.142Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "PxFBmtXDVgcNGzIM",
+                       "projectId":  "adzgqz9cb5avvdf1",
+                       "project":  {
+                                       "updatedAt":  "2026-05-28T17:50:33.321Z",
+                                       "createdAt":  "2026-05-28T17:50:26.370Z",
+                                       "id":  "adzgqz9cb5avvdf1",
+                                       "name":  "Mohamed Irshaid \u003cmohammad.irsheid@qoyod.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-06-17T12:53:54.631Z",
+                          "createdAt":  "2026-06-17T12:53:54.631Z",
+                          "versionId":  "6d46ba78-44dc-4673-b603-021a0f43ded1",
+                          "workflowId":  "PxFBmtXDVgcNGzIM",
+                          "nodes":  [
+                                        {
+                                            "id":  "66fbbac2-8e2d-5e89-ae93-b6d79b1e48ab",
+                                            "name":  "Trigger",
+                                            "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                                            "typeVersion":  1,
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+
+                                                           }
+                                        },
+                                        {
+                                            "id":  "556fc0e2-7b65-5852-a103-8ef2865b3751",
+                                            "name":  "BQ - Qual Drill",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             250,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "operation":  "executeQuery",
+                                                               "projectId":  "angular-axle-492812-q4",
+                                                               "sqlQuery":  "WITH hs AS (\n  SELECT LOWER(lead_utm_campaign) AS campaign_key,\n         SUM(leads_total) AS leads_total,\n         SUM(leads_qualified) AS leads_qualified,\n         SUM(leads_disqualified) AS leads_disqualified,\n         SAFE_DIVIDE(SUM(leads_qualified), SUM(leads_total)) AS qual_rate\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 14 DAY)\n  GROUP BY LOWER(lead_utm_campaign)\n)\nSELECT c.channel, c.campaign_name,\n       SUM(c.spend) AS spend,\n       MAX(hs.leads_total) AS leads_total,\n       MAX(hs.leads_qualified) AS leads_qualified,\n       MAX(hs.leads_disqualified) AS leads_disqualified,\n       MAX(hs.qual_rate) AS qual_rate\nFROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\nLEFT JOIN hs ON LOWER(c.campaign_name) = hs.campaign_key\nWHERE c.date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 14 DAY)\nGROUP BY c.channel, c.campaign_name\nHAVING leads_total \u003e 0\nORDER BY qual_rate ASC",
+                                                               "authentication":  "serviceAccount",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "e3eced91-4025-5f6b-a533-a9f18c3107c2",
+                                            "name":  "Qual \u003c 30%?",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             500,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "options":  {
+                                                                                                  "caseSensitive":  true,
+                                                                                                  "leftValue":  "",
+                                                                                                  "typeValidation":  "loose"
+                                                                                              },
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "id":  "98ca5de6-4999-5772-8ed8-bc870207a7cf",
+                                                                                                         "leftValue":  "={{ $(\u0027Trigger\u0027).first().json.qual_rate_pct }}",
+                                                                                                         "rightValue":  "30",
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "number",
+                                                                                                                          "operation":  "smallerEqual"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "combinator":  "and"
+                                                                              }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "3ace7adc-2682-5314-9d79-43ad823baf36",
+                                            "name":  "Build - LP Redirect Urgent",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             750,
+                                                             -200
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const rows=$input.all().map(i=\u003ei.json);\nconst ch=$(\u0027Trigger\u0027).first().json.channel, q=$(\u0027Trigger\u0027).first().json.qual_rate_pct;\nconst t=new Date().toISOString().slice(0,10);\nconst worst=rows.filter(r=\u003e(r.qual_rate||0)\u003c0.30).slice(0,5);\n\n// Qual rate source: hubspot_leads_module_daily ONLY - NEVER platform conversion counts\n// Qual rate = SUM(leads_qualified) / SUM(leads_total) from HubSpot CTE join\n// #approvals required - this node outputs recommendation only, never auto-executes\n// HubSpot READ-ONLY - any field/pipeline/stage changes require Rana/Amar sign-off via Slack\n\nconst worstLines = worst.map(r =\u003e {\n  const pct = r.qual_rate != null ? (r.qual_rate*100).toFixed(1) : \u0027n/a\u0027;\n  return `. ${r.campaign_name||\u0027unknown\u0027} - ${pct}% qual (${r.leads_total||0} leads, ${r.spend?\u0027$\u0027+r.spend.toFixed(0):\u0027-\u0027} spend)`;\n}).join(\u0027\\n\u0027);\n\nreturn [{json:{\n  task_name:`[URGENT - QUAL CRITICAL] ${ch} - Qual ${q}% below 30% threshold`,\n  task_notes:`Channel: ${ch}\nQual Rate: ${q}% - CRITICAL (\u003c 30% threshold)\nData source: hubspot_leads_module_daily (14-day window, CTE-joined to campaigns_daily)\n\nACTION REQUIRED (via #approvals - ? to execute, ? to skip):\n? Redirect traffic to best same-category LP immediately\n? Do NOT wait for a new LP - redirect existing best performer\n? Budget cut or campaign pause requires #approvals ? first\n\nWorst-performing campaigns (\u003c 30% qual):\n${worstLines}\n\nCRO Handoff Chain:\n? CRO Specialist creates LP brief\n? UI/UX Designer reviews layout\n? Developer implements changes\n? Pixel verification: BOTH Meta pixels must fire on form submit + UTM passthrough confirmed on hidden fields\n? LP sign-off ONLY after both conditions met\n\nLinkedIn note: seniority/company-size filters map to utm_audience (Ad Set level).\nConfirm UTM passthrough via HubSpot form fields before deploying any LinkedIn audience segment.\n\nESCALATE TO GROWTH-ANALYST for any HubSpot field changes, pipeline changes, or stage changes.\nHubSpot is READ-ONLY without explicit Rana/Amar sign-off via Slack.\n\nCreated: ${t} | Due: TODAY | Priority: P0 | Type: LP Redirect | Channel: ${ch} | Asset level: Landing Page | Action: redirect ? [cro-specialist]`,\n  due_on: t\n}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "5757befe-d4fa-57a8-8db8-c0aac0b14ccd",
+                                            "name":  "Build - Qual Improvement",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             750,
+                                                             200
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const rows=$input.all().map(i=\u003ei.json);\nconst ch=$(\u0027Trigger\u0027).first().json.channel, q=$(\u0027Trigger\u0027).first().json.qual_rate_pct;\nconst t=new Date().toISOString().slice(0,10);\nconst low=rows.filter(r=\u003e(r.qual_rate||0)\u003c0.45).slice(0,5);\n\n// Qual rate source: hubspot_leads_module_daily ONLY - NEVER platform conversion counts\n// Qual rate = SUM(leads_qualified) / SUM(leads_total) via CTE join\n// Join key for creative comparison: LOWER(TRIM(utm_content)) on both GROUP BY and join predicate\n// (Snapchat produces casing variants - e.g. \"VideoV1_AR\" vs \"videov1_ar\")\n// #approvals required - this node outputs recommendation only, never auto-executes\n// HubSpot READ-ONLY - pipeline/stage/field changes require Rana/Amar Slack sign-off\n\nconst lowLines = low.map(r =\u003e {\n  const pct = r.qual_rate != null ? (r.qual_rate*100).toFixed(1) : \u0027n/a\u0027;\n  return `. ${r.campaign_name} (${r.channel}) - ${pct}% qual | ${r.leads_total||0} leads | $${r.spend?r.spend.toFixed(0):\u0027-\u0027} spend`;\n}).join(\u0027\\n\u0027);\n\nreturn [{json:{\n  task_name:`[QUAL FIX] ${ch} - Qual rate ${q}% below 45% target`,\n  task_notes:`Channel: ${ch}\nQual Rate: ${q}% - Below 45% target\nData source: hubspot_leads_module_daily (14-day window)\nQual rate formula: SUM(leads_qualified) / SUM(leads_total) - NOT platform conversions\n\nLow-performing campaigns (\u003c 45% qual):\n${lowLines}\n\nPossible root causes to investigate:\n1. Audience mismatch - wrong seniority/industry targeting\n2. Ad-to-LP messaging disconnect - promise vs form mismatch\n3. Wrong LP routing - sending to non-relevant landing page\n4. LinkedIn: confirm utm_audience maps to Ad Set level (NOT Campaign Group level)\n   ? seniority/company-size filters are at Ad Set (utm_audience), confirm UTM passthrough in HubSpot\n\nCreative comparison note:\nWhen comparing creatives across channels, use LOWER(TRIM(utm_content)) on both GROUP BY and join.\nSnapchat produces casing variants (e.g. \"VideoV1_AR\" vs \"videov1_ar\") - normalize before joining.\n\nESCALATE TO GROWTH-ANALYST - any HubSpot field changes, pipeline changes, or stage changes\nrequire explicit Rana/Amar sign-off via Slack. HubSpot is READ-ONLY without approval.\n\nAll budget cuts and campaign pauses go to #approvals first - ? to execute, ? to skip.\nThis task is a recommendation only - no auto-execution.\n\nCreated: ${t} | Due: +2d | Priority: P1 | Type: Qual Fix | Channel: ${ch} | Asset level: Ad Set | Action: investigate ? [campaign-manager]`,\n  due_on: new Date(Date.now()+2*86400000).toISOString().slice(0,10)\n}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "73cc7217-9e7e-56c5-94a0-2fa8a2cb3765",
+                                            "name":  "Create Asana Task",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             1000,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "iUYNax4N4UkcLiQB",
+                                                                                       "name":  "Asana (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://app.asana.com/api/1.0/tasks",
+                                                               "authentication":  "genericCredentialType",
+                                                               "genericAuthType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "c7d4545d-efab-5407-89ab-f48e56ea0cb0",
+                                            "name":  "Return Result",
+                                            "type":  "n8n-nodes-base.set",
+                                            "typeVersion":  3.4,
+                                            "position":  [
+                                                             1250,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "manual",
+                                                               "fields":  {
+                                                                              "values":  [
+                                                                                             {
+                                                                                                 "name":  "sub_flow",
+                                                                                                 "stringValue":  "D_QUAL"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "status",
+                                                                                                 "stringValue":  "={{ $json.data?\u0027created\u0027:\u0027error\u0027 }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "channel",
+                                                                                                 "stringValue":  "={{ $(\u0027Trigger\u0027).first().json.channel }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "action",
+                                                                                                 "stringValue":  "={{ $(\u0027Trigger\u0027).first().json.qual_rate_pct \u003c= 30 ? \u0027lp_redirect\u0027 : \u0027qual_fix\u0027 }}"
+                                                                                             }
+                                                                                         ]
+                                                                          }
+                                                           }
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Trigger":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "BQ - Qual Drill",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                                              "BQ - Qual Drill":  {
+                                                                      "main":  [
+                                                                                   [
+                                                                                       {
+                                                                                           "node":  "Qual \u003c 30%?",
+                                                                                           "type":  "main",
+                                                                                           "index":  0
+                                                                                       }
+                                                                                   ]
+                                                                               ]
+                                                                  },
+                                              "Qual \u003c 30%?":  {
+                                                                       "main":  [
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Build - LP Redirect Urgent",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ],
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Build - Qual Improvement",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                                ]
+                                                                   },
+                                              "Build - LP Redirect Urgent":  {
+                                                                                 "main":  [
+                                                                                              [
+                                                                                                  {
+                                                                                                      "node":  "Create Asana Task",
+                                                                                                      "type":  "main",
+                                                                                                      "index":  0
+                                                                                                  }
+                                                                                              ]
+                                                                                          ]
+                                                                             },
+                                              "Build - Qual Improvement":  {
+                                                                               "main":  [
+                                                                                            [
+                                                                                                {
+                                                                                                    "node":  "Create Asana Task",
+                                                                                                    "type":  "main",
+                                                                                                    "index":  0
+                                                                                                }
+                                                                                            ]
+                                                                                        ]
+                                                                           },
+                                              "Create Asana Task":  {
+                                                                        "main":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "Return Result",
+                                                                                             "type":  "main",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ]
+                                                                                 ]
+                                                                    }
+                                          },
+                          "nodeGroups":  [
+
+                                         ],
+                          "authors":  "Mohamed Irshaid",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-06-17T12:53:54.750Z",
+                                                             "id":  195,
+                                                             "workflowId":  "PxFBmtXDVgcNGzIM",
+                                                             "versionId":  "6d46ba78-44dc-4673-b603-021a0f43ded1",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T12:53:54.718Z",
+                                                             "id":  194,
+                                                             "workflowId":  "PxFBmtXDVgcNGzIM",
+                                                             "versionId":  "6d46ba78-44dc-4673-b603-021a0f43ded1",
+                                                             "event":  "deactivated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         }
+                                                     ]
+                      }
+}

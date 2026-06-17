@@ -1,0 +1,1852 @@
+﻿{
+    "updatedAt":  "2026-06-17T11:10:32.201Z",
+    "createdAt":  "2026-06-15T10:52:17.069Z",
+    "id":  "iNSdpXH7Rc9Lb8h8",
+    "name":  "Nexa � [Cadence] Weekly Review",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "wkly-001",
+                      "name":  "Schedule � Weekly",
+                      "type":  "n8n-nodes-base.scheduleTrigger",
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "typeVersion":  1,
+                      "parameters":  {
+                                         "rule":  {
+                                                      "interval":  [
+                                                                       {
+                                                                           "field":  "cronExpression",
+                                                                           "expression":  "0 6 * * 0"
+                                                                       }
+                                                                   ]
+                                                  }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-002",
+                      "name":  "Set Dates � Weekly",
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       800,
+                                       0
+                                   ],
+                      "typeVersion":  2,
+                      "parameters":  {
+                                         "jsCode":  "const tz=\u0027Asia/Riyadh\u0027,now=new Date(new Date().toLocaleString(\u0027en-US\u0027,{timeZone:tz})),fmt=d=\u003ed.toISOString().slice(0,10),ago=n=\u003e{const d=new Date(now);d.setDate(d.getDate()-n);return d};return[{json:{last7start:fmt(ago(7)),last7end:fmt(ago(1)),prior7start:fmt(ago(14)),prior7end:fmt(ago(8)),weekLabel:fmt(ago(7))+\u0027 - \u0027+fmt(ago(1)),reportType:\u0027weekly\u0027}}];"
+                                     }
+                  },
+                  {
+                      "id":  "wkly-003",
+                      "name":  "Query Period Compare",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "position":  [
+                                       1600,
+                                       -600
+                                   ],
+                      "typeVersion":  2,
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "authentication":  "serviceAccount",
+                                         "projectId":  {
+                                                           "__rl":  true,
+                                                           "mode":  "expression",
+                                                           "value":  "={{ $vars.BQ_PROJECT }}"
+                                                       },
+                                         "sqlQuery":  "SELECT channel, period,\n  ROUND(SUM(spend),2) AS spend,\n  SUM(leads_total) AS leads,\n  SUM(leads_qualified) AS sqls,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_total),0)),2) AS cpl,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_qualified),0)),2) AS cpql,\n  SUM(new_biz_deals_won) AS deals_won,\n  \u0027compare\u0027 AS _query\nFROM (\n  SELECT channel,\n    CASE\n      WHEN date BETWEEN DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 14 DAY) AND DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 8 DAY) THEN \u0027prior_7d\u0027\n      WHEN date BETWEEN DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 7 DAY) AND DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 1 DAY) THEN \u0027last_7d\u0027\n    END AS period,\n    spend, leads_total, leads_qualified, new_biz_deals_won\n  FROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`\n  WHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 14 DAY)\n)\nWHERE period IS NOT NULL\nGROUP BY channel, period ORDER BY channel, period",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-004",
+                      "name":  "Query Forecast",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "position":  [
+                                       1600,
+                                       -200
+                                   ],
+                      "typeVersion":  2,
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "authentication":  "serviceAccount",
+                                         "projectId":  {
+                                                           "__rl":  true,
+                                                           "mode":  "expression",
+                                                           "value":  "={{ $vars.BQ_PROJECT }}"
+                                                       },
+                                         "sqlQuery":  "SELECT channel,\n  ROUND(SUM(spend)/7*30,0) AS proj_spend,\n  ROUND(SUM(leads_total)/7*30,0) AS proj_leads,\n  ROUND(SUM(leads_qualified)/7*30,0) AS proj_sqls,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_qualified)/7*30,0)),0) AS proj_cpql,\n  ROUND(SUM(new_biz_deals_won)/7*30,0) AS proj_deals,\n  \u0027forecast\u0027 AS _query\nFROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`\nWHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 7 DAY)\nGROUP BY channel ORDER BY proj_spend DESC",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-005",
+                      "name":  "Query Ad Audit",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "position":  [
+                                       1600,
+                                       200
+                                   ],
+                      "typeVersion":  2,
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "authentication":  "serviceAccount",
+                                         "projectId":  {
+                                                           "__rl":  true,
+                                                           "mode":  "expression",
+                                                           "value":  "={{ $vars.BQ_PROJECT }}"
+                                                       },
+                                         "sqlQuery":  "SELECT channel, campaign_name, ad_name,\n  ROUND(SUM(spend),0) AS spend_14d,\n  SUM(leads_total) AS leads,\n  SUM(leads_qualified) AS sqls,\n  SUM(new_biz_deals_won) AS deals_won,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_total),0)),0) AS cpl,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_qualified),0)),0) AS cpql,\n  ROUND(SAFE_DIVIDE(SUM(leads_disqualified),NULLIF(SUM(leads_total),0))*100,0) AS disq_pct,\n  \u0027ad_audit\u0027 AS _query\nFROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`\nWHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 14 DAY)\nGROUP BY channel, campaign_name, ad_name\nHAVING SUM(spend) \u003e= 20\nORDER BY cpql ASC NULLS LAST LIMIT 30",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-006",
+                      "name":  "Query Monitor",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "position":  [
+                                       1600,
+                                       600
+                                   ],
+                      "typeVersion":  2,
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "authentication":  "serviceAccount",
+                                         "projectId":  {
+                                                           "__rl":  true,
+                                                           "mode":  "expression",
+                                                           "value":  "={{ $vars.BQ_PROJECT }}"
+                                                       },
+                                         "sqlQuery":  "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE(\u0027Asia/Riyadh\u0027),event_date,DAY) AS days_since,\u0027monitor\u0027 AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_action_log` WHERE event_date\u003e=DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 30 DAY) ORDER BY event_date DESC LIMIT 20",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-007",
+                      "name":  "Collect Queries",
+                      "type":  "n8n-nodes-base.merge",
+                      "position":  [
+                                       2400,
+                                       0
+                                   ],
+                      "typeVersion":  3,
+                      "parameters":  {
+                                         "mode":  "append",
+                                         "numberInputs":  4
+                                     }
+                  },
+                  {
+                      "id":  "wkly-008",
+                      "name":  "Build � weekly-analyst",
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       3200,
+                                       0
+                                   ],
+                      "typeVersion":  2,
+                      "parameters":  {
+                                         "jsCode":  "const rows=$input.all().map(i=\u003ei.json),compare=rows.filter(r=\u003er._query===\u0027compare\u0027),forecast=rows.filter(r=\u003er._query===\u0027forecast\u0027),audit=rows.filter(r=\u003er._query===\u0027ad_audit\u0027),monitor=rows.filter(r=\u003er._query===\u0027monitor\u0027),today=new Date().toLocaleDateString(\u0027en-US\u0027,{timeZone:\u0027Asia/Riyadh\u0027,weekday:\u0027long\u0027,year:\u0027numeric\u0027,month:\u0027long\u0027,day:\u0027numeric\u0027});return[{json:{system:\u0027You are Nexa, Qoyod paid media agent. Today: \u0027+today+\u0027. Weekly review. USD only. Slack mrkdwn.\u0027,messages:[{role:\u0027user\u0027,content:JSON.stringify({compare,forecast,audit,monitor})}],tools:[{name:\u0027weekly_digest\u0027,description:\u0027Weekly digest\u0027,input_schema:{type:\u0027object\u0027,required:[\u0027digest\u0027,\u0027actions\u0027],properties:{digest:{type:\u0027string\u0027},actions:{type:\u0027array\u0027,items:{type:\u0027object\u0027,required:[\u0027title\u0027,\u0027description\u0027,\u0027priority\u0027],properties:{title:{type:\u0027string\u0027},description:{type:\u0027string\u0027},priority:{type:\u0027string\u0027,enum:[\u0027high\u0027,\u0027medium\u0027,\u0027low\u0027]},channel:{type:\u0027string\u0027}}}}}}}],tool_choice:{type:\u0027any\u0027}}}];"
+                                     }
+                  },
+                  {
+                      "id":  "wkly-009",
+                      "name":  "Claude � weekly-analyst",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "position":  [
+                                       4000,
+                                       0
+                                   ],
+                      "typeVersion":  4,
+                      "credentials":  {
+                                          "anthropicApi":  {
+                                                               "id":  "yLwrXNzxReOM4Fgn",
+                                                               "name":  "Anthropic account"
+                                                           }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.anthropic.com/v1/messages",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "anthropicApi",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "anthropic-version",
+                                                                                         "value":  "2023-06-01"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ model:\u0027claude-sonnet-4-6\u0027, max_tokens:6000, system:$json.system, messages:$json.messages, tools:$json.tools, tool_choice:$json.tool_choice }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-010",
+                      "name":  "Parse � weekly",
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       4800,
+                                       0
+                                   ],
+                      "typeVersion":  2,
+                      "parameters":  {
+                                         "jsCode":  "const resp=$input.first().json,block=(resp.content||[]).find(b=\u003eb.type===\u0027tool_use\u0027),out=block?.input||{},actions=out.actions||[],approvalsText=actions.map((a,i)=\u003e(i+1)+\u0027. *\u0027+a.title+\u0027* [\u0027+a.priority+\u0027]\n\u0027+a.description).join(\u0027\n\n\u0027);return[{json:{digest:out.digest||\u0027Weekly digest unavailable.\u0027,approvalsText:approvalsText||\u0027No actions.\u0027,actions,reportType:\u0027weekly\u0027,generatedAt:new Date().toISOString()}}];"
+                                     }
+                  },
+                  {
+                      "id":  "wkly-011",
+                      "name":  "Post Slack � Weekly",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "position":  [
+                                       5600,
+                                       -200
+                                   ],
+                      "typeVersion":  4,
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "YwdlGwXs943DQrfh",
+                                                                 "name":  "Slack (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/chat.postMessage",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_NOTIFY, text:$json.digest, unfurl_links:false }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-012",
+                      "name":  "Post Slack � Approvals",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "position":  [
+                                       5600,
+                                       200
+                                   ],
+                      "typeVersion":  4,
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "YwdlGwXs943DQrfh",
+                                                                 "name":  "Slack (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/chat.postMessage",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:\u0027*Weekly Actions - ? approve / ? skip*\n\n\u0027+$json.approvalsText, unfurl_links:false }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-013",
+                      "name":  "Expand Asana Tasks",
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       5600,
+                                       600
+                                   ],
+                      "typeVersion":  2,
+                      "parameters":  {
+                                         "jsCode":  "const {actions}=$input.first().json,today=new Date().toLocaleDateString(\u0027en-US\u0027,{timeZone:\u0027Asia/Riyadh\u0027});return(actions||[]).map(a=\u003e({json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:a.title,notes:a.description+\u0027\\n\\nChannel: \u0027+(a.channel||\u0027all\u0027)+\u0027\\nPriority: \u0027+(a.priority||\u0027medium\u0027)+\u0027\\nType: weekly-review\\nCreated: \u0027+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}));"
+                                     }
+                  },
+                  {
+                      "id":  "wkly-014",
+                      "name":  "Create Asana Task",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "position":  [
+                                       6400,
+                                       600
+                                   ],
+                      "typeVersion":  4,
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "iUYNax4N4UkcLiQB",
+                                                                 "name":  "Asana (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://app.asana.com/api/1.0/tasks",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify($json) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-015",
+                      "name":  "Build Audit SQL",
+                      "type":  "n8n-nodes-base.code",
+                      "position":  [
+                                       6400,
+                                       -200
+                                   ],
+                      "typeVersion":  2,
+                      "parameters":  {
+                                         "jsCode":  "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_action_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES (\u0027weekly_review\u0027,\u0027report\u0027,\u0027all\u0027,CURRENT_DATE(\u0027Asia/Riyadh\u0027),\u0027${r.reportType}_generated\u0027,CURRENT_TIMESTAMP())`}}];"
+                                     }
+                  },
+                  {
+                      "id":  "wkly-016",
+                      "name":  "Audit Log ? BQ",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "position":  [
+                                       7200,
+                                       -200
+                                   ],
+                      "typeVersion":  2,
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "authentication":  "serviceAccount",
+                                         "projectId":  {
+                                                           "__rl":  true,
+                                                           "mode":  "expression",
+                                                           "value":  "={{ $vars.BQ_PROJECT }}"
+                                                       },
+                                         "sqlQuery":  "{{ $json.sql }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "wkly-lp-01",
+                      "name":  "BQ � LP Audit",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "typeVersion":  2,
+                      "position":  [
+                                       800,
+                                       1200
+                                   ],
+                      "parameters":  {
+                                         "authentication":  "serviceAccount",
+                                         "projectId":  "={{ $vars.BQ_PROJECT }}",
+                                         "query":  "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 7 DAY)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks, SUM(c.impressions) AS impressions,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE c.date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 7 DAY)\n    AND c.destination_url IS NOT NULL\n  GROUP BY destination_url\n)\nSELECT destination_url, sample_campaign, ROUND(spend,2) AS spend_usd,\n  clicks, impressions, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE spend \u003e 0 ORDER BY leads DESC",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      }
+                  },
+                  {
+                      "id":  "wkly-lp-02",
+                      "name":  "Code � Format LP",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1600,
+                                       1200
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "const fmt=t=\u003enew Date(t).toLocaleString(\u0027sv\u0027,{timeZone:\u0027Asia/Riyadh\u0027}).split(\u0027 \u0027)[0];\nconst today=fmt(Date.now());\nconst due=fmt(Date.now()+3*86400000);\nconst rows=$input.all().map(i=\u003e{const d=i.json;return[d.destination_url||\u0027\u0027,d.sample_campaign||\u0027\u0027,d.spend_usd||0,d.clicks||0,d.impressions||0,d.leads||0,d.sqls||0,d.cvr_pct||0,d.cpql_usd||0];});\nconst headers=[\u0027destination_url\u0027,\u0027sample_campaign\u0027,\u0027spend_usd\u0027,\u0027clicks\u0027,\u0027impressions\u0027,\u0027leads\u0027,\u0027sqls\u0027,\u0027cvr_pct\u0027,\u0027cpql_usd\u0027];\nconst tabName=\u0027LP-\u0027+today;\nconst sheetLink=\u0027https://docs.google.com/spreadsheets/d/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg\u0027;\nconst top10=rows.slice(0,10);\nconst tblRows=top10.map(r=\u003e\u0027| \u0027+r[0]+\u0027 | \u0027+r[1]+\u0027 | $\u0027+r[2]+\u0027 | \u0027+r[5]+\u0027 | \u0027+r[6]+\u0027 | \u0027+r[7]+\u0027% | $\u0027+r[8]+\u0027 |\u0027).join(\u0027\\n\u0027);\nconst flags=rows.filter(r=\u003er[8]\u003e85||r[7]\u003c1||r[5]===0).map(r=\u003er[0]).join(\u0027, \u0027)||\u0027None\u0027;\nconst notes=\u0027LP WEEKLY REVIEW - \u0027+today+\u0027\\n\\n| URL | Campaign | Spend | Leads | SQLs | CVR% | CPQL |\\n|---|---|---|---|---|---|---|\\n\u0027+tblRows+\u0027\\n\\nFLAGS (CPQL\u003e$85 / CVR\u003c1% / 0 leads): \u0027+flags+\u0027\\n\\nSheet: \u0027+sheetLink+\u0027\\n\\n---\\nCreated: \u0027+today+\u0027 | Due: \u0027+due+\u0027 | Priority: Normal | Type: Review | Channel: All | Asset level: LP\u0027;\nreturn [{json:{rows,headers,tabName,sheetLink,today,due,notes}}];"
+                                     }
+                  },
+                  {
+                      "id":  "wkly-lp-03",
+                      "name":  "Sheets � Create LP Tab",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       2400,
+                                       1200
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg:batchUpdate",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "googleSheetsOAuth2Api",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({requests:[{addSheet:{properties:{title:$(\u0027Code � Format LP\u0027).first().json.tabName}}}]}) }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "kBgcDkRIN5tMoACU",
+                                                                        "name":  "Google Sheets OAuth2 API"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "wkly-lp-04",
+                      "name":  "Sheets � Write LP Rows",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       3200,
+                                       1200
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "={{ \u0027https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg/values/\u0027+encodeURIComponent($(\u0027Code � Format LP\u0027).first().json.tabName)+\u0027:append?valueInputOption=RAW\u0027 }}",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "googleSheetsOAuth2Api",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({values:[$(\u0027Code � Format LP\u0027).first().json.headers,...$(\u0027Code � Format LP\u0027).first().json.rows]}) }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "googleSheetsOAuth2Api":  {
+                                                                        "id":  "kBgcDkRIN5tMoACU",
+                                                                        "name":  "Google Sheets OAuth2 API"
+                                                                    }
+                                      }
+                  },
+                  {
+                      "id":  "wkly-lp-05",
+                      "name":  "Asana � LP Draft Weekly",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4,
+                      "position":  [
+                                       4000,
+                                       1200
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://app.asana.com/api/1.0/tasks",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:\u0027LP Weekly Review - \u0027+$(\u0027Code � Format LP\u0027).first().json.today,notes:$(\u0027Code � Format LP\u0027).first().json.notes,due_on:$(\u0027Code � Format LP\u0027).first().json.due}}) }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "iUYNax4N4UkcLiQB",
+                                                                 "name":  "Asana (Qoyod)"
+                                                             }
+                                      }
+                  },
+                  {
+                      "id":  "w-bq-fresh-001",
+                      "name":  "BQ � Freshness Check",
+                      "type":  "n8n-nodes-base.googleBigQuery",
+                      "typeVersion":  2,
+                      "position":  [
+                                       400,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "googleApi":  {
+                                                            "id":  "kE5RxM61mQkpV21N",
+                                                            "name":  "BigQuery (Qoyod)"
+                                                        }
+                                      },
+                      "parameters":  {
+                                         "operation":  "executeQuery",
+                                         "projectId":  "={{$vars.BQ_PROJECT}}",
+                                         "sqlQuery":  "SELECT FORMAT_DATE(\u0027%Y-%m-%d\u0027, MAX(date)) as latest_date, DATE_DIFF(CURRENT_DATE(\u0027Asia/Riyadh\u0027), MAX(date), DAY) as days_stale FROM `{{$vars.BQ_PROJECT}}.{{$vars.BQ_DATASET}}.campaigns_daily`",
+                                         "options":  {
+
+                                                     },
+                                         "authentication":  "serviceAccount"
+                                     }
+                  },
+                  {
+                      "id":  "w-if-fresh-001",
+                      "name":  "IF � Data Fresh?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       600,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict"
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "fc",
+                                                                                   "leftValue":  "={{$json.days_stale}}",
+                                                                                   "rightValue":  1,
+                                                                                   "operator":  {
+                                                                                                    "type":  "number",
+                                                                                                    "operation":  "lte"
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "w-slack-stale-001",
+                      "name":  "Slack � Stale Data Alert",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       800,
+                                       -300
+                                   ],
+                      "credentials":  {
+                                          "httpHeaderAuth":  {
+                                                                 "id":  "YwdlGwXs943DQrfh",
+                                                                 "name":  "Slack (Qoyod)"
+                                                             }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://slack.com/api/chat.postMessage",
+                                         "authentication":  "genericCredentialType",
+                                         "nodeCredentialType":  "httpHeaderAuth",
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ channel: $vars.SLACK_CHANNEL_NOTIFY || \"#data-health\", text: \"?? *BQ data stale* - `campaigns_daily` MAX(date) is *\" + $json.latest_date + \"* (\" + $json.days_stale + \" days behind). Weekly review skipped.\", unfurl_links: false }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  },
+                  {
+                      "id":  "w-build-perf-001",
+                      "name":  "Build � performance-lead",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4500,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "// Build prompt for performance-lead - takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b =\u003e b.type === \u0027tool_use\u0027);\nconst analysis = block?.input || {};\n\nconst systemPrompt = \u0027You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. \u0027 +\n  \u0027Validate findings, escalate CPQL regressions (\u003e$160 = pause; $130-160 = warning), identify cross-channel patterns, \u0027 +\n  \u0027add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. \u0027 +\n  \u0027CPQL zones: scale \u003c$85 | acceptable $85-$130 | warning $130-$160 | pause \u003e$160. \u0027 +\n  \u0027Min 14-day window for pause/scale. Spend in USD.\u0027;\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: \u0027weekly_digest\u0027,\n  description: \u0027Weekly digest - performance-lead final review\u0027,\n  input_schema: {\n    type: \u0027object\u0027,\n    required: [\u0027digest\u0027, \u0027actions\u0027],\n    properties: {\n      digest: {type: \u0027string\u0027},\n      actions: {type: \u0027array\u0027, items: {type: \u0027object\u0027, required: [\u0027title\u0027,\u0027description\u0027,\u0027priority\u0027],\n        properties: {title:{type:\u0027string\u0027}, description:{type:\u0027string\u0027}, priority:{type:\u0027string\u0027,enum:[\u0027high\u0027,\u0027medium\u0027,\u0027low\u0027]}, channel:{type:\u0027string\u0027}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: \u0027user\u0027, content: \u0027Growth Analyst report:\\n\\n\u0027 + digest + \u0027\\n\\nProvide your strategic review.\u0027}],\n  tools,\n  tool_choice: {type: \u0027required\u0027}\n}}];"
+                                     }
+                  },
+                  {
+                      "id":  "w-claude-perf-001",
+                      "name":  "Claude � performance-lead",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       4800,
+                                       0
+                                   ],
+                      "credentials":  {
+                                          "anthropicApi":  {
+                                                               "id":  "yLwrXNzxReOM4Fgn",
+                                                               "name":  "Anthropic account"
+                                                           }
+                                      },
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.anthropic.com/v1/messages",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "anthropicApi",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "anthropic-version",
+                                                                                         "value":  "2023-06-01"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ model:\u0027claude-sonnet-4-6\u0027, max_tokens:6000, system:$json.system, messages:$json.messages, tools:$json.tools, tool_choice:$json.tool_choice }) }}",
+                                         "options":  {
+
+                                                     }
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Schedule � Weekly":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "BQ � Freshness Check",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Set Dates � Weekly":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Query Period Compare",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Query Forecast",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Query Ad Audit",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    },
+                                                                    {
+                                                                        "node":  "Query Monitor",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Query Period Compare":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Collect Queries",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Query Forecast":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Collect Queries",
+                                                                    "type":  "main",
+                                                                    "index":  1
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Query Ad Audit":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Collect Queries",
+                                                                    "type":  "main",
+                                                                    "index":  2
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Query Monitor":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Collect Queries",
+                                                                   "type":  "main",
+                                                                   "index":  3
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Collect Queries":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Build � weekly-analyst",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Build � weekly-analyst":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Claude � weekly-analyst",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "Claude � weekly-analyst":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Build � performance-lead",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Parse � weekly":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Post Slack � Weekly",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                },
+                                                                {
+                                                                    "node":  "Post Slack � Approvals",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                },
+                                                                {
+                                                                    "node":  "Expand Asana Tasks",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                },
+                                                                {
+                                                                    "node":  "Build Audit SQL",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Expand Asana Tasks":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Create Asana Task",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Build Audit SQL":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Audit Log ? BQ",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "BQ � LP Audit":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Code � Format LP",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Code � Format LP":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Sheets � Create LP Tab",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Sheets � Create LP Tab":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Sheets � Write LP Rows",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "Sheets � Write LP Rows":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Asana � LP Draft Weekly",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "BQ � Freshness Check":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "IF � Data Fresh?",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "IF � Data Fresh?":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Set Dates � Weekly",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  },
+                                                                  {
+                                                                      "node":  "BQ � LP Audit",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ],
+                                                              [
+                                                                  {
+                                                                      "node":  "Slack � Stale Data Alert",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Build � performance-lead":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "Claude � performance-lead",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "Claude � performance-lead":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Parse � weekly",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "saveManualExecutions":  true,
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  true
+                 },
+    "staticData":  {
+                       "node:Schedule � Weekly":  {
+                                                      "recurrenceRules":  [
+
+                                                                          ]
+                                                  }
+                   },
+    "meta":  null,
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  null,
+    "versionId":  "66b69198-6c10-4ea8-af7b-7df383f9131e",
+    "activeVersionId":  "66b69198-6c10-4ea8-af7b-7df383f9131e",
+    "versionCounter":  10,
+    "triggerCount":  1,
+    "sourceWorkflowId":  null,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-06-15T10:52:17.071Z",
+                       "createdAt":  "2026-06-15T10:52:17.071Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "iNSdpXH7Rc9Lb8h8",
+                       "projectId":  "adzgqz9cb5avvdf1",
+                       "project":  {
+                                       "updatedAt":  "2026-05-28T17:50:33.321Z",
+                                       "createdAt":  "2026-05-28T17:50:26.370Z",
+                                       "id":  "adzgqz9cb5avvdf1",
+                                       "name":  "Mohamed Irshaid \u003cmohammad.irsheid@qoyod.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-06-17T11:10:32.202Z",
+                          "createdAt":  "2026-06-17T11:10:32.202Z",
+                          "versionId":  "66b69198-6c10-4ea8-af7b-7df383f9131e",
+                          "workflowId":  "iNSdpXH7Rc9Lb8h8",
+                          "nodes":  [
+                                        {
+                                            "id":  "wkly-001",
+                                            "name":  "Schedule � Weekly",
+                                            "type":  "n8n-nodes-base.scheduleTrigger",
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "typeVersion":  1,
+                                            "parameters":  {
+                                                               "rule":  {
+                                                                            "interval":  [
+                                                                                             {
+                                                                                                 "field":  "cronExpression",
+                                                                                                 "expression":  "0 6 * * 0"
+                                                                                             }
+                                                                                         ]
+                                                                        }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-002",
+                                            "name":  "Set Dates � Weekly",
+                                            "type":  "n8n-nodes-base.code",
+                                            "position":  [
+                                                             800,
+                                                             0
+                                                         ],
+                                            "typeVersion":  2,
+                                            "parameters":  {
+                                                               "jsCode":  "const tz=\u0027Asia/Riyadh\u0027,now=new Date(new Date().toLocaleString(\u0027en-US\u0027,{timeZone:tz})),fmt=d=\u003ed.toISOString().slice(0,10),ago=n=\u003e{const d=new Date(now);d.setDate(d.getDate()-n);return d};return[{json:{last7start:fmt(ago(7)),last7end:fmt(ago(1)),prior7start:fmt(ago(14)),prior7end:fmt(ago(8)),weekLabel:fmt(ago(7))+\u0027 - \u0027+fmt(ago(1)),reportType:\u0027weekly\u0027}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-003",
+                                            "name":  "Query Period Compare",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "position":  [
+                                                             1600,
+                                                             -600
+                                                         ],
+                                            "typeVersion":  2,
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "authentication":  "serviceAccount",
+                                                               "projectId":  {
+                                                                                 "__rl":  true,
+                                                                                 "mode":  "expression",
+                                                                                 "value":  "={{ $vars.BQ_PROJECT }}"
+                                                                             },
+                                                               "sqlQuery":  "SELECT channel, period,\n  ROUND(SUM(spend),2) AS spend,\n  SUM(leads_total) AS leads,\n  SUM(leads_qualified) AS sqls,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_total),0)),2) AS cpl,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_qualified),0)),2) AS cpql,\n  SUM(new_biz_deals_won) AS deals_won,\n  \u0027compare\u0027 AS _query\nFROM (\n  SELECT channel,\n    CASE\n      WHEN date BETWEEN DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 14 DAY) AND DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 8 DAY) THEN \u0027prior_7d\u0027\n      WHEN date BETWEEN DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 7 DAY) AND DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 1 DAY) THEN \u0027last_7d\u0027\n    END AS period,\n    spend, leads_total, leads_qualified, new_biz_deals_won\n  FROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`\n  WHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 14 DAY)\n)\nWHERE period IS NOT NULL\nGROUP BY channel, period ORDER BY channel, period",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-004",
+                                            "name":  "Query Forecast",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "position":  [
+                                                             1600,
+                                                             -200
+                                                         ],
+                                            "typeVersion":  2,
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "authentication":  "serviceAccount",
+                                                               "projectId":  {
+                                                                                 "__rl":  true,
+                                                                                 "mode":  "expression",
+                                                                                 "value":  "={{ $vars.BQ_PROJECT }}"
+                                                                             },
+                                                               "sqlQuery":  "SELECT channel,\n  ROUND(SUM(spend)/7*30,0) AS proj_spend,\n  ROUND(SUM(leads_total)/7*30,0) AS proj_leads,\n  ROUND(SUM(leads_qualified)/7*30,0) AS proj_sqls,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_qualified)/7*30,0)),0) AS proj_cpql,\n  ROUND(SUM(new_biz_deals_won)/7*30,0) AS proj_deals,\n  \u0027forecast\u0027 AS _query\nFROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`\nWHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 7 DAY)\nGROUP BY channel ORDER BY proj_spend DESC",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-005",
+                                            "name":  "Query Ad Audit",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "position":  [
+                                                             1600,
+                                                             200
+                                                         ],
+                                            "typeVersion":  2,
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "authentication":  "serviceAccount",
+                                                               "projectId":  {
+                                                                                 "__rl":  true,
+                                                                                 "mode":  "expression",
+                                                                                 "value":  "={{ $vars.BQ_PROJECT }}"
+                                                                             },
+                                                               "sqlQuery":  "SELECT channel, campaign_name, ad_name,\n  ROUND(SUM(spend),0) AS spend_14d,\n  SUM(leads_total) AS leads,\n  SUM(leads_qualified) AS sqls,\n  SUM(new_biz_deals_won) AS deals_won,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_total),0)),0) AS cpl,\n  ROUND(SAFE_DIVIDE(SUM(spend),NULLIF(SUM(leads_qualified),0)),0) AS cpql,\n  ROUND(SAFE_DIVIDE(SUM(leads_disqualified),NULLIF(SUM(leads_total),0))*100,0) AS disq_pct,\n  \u0027ad_audit\u0027 AS _query\nFROM `angular-axle-492812-q4.qoyod_marketing.wide_ads`\nWHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 14 DAY)\nGROUP BY channel, campaign_name, ad_name\nHAVING SUM(spend) \u003e= 20\nORDER BY cpql ASC NULLS LAST LIMIT 30",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-006",
+                                            "name":  "Query Monitor",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "position":  [
+                                                             1600,
+                                                             600
+                                                         ],
+                                            "typeVersion":  2,
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "authentication":  "serviceAccount",
+                                                               "projectId":  {
+                                                                                 "__rl":  true,
+                                                                                 "mode":  "expression",
+                                                                                 "value":  "={{ $vars.BQ_PROJECT }}"
+                                                                             },
+                                                               "sqlQuery":  "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE(\u0027Asia/Riyadh\u0027),event_date,DAY) AS days_since,\u0027monitor\u0027 AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_action_log` WHERE event_date\u003e=DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027),INTERVAL 30 DAY) ORDER BY event_date DESC LIMIT 20",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-007",
+                                            "name":  "Collect Queries",
+                                            "type":  "n8n-nodes-base.merge",
+                                            "position":  [
+                                                             2400,
+                                                             0
+                                                         ],
+                                            "typeVersion":  3,
+                                            "parameters":  {
+                                                               "mode":  "append",
+                                                               "numberInputs":  4
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-008",
+                                            "name":  "Build � weekly-analyst",
+                                            "type":  "n8n-nodes-base.code",
+                                            "position":  [
+                                                             3200,
+                                                             0
+                                                         ],
+                                            "typeVersion":  2,
+                                            "parameters":  {
+                                                               "jsCode":  "const rows=$input.all().map(i=\u003ei.json),compare=rows.filter(r=\u003er._query===\u0027compare\u0027),forecast=rows.filter(r=\u003er._query===\u0027forecast\u0027),audit=rows.filter(r=\u003er._query===\u0027ad_audit\u0027),monitor=rows.filter(r=\u003er._query===\u0027monitor\u0027),today=new Date().toLocaleDateString(\u0027en-US\u0027,{timeZone:\u0027Asia/Riyadh\u0027,weekday:\u0027long\u0027,year:\u0027numeric\u0027,month:\u0027long\u0027,day:\u0027numeric\u0027});return[{json:{system:\u0027You are Nexa, Qoyod paid media agent. Today: \u0027+today+\u0027. Weekly review. USD only. Slack mrkdwn.\u0027,messages:[{role:\u0027user\u0027,content:JSON.stringify({compare,forecast,audit,monitor})}],tools:[{name:\u0027weekly_digest\u0027,description:\u0027Weekly digest\u0027,input_schema:{type:\u0027object\u0027,required:[\u0027digest\u0027,\u0027actions\u0027],properties:{digest:{type:\u0027string\u0027},actions:{type:\u0027array\u0027,items:{type:\u0027object\u0027,required:[\u0027title\u0027,\u0027description\u0027,\u0027priority\u0027],properties:{title:{type:\u0027string\u0027},description:{type:\u0027string\u0027},priority:{type:\u0027string\u0027,enum:[\u0027high\u0027,\u0027medium\u0027,\u0027low\u0027]},channel:{type:\u0027string\u0027}}}}}}}],tool_choice:{type:\u0027any\u0027}}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-009",
+                                            "name":  "Claude � weekly-analyst",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "position":  [
+                                                             4000,
+                                                             0
+                                                         ],
+                                            "typeVersion":  4,
+                                            "credentials":  {
+                                                                "anthropicApi":  {
+                                                                                     "id":  "yLwrXNzxReOM4Fgn",
+                                                                                     "name":  "Anthropic account"
+                                                                                 }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://api.anthropic.com/v1/messages",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "anthropicApi",
+                                                               "sendHeaders":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "name":  "anthropic-version",
+                                                                                                               "value":  "2023-06-01"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ model:\u0027claude-sonnet-4-6\u0027, max_tokens:6000, system:$json.system, messages:$json.messages, tools:$json.tools, tool_choice:$json.tool_choice }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-010",
+                                            "name":  "Parse � weekly",
+                                            "type":  "n8n-nodes-base.code",
+                                            "position":  [
+                                                             4800,
+                                                             0
+                                                         ],
+                                            "typeVersion":  2,
+                                            "parameters":  {
+                                                               "jsCode":  "const resp=$input.first().json,block=(resp.content||[]).find(b=\u003eb.type===\u0027tool_use\u0027),out=block?.input||{},actions=out.actions||[],approvalsText=actions.map((a,i)=\u003e(i+1)+\u0027. *\u0027+a.title+\u0027* [\u0027+a.priority+\u0027]\n\u0027+a.description).join(\u0027\n\n\u0027);return[{json:{digest:out.digest||\u0027Weekly digest unavailable.\u0027,approvalsText:approvalsText||\u0027No actions.\u0027,actions,reportType:\u0027weekly\u0027,generatedAt:new Date().toISOString()}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-011",
+                                            "name":  "Post Slack � Weekly",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "position":  [
+                                                             5600,
+                                                             -200
+                                                         ],
+                                            "typeVersion":  4,
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "YwdlGwXs943DQrfh",
+                                                                                       "name":  "Slack (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://slack.com/api/chat.postMessage",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_NOTIFY, text:$json.digest, unfurl_links:false }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-012",
+                                            "name":  "Post Slack � Approvals",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "position":  [
+                                                             5600,
+                                                             200
+                                                         ],
+                                            "typeVersion":  4,
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "YwdlGwXs943DQrfh",
+                                                                                       "name":  "Slack (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://slack.com/api/chat.postMessage",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:\u0027*Weekly Actions - ? approve / ? skip*\n\n\u0027+$json.approvalsText, unfurl_links:false }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-013",
+                                            "name":  "Expand Asana Tasks",
+                                            "type":  "n8n-nodes-base.code",
+                                            "position":  [
+                                                             5600,
+                                                             600
+                                                         ],
+                                            "typeVersion":  2,
+                                            "parameters":  {
+                                                               "jsCode":  "const {actions}=$input.first().json,today=new Date().toLocaleDateString(\u0027en-US\u0027,{timeZone:\u0027Asia/Riyadh\u0027});return(actions||[]).map(a=\u003e({json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:a.title,notes:a.description+\u0027\\n\\nChannel: \u0027+(a.channel||\u0027all\u0027)+\u0027\\nPriority: \u0027+(a.priority||\u0027medium\u0027)+\u0027\\nType: weekly-review\\nCreated: \u0027+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}));"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-014",
+                                            "name":  "Create Asana Task",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "position":  [
+                                                             6400,
+                                                             600
+                                                         ],
+                                            "typeVersion":  4,
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "iUYNax4N4UkcLiQB",
+                                                                                       "name":  "Asana (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://app.asana.com/api/1.0/tasks",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify($json) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-015",
+                                            "name":  "Build Audit SQL",
+                                            "type":  "n8n-nodes-base.code",
+                                            "position":  [
+                                                             6400,
+                                                             -200
+                                                         ],
+                                            "typeVersion":  2,
+                                            "parameters":  {
+                                                               "jsCode":  "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_action_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES (\u0027weekly_review\u0027,\u0027report\u0027,\u0027all\u0027,CURRENT_DATE(\u0027Asia/Riyadh\u0027),\u0027${r.reportType}_generated\u0027,CURRENT_TIMESTAMP())`}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-016",
+                                            "name":  "Audit Log ? BQ",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "position":  [
+                                                             7200,
+                                                             -200
+                                                         ],
+                                            "typeVersion":  2,
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "authentication":  "serviceAccount",
+                                                               "projectId":  {
+                                                                                 "__rl":  true,
+                                                                                 "mode":  "expression",
+                                                                                 "value":  "={{ $vars.BQ_PROJECT }}"
+                                                                             },
+                                                               "sqlQuery":  "{{ $json.sql }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-lp-01",
+                                            "name":  "BQ � LP Audit",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             800,
+                                                             1200
+                                                         ],
+                                            "parameters":  {
+                                                               "authentication":  "serviceAccount",
+                                                               "projectId":  "={{ $vars.BQ_PROJECT }}",
+                                                               "query":  "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 7 DAY)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks, SUM(c.impressions) AS impressions,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE c.date \u003e= DATE_SUB(CURRENT_DATE(\u0027Asia/Riyadh\u0027), INTERVAL 7 DAY)\n    AND c.destination_url IS NOT NULL\n  GROUP BY destination_url\n)\nSELECT destination_url, sample_campaign, ROUND(spend,2) AS spend_usd,\n  clicks, impressions, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE spend \u003e 0 ORDER BY leads DESC",
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            }
+                                        },
+                                        {
+                                            "id":  "wkly-lp-02",
+                                            "name":  "Code � Format LP",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             1600,
+                                                             1200
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "const fmt=t=\u003enew Date(t).toLocaleString(\u0027sv\u0027,{timeZone:\u0027Asia/Riyadh\u0027}).split(\u0027 \u0027)[0];\nconst today=fmt(Date.now());\nconst due=fmt(Date.now()+3*86400000);\nconst rows=$input.all().map(i=\u003e{const d=i.json;return[d.destination_url||\u0027\u0027,d.sample_campaign||\u0027\u0027,d.spend_usd||0,d.clicks||0,d.impressions||0,d.leads||0,d.sqls||0,d.cvr_pct||0,d.cpql_usd||0];});\nconst headers=[\u0027destination_url\u0027,\u0027sample_campaign\u0027,\u0027spend_usd\u0027,\u0027clicks\u0027,\u0027impressions\u0027,\u0027leads\u0027,\u0027sqls\u0027,\u0027cvr_pct\u0027,\u0027cpql_usd\u0027];\nconst tabName=\u0027LP-\u0027+today;\nconst sheetLink=\u0027https://docs.google.com/spreadsheets/d/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg\u0027;\nconst top10=rows.slice(0,10);\nconst tblRows=top10.map(r=\u003e\u0027| \u0027+r[0]+\u0027 | \u0027+r[1]+\u0027 | $\u0027+r[2]+\u0027 | \u0027+r[5]+\u0027 | \u0027+r[6]+\u0027 | \u0027+r[7]+\u0027% | $\u0027+r[8]+\u0027 |\u0027).join(\u0027\\n\u0027);\nconst flags=rows.filter(r=\u003er[8]\u003e85||r[7]\u003c1||r[5]===0).map(r=\u003er[0]).join(\u0027, \u0027)||\u0027None\u0027;\nconst notes=\u0027LP WEEKLY REVIEW - \u0027+today+\u0027\\n\\n| URL | Campaign | Spend | Leads | SQLs | CVR% | CPQL |\\n|---|---|---|---|---|---|---|\\n\u0027+tblRows+\u0027\\n\\nFLAGS (CPQL\u003e$85 / CVR\u003c1% / 0 leads): \u0027+flags+\u0027\\n\\nSheet: \u0027+sheetLink+\u0027\\n\\n---\\nCreated: \u0027+today+\u0027 | Due: \u0027+due+\u0027 | Priority: Normal | Type: Review | Channel: All | Asset level: LP\u0027;\nreturn [{json:{rows,headers,tabName,sheetLink,today,due,notes}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "wkly-lp-03",
+                                            "name":  "Sheets � Create LP Tab",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4,
+                                            "position":  [
+                                                             2400,
+                                                             1200
+                                                         ],
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg:batchUpdate",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "googleSheetsOAuth2Api",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({requests:[{addSheet:{properties:{title:$(\u0027Code � Format LP\u0027).first().json.tabName}}}]}) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "credentials":  {
+                                                                "googleSheetsOAuth2Api":  {
+                                                                                              "id":  "kBgcDkRIN5tMoACU",
+                                                                                              "name":  "Google Sheets OAuth2 API"
+                                                                                          }
+                                                            }
+                                        },
+                                        {
+                                            "id":  "wkly-lp-04",
+                                            "name":  "Sheets � Write LP Rows",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4,
+                                            "position":  [
+                                                             3200,
+                                                             1200
+                                                         ],
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "={{ \u0027https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg/values/\u0027+encodeURIComponent($(\u0027Code � Format LP\u0027).first().json.tabName)+\u0027:append?valueInputOption=RAW\u0027 }}",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "googleSheetsOAuth2Api",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({values:[$(\u0027Code � Format LP\u0027).first().json.headers,...$(\u0027Code � Format LP\u0027).first().json.rows]}) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "credentials":  {
+                                                                "googleSheetsOAuth2Api":  {
+                                                                                              "id":  "kBgcDkRIN5tMoACU",
+                                                                                              "name":  "Google Sheets OAuth2 API"
+                                                                                          }
+                                                            }
+                                        },
+                                        {
+                                            "id":  "wkly-lp-05",
+                                            "name":  "Asana � LP Draft Weekly",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4,
+                                            "position":  [
+                                                             4000,
+                                                             1200
+                                                         ],
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://app.asana.com/api/1.0/tasks",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:\u0027LP Weekly Review - \u0027+$(\u0027Code � Format LP\u0027).first().json.today,notes:$(\u0027Code � Format LP\u0027).first().json.notes,due_on:$(\u0027Code � Format LP\u0027).first().json.due}}) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           },
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "iUYNax4N4UkcLiQB",
+                                                                                       "name":  "Asana (Qoyod)"
+                                                                                   }
+                                                            }
+                                        },
+                                        {
+                                            "id":  "w-bq-fresh-001",
+                                            "name":  "BQ � Freshness Check",
+                                            "type":  "n8n-nodes-base.googleBigQuery",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             400,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "googleApi":  {
+                                                                                  "id":  "kE5RxM61mQkpV21N",
+                                                                                  "name":  "BigQuery (Qoyod)"
+                                                                              }
+                                                            },
+                                            "parameters":  {
+                                                               "operation":  "executeQuery",
+                                                               "projectId":  "={{$vars.BQ_PROJECT}}",
+                                                               "sqlQuery":  "SELECT FORMAT_DATE(\u0027%Y-%m-%d\u0027, MAX(date)) as latest_date, DATE_DIFF(CURRENT_DATE(\u0027Asia/Riyadh\u0027), MAX(date), DAY) as days_stale FROM `{{$vars.BQ_PROJECT}}.{{$vars.BQ_DATASET}}.campaigns_daily`",
+                                                               "options":  {
+
+                                                                           },
+                                                               "authentication":  "serviceAccount"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "w-if-fresh-001",
+                                            "name":  "IF � Data Fresh?",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             600,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "options":  {
+                                                                                                  "caseSensitive":  true,
+                                                                                                  "leftValue":  "",
+                                                                                                  "typeValidation":  "strict"
+                                                                                              },
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "id":  "fc",
+                                                                                                         "leftValue":  "={{$json.days_stale}}",
+                                                                                                         "rightValue":  1,
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "number",
+                                                                                                                          "operation":  "lte"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "combinator":  "and"
+                                                                              }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "w-slack-stale-001",
+                                            "name":  "Slack � Stale Data Alert",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             800,
+                                                             -300
+                                                         ],
+                                            "credentials":  {
+                                                                "httpHeaderAuth":  {
+                                                                                       "id":  "YwdlGwXs943DQrfh",
+                                                                                       "name":  "Slack (Qoyod)"
+                                                                                   }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://slack.com/api/chat.postMessage",
+                                                               "authentication":  "genericCredentialType",
+                                                               "nodeCredentialType":  "httpHeaderAuth",
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ channel: $vars.SLACK_CHANNEL_NOTIFY || \"#data-health\", text: \"?? *BQ data stale* - `campaigns_daily` MAX(date) is *\" + $json.latest_date + \"* (\" + $json.days_stale + \" days behind). Weekly review skipped.\", unfurl_links: false }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "w-build-perf-001",
+                                            "name":  "Build � performance-lead",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             4500,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "jsCode":  "// Build prompt for performance-lead - takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b =\u003e b.type === \u0027tool_use\u0027);\nconst analysis = block?.input || {};\n\nconst systemPrompt = \u0027You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. \u0027 +\n  \u0027Validate findings, escalate CPQL regressions (\u003e$160 = pause; $130-160 = warning), identify cross-channel patterns, \u0027 +\n  \u0027add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. \u0027 +\n  \u0027CPQL zones: scale \u003c$85 | acceptable $85-$130 | warning $130-$160 | pause \u003e$160. \u0027 +\n  \u0027Min 14-day window for pause/scale. Spend in USD.\u0027;\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: \u0027weekly_digest\u0027,\n  description: \u0027Weekly digest - performance-lead final review\u0027,\n  input_schema: {\n    type: \u0027object\u0027,\n    required: [\u0027digest\u0027, \u0027actions\u0027],\n    properties: {\n      digest: {type: \u0027string\u0027},\n      actions: {type: \u0027array\u0027, items: {type: \u0027object\u0027, required: [\u0027title\u0027,\u0027description\u0027,\u0027priority\u0027],\n        properties: {title:{type:\u0027string\u0027}, description:{type:\u0027string\u0027}, priority:{type:\u0027string\u0027,enum:[\u0027high\u0027,\u0027medium\u0027,\u0027low\u0027]}, channel:{type:\u0027string\u0027}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: \u0027user\u0027, content: \u0027Growth Analyst report:\\n\\n\u0027 + digest + \u0027\\n\\nProvide your strategic review.\u0027}],\n  tools,\n  tool_choice: {type: \u0027required\u0027}\n}}];"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "w-claude-perf-001",
+                                            "name":  "Claude � performance-lead",
+                                            "type":  "n8n-nodes-base.httpRequest",
+                                            "typeVersion":  4.2,
+                                            "position":  [
+                                                             4800,
+                                                             0
+                                                         ],
+                                            "credentials":  {
+                                                                "anthropicApi":  {
+                                                                                     "id":  "yLwrXNzxReOM4Fgn",
+                                                                                     "name":  "Anthropic account"
+                                                                                 }
+                                                            },
+                                            "parameters":  {
+                                                               "method":  "POST",
+                                                               "url":  "https://api.anthropic.com/v1/messages",
+                                                               "authentication":  "predefinedCredentialType",
+                                                               "nodeCredentialType":  "anthropicApi",
+                                                               "sendHeaders":  true,
+                                                               "headerParameters":  {
+                                                                                        "parameters":  [
+                                                                                                           {
+                                                                                                               "name":  "anthropic-version",
+                                                                                                               "value":  "2023-06-01"
+                                                                                                           }
+                                                                                                       ]
+                                                                                    },
+                                                               "sendBody":  true,
+                                                               "specifyBody":  "json",
+                                                               "jsonBody":  "={{ JSON.stringify({ model:\u0027claude-sonnet-4-6\u0027, max_tokens:6000, system:$json.system, messages:$json.messages, tools:$json.tools, tool_choice:$json.tool_choice }) }}",
+                                                               "options":  {
+
+                                                                           }
+                                                           }
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Schedule � Weekly":  {
+                                                                        "main":  [
+                                                                                     [
+                                                                                         {
+                                                                                             "node":  "BQ � Freshness Check",
+                                                                                             "type":  "main",
+                                                                                             "index":  0
+                                                                                         }
+                                                                                     ]
+                                                                                 ]
+                                                                    },
+                                              "Set Dates � Weekly":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "Query Period Compare",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          },
+                                                                                          {
+                                                                                              "node":  "Query Forecast",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          },
+                                                                                          {
+                                                                                              "node":  "Query Ad Audit",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          },
+                                                                                          {
+                                                                                              "node":  "Query Monitor",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                                     },
+                                              "Query Period Compare":  {
+                                                                           "main":  [
+                                                                                        [
+                                                                                            {
+                                                                                                "node":  "Collect Queries",
+                                                                                                "type":  "main",
+                                                                                                "index":  0
+                                                                                            }
+                                                                                        ]
+                                                                                    ]
+                                                                       },
+                                              "Query Forecast":  {
+                                                                     "main":  [
+                                                                                  [
+                                                                                      {
+                                                                                          "node":  "Collect Queries",
+                                                                                          "type":  "main",
+                                                                                          "index":  1
+                                                                                      }
+                                                                                  ]
+                                                                              ]
+                                                                 },
+                                              "Query Ad Audit":  {
+                                                                     "main":  [
+                                                                                  [
+                                                                                      {
+                                                                                          "node":  "Collect Queries",
+                                                                                          "type":  "main",
+                                                                                          "index":  2
+                                                                                      }
+                                                                                  ]
+                                                                              ]
+                                                                 },
+                                              "Query Monitor":  {
+                                                                    "main":  [
+                                                                                 [
+                                                                                     {
+                                                                                         "node":  "Collect Queries",
+                                                                                         "type":  "main",
+                                                                                         "index":  3
+                                                                                     }
+                                                                                 ]
+                                                                             ]
+                                                                },
+                                              "Collect Queries":  {
+                                                                      "main":  [
+                                                                                   [
+                                                                                       {
+                                                                                           "node":  "Build � weekly-analyst",
+                                                                                           "type":  "main",
+                                                                                           "index":  0
+                                                                                       }
+                                                                                   ]
+                                                                               ]
+                                                                  },
+                                              "Build � weekly-analyst":  {
+                                                                             "main":  [
+                                                                                          [
+                                                                                              {
+                                                                                                  "node":  "Claude � weekly-analyst",
+                                                                                                  "type":  "main",
+                                                                                                  "index":  0
+                                                                                              }
+                                                                                          ]
+                                                                                      ]
+                                                                         },
+                                              "Claude � weekly-analyst":  {
+                                                                              "main":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "node":  "Build � performance-lead",
+                                                                                                   "type":  "main",
+                                                                                                   "index":  0
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                          },
+                                              "Parse � weekly":  {
+                                                                     "main":  [
+                                                                                  [
+                                                                                      {
+                                                                                          "node":  "Post Slack � Weekly",
+                                                                                          "type":  "main",
+                                                                                          "index":  0
+                                                                                      },
+                                                                                      {
+                                                                                          "node":  "Post Slack � Approvals",
+                                                                                          "type":  "main",
+                                                                                          "index":  0
+                                                                                      },
+                                                                                      {
+                                                                                          "node":  "Expand Asana Tasks",
+                                                                                          "type":  "main",
+                                                                                          "index":  0
+                                                                                      },
+                                                                                      {
+                                                                                          "node":  "Build Audit SQL",
+                                                                                          "type":  "main",
+                                                                                          "index":  0
+                                                                                      }
+                                                                                  ]
+                                                                              ]
+                                                                 },
+                                              "Expand Asana Tasks":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "Create Asana Task",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                                     },
+                                              "Build Audit SQL":  {
+                                                                      "main":  [
+                                                                                   [
+                                                                                       {
+                                                                                           "node":  "Audit Log ? BQ",
+                                                                                           "type":  "main",
+                                                                                           "index":  0
+                                                                                       }
+                                                                                   ]
+                                                                               ]
+                                                                  },
+                                              "BQ � LP Audit":  {
+                                                                    "main":  [
+                                                                                 [
+                                                                                     {
+                                                                                         "node":  "Code � Format LP",
+                                                                                         "type":  "main",
+                                                                                         "index":  0
+                                                                                     }
+                                                                                 ]
+                                                                             ]
+                                                                },
+                                              "Code � Format LP":  {
+                                                                       "main":  [
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Sheets � Create LP Tab",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                                ]
+                                                                   },
+                                              "Sheets � Create LP Tab":  {
+                                                                             "main":  [
+                                                                                          [
+                                                                                              {
+                                                                                                  "node":  "Sheets � Write LP Rows",
+                                                                                                  "type":  "main",
+                                                                                                  "index":  0
+                                                                                              }
+                                                                                          ]
+                                                                                      ]
+                                                                         },
+                                              "Sheets � Write LP Rows":  {
+                                                                             "main":  [
+                                                                                          [
+                                                                                              {
+                                                                                                  "node":  "Asana � LP Draft Weekly",
+                                                                                                  "type":  "main",
+                                                                                                  "index":  0
+                                                                                              }
+                                                                                          ]
+                                                                                      ]
+                                                                         },
+                                              "BQ � Freshness Check":  {
+                                                                           "main":  [
+                                                                                        [
+                                                                                            {
+                                                                                                "node":  "IF � Data Fresh?",
+                                                                                                "type":  "main",
+                                                                                                "index":  0
+                                                                                            }
+                                                                                        ]
+                                                                                    ]
+                                                                       },
+                                              "IF � Data Fresh?":  {
+                                                                       "main":  [
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Set Dates � Weekly",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        },
+                                                                                        {
+                                                                                            "node":  "BQ � LP Audit",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ],
+                                                                                    [
+                                                                                        {
+                                                                                            "node":  "Slack � Stale Data Alert",
+                                                                                            "type":  "main",
+                                                                                            "index":  0
+                                                                                        }
+                                                                                    ]
+                                                                                ]
+                                                                   },
+                                              "Build � performance-lead":  {
+                                                                               "main":  [
+                                                                                            [
+                                                                                                {
+                                                                                                    "node":  "Claude � performance-lead",
+                                                                                                    "type":  "main",
+                                                                                                    "index":  0
+                                                                                                }
+                                                                                            ]
+                                                                                        ]
+                                                                           },
+                                              "Claude � performance-lead":  {
+                                                                                "main":  [
+                                                                                             [
+                                                                                                 {
+                                                                                                     "node":  "Parse � weekly",
+                                                                                                     "type":  "main",
+                                                                                                     "index":  0
+                                                                                                 }
+                                                                                             ]
+                                                                                         ]
+                                                                            }
+                                          },
+                          "nodeGroups":  [
+
+                                         ],
+                          "authors":  "Mohamed Irshaid",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-06-17T11:10:32.339Z",
+                                                             "id":  181,
+                                                             "workflowId":  "iNSdpXH7Rc9Lb8h8",
+                                                             "versionId":  "66b69198-6c10-4ea8-af7b-7df383f9131e",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T11:10:32.299Z",
+                                                             "id":  180,
+                                                             "workflowId":  "iNSdpXH7Rc9Lb8h8",
+                                                             "versionId":  "66b69198-6c10-4ea8-af7b-7df383f9131e",
+                                                             "event":  "deactivated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         }
+                                                     ]
+                      }
+}

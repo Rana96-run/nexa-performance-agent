@@ -1,0 +1,435 @@
+﻿{
+    "updatedAt":  "2026-06-17T08:22:22.210Z",
+    "createdAt":  "2026-06-16T19:46:06.549Z",
+    "id":  "ug3niLKrjPfO9Iz7",
+    "name":  "Nexa · [Infra] QA Gate",
+    "description":  null,
+    "active":  true,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "id":  "9e3a384e-d9a0-5f8a-9edc-f3c63d659547",
+                      "name":  "Trigger",
+                      "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "parameters":  {
+
+                                     }
+                  },
+                  {
+                      "id":  "29f230bb-0a67-52b9-bb4c-adce4f932e98",
+                      "name":  "Validate Output",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       250,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "\nconst inp=$input.first().json;\nconst errors=[];\nif(!inp.sub_flow)       errors.push(\u0027Missing sub_flow identifier\u0027);\nif(!inp.channel)        errors.push(\u0027Missing channel field\u0027);\nif(inp.status!==\u0027created\u0027\u0026\u0026inp.status!==\u0027ok\u0027\u0026\u0026inp.status!==\u0027QA_PASSED\u0027)\n                        errors.push(`Upstream status: ${inp.status||\u0027unknown\u0027}`);\nconst notes=(inp.task_notes||\u0027\u0027).toLowerCase();\nif(notes.includes(\u0027 sar\u0027)\u0026\u0026!notes.includes(\u0027usd\u0027))\n                        errors.push(\u0027Spend figures may be in SAR — must be USD\u0027);\nif(notes.includes(\u0027auto-executed\u0027)||notes.includes(\u0027auto-applied\u0027))\n                        errors.push(\u0027Output claims auto-execution — requires ✅ approval\u0027);\nconst passed=errors.length===0;\nreturn [{json:{\n  qa_status: passed?\u0027QA_PASSED\u0027:\u0027QA_FAILED\u0027,\n  errors, validated_at: new Date().toISOString(),\n  agent: inp.sub_flow||\u0027unknown\u0027, channel: inp.channel||\u0027unknown\u0027,\n  original_input: inp\n}}];\n"
+                                     }
+                  },
+                  {
+                      "id":  "f5a4f0ee-518e-5d12-8c0a-e481e3f9153e",
+                      "name":  "All Checks Passed?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       500,
+                                       0
+                                   ],
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "loose"
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "4616a7e2-4e68-5109-8896-e34ff4340034",
+                                                                                   "leftValue":  "={{ $json.errors.length }}",
+                                                                                   "rightValue":  "0",
+                                                                                   "operator":  {
+                                                                                                    "type":  "number",
+                                                                                                    "operation":  "equal"
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        }
+                                     }
+                  },
+                  {
+                      "id":  "262cd63c-7b2f-522c-b41e-678f022c78a3",
+                      "name":  "QA_PASSED",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       750,
+                                       -100
+                                   ],
+                      "parameters":  {
+                                         "mode":  "manual",
+                                         "fields":  {
+                                                        "values":  [
+                                                                       {
+                                                                           "name":  "qa_result",
+                                                                           "stringValue":  "QA_PASSED"
+                                                                       },
+                                                                       {
+                                                                           "name":  "sub_flow",
+                                                                           "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.agent }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "channel",
+                                                                           "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.channel }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "validated_at",
+                                                                           "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.validated_at }}"
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  },
+                  {
+                      "id":  "a0a74d1a-414a-5bb9-90a7-19eff71c3002",
+                      "name":  "QA_FAILED",
+                      "type":  "n8n-nodes-base.set",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       750,
+                                       100
+                                   ],
+                      "parameters":  {
+                                         "mode":  "manual",
+                                         "fields":  {
+                                                        "values":  [
+                                                                       {
+                                                                           "name":  "qa_result",
+                                                                           "stringValue":  "QA_FAILED"
+                                                                       },
+                                                                       {
+                                                                           "name":  "sub_flow",
+                                                                           "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.agent }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "channel",
+                                                                           "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.channel }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "errors",
+                                                                           "stringValue":  "={{ JSON.stringify($(\u0027Validate Output\u0027).first().json.errors) }}"
+                                                                       },
+                                                                       {
+                                                                           "name":  "validated_at",
+                                                                           "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.validated_at }}"
+                                                                       }
+                                                                   ]
+                                                    }
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Trigger":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Validate Output",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Validate Output":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "All Checks Passed?",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "All Checks Passed?":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "QA_PASSED",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ],
+                                                                [
+                                                                    {
+                                                                        "node":  "QA_FAILED",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "timezone":  "Asia/Riyadh",
+                     "saveManualExecutions":  true,
+                     "callerPolicy":  "workflowsFromSameOwner",
+                     "availableInMCP":  true
+                 },
+    "staticData":  null,
+    "meta":  null,
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  null,
+    "versionId":  "469d5902-f73f-48a1-95e7-13be513ee6ec",
+    "activeVersionId":  "469d5902-f73f-48a1-95e7-13be513ee6ec",
+    "versionCounter":  2,
+    "triggerCount":  0,
+    "sourceWorkflowId":  null,
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-06-16T19:46:06.550Z",
+                       "createdAt":  "2026-06-16T19:46:06.550Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "ug3niLKrjPfO9Iz7",
+                       "projectId":  "adzgqz9cb5avvdf1",
+                       "project":  {
+                                       "updatedAt":  "2026-05-28T17:50:33.321Z",
+                                       "createdAt":  "2026-05-28T17:50:26.370Z",
+                                       "id":  "adzgqz9cb5avvdf1",
+                                       "name":  "Mohamed Irshaid \u003cmohammad.irsheid@qoyod.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                   }
+                   }
+               ],
+    "tags":  [
+
+             ],
+    "activeVersion":  {
+                          "updatedAt":  "2026-06-16T19:46:06.551Z",
+                          "createdAt":  "2026-06-16T19:46:06.551Z",
+                          "versionId":  "469d5902-f73f-48a1-95e7-13be513ee6ec",
+                          "workflowId":  "ug3niLKrjPfO9Iz7",
+                          "nodes":  [
+                                        {
+                                            "id":  "9e3a384e-d9a0-5f8a-9edc-f3c63d659547",
+                                            "name":  "Trigger",
+                                            "type":  "n8n-nodes-base.executeWorkflowTrigger",
+                                            "typeVersion":  1,
+                                            "position":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+
+                                                           }
+                                        },
+                                        {
+                                            "id":  "29f230bb-0a67-52b9-bb4c-adce4f932e98",
+                                            "name":  "Validate Output",
+                                            "type":  "n8n-nodes-base.code",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             250,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "runOnceForAllItems",
+                                                               "jsCode":  "\nconst inp=$input.first().json;\nconst errors=[];\nif(!inp.sub_flow)       errors.push(\u0027Missing sub_flow identifier\u0027);\nif(!inp.channel)        errors.push(\u0027Missing channel field\u0027);\nif(inp.status!==\u0027created\u0027\u0026\u0026inp.status!==\u0027ok\u0027\u0026\u0026inp.status!==\u0027QA_PASSED\u0027)\n                        errors.push(`Upstream status: ${inp.status||\u0027unknown\u0027}`);\nconst notes=(inp.task_notes||\u0027\u0027).toLowerCase();\nif(notes.includes(\u0027 sar\u0027)\u0026\u0026!notes.includes(\u0027usd\u0027))\n                        errors.push(\u0027Spend figures may be in SAR — must be USD\u0027);\nif(notes.includes(\u0027auto-executed\u0027)||notes.includes(\u0027auto-applied\u0027))\n                        errors.push(\u0027Output claims auto-execution — requires ✅ approval\u0027);\nconst passed=errors.length===0;\nreturn [{json:{\n  qa_status: passed?\u0027QA_PASSED\u0027:\u0027QA_FAILED\u0027,\n  errors, validated_at: new Date().toISOString(),\n  agent: inp.sub_flow||\u0027unknown\u0027, channel: inp.channel||\u0027unknown\u0027,\n  original_input: inp\n}}];\n"
+                                                           }
+                                        },
+                                        {
+                                            "id":  "f5a4f0ee-518e-5d12-8c0a-e481e3f9153e",
+                                            "name":  "All Checks Passed?",
+                                            "type":  "n8n-nodes-base.if",
+                                            "typeVersion":  2,
+                                            "position":  [
+                                                             500,
+                                                             0
+                                                         ],
+                                            "parameters":  {
+                                                               "conditions":  {
+                                                                                  "options":  {
+                                                                                                  "caseSensitive":  true,
+                                                                                                  "leftValue":  "",
+                                                                                                  "typeValidation":  "loose"
+                                                                                              },
+                                                                                  "conditions":  [
+                                                                                                     {
+                                                                                                         "id":  "4616a7e2-4e68-5109-8896-e34ff4340034",
+                                                                                                         "leftValue":  "={{ $json.errors.length }}",
+                                                                                                         "rightValue":  "0",
+                                                                                                         "operator":  {
+                                                                                                                          "type":  "number",
+                                                                                                                          "operation":  "equal"
+                                                                                                                      }
+                                                                                                     }
+                                                                                                 ],
+                                                                                  "combinator":  "and"
+                                                                              }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "262cd63c-7b2f-522c-b41e-678f022c78a3",
+                                            "name":  "QA_PASSED",
+                                            "type":  "n8n-nodes-base.set",
+                                            "typeVersion":  3.4,
+                                            "position":  [
+                                                             750,
+                                                             -100
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "manual",
+                                                               "fields":  {
+                                                                              "values":  [
+                                                                                             {
+                                                                                                 "name":  "qa_result",
+                                                                                                 "stringValue":  "QA_PASSED"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "sub_flow",
+                                                                                                 "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.agent }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "channel",
+                                                                                                 "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.channel }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "validated_at",
+                                                                                                 "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.validated_at }}"
+                                                                                             }
+                                                                                         ]
+                                                                          }
+                                                           }
+                                        },
+                                        {
+                                            "id":  "a0a74d1a-414a-5bb9-90a7-19eff71c3002",
+                                            "name":  "QA_FAILED",
+                                            "type":  "n8n-nodes-base.set",
+                                            "typeVersion":  3.4,
+                                            "position":  [
+                                                             750,
+                                                             100
+                                                         ],
+                                            "parameters":  {
+                                                               "mode":  "manual",
+                                                               "fields":  {
+                                                                              "values":  [
+                                                                                             {
+                                                                                                 "name":  "qa_result",
+                                                                                                 "stringValue":  "QA_FAILED"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "sub_flow",
+                                                                                                 "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.agent }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "channel",
+                                                                                                 "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.channel }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "errors",
+                                                                                                 "stringValue":  "={{ JSON.stringify($(\u0027Validate Output\u0027).first().json.errors) }}"
+                                                                                             },
+                                                                                             {
+                                                                                                 "name":  "validated_at",
+                                                                                                 "stringValue":  "={{ $(\u0027Validate Output\u0027).first().json.validated_at }}"
+                                                                                             }
+                                                                                         ]
+                                                                          }
+                                                           }
+                                        }
+                                    ],
+                          "connections":  {
+                                              "Trigger":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Validate Output",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                                              "Validate Output":  {
+                                                                      "main":  [
+                                                                                   [
+                                                                                       {
+                                                                                           "node":  "All Checks Passed?",
+                                                                                           "type":  "main",
+                                                                                           "index":  0
+                                                                                       }
+                                                                                   ]
+                                                                               ]
+                                                                  },
+                                              "All Checks Passed?":  {
+                                                                         "main":  [
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "QA_PASSED",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ],
+                                                                                      [
+                                                                                          {
+                                                                                              "node":  "QA_FAILED",
+                                                                                              "type":  "main",
+                                                                                              "index":  0
+                                                                                          }
+                                                                                      ]
+                                                                                  ]
+                                                                     }
+                                          },
+                          "nodeGroups":  [
+
+                                         ],
+                          "authors":  "Mohamed Irshaid",
+                          "name":  null,
+                          "description":  null,
+                          "autosaved":  false,
+                          "workflowPublishHistory":  [
+                                                         {
+                                                             "createdAt":  "2026-06-16T19:53:49.244Z",
+                                                             "id":  45,
+                                                             "workflowId":  "ug3niLKrjPfO9Iz7",
+                                                             "versionId":  "469d5902-f73f-48a1-95e7-13be513ee6ec",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T08:22:22.301Z",
+                                                             "id":  79,
+                                                             "workflowId":  "ug3niLKrjPfO9Iz7",
+                                                             "versionId":  "469d5902-f73f-48a1-95e7-13be513ee6ec",
+                                                             "event":  "activated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         },
+                                                         {
+                                                             "createdAt":  "2026-06-17T08:22:22.272Z",
+                                                             "id":  78,
+                                                             "workflowId":  "ug3niLKrjPfO9Iz7",
+                                                             "versionId":  "469d5902-f73f-48a1-95e7-13be513ee6ec",
+                                                             "event":  "deactivated",
+                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
+                                                         }
+                                                     ]
+                      }
+}
