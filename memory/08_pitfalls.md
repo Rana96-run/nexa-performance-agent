@@ -111,6 +111,24 @@ all dropped 2026-06-16, all consumers migrated to `wide_ads`.
 
 `PUT /rest/workflows/{id}` returns `404 Cannot PUT`. The correct method for updating a workflow via the browser session is `PATCH /rest/workflows/{id}` with `Content-Type: application/json`. Same applies to partial updates (just `{active:true}` etc.). The public API (`/api/v1/workflows/{id}`) uses `X-N8N-API-KEY` header — different auth path. Activation via PATCH `{active:true}` silently returns `active:false` if the workflow has validation issues; use the n8n UI toggle as fallback.
 
+## [2026-06-17] n8n public API (/api/v1): use PUT not PATCH for workflow updates
+
+**PATCH returns 405 on `/api/v1/workflows/{id}`** — the public API only supports PUT. The internal browser API (`/rest/`) uses PATCH; they are separate paths with different methods. Always use PUT when updating workflows via the public API with `X-N8N-API-KEY`.
+
+## [2026-06-17] n8n googleBigQuery node: exact format required or credential validation fails
+
+The `n8n-nodes-base.googleBigQuery` node REQUIRES:
+- `typeVersion: 2.1` (not 2.0)
+- `parameters.authentication: "serviceAccount"`
+- `parameters.projectId: {"__rl": true, "value": "project-id", "mode": "id"}` (resource locator format, not plain string)
+- `credentials: {"googleApi": {"id": "...", "name": "..."}}` (type is `googleApi`, not `googleBigQueryOAuth2Api`)
+
+Without `authentication: "serviceAccount"`, n8n rejects with "Missing required credential: googleBigQueryOAuth2Api". The existing BQ credential in n8n is `kE5RxM61mQkpV21N` (type `googleApi`, name "BigQuery (Qoyod)").
+
+## [2026-06-17] n8n public API: PATCH on active workflows can partially save
+
+When PATCH fails with a credential error (405, 400), the workflow may still get partially updated — nodes appended, connections added — leaving it in a broken state. Always fetch fresh before building the update payload, and include idempotent cleanup: strip all existing `googleBigQuery` and `code` nodes before re-adding, and purge connections referencing removed node names.
+
 
 
 ## [2026-06-15] CREATE OR REPLACE VIEW fails if object is a BASE TABLE

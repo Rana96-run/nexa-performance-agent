@@ -255,8 +255,10 @@ Campaign IDs (customer 5753494964):
 - [ ] **Add QA feed cell in Hex** — SQL template in `memory/16_activity_dashboard.md`. User doing manually.
 - [x] **Test Data Collection sub-workflow first run** — DONE 2026-06-17. Phase 1 (Data Collection) confirmed completing. Root issue was Master crashing post-collection at `Claude · Data Guard` due to `tool_choice:{type:'required'}` invalid Anthropic API value — fixed to `{type:'any'}` across all 5 Claude nodes. BQ channels current except Google Ads (1d stale) and LinkedIn (3mo stale — pre-existing). Next scheduled run: tonight 04:00 UTC.
 - [x] **Nexa · Databox Sync** — DELETED 2026-06-17 (superseded; Databox reads directly from BQ).
+- [x] **13 on-demand n8n workflows wired to BigQuery** — DONE 2026-06-17. All 13 workflows now query BQ first (real `googleBigQuery` node with `serviceAccount` auth), format rows via `Code Format` node, then inject into Claude's system message. Claude can no longer hallucinate numbers. N8N_API_KEY added to `.env` and `.env.example`. `update_n8n_workflows.py` retained in repo root for future re-runs.
 
 **PATCH method confirmed for n8n cloud internal API** — `PUT /rest/workflows/{id}` returns 404. Use `PATCH /rest/workflows/{id}` for all workflow updates. See `memory/08_pitfalls.md`.
+**PUT confirmed for n8n public API (/api/v1/)** — PATCH returns 405. Use PUT with full workflow body. Key is `X-N8N-API-KEY` from Railway vars (`N8N_API_KEY`). See `memory/08_pitfalls.md`.
 
 ## Done this session (2026-06-16) — n8n hardening: Tasks 2-7
 
