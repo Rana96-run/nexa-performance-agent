@@ -25,6 +25,25 @@ from flask import Flask, jsonify, redirect
 BQ_PROJECT = os.getenv("BQ_PROJECT_ID", "angular-axle-492812-q4")
 BQ_DATASET = os.getenv("BQ_DATASET", "qoyod_marketing")
 
+# n8n Cloud base URL
+N8N_BASE = "https://qoyod.app.n8n.cloud/workflow"
+
+# n8n workflow IDs
+N8N_WORKFLOWS = {
+    "orchestrator":    "T8icImtZFLYeCa7e",
+    "weekly":          "iNSdpXH7Rc9Lb8h8",
+    "monthly":         "0Zh45UoTtjjhRn8U",
+    "growth_analyst":  "MHCdIiAtKzHNve1x",
+    "perf_lead":       "Qd5SoGxZbgT1ohYP",
+    "cro":             "jfE5KKnPJQBf7MCj",
+    "qual":            "PxFBmtXDVgcNGzIM",
+    "campaign_mgr":    "eL0V6ReftV2U1wNf",
+    "creative":        "smHaEhWloComRQyz",
+    "qa":              "ug3niLKrjPfO9Iz7",
+    "data_collection": "jOnJxdpdaO3Vbi0B",
+    "approval":        "5Acqsbxsk0XQ5k9e",
+}
+
 # Connectors tracked in the health cards
 CONNECTORS = [
     ("Google Ads",      "google_ads"),
@@ -87,18 +106,44 @@ def _get_system_health() -> dict[str, Any]:
     return {"last_ts": last_ts}
 
 
-def _get_connector_health() -> dict[str, Any]:
-    """Return last-seen timestamp per channel from agent_activity_log."""
-    rows = _bq_query(f"""
-        SELECT
-            channel,
-            MAX(ts) AS last_ts
-        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
-        WHERE channel IS NOT NULL
-          AND ts >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+def _get_connector_health() -> dict[str, dict[str, Any]]:
+    """Return freshness info per channel from campaigns_daily and hubspot tables.
+
+    Returns a dict keyed by channel slug, each value is
+    {"last_date": date_obj, "days_stale": int}.
+    Falls back to agent_activity_log only if campaigns_daily returns nothing.
+    """
+    result: dict[str, dict[str, Any]] = {}
+
+    # Ad-platform channels from campaigns_daily
+    ad_rows = _bq_query(f"""
+        SELECT channel, MAX(date) AS last_date,
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_stale
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.campaigns_daily`
+        WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
         GROUP BY channel
     """)
-    return {r["channel"]: r["last_ts"] for r in rows if r.get("channel")}
+    for r in ad_rows:
+        ch = r.get("channel")
+        if ch:
+            result[ch] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
+
+    # HubSpot tables
+    hs_rows = _bq_query(f"""
+        SELECT 'hubspot_leads' AS channel, MAX(date) AS last_date,
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_stale
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_leads_module_daily`
+        UNION ALL
+        SELECT 'hubspot_deals', MAX(date),
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_deals_daily`
+    """)
+    for r in hs_rows:
+        ch = r.get("channel")
+        if ch:
+            result[ch] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
+
+    return result
 
 
 def _get_heatmap_data() -> list[dict[str, Any]]:
@@ -149,6 +194,22 @@ def _freshness_status(ts: Any) -> tuple[str, str]:
         return "#e05c5c", f"{int(delta_h)}h ago"
 
 
+def _staleness_color(days_stale: Any) -> str:
+    """Return CSS color for a days-stale integer (0=green, 1=yellow, 2+=red)."""
+    if days_stale is None:
+        return "var(--muted)"
+    try:
+        d = int(days_stale)
+    except (TypeError, ValueError):
+        return "var(--muted)"
+    if d == 0:
+        return "var(--green)"
+    elif d == 1:
+        return "var(--orange)"
+    else:
+        return "#e05c5c"
+
+
 def _ts_fmt(ts: Any) -> str:
     """Format a BQ timestamp for display."""
     if ts is None:
@@ -179,7 +240,12 @@ def create_app() -> Flask:
         connector_map   = _get_connector_health()
         heatmap_rows    = _get_heatmap_data()
         activity_rows   = _get_recent_activity()
-        return _render_dashboard(system_health, connector_map, heatmap_rows, activity_rows)
+        recent_actions  = _get_recent_actions()
+        open_tasks      = _get_open_asana_tasks()
+        return _render_dashboard(
+            system_health, connector_map, heatmap_rows, activity_rows,
+            recent_actions, open_tasks,
+        )
 
     return app
 
@@ -229,23 +295,44 @@ def _build_health_bar(system_health: dict[str, Any]) -> str:
     <span class="hlabel">⏱ Next run in</span>
     <span class="hval" style="color:var(--muted)">{next_run_label}</span>
   </div>
+  <div class="hchip">
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['data_collection']}" target="_blank" class="n8n-link">Data Collection &rarr;</a>
+  </div>
+  <div class="hchip">
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['approval']}" target="_blank" class="n8n-link">Approval Listener &rarr;</a>
+  </div>
 </div>"""
 
 
 def _build_connector_cards(connector_map: dict[str, Any]) -> str:
     cards = []
     for name, key in CONNECTORS:
-        ts = connector_map.get(key)
-        color, label = _freshness_status(ts)
-        ts_str = _ts_fmt(ts)
+        info = connector_map.get(key) or {}
+        last_date  = info.get("last_date")
+        days_stale = info.get("days_stale")
+
+        color = _staleness_color(days_stale)
+
+        if last_date is None:
+            date_str   = "No data"
+            stale_str  = "—"
+        else:
+            # last_date may be a datetime.date or datetime.datetime object
+            if hasattr(last_date, "strftime"):
+                date_str = last_date.strftime("%Y-%m-%d")
+            else:
+                date_str = str(last_date)
+            d = int(days_stale) if days_stale is not None else 0
+            stale_str = "Fresh" if d == 0 else f"{d}d stale"
+
         cards.append(f"""
     <div class="conn-card">
       <div class="conn-top">
         <span class="conn-name">{name}</span>
         <span class="conn-dot" style="background:{color};box-shadow:0 0 4px {color}"></span>
       </div>
-      <div class="conn-ts">{ts_str}</div>
-      <div class="conn-status" style="color:{color}">{label}</div>
+      <div class="conn-ts">{date_str}</div>
+      <div class="conn-status" style="color:{color}">{stale_str}</div>
     </div>""")
     return "\n".join(cards)
 
@@ -295,6 +382,27 @@ def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
 </div>"""
 
 
+def _get_recent_actions() -> list[dict[str, Any]]:
+    """Return last 10 entries from agent_activity_log for the Actions panel."""
+    return _bq_query(f"""
+        SELECT role, action, status, channel, ts
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+        ORDER BY ts DESC
+        LIMIT 10
+    """)
+
+
+def _get_open_asana_tasks() -> list[dict[str, Any]]:
+    """Return open Asana tasks from asana_task_status."""
+    return _bq_query(f"""
+        SELECT task_name, assignee, due_date, project_name, status
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.asana_task_status`
+        WHERE status != 'COMPLETE'
+        ORDER BY due_date ASC
+        LIMIT 10
+    """)
+
+
 def _build_activity_feed(activity_rows: list[dict[str, Any]]) -> str:
     if not activity_rows:
         return '<div class="feed-empty">No activity in the last 7 days — BQ may be unreachable</div>'
@@ -329,6 +437,120 @@ def _build_activity_feed(activity_rows: list[dict[str, Any]]) -> str:
     return "\n".join(items)
 
 
+def _build_actions_tasks(recent_actions: list[dict[str, Any]], open_tasks: list[dict[str, Any]]) -> str:
+    """Build the Actions & Tasks 3-column section."""
+    import datetime as _dt
+    import pytz as _pytz
+    _riyadh = _pytz.timezone("Asia/Riyadh")
+    _today = _dt.datetime.now(_riyadh).date()
+
+    # Column 1 — Recent Actions
+    if recent_actions:
+        action_items = []
+        _now_utc = datetime.now(timezone.utc)
+        for r in recent_actions:
+            role    = r.get("role") or "—"
+            action  = r.get("action") or "—"
+            status  = (r.get("status") or "—").lower()
+            channel = r.get("channel") or ""
+            ts      = r.get("ts")
+            if ts is not None:
+                if hasattr(ts, "replace"):
+                    ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+                delta_m = int((_now_utc - ts).total_seconds() / 60)
+                if delta_m < 60:
+                    ago = f"{delta_m}m ago"
+                elif delta_m < 1440:
+                    ago = f"{delta_m // 60}h ago"
+                else:
+                    ago = f"{delta_m // 1440}d ago"
+            else:
+                ago = "—"
+            ch_part = f" &middot; {channel}" if channel else ""
+            if status == "success":
+                sc = "at-status-ok"
+            elif status in ("failed", "error"):
+                sc = "at-status-fail"
+            else:
+                sc = "at-status-pend"
+            action_items.append(
+                f'<div class="at-row">'
+                f'<span class="at-role">{role}</span>'
+                f'<span style="flex:1">{action}{ch_part}</span>'
+                f'<span class="{sc}">{status}</span>'
+                f'<span style="color:var(--muted);font-size:10px;margin-left:6px">{ago}</span>'
+                f'</div>'
+            )
+        actions_html = "\n".join(action_items)
+    else:
+        actions_html = '<div class="at-empty">No recent actions — Daily workflow has not completed yet</div>'
+
+    # Column 2 — Open Asana Tasks
+    if open_tasks:
+        task_items = []
+        for r in open_tasks:
+            name    = r.get("task_name") or "—"
+            assign  = r.get("assignee") or ""
+            due     = r.get("due_date")
+            proj    = r.get("project_name") or ""
+            overdue = False
+            due_str = "—"
+            if due is not None:
+                if hasattr(due, "strftime"):
+                    due_str = due.strftime("%Y-%m-%d")
+                    if hasattr(due, "date"):
+                        overdue = due.date() < _today
+                    else:
+                        overdue = due < _today
+                else:
+                    due_str = str(due)
+            overdue_cls = " at-overdue" if overdue else ""
+            assign_part = f" &middot; {assign}" if assign else ""
+            proj_part   = f'<span style="color:var(--muted);font-size:10px">{proj}</span>' if proj else ""
+            task_items.append(
+                f'<div class="at-row">'
+                f'<span style="flex:1">{name}{assign_part} {proj_part}</span>'
+                f'<span class="at-status-pend{overdue_cls}">{due_str}</span>'
+                f'</div>'
+            )
+        tasks_html = "\n".join(task_items)
+    else:
+        tasks_html = '<div class="at-empty">No open tasks found</div>'
+
+    return f"""
+<div class="at-grid">
+
+  <!-- Recent Actions -->
+  <div class="at-card">
+    <div class="at-title">Recent Actions</div>
+    {actions_html}
+  </div>
+
+  <!-- Open Asana Tasks -->
+  <div class="at-card">
+    <div class="at-title">Open Asana Tasks</div>
+    {tasks_html}
+  </div>
+
+  <!-- Pending Approvals -->
+  <div class="at-card">
+    <div class="at-title">Pending Approvals</div>
+    <div style="font-size:12px;color:var(--dim);line-height:1.7">
+      Approvals are managed in Slack <strong>#approvals</strong>.<br>
+      React <strong>&#10003;</strong> to execute all scale + pause items.<br>
+      React <strong>&#10007;</strong> to skip.
+    </div>
+    <div style="margin-top:10px">
+      <a href="#" class="n8n-link">Open #approvals in Slack &rarr;</a>
+    </div>
+    <div style="margin-top:14px;font-size:11px;color:var(--muted)">
+      optimize / junk / drilldown items are review-only &mdash; Asana tasks already created, no further execution needed.
+    </div>
+  </div>
+
+</div>"""
+
+
 # ─── Dashboard HTML ───────────────────────────────────────────────────────────
 
 def _render_dashboard(
@@ -336,11 +558,14 @@ def _render_dashboard(
     connector_map: dict[str, Any],
     heatmap_rows: list[dict[str, Any]],
     activity_rows: list[dict[str, Any]],
+    recent_actions: list[dict[str, Any]],
+    open_tasks: list[dict[str, Any]],
 ) -> str:
     health_bar       = _build_health_bar(system_health)
     connector_cards  = _build_connector_cards(connector_map)
     heatmap          = _build_heatmap(heatmap_rows)
     activity_feed    = _build_activity_feed(activity_rows)
+    actions_tasks    = _build_actions_tasks(recent_actions, open_tasks)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -488,6 +713,32 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 .cfoot{{display:flex;align-items:center;justify-content:space-between;
   margin-top:4px;gap:6px}}
 .cnote{{font-size:11px;color:var(--muted)}}
+
+/* ── n8n links ── */
+.n8n-link{{color:#f0883e;font-size:11px;text-decoration:none;
+  border:1px solid #f0883e44;padding:2px 8px;border-radius:4px;white-space:nowrap}}
+.n8n-link:hover{{background:#f0883e22}}
+.n8n-run-btn{{color:#111;background:#f0883e;font-size:12px;font-weight:700;
+  text-decoration:none;border:none;padding:5px 14px;border-radius:6px;
+  white-space:nowrap;display:inline-block;margin-top:10px}}
+.n8n-run-btn:hover{{background:#ffa657}}
+
+/* ── Actions & Tasks section ── */
+.at-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}}
+@media(max-width:900px){{.at-grid{{grid-template-columns:1fr}}}}
+.at-card{{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:16px;display:flex;flex-direction:column;gap:6px}}
+.at-title{{font-size:13px;font-weight:700;margin-bottom:4px}}
+.at-row{{font-size:11px;color:var(--dim);padding:4px 0;
+  border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;
+  align-items:center}}
+.at-row:last-child{{border-bottom:none}}
+.at-role{{color:var(--blue);font-weight:600;min-width:90px}}
+.at-status-ok{{color:var(--green);font-weight:600}}
+.at-status-fail{{color:#e05c5c;font-weight:600}}
+.at-status-pend{{color:var(--orange);font-weight:600}}
+.at-overdue{{color:#e05c5c;font-weight:600}}
+.at-empty{{color:var(--muted);font-size:12px;font-style:italic}}
 </style>
 </head>
 <body>
@@ -525,6 +776,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <div>
       <div class="cname">Daily Master</div>
       <div class="cdesc">Full daily analysis: spend, leads, CPQL, anomaly detection, Slack summary, pause/scale candidates</div>
+      <div style="margin-top:8px"><a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a></div>
     </div>
     <div class="csched">05:00 UTC daily</div>
   </div>
@@ -532,6 +784,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <div>
       <div class="cname">Weekly Review</div>
       <div class="cdesc">7-day vs prior-7 period comparison, keyword autofix, channel flags, weekly Slack digest</div>
+      <div style="margin-top:8px"><a href="{N8N_BASE}/{N8N_WORKFLOWS['weekly']}" target="_blank" class="n8n-link">Open Weekly in n8n &rarr;</a></div>
     </div>
     <div class="csched">Sun 05:00 UTC</div>
   </div>
@@ -539,10 +792,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <div>
       <div class="cname">Monthly Review</div>
       <div class="cdesc">MoM review, OKR tracking, budget reconciliation, 30-day forecast</div>
+      <div style="margin-top:8px"><a href="{N8N_BASE}/{N8N_WORKFLOWS['monthly']}" target="_blank" class="n8n-link">Open Monthly in n8n &rarr;</a></div>
     </div>
     <div class="csched">1st 05:00 UTC</div>
   </div>
 </div>
+
+<!-- ── ACTIONS & TASKS ── -->
+<div class="sec">Actions &amp; Tasks</div>
+{actions_tasks}
 
 <!-- ═══════════════════════════════════════════════════════
      AGENT TEAM — On-Demand
@@ -557,12 +815,14 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="agent-icon">&#127775;</span>
     <span class="agent-name">AI Orchestrator</span>
     <span class="agent-desc">Routes all work &middot; gates every &#10003; &middot; daily 8-step loop at 08:00 Riyadh</span>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a>
     <span class="dept-chip">MANAGER</span>
   </div>
   <div class="agent-body">
     <div class="orch-card">
       <div class="orch-title">The 8-Step Intelligence Loop (runs every daily cadence)</div>
-      <ol class="orch-loop">
+      <a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-run-btn">&#9654; Run Daily Now</a>
+      <ol class="orch-loop" style="margin-top:12px">
         <li>OBSERVE &mdash; pull live data from BQ, never yesterday&#39;s recollection</li>
         <li>COMPARE period-over-period &mdash; last 7d vs prior 7d via period_compare.py</li>
         <li>INVESTIGATE root cause &mdash; campaign mix, audience, launch waves, silent deaths, LP routing</li>
@@ -585,6 +845,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="agent-icon">&#128270;</span>
     <span class="agent-name">QA Auditor</span>
     <span class="agent-desc">Validates every agent output &middot; stamps QA_PASSED or QA_FAILED &middot; nothing ships without passing</span>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['qa']}" target="_blank" class="n8n-link">QA Gate &rarr;</a>
     <span class="dept-chip">GATEKEEPER</span>
   </div>
   <div class="agent-body">
@@ -688,6 +949,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="agent-icon">&#127919;</span>
     <span class="agent-name">Performance Lead</span>
     <span class="agent-desc">KPI thresholds &middot; budget allocation &middot; channel mix &middot; triage to Campaign Manager or Creative Strategist</span>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['perf_lead']}" target="_blank" class="n8n-link">CPL sub-flow &rarr;</a>
     <span class="dept-chip">PERFORMANCE</span>
   </div>
   <div class="agent-body">
@@ -728,6 +990,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Campaign Manager</span>
         <span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span>
+        <a href="{N8N_BASE}/{N8N_WORKFLOWS['campaign_mgr']}" target="_blank" class="n8n-link">IS sub-flow &rarr;</a>
         <span class="sub-chip">PERFORMANCE</span>
       </div>
       <div class="sub-body">
@@ -777,6 +1040,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Creative Strategist</span>
         <span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span>
+        <a href="{N8N_BASE}/{N8N_WORKFLOWS['creative']}" target="_blank" class="n8n-link">Creative sub-flow &rarr;</a>
         <span class="sub-chip">PERFORMANCE</span>
       </div>
       <div class="sub-body">
@@ -825,6 +1089,8 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="agent-icon">&#128200;</span>
     <span class="agent-name">CRO Specialist</span>
     <span class="agent-desc">LP briefs &middot; qual ratio decisions (redirect at &lt;30%) &middot; A/B test hypotheses &middot; test result calls</span>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['cro']}" target="_blank" class="n8n-link">CPQL sub-flow &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['qual']}" target="_blank" class="n8n-link">Qual sub-flow &rarr;</a>
     <span class="dept-chip">CRO CHAIN</span>
   </div>
   <div class="agent-body">
@@ -907,6 +1173,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="agent-icon">&#128202;</span>
     <span class="agent-name">Growth Analyst</span>
     <span class="agent-desc">BQ analysis &middot; period comparisons &middot; flag investigations &middot; forecasts &middot; owns memory/08_pitfalls.md</span>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['growth_analyst']}" target="_blank" class="n8n-link">ROAS sub-flow &rarr;</a>
     <span class="dept-chip">DATA</span>
   </div>
   <div class="agent-body">
