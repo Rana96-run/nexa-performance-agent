@@ -297,6 +297,18 @@ def _build_health_bar(system_health: dict[str, Any]) -> str:
     color, label = _freshness_status(last_ts)
     bq_dot = f'<span class="hdot" style="background:{color};box-shadow:0 0 5px {color}"></span>'
 
+    import datetime as _dt
+    import pytz as _pytz
+    _riyadh = _pytz.timezone("Asia/Riyadh")
+    _now_riyadh = _dt.datetime.now(_riyadh)
+    _next_8am = _now_riyadh.replace(hour=8, minute=0, second=0, microsecond=0)
+    if _now_riyadh >= _next_8am:
+        _next_8am += _dt.timedelta(days=1)
+    _diff = _next_8am - _now_riyadh
+    _next_run_h = int(_diff.total_seconds() // 3600)
+    _next_run_m = int((_diff.total_seconds() % 3600) // 60)
+    next_run_label = f"{_next_run_h}h {_next_run_m}m"
+
     return f"""
 <div class="hbar">
   <div class="hchip">
@@ -318,6 +330,10 @@ def _build_health_bar(system_health: dict[str, Any]) -> str:
     <span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span>
     <span class="hlabel">Railway</span>
     <span class="hval" style="color:var(--green)">Serving</span>
+  </div>
+  <div class="hchip">
+    <span class="hlabel">⏱ Next run in</span>
+    <span class="hval" style="color:var(--muted)">{next_run_label}</span>
   </div>
 </div>"""
 
