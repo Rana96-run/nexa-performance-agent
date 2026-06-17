@@ -1,5 +1,5 @@
-﻿{
-    "updatedAt":  "2026-06-17T08:22:21.074Z",
+{
+    "updatedAt":  "2026-06-17T13:48:56.624Z",
     "createdAt":  "2026-06-16T21:07:12.580Z",
     "id":  "jOnJxdpdaO3Vbi0B",
     "name":  "Nexa · [Infra] Data Collection",
@@ -1854,9 +1854,9 @@
 
                    ],
     "pinData":  null,
-    "versionId":  "fb2e028c-a713-46d6-8395-7507e89f3735",
-    "activeVersionId":  "fb2e028c-a713-46d6-8395-7507e89f3735",
-    "versionCounter":  8,
+    "versionId":  "c4c8b22d-aac8-4357-9afa-b7b6e3b4ee2e",
+    "activeVersionId":  "c4c8b22d-aac8-4357-9afa-b7b6e3b4ee2e",
+    "versionCounter":  14,
     "triggerCount":  0,
     "sourceWorkflowId":  null,
     "shared":  [
@@ -1885,9 +1885,9 @@
 
              ],
     "activeVersion":  {
-                          "updatedAt":  "2026-06-17T07:57:58.729Z",
-                          "createdAt":  "2026-06-17T07:57:58.729Z",
-                          "versionId":  "fb2e028c-a713-46d6-8395-7507e89f3735",
+                          "updatedAt":  "2026-06-17T13:48:56.626Z",
+                          "createdAt":  "2026-06-17T13:48:56.626Z",
+                          "versionId":  "c4c8b22d-aac8-4357-9afa-b7b6e3b4ee2e",
                           "workflowId":  "jOnJxdpdaO3Vbi0B",
                           "nodes":  [
                                         {
@@ -3736,26 +3736,18 @@
                           "autosaved":  false,
                           "workflowPublishHistory":  [
                                                          {
-                                                             "createdAt":  "2026-06-17T07:58:07.855Z",
-                                                             "id":  63,
+                                                             "createdAt":  "2026-06-17T13:48:56.769Z",
+                                                             "id":  219,
                                                              "workflowId":  "jOnJxdpdaO3Vbi0B",
-                                                             "versionId":  "fb2e028c-a713-46d6-8395-7507e89f3735",
+                                                             "versionId":  "c4c8b22d-aac8-4357-9afa-b7b6e3b4ee2e",
                                                              "event":  "activated",
                                                              "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
                                                          },
                                                          {
-                                                             "createdAt":  "2026-06-17T08:22:21.179Z",
-                                                             "id":  77,
+                                                             "createdAt":  "2026-06-17T13:48:56.738Z",
+                                                             "id":  218,
                                                              "workflowId":  "jOnJxdpdaO3Vbi0B",
-                                                             "versionId":  "fb2e028c-a713-46d6-8395-7507e89f3735",
-                                                             "event":  "activated",
-                                                             "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
-                                                         },
-                                                         {
-                                                             "createdAt":  "2026-06-17T08:22:21.132Z",
-                                                             "id":  76,
-                                                             "workflowId":  "jOnJxdpdaO3Vbi0B",
-                                                             "versionId":  "fb2e028c-a713-46d6-8395-7507e89f3735",
+                                                             "versionId":  "c4c8b22d-aac8-4357-9afa-b7b6e3b4ee2e",
                                                              "event":  "deactivated",
                                                              "userId":  "2a6e0304-07da-4c79-a506-3c92b5981bd1"
                                                          }

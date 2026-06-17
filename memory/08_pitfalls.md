@@ -1482,3 +1482,19 @@ NULL-channel-with-leads count + distinct channel values present.
   (allowed NULLs). **The 9c758c7 source-filter pattern only needs to live in the one UTM-grain
   view; the channel-grain views already filter implicitly via the INNER join.** No fixes
   applied, no materialize needed.
+
+## n8n API PUT requires UTF-8 without BOM (2026-06-17)
+
+**Symptom:** PUT to `https://qoyod.app.n8n.cloud/api/v1/workflows/{id}` silently fails or returns HTTP 500 even with valid JSON payload.
+
+**Root cause:** PowerShell's `Set-Content` and `ConvertTo-Json | Out-File` write UTF-8 with BOM (bytes EF-BB-BF at start). The n8n Cloud API rejects BOM-prefixed payloads.
+
+**Fix:** Strip the BOM before sending:
+```powershell
+$json = $wf | ConvertTo-Json -Depth 20 -Compress
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod -Uri "..." -Headers $headers -Method PUT -Body $bytes -ContentType "application/json"
+```
+Or use `[System.Text.UTF8Encoding]::new($false).GetString(...)` to read back without BOM.
+
+**Risk:** An accidental PUT with a small/empty payload can wipe a workflow. Always save a backup JSON before any PUT.
