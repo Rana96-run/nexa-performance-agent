@@ -32,7 +32,14 @@ ONDEMAND_ROUTES: dict[str, str] = {
     # QA Auditor
     "qa-check":           f"{N8N_BASE}/od-qa-check",
 
-    # Project Coordinator
+    # Project Coordinator — Campaign Coordination
+    "seasonal-brief":         f"{N8N_BASE}/od-seasonal-brief",
+    "seasonal-monitor":       f"{N8N_BASE}/od-seasonal-monitor",
+    "product-campaign-brief": f"{N8N_BASE}/od-product-campaign-brief",
+    "product-monitor":        f"{N8N_BASE}/od-product-monitor",
+    "campaign-report":        f"{N8N_BASE}/od-campaign-report",
+
+    # Project Coordinator — Technical Health
     "connector-health":   f"{N8N_BASE}/od-connector-health",
     "gtm-audit":          f"{N8N_BASE}/od-gtm-audit",
     "pixel-health":       f"{N8N_BASE}/od-pixel-health",
@@ -697,10 +704,63 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   <div class="agent-header">
     <span class="agent-icon">&#128295;</span>
     <span class="agent-name">Project Coordinator</span>
-    <span class="agent-desc">Connector health &middot; GTM audit &middot; pixel audit &middot; Asana task status &middot; secrets rotation</span>
+    <span class="agent-desc">Seasonal &amp; product campaign coordination &middot; all-seat Asana task creation &middot; Slack monitoring &middot; monthly campaign reports &middot; connector health &middot; GTM &middot; pixel audit</span>
     <span class="dept-chip">OPS</span>
   </div>
   <div class="agent-body">
+
+    <!-- Campaign Coordination sub-section -->
+    <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);border-bottom:1px solid color-mix(in srgb,var(--blue) 25%,var(--border));padding-bottom:6px">Campaign Coordination</div>
+    <div class="grid" style="margin-bottom:22px">
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Seasonal Campaign Brief</div>
+        <div class="cdesc2">Kick off a seasonal campaign (National Day &middot; Founding Day &middot; Ramadan &middot; End of Year). Timeline, budget, naming, Asana tasks for all seats.</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--blue)" onclick="run(this,'seasonal-brief')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-seasonal-brief"></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Seasonal Campaign Monitor</div>
+        <div class="cdesc2">Status check: Asana tasks on track, blockers in Slack, mid-campaign CPQL vs target, delivery dates</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--blue)" onclick="run(this,'seasonal-monitor')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-seasonal-monitor"></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Product Campaign Brief</div>
+        <div class="cdesc2">Launch a product/industry campaign (Bookkeeping &middot; Qflavours &middot; QHR &middot; POS). Includes HubSpot lead module check, deal pipeline, UTM structure, all-seat Asana tasks.</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--blue)" onclick="run(this,'product-campaign-brief')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-product-campaign-brief"></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Product Campaign Monitor</div>
+        <div class="cdesc2">Monitor active product campaigns: HubSpot attribution, deal pipeline conversion, CPQL vs target, Slack blockers</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--blue)" onclick="run(this,'product-monitor')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-product-monitor"></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Monthly Campaign Report</div>
+        <div class="cdesc2">End-of-month report: all seasonal + product campaigns. Spend &middot; leads &middot; SQLs &middot; CPQL vs target &middot; deal value. Creates follow-up Asana tasks for misses.</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+          <button class="btn" style="--btn-color:var(--blue)" onclick="run(this,'campaign-report')">Run &rarr;</button>
+        </div>
+        <div class="cst spin" id="st-campaign-report"></div>
+      </div>
+    </div>
+
+    <!-- Technical Health sub-section -->
+    <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--grey);border-bottom:1px solid color-mix(in srgb,var(--grey) 25%,var(--border));padding-bottom:6px">Technical Health</div>
     <div class="grid">
       <div class="card">
         <div class="ctitle">Connector Health</div>
@@ -730,6 +790,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <div class="cst spin" id="st-pixel-health"></div>
       </div>
     </div>
+
   </div>
 </div>
 
