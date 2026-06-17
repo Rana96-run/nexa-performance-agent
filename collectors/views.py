@@ -324,20 +324,24 @@ ALL_VIEWS = [
     # HubSpot compat views — aggregate from individual store tables (wide-table redesign step 4)
     ("hubspot_leads_module_daily",     HUBSPOT_LEADS_MODULE_COMPAT_SQL),
     ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),
-    # paid_channel_campaign_daily, paid_channel_daily DROPPED 2026-06-16 — all consumers migrated to wide_ads
+    # RESTORED 2026-06-17 — n8n on-demand workflows (campaign-health, period-compare) query these views
+    ("paid_channel_daily",             PAID_CHANNEL_DAILY_SQL),
+    # paid_channel_campaign_daily DROPPED 2026-06-16 — SQL has aggregation-of-aggregation bug; not used by n8n
     # v_new_biz_daily and v_agent_activity_dashboard DROPPED 2026-06-16 (0 active consumers)
-    # SQL constants retained above for reference; do NOT re-add to ALL_VIEWS.
 ]
 
 # Sub-campaign views (keyword grain only).
-# v_adset_performance and v_ad_performance DROPPED 2026-06-16 — all consumers migrated to wide_ads.
+# v_adset_performance DROPPED 2026-06-16 — no active consumers.
+# v_ad_performance RESTORED 2026-06-17 — n8n on-demand ad-audit workflow queries it.
 # v_keyword_performance is defined in bq_writer.py.
 def _sub_campaign_views():
     from collectors.bq_writer import (
         V_KEYWORD_PERFORMANCE_SQL,
+        V_AD_PERFORMANCE_SQL,
     )
     return [
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
+        ("v_ad_performance",        V_AD_PERFORMANCE_SQL),
     ]
 
 
