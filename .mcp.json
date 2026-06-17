@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "adspirer": {
-      "type": "http",
-      "url": "https://mcp.adspirer.com/mcp"
-    }
-  }
-}

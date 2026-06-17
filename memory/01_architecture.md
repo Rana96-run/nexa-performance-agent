@@ -112,7 +112,9 @@ Collectors are the **only** Python runtime still in active use. All other Python
 
 ## Repo layout (as of 2026-06-16 cleanup)
 
-Deleted in 2026-06-16 cleanup: `analysers/` (28 files), `notifications/` (7 files), `reports/` (3 files), `main.py`, `operational_scheduler.py`, `reporting_scheduler.py`, `app_server.py`, `claude/` (legacy roles/personas), `Open PowerShell.bat`, `lp_tracker_formatted.xlsx`, 25+ stale scripts.
+Deleted in 2026-06-16 cleanup: `analysers/` (28 files), `notifications/` (7 files), `main.py`, `operational_scheduler.py`, `reporting_scheduler.py`, `claude/` (legacy roles/personas), `Open PowerShell.bat`, `lp_tracker_formatted.xlsx`, 25+ stale scripts.
+
+`app_server.py` and `reports/` still live — required by Railway web service, pending shutdown.
 
 ```
 Nexa Performance Agent/

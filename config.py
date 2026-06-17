@@ -240,7 +240,7 @@ USD_SAR_PEG = 3.75   # 1 USD = 3.75 SAR
 # *** CANONICAL pause/scale thresholds — campaign level ***
 #
 # CPQL is the PRIMARY KPI for all pause/scale decisions. CPL is secondary
-# support context only. Decision tree in analysers/campaign_health.py uses
+# support context only. Decision tree in the n8n CPQL Fix sub-flow uses
 # CPQL zones first; CPL is consulted as a tie-breaker / supporting signal.
 #
 # Switched primacy on 2026-05-17 after the May 2026 incident: lp.qoyod.com/
@@ -263,7 +263,7 @@ CPL_WARNING    = 49.00  # ≤ this  -> warning      ($40–$49 zone)
 CPL_PAUSE      = 50.00  # > this  -> pause candidate
 # backwards-compat alias (some callers check CPL_PAUSE as the single trigger)
 
-# Lag-aware CPQL reporting — see analysers/lag_aware.py.
+# Lag-aware CPQL reporting — threshold applied in n8n workflows and BQ queries.
 # Days where (open_leads / leads_total) exceeds this fraction are considered
 # "lag-affected" and excluded from CPQL math. Set on 2026-05-17 after May 15-16
 # CPQL of $2,801 / $1,373 turned out to be 90%+ open leads (SDR backlog), not
