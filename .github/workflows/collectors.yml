@@ -142,7 +142,7 @@ jobs:
         id: google_ads
         if: ${{ inputs.collector == '' || inputs.collector == 'google_ads' }}
         continue-on-error: true
-        run: python collectors/google_ads_bq.py all
+        run: python collectors/google_ads_bq.py all 35
 
       - name: Collector — Meta
         id: meta
