@@ -97,7 +97,8 @@ SELECT
     NULLIF(SUM(leads_qualified)+SUM(leads_disqualified), 0)) * 100, 2)               AS qual_rate_pct
 FROM `{P}.{D}.wide_ads`
 GROUP BY date, channel, campaign_id
-HAVING SUM(spend) > 0 OR SUM(leads_total) > 0  -- drop ghost rows with no activity
+-- Note: HAVING with aggregates is not allowed in BQ VIEWs.
+-- wide_ads already filters WHERE spend > 0, so ghost rows are excluded at source.
 """
 
 
@@ -326,20 +327,25 @@ ALL_VIEWS = [
     ("hubspot_deals_daily",            HUBSPOT_DEALS_COMPAT_SQL),
     # RESTORED 2026-06-17 — n8n on-demand workflows (campaign-health, period-compare) query these views
     ("paid_channel_daily",             PAID_CHANNEL_DAILY_SQL),
-    # paid_channel_campaign_daily DROPPED 2026-06-16 — SQL has aggregation-of-aggregation bug; not used by n8n
+    # RESTORED 2026-06-19 — Hex campaign-grain cells and scripts (reconcile_views, cowork skills) query this
+    # (previous "aggregation-of-aggregation bug" note was incorrect — SQL sources from wide_ads directly)
+    ("paid_channel_campaign_daily",    PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
     # v_new_biz_daily and v_agent_activity_dashboard DROPPED 2026-06-16 (0 active consumers)
 ]
 
-# Sub-campaign views (keyword grain only).
-# v_adset_performance DROPPED 2026-06-16 — no active consumers.
+# Sub-campaign views (adset, ad, keyword grain).
+# v_adset_performance RESTORED 2026-06-19 — cowork skills (pmax-decoder, wasted-spend-finder),
+#   reconcile_views.py, and growth-analyst agent all query this view.
 # v_ad_performance RESTORED 2026-06-17 — n8n on-demand ad-audit workflow queries it.
 # v_keyword_performance is defined in bq_writer.py.
 def _sub_campaign_views():
     from collectors.bq_writer import (
         V_KEYWORD_PERFORMANCE_SQL,
         V_AD_PERFORMANCE_SQL,
+        V_ADSET_PERFORMANCE_SQL,
     )
     return [
+        ("v_adset_performance",     V_ADSET_PERFORMANCE_SQL),
         ("v_keyword_performance",   V_KEYWORD_PERFORMANCE_SQL),
         ("v_ad_performance",        V_AD_PERFORMANCE_SQL),
     ]
