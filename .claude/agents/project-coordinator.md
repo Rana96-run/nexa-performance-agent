@@ -50,7 +50,7 @@ Stakeholder update loop:
 ### UTM policy
 - Format: `{Channel}_{Type}_{Language}_{Product}_{Audience}`
 - Validate every campaign name before it leaves Campaign Manager
-- LinkedIn UTM mapping: Group=utm_campaign, Campaign=utm_audience, Ad=utm_content
+- LinkedIn UTM mapping: Campaign=utm_campaign, Ad Set=utm_audience, Ad=utm_content (LinkedIn UI renamed levels — no more Campaign Group / Group terminology)
 
 ### Meta pixel health
 - Both pixels must fire on every LP form submit

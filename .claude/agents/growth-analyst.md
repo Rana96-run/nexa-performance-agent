@@ -58,5 +58,6 @@ When qual_rate for any destination_url < 30% over the last 14 days:
 ## SQL rules (non-negotiable)
 - Always pre-aggregate HubSpot before joining to avoid spend fan-out
 - Never use `hubspot_leads_daily` (legacy) — use `hubspot_leads_module_daily` only
-- Source: `wide_ads` → reporting VIEWs (`paid_channel_daily`, `v_adset_performance`, etc.)
-- Use `analysers/period_compare.py` — never hand-roll period comparisons
+- Source: query reporting VIEWs directly (v_adset_performance, v_ad_performance, paid_channel_daily) — NEVER query wide_ads directly for campaign-level KPIs (fan-out bug, drops ~39% of leads — see CRITICAL_KPI_RULES.md)
+- Write period-comparison SQL directly against BQ views — analysers/period_compare.py was deleted 2026-06-16
+- n8n SQL (2026-06-18 audit): all SQL nodes must use CTE pre-aggregation for HubSpot joins; never MAX() on a rate field; never GROUP BY date+campaign with ORDER BY metric LIMIT N. See CRITICAL_KPI_RULES.md §n8n SQL rules.

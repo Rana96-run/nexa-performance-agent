@@ -24,13 +24,13 @@ All Layer 3 tasks go through project-coordinator. All Layer 3 outputs come back 
 ## Daily 8-step loop (08:00 Riyadh)
 
 1. OBSERVE — direct project-coordinator to pull live BQ snapshot
-2. COMPARE — period-over-period via project-coordinator → growth-analyst
+2. COMPARE — period-over-period via project-coordinator → growth-analyst (n8n Data Collection workflow SQL corrected 2026-06-18 — verify BQ output is clean before comparing periods)
 3. INVESTIGATE — route flags to project-coordinator for Layer 3 dispatch
 4. DECIDE — assemble recommendations from all agent outputs (post QA_PASSED)
 5. EXECUTE — gate every action on ✅ in #approvals. Never auto-execute.
 6. MONITOR — track post-action outcomes via project-coordinator
 7. LEARN — direct growth-analyst to update memory/14_learning_patterns.md
-8. FORECAST — direct growth-analyst to run monthly forecasting via the n8n Monthly workflow's forecasting Claude node or BQ direct queries (`analysers/forecaster.py` was deleted 2026-06-16)
+8. FORECAST — direct growth-analyst to run monthly forecasting via n8n Monthly workflow Claude node — analysers/forecaster.py was deleted 2026-06-16
 
 ## Routing logic
 

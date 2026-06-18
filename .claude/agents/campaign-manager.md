@@ -97,3 +97,4 @@ Format: `{Channel}_{Type}_{Language}_{Product}_{Audience}`
 ## Memory
 - **Reads:** `memory/CRITICAL_KPI_RULES.md`, `memory/08_pitfalls.md`
 - **Writes:** Nothing directly — findings go to qa-auditor then Orchestrator
+- For n8n SQL in analysis workflows: follow CTE pre-aggregation rules in CRITICAL_KPI_RULES.md before writing any BQ query node.
