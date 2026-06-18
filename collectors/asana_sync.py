@@ -8,7 +8,7 @@ Two functions:
 2. sync_user_tasks()    — scan ASANA_PROJECTS for tasks NOT created by the agent
                           and log them as user_created_task
 
-Both are called from reporting_scheduler.run_refresh() — non-fatal.
+Called from n8n workflows via Railway subprocess, or directly via `python -m collectors.asana_sync`.
 """
 import json
 import os
@@ -505,7 +505,7 @@ def backfill_from_projects() -> int:
 
 
 def run_full_sync() -> int:
-    """Entry point called from reporting_scheduler.
+    """Entry point called from n8n workflows via Railway subprocess.
     Always runs backfill first — idempotent, skips known GIDs instantly."""
     backfill_from_projects()
     n = sync_asana_tasks()

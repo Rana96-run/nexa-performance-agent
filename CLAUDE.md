@@ -73,7 +73,7 @@ monthly review, and any ad-hoc "why did X happen?" question) follows the same
 2. **COMPARE period-over-period** — ALWAYS contrast the current window with a
    matched prior window. Default windows: last 7d vs prior 7d for daily/weekly;
    month-to-date vs same days of previous month for monthly. Use
-   `analysers/period_compare.py` — never hand-roll this comparison again.
+   Write period-comparison SQL directly against BQ reporting views — analysers/period_compare.py was deleted 2026-06-16.
 3. **INVESTIGATE root cause** — when a flag fires (CPQL_REGRESSED, ROAS_REGRESSED,
    QUAL_DROPPED, LAUNCH_WAVE), drill into the contributing factors: campaign mix,
    audience changes, launch waves, silent deaths, LP routing, keyword/bid shifts.
@@ -87,7 +87,7 @@ monthly review, and any ad-hoc "why did X happen?" question) follows the same
 7. **LEARN** — record the outcome in `memory/14_learning_patterns.md`. Next
    session reads it before recommending a similar action.
 8. **FORECAST** — every weekly/monthly cadence ends with a month-over-month
-   projection via `analysers/forecaster.py`. State expected end-of-month spend,
+   projection via n8n Monthly workflow Claude node — analysers/forecaster.py was deleted 2026-06-16. State expected end-of-month spend,
    leads, SQLs, CPQL, ROAS — and the gap between status-quo and post-action paths.
 
 For any single user question of the form "why did X happen?", "what changed in
