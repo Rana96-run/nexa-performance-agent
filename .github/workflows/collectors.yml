@@ -236,88 +236,9 @@ jobs:
           print(f"Asana sync complete: {n} rows")
           PYEOF
 
-      # ── 8. Report failures to Slack #data-health ───────────────────────────────
-      # Posts a single message listing every step that failed.
-      # Channel ID C0ARMQKK8GK = #data-health
-      - name: Report failures to Slack
-        if: always()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_ACCESS_TOKEN: ${{ secrets.SLACK_ACCESS_TOKEN }}
-          # Step outcomes injected so the Python snippet can read them
-          OUTCOME_GOOGLE_ADS: ${{ steps.google_ads.outcome }}
-          OUTCOME_META: ${{ steps.meta.outcome }}
-          OUTCOME_SNAPCHAT: ${{ steps.snapchat.outcome }}
-          OUTCOME_TIKTOK: ${{ steps.tiktok.outcome }}
-          OUTCOME_LINKEDIN: ${{ steps.linkedin.outcome }}
-          OUTCOME_MICROSOFT_ADS: ${{ steps.microsoft_ads.outcome }}
-          OUTCOME_HUBSPOT_LEADS: ${{ steps.hubspot_leads.outcome }}
-          OUTCOME_HUBSPOT_DEALS: ${{ steps.hubspot_deals.outcome }}
-          OUTCOME_YOUTUBE: ${{ steps.youtube.outcome }}
-          OUTCOME_GA4: ${{ steps.ga4.outcome }}
-          OUTCOME_META_ORGANIC: ${{ steps.meta_organic.outcome }}
-          OUTCOME_VIEWS: ${{ steps.views.outcome }}
-          OUTCOME_ASANA_SYNC: ${{ steps.asana_sync.outcome }}
-          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        run: |
-          python - <<'PYEOF'
-          import os, requests
-
-          token   = os.environ.get("SLACK_BOT_TOKEN") or os.environ.get("SLACK_ACCESS_TOKEN", "")
-          channel = "C0ARMQKK8GK"   # #data-health
-          run_url = os.environ.get("RUN_URL", "")
-
-          step_outcomes = {
-              "google_ads":     os.environ.get("OUTCOME_GOOGLE_ADS",     "skipped"),
-              "meta":           os.environ.get("OUTCOME_META",           "skipped"),
-              "snapchat":       os.environ.get("OUTCOME_SNAPCHAT",       "skipped"),
-              "tiktok":         os.environ.get("OUTCOME_TIKTOK",         "skipped"),
-              "linkedin":       os.environ.get("OUTCOME_LINKEDIN",       "skipped"),
-              "microsoft_ads":  os.environ.get("OUTCOME_MICROSOFT_ADS",  "skipped"),
-              "hubspot_leads":  os.environ.get("OUTCOME_HUBSPOT_LEADS",  "skipped"),
-              "hubspot_deals":  os.environ.get("OUTCOME_HUBSPOT_DEALS",  "skipped"),
-              "youtube":        os.environ.get("OUTCOME_YOUTUBE",        "skipped"),
-              "ga4":            os.environ.get("OUTCOME_GA4",            "skipped"),
-              "meta_organic":   os.environ.get("OUTCOME_META_ORGANIC",   "skipped"),
-              "views":          os.environ.get("OUTCOME_VIEWS",          "skipped"),
-              "asana_sync":     os.environ.get("OUTCOME_ASANA_SYNC",     "skipped"),
-          }
-
-          failed  = [k for k, v in step_outcomes.items() if v == "failure"]
-          success = [k for k, v in step_outcomes.items() if v == "success"]
-          skipped = [k for k, v in step_outcomes.items() if v == "skipped"]
-
-          if not failed:
-              # All good — post a heartbeat only (no noise for clean runs)
-              text = (
-                  f":white_check_mark: *BQ Collectors — all passed* "
-                  f"({len(success)} ran, {len(skipped)} skipped) | <{run_url}|View run>"
-              )
-          else:
-              lines = "\n".join(f"  • `{c}`" for c in failed)
-              text = (
-                  f":red_circle: *BQ Collectors — {len(failed)} FAILED*\n"
-                  f"{lines}\n"
-                  f"{len(success)} passed, {len(skipped)} skipped | <{run_url}|View run>"
-              )
-
-          if not token:
-              print("SLACK_BOT_TOKEN not set — skipping Slack notification")
-              print(text)
-              raise SystemExit(0)
-
-          resp = requests.post(
-              "https://slack.com/api/chat.postMessage",
-              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-              json={"channel": channel, "text": text},
-              timeout=10,
-          )
-          data = resp.json()
-          if not data.get("ok"):
-              print(f"Slack post failed: {data}")
-              raise SystemExit(1)
-          print(f"Slack notified: {text[:120]}")
-          PYEOF
+      # Step 8 (Report failures to Slack) removed 2026-06-18.
+      # n8n Data Collection workflow (jOnJxdpdaO3Vbi0B) already alerts #data-health
+      # on collector failures. This step was posting duplicates every 6h run.
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SECRETS NEEDED IN GITHUB:
