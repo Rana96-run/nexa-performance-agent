@@ -222,3 +222,82 @@ Also check these three before writing any recommendation or query:
   Bar: ratio ≤ 1.05 on EVERY paid channel (google_ads, meta, snapchat, tiktok, microsoft_ads).
   A clean Google Ads total can mask 2× over-count on smaller channels.
   Use `scripts/reconcile_views.py` for the automated check.
+
+---
+
+## n8n SQL rules (non-negotiable — enforced by kpi_rule_guard.py)
+
+These apply to every BigQuery node in every n8n workflow. Violations here
+caused 11 bugs across 6 workflows (discovered 2026-06-18).
+
+### NEVER use `wide_ads` for campaign-level or channel-level KPIs
+
+`wide_ads` attributes leads per ad via `utm_content` on exact date match —
+~39% of leads are dropped. It is an ad-grain table for creative performance
+only. Never query it for CPQL, CPL, qual rate, or lead counts at campaign
+or channel level.
+
+**Wrong:**
+```sql
+SELECT channel, SUM(leads_total) FROM wide_ads GROUP BY channel
+```
+
+**Correct — always use campaigns_daily + pre-aggregated HS CTE:**
+```sql
+WITH hs AS (
+  SELECT date, lead_utm_campaign,
+         SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls
+  FROM hubspot_leads_module_daily
+  GROUP BY date, lead_utm_campaign
+),
+spend AS (
+  SELECT channel, campaign_name, LOWER(campaign_name) AS k,
+         SUM(spend) AS spend
+  FROM campaigns_daily
+  GROUP BY channel, campaign_name
+)
+SELECT s.channel, s.campaign_name, s.spend,
+       SUM(hs.leads) AS leads, SUM(hs.sqls) AS sqls,
+       SAFE_DIVIDE(s.spend, SUM(hs.sqls)) AS cpql
+FROM spend s
+LEFT JOIN hs ON LOWER(hs.lead_utm_campaign) = s.k
+GROUP BY s.channel, s.campaign_name, s.spend
+```
+
+### NEVER use MAX() or MIN() on a rate after a JOIN
+
+`MAX(qual_rate)` after joining picks an arbitrary row from the wrong campaign.
+Always compute rates from summed numerator / summed denominator.
+
+**Wrong:** `MAX(hs.qual_rate)` in outer GROUP BY
+**Correct:** `SAFE_DIVIDE(SUM(hs.sqls), SUM(hs.leads)) AS qual_rate`
+
+### NEVER group by date+campaign and ORDER BY metric LIMIT N
+
+This picks the single worst/best day, not the true 14-day average.
+
+**Wrong:** `GROUP BY date, channel, campaign_name ORDER BY cpql DESC LIMIT 8`
+**Correct:** `GROUP BY channel, campaign_name` — aggregate the full window first
+
+### NEVER join hubspot_leads_module_daily without pre-aggregating first
+
+Direct JOIN multiplies spend rows by the number of matching HubSpot rows
+(fan-out bug). Always wrap HubSpot in a CTE that GROUPs before joining.
+
+### ALWAYS use LOWER() on both sides of the campaign name join
+
+`ON c.campaign_name = hs.lead_utm_campaign` silently drops leads when case
+differs. Always: `ON LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)`
+
+### Claude node prompt rule
+
+Every Claude node that receives BQ data must include:
+> "The following table contains pre-computed KPIs from BigQuery. Do not
+> recalculate any numbers. Interpret the data as-is. All figures are
+> final — cite them exactly as shown in the table."
+
+### n8n workflow edit discipline
+
+Workflows are ONLY edited via local JSON files in `n8n/workflows/`, then
+pushed via the n8n API. Never edit directly in the n8n Cloud UI — Cloud UI
+edits are not reflected in git and will be overwritten on the next push.
