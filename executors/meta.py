@@ -256,7 +256,7 @@ def create_adset(
         payload["promoted_object"] = promoted_object
 
     r = _post(f"/act_{account_id}/adsets", payload)
-    print(f"[meta] adset created ({status}) -> {r.get('id')} | {_prefixed(name)}")
+    print(f"[meta] adset created ({status}) -> {r.get('id')} | {name}")
     return r
 
 

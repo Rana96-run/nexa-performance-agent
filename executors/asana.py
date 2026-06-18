@@ -18,6 +18,7 @@ from config import (
     ASANA_ACTIVE_SEASONAL,
     asana_section_name,
 )
+from cache.cache_manager import task_is_new, record_task, get_task_gid
 
 
 def _assignee_for_role(log_role: str, channel: str = "") -> str:
@@ -56,7 +57,6 @@ def _assignee_for_channel(channel: str) -> str:
 
 def _assignee_name_for_channel(channel: str) -> str:
     return _assignee_name_for_role("default", channel)
-from cache.cache_manager import task_is_new, record_task, get_task_gid
 
 # Action -> priority label (shown in task footer)
 _ACTION_PRIORITY = {

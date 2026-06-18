@@ -671,7 +671,10 @@ def create_full_campaign(
                  {"adsquads": [{"adsquad": current_squad}]})
             print(f"[snap] Pixel attached to ad squad: {SNAPCHAT_PIXEL_ID}")
         except Exception as e:
-            print(f"[snap] Pixel attach failed (non-fatal): {e}")
+            raise RuntimeError(
+                f"[snap] WEB_FORM pixel attach failed for squad {squad_id}: {e}. "
+                "Campaign was created but has NO conversion tracking — fix before launching."
+            ) from e
     else:
         form_id = result.get("form_id")
         print(f"[snap] INSTANT_FORM — form: {result.get('form_name')} ({form_id})")

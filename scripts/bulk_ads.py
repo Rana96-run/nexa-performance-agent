@@ -334,7 +334,7 @@ def _enable_ad(channel: str, ad_name: str | None, ad_id: str | None) -> bool:
             _tt_post("/ad/status/update/", {
                 "advertiser_id":    _DEFAULT_ACCOUNT,
                 "ad_ids":           [ad_id],
-                "operation_status": "ENABLE",
+                "operation_status": "AD_STATUS_ENABLE",
             })
             print(f"{PREFIX} ENABLED TikTok ad (id={ad_id})")
             return True
