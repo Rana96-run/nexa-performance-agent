@@ -140,66 +140,77 @@ jobs:
 
       - name: Collector — Google Ads
         id: google_ads
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'google_ads' }}
         continue-on-error: true
         run: python collectors/google_ads_bq.py all 35
 
       - name: Collector — Meta
         id: meta
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'meta' }}
         continue-on-error: true
         run: python collectors/meta_bq.py all
 
       - name: Collector — Snapchat
         id: snapchat
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'snapchat' }}
         continue-on-error: true
         run: python collectors/snap_bq.py all
 
       - name: Collector — TikTok
         id: tiktok
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'tiktok' }}
         continue-on-error: true
         run: python collectors/tiktok_bq.py all
 
       - name: Collector — LinkedIn
         id: linkedin
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'linkedin' }}
         continue-on-error: true
         run: python collectors/linkedin_bq.py all
 
       - name: Collector — Microsoft Ads
         id: microsoft_ads
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'microsoft_ads' }}
         continue-on-error: true
         run: python collectors/microsoft_ads_bq.py all
 
       - name: Collector — HubSpot Leads (cursor sync)
         id: hubspot_leads
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'hubspot_leads' }}
         continue-on-error: true
         run: python collectors/hubspot_leads_bq.py cursor
 
       - name: Collector — HubSpot Deals
         id: hubspot_deals
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'hubspot_deals' }}
         continue-on-error: true
         run: python collectors/hubspot_deals_bq.py mirror
 
       - name: Collector — YouTube
         id: youtube
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'youtube' }}
         continue-on-error: true
         run: python collectors/youtube_bq.py
 
       - name: Collector — GA4
         id: ga4
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'ga4' }}
         continue-on-error: true
         run: python collectors/ga4_bq.py --incremental
 
       - name: Collector — Meta Organic
         id: meta_organic
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'meta_organic' }}
         continue-on-error: true
         run: python collectors/meta_organic_bq.py
@@ -207,6 +218,7 @@ jobs:
       # ── 6. Views refresh ───────────────────────────────────────────────────────
       - name: Refresh BQ views
         id: views
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'views' }}
         continue-on-error: true
         run: python collectors/views.py
@@ -214,6 +226,7 @@ jobs:
       # ── 7. Asana sync ──────────────────────────────────────────────────────────
       - name: Asana sync
         id: asana_sync
+        timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'asana_sync' }}
         continue-on-error: true
         run: |

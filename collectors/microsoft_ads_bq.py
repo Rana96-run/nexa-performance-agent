@@ -567,7 +567,7 @@ def collect_keywords_and_write(days: int = None, incremental: bool = False) -> i
     if not all_rows:
         return 0
     return upsert_rows("keywords_daily", all_rows,
-                       key_fields=["date", "channel", "adgroup_id", "keyword_id"])
+                       key_fields=["date", "channel", "account_id", "adgroup_id", "keyword_id"])
 
 
 # ── Ad level → ads_daily ───────────────────────────────────────────────────────
