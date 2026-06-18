@@ -395,10 +395,10 @@ def _get_recent_actions() -> list[dict[str, Any]]:
 def _get_open_asana_tasks() -> list[dict[str, Any]]:
     """Return open Asana tasks from asana_task_status."""
     return _bq_query(f"""
-        SELECT task_name, assignee, due_date, project_name, status
+        SELECT title, assignee_name, due_on, project_key, completed
         FROM `{BQ_PROJECT}.{BQ_DATASET}.asana_task_status`
-        WHERE status != 'COMPLETE'
-        ORDER BY due_date ASC
+        WHERE completed = FALSE
+        ORDER BY due_on ASC
         LIMIT 10
     """)
 
@@ -489,10 +489,10 @@ def _build_actions_tasks(recent_actions: list[dict[str, Any]], open_tasks: list[
     if open_tasks:
         task_items = []
         for r in open_tasks:
-            name    = r.get("task_name") or "—"
-            assign  = r.get("assignee") or ""
-            due     = r.get("due_date")
-            proj    = r.get("project_name") or ""
+            name    = r.get("title") or "—"
+            assign  = r.get("assignee_name") or ""
+            due     = r.get("due_on")
+            proj    = r.get("project_key") or ""
             overdue = False
             due_str = "—"
             if due is not None:
