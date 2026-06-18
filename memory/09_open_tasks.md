@@ -3,12 +3,11 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-17:** 12-workflow n8n architecture live and healthy.
-> Master workflow `tool_choice:required` bug fixed. Slack Approval Listener + Event Subscriptions live.
-> Full desk cleanup + memory/docs updated. Archive: `D:\Nexa-Performance-Agent-2026-06-17.zip`.
-> Google Ads OAuth re-minted (client secret rotated) — `GOOGLE_ADS_REFRESH_TOKEN` updated in Railway + GitHub Secrets.
-> Collector runs clean; 2026-06-16 data pending Google API finalization (~16:00 Riyadh).
-> Remaining: GitHub Secrets full migration (all vars, not just Google Ads) + Railway shutdown.
+> **Status as of 2026-06-18:** n8n Master + Data Collection running clean. 5 SQL bugs fixed in n8n report
+> workflows (wide_ads fan-out, MAX(qual_rate) pollution, daily-grain CPQL spike). MS Ads key_fields fixed.
+> Daily task review Cowork scheduled task created (09:00 Riyadh daily). TikTok pause pending ✅ in #approvals.
+> Google ZATCA campaigns flagged for re-evaluation on 2026-06-20 and 2026-06-23.
+> Remaining: Railway shutdown (pending confirmation), Databox $var + activation.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -229,7 +228,7 @@ Campaign IDs (customer 5753494964):
 
 ---
 
-## Done this session (2026-06-18) — collector fixes + n8n hardening
+## Done this session (2026-06-18) — collector fixes, n8n hardening, report SQL fixes
 
 - [x] **HubSpot Deals collector fixed.** `hubspot_deals_daily` was converted to a VIEW (commit `2cbe6ec`), breaking direct table writes. Fixed `collectors.yml` to call `python collectors/hubspot_deals_bq.py mirror` (writes to `hubspot_deals_individual`; view reflects automatically). Verified: 116,970 rows written, data current to 2026-06-17. Commit: `a37fb6e`.
 - [x] **Google Ads credential fixed.** `GOOGLE_ADS_CLIENT_SECRET` was stored with literal `<>` angle brackets in Railway — caused `invalid_client` OAuth error. Removed brackets; collector now runs clean. Data current to 2026-06-17.
@@ -238,6 +237,17 @@ Campaign IDs (customer 5753494964):
 - [x] **n8n architecture enforced: 12 workflows.** Deleted 30 on-demand webhook workflows + 9 stale/superseded workflows. Architecture is exactly 12: 3 cadence + 3 infra + 6 KPI sub-flows. On-demand = click "Execute workflow" in n8n UI.
 - [x] **Dashboard: removed on-demand proxy layer.** Deleted ONDEMAND_ROUTES, `/api/ondemand/<task>` route, Run buttons, JS fetch block from `reports/app.py`. Connector health now queries `campaigns_daily MAX(date)` directly (independent of Daily Performance workflow). Added n8n links + actions/tasks section.
 - [x] **n8n UTF-8 BOM pitfall documented.** `memory/08_pitfalls.md` updated. All PUT operations must use `[System.Text.UTF8Encoding]::new($false)` to avoid BOM bytes that silently fail the n8n API.
+- [x] **bq_write_sanity QA gate unblocked.** MS Ads `key_fields` missing `account_id` caused the sanity gate to block BQ writes. Fixed by commit `df2d282`. Will clear on next 18:00 UTC run.
+- [x] **Daily task review Cowork scheduled task created.** New skill at `C:\Users\qoyod\.claude\scheduled-tasks\daily-task-review\SKILL.md`, registered daily at 09:00 Riyadh. Checks Asana for overdue/new tasks and surfaces them to the team.
+- [x] **n8n report 5 SQL bugs fixed.** Three workflows (Master + Weekly + Monthly) patched for: (1) `wide_ads` fan-out dropping ~39% of leads, (2) `MAX(qual_rate)` cross-campaign pollution, (3) daily-grain CPQL spike from wrong GROUP BY. Commits: `df2d282` + `abb6b37`. Pushed to n8n Cloud. Tomorrow's Master run is first live test.
+- [ ] **TikTok VAT compliance hook + ZATCA warning hook pause** — Pending ✅ in #approvals (ts: 1781813472.822169). Not yet executed.
+- [ ] **Google ZATCA re-evaluation.** ZATCAVendorShop hits day 10 on 2026-06-20; ZATCAPhase2 on 2026-06-23. Asana task GID 1215845331755397 created for tracking. Re-eval: check CPQL and disq rate; apply pause rule if still >$90 CPQL at the 10d mark.
+
+## Open monitoring tasks (added 2026-06-18)
+
+- [ ] **Monitor TikTok pause execution** — Check #approvals for ✅/❌ reaction on ts `1781813472.822169`. If ✅, verify TikTok ads are paused in platform (confirm status in TikTok Ads Manager). If ❌ or no reaction by EOD, re-surface next session.
+- [ ] **Verify n8n report accuracy** — On 2026-06-19 08:00 Riyadh, check that the Master workflow Slack post shows correct lead counts and CPQL (should match BQ via new CTE queries). Compare against previous report. If numbers look right → close. If still off → diagnose.
+- [ ] **Google ZATCA re-eval 2026-06-20** — ZATCAVendorShop hits 10 days on 2026-06-20. Query BQ for CPQL + disq rate over last 10 days. If CPQL > $90 AND disq_rate >= 60% → pause (after ✅ in #approvals). If improving → leave. Update Asana task GID 1215845331755397.
 
 ## Done this session (2026-06-16) — n8n full build
 

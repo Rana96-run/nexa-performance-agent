@@ -111,6 +111,74 @@ all dropped 2026-06-16, all consumers migrated to `wide_ads`.
 
 `PUT /rest/workflows/{id}` returns `404 Cannot PUT`. The correct method for updating a workflow via the browser session is `PATCH /rest/workflows/{id}` with `Content-Type: application/json`. Same applies to partial updates (just `{active:true}` etc.). The public API (`/api/v1/workflows/{id}`) uses `X-N8N-API-KEY` header — different auth path. Activation via PATCH `{active:true}` silently returns `active:false` if the workflow has validation issues; use the n8n UI toggle as fallback.
 
+## [2026-06-18] n8n `wide_ads` fan-out drops ~39% of leads at campaign level
+
+**Symptom:** n8n report shows ~39% fewer leads than BQ `hubspot_leads_module_daily` for the same campaigns/channels.
+
+**Root cause:** `wide_ads` attributes leads per ad via `(date, ad_id)` join — lead createdate ≠ spend date for ~39% of leads (687 of 1,283 in the last sample). This is a known, intentional trade-off in `wide_ads` (conservative undercounting). It is NOT suitable for campaign-level lead totals in reports.
+
+**Fix:** Always use `campaigns_daily` + a pre-aggregated `hubspot_leads_module_daily` CTE for campaign-level lead counts in n8n workflows:
+```sql
+WITH hs AS (
+  SELECT date, lead_utm_campaign,
+         SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls
+  FROM `project.dataset.hubspot_leads_module_daily`
+  GROUP BY date, lead_utm_campaign
+)
+SELECT c.campaign_name, SUM(c.spend) AS spend, SUM(hs.leads) AS leads,
+       SAFE_DIVIDE(SUM(c.spend), SUM(hs.sqls)) AS cpql
+FROM `project.dataset.campaigns_daily` c
+LEFT JOIN hs ON c.date = hs.date
+           AND LOWER(c.campaign_name) = LOWER(hs.lead_utm_campaign)
+WHERE c.date BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AND CURRENT_DATE()
+GROUP BY c.campaign_name
+```
+**Rule: never use `wide_ads` for campaign-level aggregations in n8n report workflows.**
+
+## [2026-06-18] n8n `MAX(qual_rate)` cross-campaign pollution after LEFT JOIN
+
+**Symptom:** Campaign CPQL numbers are wildly wrong — one campaign's qual_rate bleeds into others.
+
+**Root cause:** Using `MAX(hs.qual_rate)` in a `GROUP BY` query after a LEFT JOIN picks an arbitrary qual_rate from whichever HubSpot row lands last. If two campaigns have different qual_rates and the JOIN is not perfectly 1:1, the MAX picks the wrong campaign's value.
+
+**Fix:** Never pre-compute `qual_rate` in HubSpot CTE and take MAX of it. Instead, pre-aggregate raw counts (`leads_total`, `leads_qualified`) on both sides, then compute `SAFE_DIVIDE(SUM(sqls), SUM(leads))` AFTER joining:
+```sql
+-- WRONG
+SELECT c.campaign_name, MAX(hs.qual_rate) AS qual_rate  -- poisons across campaigns
+...
+-- CORRECT
+SELECT c.campaign_name,
+       SAFE_DIVIDE(SUM(hs.sqls), SUM(hs.leads)) AS qual_rate
+FROM campaigns_agg c
+LEFT JOIN hs_agg hs ON ...
+GROUP BY c.campaign_name
+```
+**Rule: always join pre-aggregated spend and pre-aggregated HS separately, then compute SAFE_DIVIDE on summed values.**
+
+## [2026-06-18] n8n daily-grain CPQL spike from wrong GROUP BY
+
+**Symptom:** Report shows a campaign with CPQL of $800+ when the true 14-day CPQL is $90. The spike is from a single bad day being surfaced as the "campaign's" number.
+
+**Root cause:** Grouping by `(date, channel, campaign_name)` and ordering by `CPQL DESC` (or using a daily grain without further aggregation) picks the single worst-day spend/leads ratio and presents it as if it represents the campaign's overall performance.
+
+**Fix:** Always aggregate over the FULL evaluation window first, then compute CPQL from the totals:
+```sql
+-- WRONG: daily grain, worst day surfaces as "the" CPQL
+SELECT date, campaign_name, spend/sqls AS cpql
+FROM ... GROUP BY date, campaign_name ORDER BY cpql DESC LIMIT 10
+
+-- CORRECT: full-window aggregation
+SELECT campaign_name,
+       SUM(spend) AS total_spend,
+       SUM(sqls) AS total_sqls,
+       SAFE_DIVIDE(SUM(spend), SUM(sqls)) AS cpql
+FROM ...
+WHERE date BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY) AND CURRENT_DATE()
+GROUP BY campaign_name
+ORDER BY cpql DESC
+```
+**Rule: never group by `(date, campaign_name)` and ORDER BY CPQL for a report — always aggregate the full window first.**
+
 ## [2026-06-17] n8n public API (/api/v1): use PUT not PATCH for workflow updates
 
 **PATCH returns 405 on `/api/v1/workflows/{id}`** — the public API only supports PUT. The internal browser API (`/rest/`) uses PATCH; they are separate paths with different methods. Always use PUT when updating workflows via the public API with `X-N8N-API-KEY`.
