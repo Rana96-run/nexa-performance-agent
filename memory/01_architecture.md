@@ -157,6 +157,9 @@ Nexa Performance Agent/
 | `hubspot_deals_daily` | hubspot_deals_bq.py (VIEW — compat wrapper over `hubspot_deals_individual`; collector writes via `mirror` subcommand) | date, pipeline, qoyod_source |
 | `hubspot_deals_individual` | hubspot_deals_bq.py (`mirror` subcommand) | hs_object_id |
 | `organic_page_daily` | meta_organic_bq, youtube_bq | date, channel |
+| `ga4_sessions_daily` | ga4_bq.py | date, landing_page (last seen 2026-06-17, 37 rows) |
+| `gsc_organic_daily` | planned — collector not yet built (no gsc_*.py in collectors/) | date, page, query |
+| `gsc_organic_staging` | planned — collector not yet built | date, page, query |
 | `agent_activity_log` | activity_logger.py | role, status |
 | `connector_health_log` | connector_tracker.py | connector, check_type |
 | `asana_task_status` | asana_sync.py | task_id |
@@ -197,7 +200,7 @@ every 6h via the reporting scheduler.
 | View | Purpose |
 |---|---|
 | `v_keyword_performance` | Keyword grain with QS, IS, leads |
-| ~~`v_channel_key_map`~~ | Dropped 2026-06-16 — inlined as CASE in consumers |
+| `v_channel_key_map` | RESTORED 2026-06-16 — still referenced by Hex SQL cells; 'Tiktok Ads' casing bug fixed 2026-06-19 |
 
 ### Dropped tables (do not recreate)
 
@@ -211,7 +214,7 @@ v_website_funnel_daily
 **Dropped 2026-06-15 (replaced by VIEWs from wide_ads — see reporting VIEWs section above):**
 utm_paid_attribution_daily, channel_roas_daily
 
-**Dropped 2026-06-16 (0 active analysis consumers):**
+**Dropped 2026-06-16 (0 active analysis consumers) — physically deleted from BQ 2026-06-19:**
 platform_campaign_snapshot, pmax_asset_groups_daily, v_agent_activity_dashboard,
 v_agent_consumption_daily, v_new_biz_daily
 
