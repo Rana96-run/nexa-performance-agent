@@ -490,7 +490,7 @@ def pause_ad(ad_id: str, advertiser_id: str | None = None):
     _post("/ad/status/update/", {
         "advertiser_id": acct,
         "ad_ids":         [ad_id],
-        "operation_status": "AD_STATUS_DISABLE",
+        "operation_status": "DISABLE",
     })
     print(f"[tiktok] ad {ad_id} PAUSED")
 
