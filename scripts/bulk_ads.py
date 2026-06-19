@@ -49,6 +49,15 @@ JUNK_LEAD_RATE     = 0.60   # 60% disqualified
 JUNK_LEAD_MIN      = 5      # minimum HubSpot leads to qualify for junk-lead rule
 HIGH_CPL_DAYS      = 10     # days running before high-CPL rule applies
 
+# Ads considered already inactive: 0 spend in the last 2 days
+ALREADY_PAUSED_ADS_SQL = """
+    SELECT DISTINCT LOWER(ad_name) AS ad_key
+    FROM `{project}.{dataset}.ads_daily`
+    WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 DAY)
+    GROUP BY ad_name
+    HAVING SUM(spend) = 0
+"""
+
 # Google Ads accounts (Acc1 = primary, Acc2 = secondary)
 GOOGLE_ADS_CUSTOMER_IDS = ["1513020554", "5753494964"]
 
@@ -121,6 +130,13 @@ def _fetch_ad_perf(days: int) -> list[dict]:
     sql     = _AD_PERF_SQL.format(project=PROJECT_ID, dataset=DATASET, days=days)
     rows    = list(client.query(sql).result())
     return [dict(row) for row in rows]
+
+
+def _fetch_already_paused_ads() -> set[str]:
+    """Return lowercase ad_name set for ads with 0 spend in the last 2 days (already inactive)."""
+    client = _get_bq_client()
+    sql = ALREADY_PAUSED_ADS_SQL.format(project=PROJECT_ID, dataset=DATASET)
+    return {row["ad_key"] for row in client.query(sql).result()}
 
 
 # ── Rule evaluation ───────────────────────────────────────────────────────────
@@ -403,6 +419,14 @@ def cmd_audit(days: int) -> list[dict]:
     except Exception as e:
         print(f"{PREFIX} [error] BQ query failed: {e}")
         sys.exit(1)
+
+    already_inactive = _fetch_already_paused_ads()
+    if already_inactive:
+        before = len(rows)
+        rows = [r for r in rows if r.get("ad_name", "").lower() not in already_inactive]
+        skipped_inactive = before - len(rows)
+        if skipped_inactive:
+            print(f"{PREFIX} Skipped {skipped_inactive} already-inactive ads (0 spend last 2 days)")
 
     print(f"{PREFIX} Evaluating {len(rows)} ads against pause rules...")
 

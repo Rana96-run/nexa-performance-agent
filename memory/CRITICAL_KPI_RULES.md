@@ -301,3 +301,25 @@ Every Claude node that receives BQ data must include:
 Workflows are ONLY edited via local JSON files in `n8n/workflows/`, then
 pushed via the n8n API. Never edit directly in the n8n Cloud UI — Cloud UI
 edits are not reflected in git and will be overwritten on the next push.
+
+---
+
+## Campaign Status Filter (non-negotiable)
+
+Before ANY pause recommendation, CPQL flag, or "worst performer" label:
+
+- Filter out campaigns (or ads) with `spend = 0` for all rows in the last 2 days of `campaigns_daily` / `ads_daily`
+- SQL subquery to exclude already-paused campaigns:
+  ```sql
+  AND campaign_name NOT IN (
+    SELECT campaign_name
+    FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.campaigns_daily`
+    WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 2 DAY)
+    GROUP BY campaign_name
+    HAVING SUM(spend) = 0 AND SUM(impressions) = 0
+  )
+  ```
+- A paused campaign will always look like a bad performer — never flag it
+- This applies to: daily Slack summaries, ZATCA re-evals, bulk_ads audit, n8n KPI nodes, period comparisons, any "top/worst" channel ranking
+- In `bulk_ads.py`: the `_fetch_already_paused_ads()` function pre-fetches inactive ad names and filters them before the flagging loop
+- Established 2026-06-19 after ZATCA pause recommendations were sent for ZATCAVendorShop and ZATCAPhase2 — both already paused
