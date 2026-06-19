@@ -29,6 +29,11 @@ def _disabled() -> bool:
 
 def _alert_health(surface: str, failures: list[QACheckResult]):
     """Post a one-line ping to Slack #health. Best-effort, never raises."""
+    # Skip in GitHub Actions — n8n Data Collection workflow already alerts
+    # #data-health on collector failures. Posting here would duplicate it.
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        log.info("qa.gate: skipping health ping — running in GitHub Actions (n8n covers it)")
+        return
     try:
         import requests as _req
         token = os.getenv("SLACK_BOT_TOKEN", "")
