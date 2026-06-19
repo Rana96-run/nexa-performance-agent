@@ -17,7 +17,7 @@ on:
           Collector to run (leave blank to run all).
           Options: google_ads | meta | snapchat | tiktok | linkedin |
                    microsoft_ads | hubspot_leads | hubspot_deals |
-                   youtube | ga4 | meta_organic | views | asana_sync
+                   youtube | ga4 | meta_organic | gsc | views | asana_sync
         required: false
         default: ""
         type: string
@@ -215,6 +215,15 @@ jobs:
         continue-on-error: true
         run: python collectors/meta_organic_bq.py
 
+      - name: Collector — GSC organic search
+        id: gsc
+        timeout-minutes: 15
+        if: ${{ inputs.collector == '' || inputs.collector == 'gsc' }}
+        continue-on-error: true
+        env:
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+        run: python -m collectors.gsc_bq 3
+
       # ── 6. Views refresh ───────────────────────────────────────────────────────
       - name: Refresh BQ views
         id: views
@@ -295,6 +304,8 @@ jobs:
 # YT_CHANNEL_ID
 #
 # GA4_PROPERTY_ID
+#
+# GSC_SITE_URL                  ← e.g. sc-domain:qoyod.com (service account must be granted GSC access)
 #
 # SLACK_BOT_TOKEN          (preferred — used for both collector alerts and Slack posting)
 # SLACK_ACCESS_TOKEN       (legacy alias — keep in sync with SLACK_BOT_TOKEN)
