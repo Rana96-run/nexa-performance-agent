@@ -158,8 +158,6 @@
             "parameters": {
                 "method": "GET",
                 "url": "https://api.github.com/repos/Rana96-run/nexa-performance-agent/contents/docs/index.html",
-                "authentication": "genericCredentialType",
-                "genericAuthType": "httpHeaderAuth",
                 "sendHeaders": true,
                 "headerParameters": {
                     "parameters": [
@@ -186,8 +184,6 @@
             "parameters": {
                 "method": "PUT",
                 "url": "https://api.github.com/repos/Rana96-run/nexa-performance-agent/contents/docs/index.html",
-                "authentication": "genericCredentialType",
-                "genericAuthType": "httpHeaderAuth",
                 "sendHeaders": true,
                 "headerParameters": {
                     "parameters": [
