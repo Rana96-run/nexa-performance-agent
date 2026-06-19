@@ -134,59 +134,8 @@ def collect_and_write(days: int = None, incremental: bool = False):
 # ── Ad Set level → adsets_daily ──────────────────────────────────────────────
 
 def collect_adsets_and_write(days: int = None, incremental: bool = False):
-    """Ad set grain → adsets_daily. Same token, level='adset'."""
-    _init()
-    start, end = _date_window(days, incremental)
-    now        = datetime.now(timezone.utc).isoformat()
-    rows       = []
-    accounts   = [a for a in META_AD_ACCOUNTS if a]
-    print(f"[meta] adsets {start} -> {end} | {len(accounts)} account(s)")
-
-    for account_id in accounts:
-        account    = AdAccount(account_id)
-        native_cur = _native_currency(account_id)
-        count_before = len(rows)
-        try:
-            for ins in account.get_insights(params={
-                "level": "adset",
-                "time_range": {"since": str(start), "until": str(end)},
-                "time_increment": 1,
-                "fields": [
-                    "campaign_id", "campaign_name",
-                    "adset_id", "adset_name",
-                    "spend", "actions", "impressions", "clicks", "ctr", "frequency",
-                ],
-                "limit": 500,
-            }):
-                spend_native = float(ins.get("spend", 0) or 0)
-                spend        = to_usd(spend_native, native_cur)
-                conversions  = _leads_from_actions(ins.get("actions"))
-                rows.append({
-                    "date":          ins.get("date_start"),
-                    "channel":       "meta",
-                    "account_id":    account_id,
-                    "campaign_id":   str(ins.get("campaign_id")),
-                    "campaign_name": ins.get("campaign_name"),
-                    "adset_id":      str(ins.get("adset_id")),
-                    "adset_name":    ins.get("adset_name"),
-                    "utm_audience":  ins.get("adset_name"),  # Meta {{adset.name}} resolves to this
-                    "status":        None,
-                    "spend":         round(spend, 2),
-                    "impressions":   int(ins.get("impressions", 0) or 0),
-                    "clicks":        int(ins.get("clicks", 0) or 0),
-                    "ctr":           round(float(ins.get("ctr", 0) or 0), 4),
-                    "leads":         conversions,
-                    "conversions":   float(conversions),
-                    "frequency":     round(float(ins.get("frequency", 0) or 0), 4),
-                    "currency":      "USD",
-                    "updated_at":    now,
-                })
-        except Exception as e:
-            print(f"[meta]   adsets account {account_id} error: {e}")
-        print(f"[meta]   adsets account {account_id}: {len(rows) - count_before} rows")
-
-    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
-    return 0  # was: upsert_rows("adsets_daily", rows, ...)
+    """Ad set grain → adsets_daily. adsets_daily DROPPED 2026-06-16 — no-op."""
+    return 0
 
 
 # ── Creative type lookup ──────────────────────────────────────────────────────

@@ -252,69 +252,8 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
 # ── Ad Group level → adsets_daily ────────────────────────────────────────────
 
 def collect_adgroups_and_write(days: int = None, incremental: bool = False) -> int:
-    """Ad group grain → adsets_daily. Same token, AUCTION_ADGROUP level."""
-    if not ACCESS_TOKEN:
-        print("[tiktok-bq] TIKTOK_ACCESS_TOKEN not set — skipping adgroups")
-        return 0
-
-    end = datetime.now(_RIYADH).date() - timedelta(days=1)
-    if incremental:
-        start = end - timedelta(days=29)   # 30-day window covers all platform restatement windows
-    elif days:
-        start = end - timedelta(days=days - 1)
-    else:
-        start = date(2025, 1, 1)   # full history from campaign launch
-
-    now  = datetime.now(timezone.utc).isoformat()
-    rows = []
-
-    for account_id in _ad_accounts():
-        native_cur = _advertiser_currency(account_id)
-        # Metadata lookup: adgroup_id -> {campaign_id, name}
-        adgroup_meta = _list_adgroups(account_id)
-        print(f"[tiktok-bq] adgroups account {account_id}: {len(adgroup_meta)} adgroups in metadata")
-        # dimensions must NOT include campaign_id at AUCTION_ADGROUP level
-        report_rows = _get_report(
-            account_id, start, end,
-            data_level="AUCTION_ADGROUP",
-            dimensions=["adgroup_id", "stat_time_day"],
-            metrics=["spend", "impressions", "clicks", "ctr",
-                     "conversion", "adgroup_name"],
-        )
-        for row in report_rows:
-            dims    = row.get("dimensions", {})
-            metrics = row.get("metrics", {})
-            day     = (dims.get("stat_time_day") or "")[:10]
-            if not day:
-                continue
-            adgroup_id   = str(dims.get("adgroup_id", ""))
-            meta         = adgroup_meta.get(adgroup_id, {})
-            spend_native = float(metrics.get("spend", 0) or 0)
-            spend        = to_usd(spend_native, native_cur)
-            _adset_name = metrics.get("adgroup_name") or meta.get("name")
-            rows.append({
-                "date":          day,
-                "channel":       "tiktok",
-                "account_id":    account_id,
-                "campaign_id":   meta.get("campaign_id", ""),
-                "campaign_name": None,   # not available at adgroup grain
-                "adset_id":      adgroup_id,
-                "adset_name":    _adset_name,
-                "utm_audience":  _adset_name,  # TikTok ad_group name = utm_audience
-                "status":        None,
-                "spend":         round(spend, 2),
-                "impressions":   int(metrics.get("impressions", 0) or 0),
-                "clicks":        int(metrics.get("clicks", 0) or 0),
-                "ctr":           float(metrics.get("ctr", 0) or 0),
-                "leads":         int(metrics.get("conversion", 0) or 0),
-                "conversions":   float(metrics.get("conversion", 0) or 0),
-                "currency":      "USD",
-                "updated_at":    now,
-            })
-        print(f"[tiktok-bq] adgroups account {account_id}: {len(report_rows)} stat rows")
-
-    # adsets_daily DROPPED 2026-06-16 — only consumer migrated to wide_ads.
-    return 0  # was: upsert_rows("adsets_daily", rows, ...)
+    """Ad group grain → adsets_daily. adsets_daily DROPPED 2026-06-16 — no-op."""
+    return 0
 
 
 # ── Ad level → ads_daily ──────────────────────────────────────────────────────
