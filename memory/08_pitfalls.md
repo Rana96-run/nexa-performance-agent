@@ -183,6 +183,14 @@ ORDER BY cpql DESC
 
 **PATCH returns 405 on `/api/v1/workflows/{id}`** — the public API only supports PUT. The internal browser API (`/rest/`) uses PATCH; they are separate paths with different methods. Always use PUT when updating workflows via the public API with `X-N8N-API-KEY`.
 
+**PUT body: only these fields are accepted** (confirmed 2026-06-19 — all others cause HTTP 400 "additional properties" or "read-only"):
+```python
+ALLOWED_FIELDS = {"name", "nodes", "connections", "settings", "staticData"}
+```
+Strip: `createdAt`, `updatedAt`, `id`, `description`, `active`, `isArchived`, `meta`, `nodeGroups`, `pinData`, `versionId`, `activeVersionId`, `versionCounter`, `triggerCount`, `sourceWorkflowId`, `shared`, `tags`, `activeVersion`.
+
+**There is no run/execute endpoint** on the public API for schedule-triggered workflows — trigger via the n8n UI "Execute Workflow" button instead.
+
 ## [2026-06-17] n8n googleBigQuery node: exact format required or credential validation fails
 
 The `n8n-nodes-base.googleBigQuery` node REQUIRES:
