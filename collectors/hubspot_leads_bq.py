@@ -614,9 +614,10 @@ def _delete_leads_by_ids(client, ids: list[str]) -> None:
 
 def _rebuild_daily_buckets(client, affected_dates: set) -> int:
     """
-    Re-aggregate hubspot_leads_individual for the given set of createdate dates,
-    then upsert into hubspot_leads_module_daily.
-    Called after every cursor sync so the aggregated table stays current.
+    After the wide-table redesign (2026-06-15), hubspot_leads_module_daily is a
+    VIEW over hubspot_leads_individual — no physical table to write to.
+    This function now simply counts the individual rows for the affected dates
+    and returns that count. The VIEW auto-aggregates; no upsert is needed.
     """
     if not affected_dates:
         return 0
@@ -627,112 +628,11 @@ def _rebuild_daily_buckets(client, affected_dates: set) -> int:
     date_list = sorted(str(d) for d in affected_dates)
 
     params = [_bq.ArrayQueryParameter("dates", "DATE", date_list)]
-    rows_iter = client.query(
-        f"SELECT * FROM `{table_id}` WHERE hs_createdate IN UNNEST(@dates)",
+    result = client.query(
+        f"SELECT COUNT(*) AS n FROM `{table_id}` WHERE hs_createdate IN UNNEST(@dates)",
         job_config=_bq.QueryJobConfig(query_parameters=params)
     ).result()
-
-    buckets = defaultdict(lambda: {
-        "total": 0, "qualified": 0, "disqualified": 0, "open": 0,
-        "disq_reasons": defaultdict(int), "disq_sub_reasons": defaultdict(int),
-    })
-    # Capture first-seen platform IDs per bucket — IDs are stable even when
-    # campaign/adset/ad names change (TikTok, Meta).  Within a bucket, all
-    # leads share the same utm name so they should share the same platform ID.
-    bucket_ids: dict = {}
-    for row in rows_iter:
-        key = (
-            str(row.hs_createdate),
-            row.qoyod_source or "Other",
-            row.pipeline or "Unknown",
-            row.stage or "Unknown",
-            row.lead_utm_campaign or "__none__",
-            row.lead_utm_audience,
-            row.lead_utm_content,
-            row.lead_utm_source,
-            row.lead_utm_medium,
-            row.lead_utm_term,
-        )
-        b = buckets[key]
-        b["total"] += 1
-        if row.is_qualified:
-            b["qualified"] += 1
-        elif row.is_disqualified:
-            b["disqualified"] += 1
-            if row.top_disq_reason:
-                b["disq_reasons"][row.top_disq_reason] += 1
-            if row.top_disq_sub_reason:
-                b["disq_sub_reasons"][row.top_disq_sub_reason] += 1
-        if row.is_open:
-            b["open"] += 1
-        # First-seen ID wins (consistent within a name bucket)
-        if key not in bucket_ids:
-            bucket_ids[key] = {
-                "campaign_id_sync": getattr(row, "lead_campaign_id_sync", None),
-                "adgroup_id_sync":  getattr(row, "lead_adgroup_id_sync",  None),
-                "ad_id_sync":       getattr(row, "lead_ad_id_sync",       None),
-                "gclid":            getattr(row, "lead_google_ad_click_id", None),
-                "cta_source":       getattr(row, "lead_cta_source_sync",   None),
-                "cta_source_url":   getattr(row, "lead_cta_source_url",    None),
-            }
-        else:
-            ids = bucket_ids[key]
-            if not ids["campaign_id_sync"]:
-                ids["campaign_id_sync"] = getattr(row, "lead_campaign_id_sync", None)
-            if not ids["adgroup_id_sync"]:
-                ids["adgroup_id_sync"]  = getattr(row, "lead_adgroup_id_sync",  None)
-            if not ids["ad_id_sync"]:
-                ids["ad_id_sync"]       = getattr(row, "lead_ad_id_sync",       None)
-            if not ids.get("gclid"):
-                ids["gclid"]            = getattr(row, "lead_google_ad_click_id", None)
-            if not ids.get("cta_source"):
-                ids["cta_source"]       = getattr(row, "lead_cta_source_sync", None)
-            if not ids.get("cta_source_url"):
-                ids["cta_source_url"]   = getattr(row, "lead_cta_source_url",  None)
-
-    now = datetime.now(timezone.utc).isoformat()
-    daily_rows = []
-    for key, b in buckets.items():
-        d, src, pipeline, stage, utm_c, utm_a, utm_co, utm_s, utm_m, utm_t = key
-        top_reason = max(b["disq_reasons"], key=b["disq_reasons"].get) if b["disq_reasons"] else None
-        top_sub    = max(b["disq_sub_reasons"], key=b["disq_sub_reasons"].get) if b["disq_sub_reasons"] else None
-        ids = bucket_ids.get(key, {})
-        daily_rows.append({
-            "date":                d,
-            "qoyod_source":        src,
-            "pipeline":            pipeline,
-            "stage":               stage,
-            "lead_utm_campaign":   utm_c,
-            "lead_utm_audience":   utm_a,
-            "lead_utm_content":    utm_co,
-            "lead_utm_source":     utm_s,
-            "lead_utm_medium":     utm_m,
-            "lead_utm_term":       utm_t,
-            "lead_campaign_id_sync":  ids.get("campaign_id_sync"),
-            "lead_adgroup_id_sync":   ids.get("adgroup_id_sync"),
-            "lead_ad_id_sync":        ids.get("ad_id_sync"),
-            "lead_google_ad_click_id": ids.get("gclid"),
-            "lead_cta_source_sync":   ids.get("cta_source"),
-            "lead_cta_source_url":    ids.get("cta_source_url"),
-            "leads_total":         b["total"],
-            "leads_qualified":     b["qualified"],
-            "leads_disqualified":  b["disqualified"],
-            "leads_open":          b["open"],
-            "top_disq_reason":     top_reason,
-            "top_disq_sub_reason": top_sub,
-            "updated_at":          now,
-        })
-
-    _ensure_table_exists()
-    # key_fields=["date"] only — _rebuild_daily_buckets owns the entire date
-    # partition (it rebuilds from scratch). Using a broader key (e.g. +qoyod_source)
-    # causes silent stale-row accumulation: when a lead's source changes between
-    # builds, the old (date, old_source) rows are NOT deleted because the new build
-    # no longer includes that source value. Full-date DELETE is the safe default
-    # for any table that is completely rebuilt per date. (Fixed 2026-05-11 after
-    # 60 156-row corruption was found — 5x duplication from accumulated ghost rows.)
-    return upsert_rows("hubspot_leads_module_daily", daily_rows,
-                       key_fields=["date"])
+    return next(iter(result)).n
 
 
 def sync_cursor_and_write(incremental: bool = False, days: int = None) -> int:

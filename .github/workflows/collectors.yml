@@ -150,7 +150,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'meta' }}
         continue-on-error: true
-        run: python collectors/meta_bq.py all
+        run: python collectors/meta_bq.py all 30
 
       - name: Collector — Snapchat
         id: snapchat

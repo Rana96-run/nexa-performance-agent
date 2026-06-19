@@ -77,7 +77,7 @@ def _bq_query(sql: str) -> list[dict[str, Any]]:
             info = json.loads(creds_json)
             creds = service_account.Credentials.from_service_account_info(
                 info,
-                scopes=["https://www.googleapis.com/auth/bigquery.readonly"],
+                scopes=["https://www.googleapis.com/auth/bigquery"],
             )
             client = bigquery.Client(project=BQ_PROJECT, credentials=creds)
         elif creds_path:
