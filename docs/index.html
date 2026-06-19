@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="3600">
-<title>Nexa Performance Agent</title>
+<title>Nexa Performance Agent — Activity Dashboard</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -14,173 +14,104 @@
   --orange:#f0883e;--warm-orange:#ffa657;--green:#3fb950;--lgreen:#7ee787;
   --grey:#8b949e;--red:#f85149;--accent:#00ff88;
 }
-body{background:var(--bg);color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  font-size:14px;line-height:1.5;min-height:100vh}
-header{display:flex;align-items:center;gap:10px;padding:16px 24px;
-  border-bottom:1px solid var(--border);background:#111;
-  position:sticky;top:0;z-index:100}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+a{color:inherit;text-decoration:none}
+a:hover{text-decoration:underline}
+header{display:flex;align-items:center;gap:10px;padding:16px 24px;border-bottom:1px solid var(--border);background:#111;position:sticky;top:0;z-index:100}
 header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 6px var(--accent);flex-shrink:0}
-.htag{margin-left:auto;font-size:11px;color:var(--muted);background:#222;
-  padding:3px 8px;border-radius:4px;border:1px solid var(--border)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0}
+.htag{margin-left:auto;font-size:11px;color:var(--muted);background:#222;padding:3px 8px;border-radius:4px;border:1px solid var(--border)}
 main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
-.sec{font-size:11px;font-weight:600;text-transform:uppercase;
-  letter-spacing:1.2px;color:var(--muted);margin:32px 0 14px;
-  display:flex;align-items:center;gap:8px}
+.toggle-all{font-size:11px;color:var(--orange);cursor:pointer;background:none;border:1px solid var(--orange);padding:4px 10px;border-radius:4px;margin-left:auto}
+.sec{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:32px 0 0;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
 .sec::after{content:"";flex:1;height:1px;background:var(--border)}
+.sec .sec-arrow{font-size:9px;transition:transform 0.15s}
+.section-body{overflow:hidden;transition:max-height 0.25s ease;margin-bottom:4px}
+.section-body.collapsed{max-height:0!important}
 /* Health bar */
-.hbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px}
-.hchip{display:flex;align-items:center;gap:7px;background:var(--card);
-  border:1px solid var(--border);border-radius:20px;padding:6px 14px;
-  font-size:12px}
+.hbar{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 4px}
+.hchip{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px}
 .hdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .hlabel{color:var(--dim)}
 .hval{font-weight:600}
-/* Connector cards */
-.conn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+/* Connector & hygiene cards */
+.conn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0 4px}
 @media(max-width:900px){.conn-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.conn-grid{grid-template-columns:1fr}}
-.conn-card{background:var(--card);border:1px solid var(--border);
-  border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:5px}
+.conn-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:5px}
 .conn-top{display:flex;align-items:center;justify-content:space-between}
 .conn-name{font-size:13px;font-weight:600}
 .conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .conn-ts{font-size:11px;color:var(--muted)}
 .conn-status{font-size:11px;font-weight:600}
 /* Heatmap */
-.hm-wrap{overflow-x:auto}
+.hm-wrap{overflow-x:auto;margin:14px 0 4px}
 .hm-table{border-collapse:collapse;font-size:10px}
 .hm-h{color:var(--muted);padding:2px 3px;text-align:center;font-weight:400;width:22px}
-.hm-row{color:var(--dim);padding:2px 8px 2px 0;text-align:right;
-  font-size:11px;white-space:nowrap;font-weight:500}
+.hm-row{color:var(--dim);padding:2px 8px 2px 0;text-align:right;font-size:11px;white-space:nowrap;font-weight:500}
 .hm-cell{width:22px;height:18px;border-radius:3px;cursor:default}
 .hm-legend{display:flex;align-items:center;gap:8px;margin-top:8px}
-.hm-grad{width:80px;height:10px;border-radius:4px;
-  background:linear-gradient(to right,var(--border),var(--accent))}
+.hm-grad{width:80px;height:10px;border-radius:4px;background:linear-gradient(to right,var(--border),var(--accent))}
 /* Activity feed */
-.feed-row{display:flex;align-items:center;gap:10px;padding:8px 12px;
-  border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap}
+.feed-wrap{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:14px 0 4px}
+.feed-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap}
 .feed-row:last-child{border-bottom:none}
 .feed-ts{color:var(--muted);white-space:nowrap;min-width:110px}
 .feed-role{color:var(--blue);font-weight:600;min-width:120px}
-.feed-ch{background:#1f1f1f;color:var(--dim);border:1px solid var(--border);
-  border-radius:4px;padding:1px 6px;font-size:10px}
+.feed-ch{background:#1f1f1f;color:var(--dim);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px}
 .feed-action{flex:1;color:var(--text)}
-.feed-badge{font-size:10px;font-weight:700;text-transform:uppercase;
-  padding:2px 7px;border-radius:10px;border:1px solid;white-space:nowrap}
-.feed-empty{color:var(--muted);font-size:12px;padding:16px;
-  background:var(--card);border:1px solid var(--border);border-radius:8px}
-.feed-wrap{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.feed-badge{font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:10px;border:1px solid;white-space:nowrap}
+.feed-empty{color:var(--muted);font-size:12px;padding:16px}
+/* Open Tasks table */
+.tasks-wrap{margin:14px 0 4px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,0.02)}
 /* Cadence */
-.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0 4px}
 @media(max-width:700px){.cgrid{grid-template-columns:1fr}}
-.ccard{background:var(--card);border:1px solid var(--border);border-radius:8px;
-  padding:14px 16px;display:flex;justify-content:space-between;
-  align-items:flex-start;gap:12px}
+.ccard{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .cname{font-size:13px;font-weight:600}
 .cdesc{font-size:11px;color:var(--muted);margin-top:3px}
-.csched{font-size:11px;color:var(--muted);background:#111;
-  padding:3px 8px;border-radius:4px;font-family:monospace;white-space:nowrap;flex-shrink:0}
-/* Agent panels */
-.agent-panel{border-left:4px solid var(--panel-color,#444);
-  background:var(--panel);border-radius:8px;margin-bottom:18px;overflow:hidden}
-.agent-header{display:flex;align-items:center;gap:10px;
-  padding:14px 18px;border-bottom:1px solid var(--border);
-  background:color-mix(in srgb,var(--panel-color,#444) 8%,var(--panel))}
-.agent-icon{font-size:18px}
-.agent-name{font-size:15px;font-weight:700;color:var(--panel-color,#e6e6e6)}
-.agent-desc{font-size:12px;color:var(--dim);flex:1}
-.dept-chip{font-size:10px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.8px;padding:2px 8px;border-radius:10px;
-  border:1px solid currentColor;color:var(--panel-color,#888);opacity:.8;white-space:nowrap}
-.agent-body{padding:16px 18px}
-.orch-card{background:color-mix(in srgb,#f0883e 6%,#111);
-  border:1px solid color-mix(in srgb,#f0883e 20%,var(--border));
-  border-radius:8px;padding:16px 20px}
-.orch-title{font-size:13px;font-weight:700;color:#f0883e;margin-bottom:8px}
-.orch-loop{list-style:none;counter-reset:loop;display:flex;flex-direction:column;gap:5px}
-.orch-loop li{counter-increment:loop;display:flex;align-items:flex-start;gap:8px;
-  font-size:12px;color:var(--dim)}
-.orch-loop li::before{content:counter(loop);min-width:18px;height:18px;
-  border-radius:50%;background:color-mix(in srgb,#f0883e 25%,#222);
-  color:#f0883e;font-size:10px;font-weight:700;display:flex;align-items:center;
-  justify-content:center;flex-shrink:0;margin-top:1px}
-.sub-panel{border-left:2px solid var(--sub-color,#444);
-  background:color-mix(in srgb,var(--sub-color,#444) 5%,#0f0f0f);
-  border-radius:6px;margin-bottom:14px;overflow:hidden;margin-left:24px}
-.sub-header{display:flex;align-items:center;gap:8px;
-  padding:10px 14px;border-bottom:1px solid var(--border)}
-.sub-arrow{font-size:14px;color:var(--dim);flex-shrink:0}
-.sub-name{font-size:13px;font-weight:700;color:var(--sub-color,#e6e6e6)}
-.sub-desc{font-size:11px;color:var(--muted);flex:1}
-.sub-chip{font-size:10px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.8px;padding:2px 8px;border-radius:10px;
-  border:1px solid currentColor;color:var(--sub-color,#888);opacity:.8;white-space:nowrap}
-.sub-body{padding:12px 14px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:520px){.grid{grid-template-columns:1fr}}
-.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-@media(max-width:600px){.grid-2{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--border);border-radius:7px;
-  padding:14px;display:flex;flex-direction:column;gap:8px;
-  transition:border-color .15s}
-.card:hover{border-color:#3a3a3a}
-.ctitle{font-size:13px;font-weight:600}
-.cdesc2{font-size:12px;color:var(--dim);flex:1}
-.cfoot{display:flex;align-items:center;justify-content:space-between;
-  margin-top:4px;gap:6px}
-.cnote{font-size:11px;color:var(--muted)}
-.n8n-link{color:#f0883e;font-size:11px;text-decoration:none;
-  border:1px solid #f0883e44;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.csched{font-size:11px;color:var(--muted);background:#111;padding:3px 8px;border-radius:4px;font-family:monospace;white-space:nowrap;flex-shrink:0}
+.n8n-link{color:#f0883e;font-size:11px;text-decoration:none;border:1px solid #f0883e44;padding:2px 8px;border-radius:4px;white-space:nowrap}
 .n8n-link:hover{background:#f0883e22}
-.n8n-run-btn{color:#111;background:#f0883e;font-size:12px;font-weight:700;
-  text-decoration:none;border:none;padding:5px 14px;border-radius:6px;
-  white-space:nowrap;display:inline-block;margin-top:10px}
-.n8n-run-btn:hover{background:#ffa657}
-.at-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media(max-width:900px){.at-grid{grid-template-columns:1fr}}
-.at-card{background:var(--card);border:1px solid var(--border);border-radius:8px;
-  padding:16px;display:flex;flex-direction:column;gap:6px}
-.at-title{font-size:13px;font-weight:700;margin-bottom:4px}
-.at-row{font-size:11px;color:var(--dim);padding:4px 0;
-  border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;
-  align-items:center}
-.at-row:last-child{border-bottom:none}
-.at-role{color:var(--blue);font-weight:600;min-width:90px}
-.at-status-ok{color:var(--green);font-weight:600}
-.at-status-fail{color:#e05c5c;font-weight:600}
-.at-status-pend{color:var(--orange);font-weight:600}
-.at-overdue{color:#e05c5c;font-weight:600}
-.at-empty{color:var(--muted);font-size:12px;font-style:italic}
+/* Team roles */
+.role-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin:14px 0 4px}
+.role-card{background:var(--card);border:1px solid var(--border);border-left-width:3px;border-radius:8px;padding:14px}
+/* Approval footer */
+.approval-footer{margin-top:24px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:13px}
 </style>
 </head>
 <body>
+
 <header>
   <div class="dot"></div>
   <h1>Nexa Performance Agent</h1>
-  <span class="htag">n8n Cloud &bull; GitHub Pages</span>
+  <span class="htag">n8n Cloud · GitHub Pages · 19 Jun 2026 21:00 AST</span>
+  <button id="toggle-all" class="toggle-all">Collapse All</button>
 </header>
+
 <main>
 
-<!-- SYSTEM HEALTH BAR -->
-<div class="sec">System Health</div>
-<div class="hbar">
-  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">BQ Activity</span><span class="hval" style="color:var(--green)">5h ago</span></div>
+<!-- SYSTEM HEALTH -->
+<div class="sec" id="sec-h-0"><span class="sec-arrow">▾</span>&nbsp;System Health</div>
+<div class="section-body" id="sec-0"><div class="hbar">
+  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">BQ Activity</span><span class="hval" style="color:var(--green)">6h ago</span></div>
   <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">n8n Master</span><span class="hval" style="color:var(--muted)">Daily 08:00 AST</span></div>
   <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">GitHub Actions</span><span class="hval" style="color:var(--muted)">Every 6h</span></div>
   <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">GitHub Pages</span><span class="hval" style="color:var(--green)">Serving</span></div>
-  <div class="hchip"><span class="hlabel">&#8987; Next run in</span><span class="hval" style="color:var(--muted)">11h 59m</span></div>
-  <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/jOnJxdpdaO3Vbi0B" target="_blank" class="n8n-link">Data Collection &rarr;</a></div>
-  <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/5Acqsbxsk0XQ5k9e" target="_blank" class="n8n-link">Approval Listener &rarr;</a></div>
-</div>
+  <div class="hchip"><span class="hlabel">⏳ Next run in</span><span class="hval" style="color:var(--muted)">10h 59m</span></div>
+  <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/jOnJxdpdaO3Vbi0B" target="_blank" class="n8n-link">Data Collection →</a></div>
+  <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/5Acqsbxsk0XQ5k9e" target="_blank" class="n8n-link">Approval Listener →</a></div>
+</div></div>
 
-<!-- CONNECTOR HEALTH CARDS -->
-<div class="sec">Connector Health</div>
-<div class="conn-grid">
-<div class="conn-card">
+<!-- CONNECTOR HEALTH -->
+<div class="sec" id="sec-h-1"><span class="sec-arrow">▾</span>&nbsp;Connector Health</div>
+<div class="section-body" id="sec-1">
+  <div class="conn-grid"><div class="conn-card">
   <div class="conn-top"><span class="conn-name">Google Ads</span><span class="conn-dot" style="background:var(--orange);box-shadow:0 0 4px var(--orange)"></span></div>
   <div class="conn-ts">2026-06-18</div>
   <div class="conn-status" style="color:var(--orange)">1d stale</div>
@@ -219,383 +150,181 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   <div class="conn-top"><span class="conn-name">HubSpot Deals</span><span class="conn-dot" style="background:#e05c5c;box-shadow:0 0 4px #e05c5c"></span></div>
   <div class="conn-ts">2026-06-17</div>
   <div class="conn-status" style="color:#e05c5c">2d stale</div>
-</div>
+</div></div>
 </div>
 
-<!-- ACTIVITY HEAT MAP -->
-<div class="sec">Activity Heat Map &mdash; Last 7 Days</div>
-<div class="hm-wrap"><table class="hm-table"><thead><tr><th></th><th class="hm-h">00</th><th class="hm-h">01</th><th class="hm-h">02</th><th class="hm-h">03</th><th class="hm-h">04</th><th class="hm-h">05</th><th class="hm-h">06</th><th class="hm-h">07</th><th class="hm-h">08</th><th class="hm-h">09</th><th class="hm-h">10</th><th class="hm-h">11</th><th class="hm-h">12</th><th class="hm-h">13</th><th class="hm-h">14</th><th class="hm-h">15</th><th class="hm-h">16</th><th class="hm-h">17</th><th class="hm-h">18</th><th class="hm-h">19</th><th class="hm-h">20</th><th class="hm-h">21</th><th class="hm-h">22</th><th class="hm-h">23</th></tr></thead><tbody><tr><th class="hm-row">Mon</th><td class="hm-cell" style="background:rgba(0,255,136,0.18)" title="45 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="37 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="43 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.11)" title="28 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.05)" title="13 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Tue</th><td class="hm-cell" style="background:rgba(0,255,136,0.46)" title="115 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,1.00)" title="248 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="4 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.24)" title="59 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.44)" title="110 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.38)" title="93 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td></tr><tr><th class="hm-row">Wed</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.22)" title="54 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td></tr><tr><th class="hm-row">Thu</th><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td></tr><tr><th class="hm-row">Fri</th><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td></tr><tr><th class="hm-row">Sat</th><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="50 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="41 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="16 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Sun</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.31)" title="76 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="38 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr></tbody></table>
-<div class="hm-legend"><span style="color:var(--muted);font-size:11px">Less</span><div class="hm-grad"></div><span style="color:var(--muted);font-size:11px">More</span><span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh &middot; last 7 days</span></div></div>
+<!-- DATA HYGIENE -->
+<div class="sec" id="sec-h-2"><span class="sec-arrow">▾</span>&nbsp;Data Hygiene</div>
+<div class="section-body" id="sec-2">
+  <div class="conn-grid"><div class="conn-card">
+  <div class="conn-top"><span class="conn-name">agent_activity_log</span></div>
+  <div class="conn-ts">22,012 rows</div>
+  <div class="conn-status"><span style="color:#22c55e">Fresh 🟢</span></div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">asana_task_status</span></div>
+  <div class="conn-ts">144,687 rows</div>
+  <div class="conn-status"><span style="color:#22c55e">Fresh 🟢</span></div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">campaigns_daily</span></div>
+  <div class="conn-ts">46,392 rows</div>
+  <div class="conn-status"><span style="color:#f59e0b">1d stale 🟡</span></div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">hubspot_deals_daily</span></div>
+  <div class="conn-ts">44,313 rows</div>
+  <div class="conn-status"><span style="color:#ef4444">2d stale 🔴</span></div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">hubspot_leads_module_daily</span></div>
+  <div class="conn-ts">15,691 rows</div>
+  <div class="conn-status"><span style="color:#22c55e">Fresh 🟢</span></div>
+</div></div>
+</div>
+
+<!-- ACTIVITY HEATMAP -->
+<div class="sec" id="sec-h-3"><span class="sec-arrow">▾</span>&nbsp;Activity Heat Map — Last 7 Days</div>
+<div class="section-body" id="sec-3"><div class="hm-wrap"><table class="hm-table"><thead><tr><th></th><th class="hm-h">00</th><th class="hm-h">01</th><th class="hm-h">02</th><th class="hm-h">03</th><th class="hm-h">04</th><th class="hm-h">05</th><th class="hm-h">06</th><th class="hm-h">07</th><th class="hm-h">08</th><th class="hm-h">09</th><th class="hm-h">10</th><th class="hm-h">11</th><th class="hm-h">12</th><th class="hm-h">13</th><th class="hm-h">14</th><th class="hm-h">15</th><th class="hm-h">16</th><th class="hm-h">17</th><th class="hm-h">18</th><th class="hm-h">19</th><th class="hm-h">20</th><th class="hm-h">21</th><th class="hm-h">22</th><th class="hm-h">23</th></tr></thead><tbody><tr><th class="hm-row">Mon</th><td class="hm-cell" style="background:rgba(0,255,136,0.18)" title="45 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="37 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="43 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.11)" title="28 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.05)" title="13 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Tue</th><td class="hm-cell" style="background:rgba(0,255,136,0.46)" title="115 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,1.00)" title="248 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="4 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.24)" title="59 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.44)" title="110 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.38)" title="93 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td></tr><tr><th class="hm-row">Wed</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.22)" title="54 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td></tr><tr><th class="hm-row">Thu</th><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td></tr><tr><th class="hm-row">Fri</th><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td></tr><tr><th class="hm-row">Sat</th><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="50 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="41 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="16 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Sun</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.31)" title="76 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="38 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr></tbody></table>
+<div class="hm-legend"><span style="color:var(--muted);font-size:11px">Less</span><div class="hm-grad"></div><span style="color:var(--muted);font-size:11px">More</span><span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh · last 7 days</span></div></div></div>
 
 <!-- RECENT AGENT ACTIVITY -->
-<div class="sec">Recent Agent Activity</div>
-<div class="feed-wrap">
-<div class="feed-row"><span class="feed-ts">19 Jun 11:16 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">18 Jun 20:37 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">18 Jun 20:27 UTC</span><span class="feed-role">task_creator</span><span class="feed-action">asana_task_created</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 21:07 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 20:42 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div><div class="feed-row"><span class="feed-ts">17 Jun 14:35 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 14:23 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div><div class="feed-row"><span class="feed-ts">17 Jun 08:54 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:24 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:05 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">databox_push</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:04 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">slack_digest_posted</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:04 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">scheduler_daily</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:03 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">hubspot_deals</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:02 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">linkedin</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:02 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">google</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:00 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:37 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:37 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:36 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:36 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div>
+<div class="sec" id="sec-h-4"><span class="sec-arrow">▾</span>&nbsp;Recent Agent Activity</div>
+<div class="section-body" id="sec-4">
+  <div class="feed-wrap"><div class="feed-row"><span class="feed-ts">19 Jun 11:16 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">18 Jun 20:37 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">18 Jun 20:27 UTC</span><span class="feed-role">task_creator</span><span class="feed-action">asana_task_created</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 21:07 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 20:42 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div><div class="feed-row"><span class="feed-ts">17 Jun 14:35 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 14:23 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div><div class="feed-row"><span class="feed-ts">17 Jun 08:54 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:24 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:05 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">databox_push</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:04 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">slack_digest_posted</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:04 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">scheduler_daily</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:03 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">hubspot_deals</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:02 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">linkedin</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:02 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">google</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:00 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:37 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:37 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:36 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:36 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div></div>
+</div>
+
+<!-- OPEN TASKS -->
+<div class="sec" id="sec-h-5"><span class="sec-arrow">▾</span>&nbsp;Open Asana Tasks</div>
+<div class="section-body" id="sec-5">
+  <div class="tasks-wrap">
+    <table>
+      <thead><tr><th>Title</th><th>Assignee</th><th>Due</th><th>Project</th></tr></thead>
+      <tbody><tr><td><a href="https://app.asana.com/0/0/1214471578416703" target="_blank" style="color:var(--orange);text-decoration:none">Post-Restructure Monitoring</a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-02-26</span></td><td>google_ads</td></tr><tr><td><a href="https://app.asana.com/0/0/1213968030724884" target="_blank" style="color:var(--orange);text-decoration:none">Launch Microsoft ads Campaign </a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-12</span></td><td>q_flavours</td></tr><tr><td><a href="https://app.asana.com/0/0/1213968030750219" target="_blank" style="color:var(--orange);text-decoration:none">Launch Snapchat ads Campaign </a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-12</span></td><td>q_flavours</td></tr><tr><td><a href="https://app.asana.com/0/0/1213968030750214" target="_blank" style="color:var(--orange);text-decoration:none">Launch Google ads Campaign </a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-12</span></td><td>q_flavours</td></tr><tr><td><a href="https://app.asana.com/0/0/1213968030724883" target="_blank" style="color:var(--orange);text-decoration:none">Launch Meta ads Campaign </a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-12</span></td><td>q_flavours</td></tr><tr><td><a href="https://app.asana.com/0/0/1214365325186012" target="_blank" style="color:var(--orange);text-decoration:none">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: Search_AR_Qflavours_Feature (acc1, PAUSED)</a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-29</span></td><td>optimization</td></tr><tr><td><a href="https://app.asana.com/0/0/1214365325193402" target="_blank" style="color:var(--orange);text-decoration:none">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: ImpressionShare_Search_AR_Invoice (acc2, ENABLED)</a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-29</span></td><td>optimization</td></tr><tr><td><a href="https://app.asana.com/0/0/1214365325016143" target="_blank" style="color:var(--orange);text-decoration:none">[Recommendation | Fix] UTM Attribution Gap — SNAPCHAT: Snapchat_LeadGen_Invoice_Prospecting_Broad_Instantform</a></td><td>Donia Mohamed</td><td><span style="color:#ef4444">2026-04-29</span></td><td>snapchat</td></tr><tr><td><a href="https://app.asana.com/0/0/1214365325213892" target="_blank" style="color:var(--orange);text-decoration:none">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: WebsiteTraffic_Search_AR_Invoice</a></td><td>Rana khalid</td><td><span style="color:#ef4444">2026-04-29</span></td><td>google_ads</td></tr><tr><td><a href="https://app.asana.com/0/0/1214365325246435" target="_blank" style="color:var(--orange);text-decoration:none">[Recommendation | Fix] UTM Attribution Gap — META: Meta_LeadGen_E-Invoice_Phase2_Retargeting_Instantform</a></td><td>Donia Mohamed</td><td><span style="color:#ef4444">2026-04-29</span></td><td>meta</td></tr></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- CADENCE FLOWS -->
-<div class="sec">Cadence Flows</div>
-<div class="cgrid">
-  <div class="ccard">
-    <div>
-      <div class="cname">Daily Master</div>
-      <div class="cdesc">Full daily analysis: spend, leads, CPQL, anomaly detection, Slack summary, pause/scale candidates</div>
-      <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a></div>
+<div class="sec" id="sec-h-6"><span class="sec-arrow">▾</span>&nbsp;Cadence Flows</div>
+<div class="section-body" id="sec-6">
+  <div class="cgrid">
+    <div class="ccard">
+      <div>
+        <div class="cname">Daily Master</div>
+        <div class="cdesc">Full daily analysis: spend, leads, CPQL, anomaly detection, Slack summary, pause/scale candidates</div>
+        <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-link">Open Daily in n8n →</a></div>
+      </div>
+      <div class="csched">05:00 UTC daily</div>
     </div>
-    <div class="csched">05:00 UTC daily</div>
-  </div>
-  <div class="ccard">
-    <div>
-      <div class="cname">Weekly Review</div>
-      <div class="cdesc">7-day vs prior-7 period comparison, keyword autofix, channel flags, weekly Slack digest</div>
-      <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/iNSdpXH7Rc9Lb8h8" target="_blank" class="n8n-link">Open Weekly in n8n &rarr;</a></div>
+    <div class="ccard">
+      <div>
+        <div class="cname">Weekly Review</div>
+        <div class="cdesc">7-day vs prior-7 period comparison, keyword autofix, channel flags, weekly Slack digest</div>
+        <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/iNSdpXH7Rc9Lb8h8" target="_blank" class="n8n-link">Open Weekly in n8n →</a></div>
+      </div>
+      <div class="csched">Sun 05:00 UTC</div>
     </div>
-    <div class="csched">Sun 05:00 UTC</div>
-  </div>
-  <div class="ccard">
-    <div>
-      <div class="cname">Monthly Review</div>
-      <div class="cdesc">MoM review, OKR tracking, budget reconciliation, 30-day forecast</div>
-      <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/0Zh45UoTtjjhRn8U" target="_blank" class="n8n-link">Open Monthly in n8n &rarr;</a></div>
-    </div>
-    <div class="csched">1st 05:00 UTC</div>
-  </div>
-</div>
-
-<!-- ACTIONS & TASKS -->
-<div class="sec">Actions &amp; Tasks</div>
-<div class="at-grid">
-<div class="at-card"><div class="at-title">Recent Actions</div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">5h ago</span></div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">20h ago</span></div><div class="at-row"><span class="at-role">task_creator</span><span style="flex:1">asana_task_created</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">20h ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-fail">failed</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">project_coordinator</span><span style="flex:1">slack_audit_complete</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">health_monitor</span><span style="flex:1">connector_escalated &middot; databox_push</span><span class="at-status-fail">failed</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div></div>
-<div class="at-card"><div class="at-title">Open Asana Tasks</div><div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div><div class="at-row"><span style="flex:1">Launch Microsoft ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">Launch Snapchat ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">Launch Google ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">Launch Meta ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: Search_AR_Qflavours_Feature (acc1, PAUSED) &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: ImpressionShare_Search_AR_Invoice (acc2, ENABLED) &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — SNAPCHAT: Snapchat_LeadGen_Invoice_Prospecting_Broad_Instantform &middot; Donia Mohamed <span style="color:var(--muted);font-size:10px">snapchat</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: WebsiteTraffic_Search_AR_Invoice &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — META: Meta_LeadGen_E-Invoice_Phase2_Retargeting_Instantform &middot; Donia Mohamed <span style="color:var(--muted);font-size:10px">meta</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div></div>
-<div class="at-card"><div class="at-title">Pending Approvals</div>
-<div style="font-size:12px;color:var(--dim);line-height:1.7">Approvals are managed in Slack <strong>#approvals</strong>.<br>React <strong>&#10003;</strong> to execute all scale + pause items.<br>React <strong>&#10007;</strong> to skip.</div>
-<div style="margin-top:10px"><a href="#" class="n8n-link">Open #approvals in Slack &rarr;</a></div>
-<div style="margin-top:14px;font-size:11px;color:var(--muted)">optimize / junk / drilldown items are review-only &mdash; Asana tasks already created, no further execution needed.</div></div></div>
-
-<!-- AGENT TEAM -->
-<div class="sec">Agent Team</div>
-
-<!-- AI Orchestrator -->
-<div class="agent-panel" style="--panel-color:#f0883e">
-  <div class="agent-header">
-    <span class="agent-icon">&#127775;</span>
-    <span class="agent-name">AI Orchestrator</span>
-    <span class="agent-desc">Routes all work &middot; gates every &#10003; &middot; daily 8-step loop at 08:00 Riyadh</span>
-    <a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a>
-    <span class="dept-chip">MANAGER</span>
-  </div>
-  <div class="agent-body">
-    <div class="orch-card">
-      <div class="orch-title">The 8-Step Intelligence Loop (runs every daily cadence)</div>
-      <a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-run-btn">&#9654; Run Daily Now</a>
-      <ol class="orch-loop" style="margin-top:12px">
-        <li>OBSERVE &mdash; pull live data from BQ, never yesterday&#39;s recollection</li>
-        <li>COMPARE period-over-period &mdash; last 7d vs prior 7d via period_compare.py</li>
-        <li>INVESTIGATE root cause &mdash; campaign mix, audience, launch waves, silent deaths, LP routing</li>
-        <li>DECIDE with full setup &mdash; complete campaign/adset/creative/LP spec, not just &ldquo;pause this&rdquo;</li>
-        <li>EXECUTE only after &#10003; approval &mdash; #approvals + &#10003;/&#10007; flow</li>
-        <li>MONITOR post-action &mdash; re-evaluate every action at 7d and 14d</li>
-        <li>LEARN &mdash; record outcome in memory/14_learning_patterns.md</li>
-        <li>FORECAST &mdash; end-of-month projection via forecaster.py (spend, leads, SQLs, CPQL, ROAS)</li>
-      </ol>
+    <div class="ccard">
+      <div>
+        <div class="cname">Monthly Review</div>
+        <div class="cdesc">MoM review, OKR tracking, budget reconciliation, 30-day forecast</div>
+        <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/0Zh45UoTtjjhRn8U" target="_blank" class="n8n-link">Open Monthly in n8n →</a></div>
+      </div>
+      <div class="csched">1st 05:00 UTC</div>
     </div>
   </div>
 </div>
 
-<!-- Layer 2 Operations -->
-<div class="sec">Layer 2 &mdash; Operations</div>
-
-<!-- QA Auditor -->
-<div class="agent-panel" style="--panel-color:var(--red)">
-  <div class="agent-header">
-    <span class="agent-icon">&#128270;</span>
-    <span class="agent-name">QA Auditor</span>
-    <span class="agent-desc">Validates every agent output &middot; stamps QA_PASSED or QA_FAILED &middot; nothing ships without passing</span>
-    <a href="https://qoyod.app.n8n.cloud/workflow/ug3niLKrjPfO9Iz7" target="_blank" class="n8n-link">QA Gate &rarr;</a>
-    <span class="dept-chip">GATEKEEPER</span>
-  </div>
-  <div class="agent-body">
-    <div class="grid-2">
-      <div class="card">
-        <div class="ctitle">QA Validation Run</div>
-        <div class="cdesc2">Run validation checklist on recent agent outputs: data integrity, task completeness, approval gate, format, technical checks</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-    </div>
-  </div>
+<!-- TEAM ROLES -->
+<div class="sec" id="sec-h-7"><span class="sec-arrow">▾</span>&nbsp;Team Roles Quick Reference</div>
+<div class="section-body" id="sec-7">
+  <div class="role-grid"><div class="role-card" style="border-left-color:#f97316">
+  <div style="font-size:14px;font-weight:700;color:#f97316;margin-bottom:6px">AI Orchestrator</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#f97316;color:#000">MANAGER</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> run daily / weekly / monthly</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> All agents</div>
+</div><div class="role-card" style="border-left-color:#ef4444">
+  <div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:6px">QA Auditor</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#ef4444;color:#000">GATEKEEPER</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> validate this output</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> AI Orchestrator</div>
+</div><div class="role-card" style="border-left-color:#6b7280">
+  <div style="font-size:14px;font-weight:700;color:#6b7280;margin-bottom:6px">Project Coordinator</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#6b7280;color:#000">OPS</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> coordinate this campaign</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> #approvals</div>
+</div><div class="role-card" style="border-left-color:#3b82f6">
+  <div style="font-size:14px;font-weight:700;color:#3b82f6;margin-bottom:6px">Performance Lead</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#3b82f6;color:#000">PERFORMANCE</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> set KPI thresholds / budget</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> Campaign Manager + Creative Strategist</div>
+</div><div class="role-card" style="border-left-color:#0ea5e9">
+  <div style="font-size:14px;font-weight:700;color:#0ea5e9;margin-bottom:6px">Campaign Manager</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#3b82f6;color:#000">PERFORMANCE</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> audit keywords / ads</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> #approvals</div>
+</div><div class="role-card" style="border-left-color:#a855f7">
+  <div style="font-size:14px;font-weight:700;color:#a855f7;margin-bottom:6px">Creative Strategist</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#3b82f6;color:#000">PERFORMANCE</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> brief creative</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> #approvals</div>
+</div><div class="role-card" style="border-left-color:#f97316">
+  <div style="font-size:14px;font-weight:700;color:#f97316;margin-bottom:6px">CRO Specialist</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#22c55e;color:#000">CRO CHAIN</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> LP brief / qual rate</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> UI/UX Designer</div>
+</div><div class="role-card" style="border-left-color:#fb923c">
+  <div style="font-size:14px;font-weight:700;color:#fb923c;margin-bottom:6px">UI/UX Designer</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#22c55e;color:#000">CRO CHAIN</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> design LP</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> Developer</div>
+</div><div class="role-card" style="border-left-color:#86efac">
+  <div style="font-size:14px;font-weight:700;color:#86efac;margin-bottom:6px">Developer</div>
+  <div style="display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;margin-bottom:8px;background:#22c55e;color:#000">CRO CHAIN</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Trigger:</strong> build LP / wire pixels</div>
+  <div style="font-size:11px;color:var(--dim);margin-top:4px"><strong style="color:var(--text)">Outputs to:</strong> #data-health</div>
+</div></div>
 </div>
 
-<!-- Project Coordinator -->
-<div class="agent-panel" style="--panel-color:var(--grey)">
-  <div class="agent-header">
-    <span class="agent-icon">&#128295;</span>
-    <span class="agent-name">Project Coordinator</span>
-    <span class="agent-desc">Seasonal &amp; product campaign coordination &middot; all-seat Asana task creation &middot; Slack monitoring &middot; monthly campaign reports &middot; connector health &middot; GTM &middot; pixel audit</span>
-    <span class="dept-chip">OPS</span>
-  </div>
-  <div class="agent-body">
-    <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);border-bottom:1px solid color-mix(in srgb,var(--blue) 25%,var(--border));padding-bottom:6px">Campaign Coordination</div>
-    <div class="grid" style="margin-bottom:22px">
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
-        <div class="ctitle" style="color:var(--blue)">Seasonal Campaign Brief</div>
-        <div class="cdesc2">Kick off a seasonal campaign (National Day &middot; Founding Day &middot; Ramadan &middot; End of Year). Timeline, budget, naming, Asana tasks for all seats.</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
-        <div class="ctitle" style="color:var(--blue)">Seasonal Campaign Monitor</div>
-        <div class="cdesc2">Status check: Asana tasks on track, blockers in Slack, mid-campaign CPQL vs target, delivery dates</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
-        <div class="ctitle" style="color:var(--blue)">Product Campaign Brief</div>
-        <div class="cdesc2">Launch a product/industry campaign (Bookkeeping &middot; Qflavours &middot; QHR &middot; POS). Includes HubSpot lead module check, deal pipeline, UTM structure, all-seat Asana tasks.</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
-        <div class="ctitle" style="color:var(--blue)">Product Campaign Monitor</div>
-        <div class="cdesc2">Monitor active product campaigns: HubSpot attribution, deal pipeline conversion, CPQL vs target, Slack blockers</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
-        <div class="ctitle" style="color:var(--blue)">Monthly Campaign Report</div>
-        <div class="cdesc2">End-of-month report: all seasonal + product campaigns. Spend &middot; leads &middot; SQLs &middot; CPQL vs target &middot; deal value. Creates follow-up Asana tasks for misses.</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-    </div>
-    <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--grey);border-bottom:1px solid color-mix(in srgb,var(--grey) 25%,var(--border));padding-bottom:6px">Technical Health</div>
-    <div class="grid">
-      <div class="card">
-        <div class="ctitle">Connector Health</div>
-        <div class="cdesc2">Check BQ freshness for all source tables. Flag STALE (&gt;12h) or DEAD (&gt;24h) connectors.</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">GTM Audit</div>
-        <div class="cdesc2">Audit GTM-TFH26VC2 (web) + GTM-PK6924TJ (server): tags, triggers, UTM passthrough, duplicates</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Meta Pixel Health</div>
-        <div class="cdesc2">Verify both Meta pixels fire on every LP form submit. Flag gaps in Events Manager.</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Layer 3 Performance -->
-<div class="sec">Layer 3 &mdash; Performance</div>
-
-<!-- Performance Lead -->
-<div class="agent-panel" style="--panel-color:var(--blue)">
-  <div class="agent-header">
-    <span class="agent-icon">&#127919;</span>
-    <span class="agent-name">Performance Lead</span>
-    <span class="agent-desc">KPI thresholds &middot; budget allocation &middot; channel mix &middot; triage to Campaign Manager or Creative Strategist</span>
-    <a href="https://qoyod.app.n8n.cloud/workflow/Qd5SoGxZbgT1ohYP" target="_blank" class="n8n-link">CPL sub-flow &rarr;</a>
-    <span class="dept-chip">PERFORMANCE</span>
-  </div>
-  <div class="agent-body">
-    <div class="grid" style="margin-bottom:18px">
-      <div class="card">
-        <div class="ctitle">Campaign Brief</div>
-        <div class="cdesc2">Full brief for a new campaign: audience, creative direction, budget, naming, KPI gates</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Monthly Plan</div>
-        <div class="cdesc2">Monthly performance plan with targets, channel allocation, and action priorities</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Quarterly Plan</div>
-        <div class="cdesc2">Quarterly strategy: OKRs, budget roadmap by month, risk &amp; upside analysis</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">KPI Threshold Review</div>
-        <div class="cdesc2">Review live CPQL/CPL/ROAS against config.py thresholds &mdash; flag if calibration needed</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-    </div>
-    <!-- Campaign Manager sub-panel -->
-    <div class="sub-panel" style="--sub-color:var(--lblue)">
-      <div class="sub-header">
-        <span class="sub-arrow">&#8618;</span>
-        <span class="sub-name">Campaign Manager</span>
-        <span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span>
-        <a href="https://qoyod.app.n8n.cloud/workflow/eL0V6ReftV2U1wNf" target="_blank" class="n8n-link">IS sub-flow &rarr;</a>
-        <span class="sub-chip">PERFORMANCE</span>
-      </div>
-      <div class="sub-body">
-        <div class="grid">
-          <div class="card">
-            <div class="ctitle">Keyword Audit</div>
-            <div class="cdesc2">Scan enabled keywords for policy violations: always-negative patterns, wrong language, QS&lt;5+IS&gt;80%</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">Ad Audit</div>
-            <div class="cdesc2">Scan live ads: zero-conv ($70/7d), junk leads (60%+ disqualified), high CPL (&gt;$50/10d)</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">Campaign Health</div>
-            <div class="cdesc2">ROAS &rarr; CPQL &rarr; CPL waterfall per channel. Flag campaigns outside KPI zones.</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">Scale Proposal</div>
-            <div class="cdesc2">Identify campaigns with CPQL &le;$60 over 14d and generate full scale proposals for #approvals</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">Campaign Naming Audit</div>
-            <div class="cdesc2">Validate all live campaign names against {Channel}_{Type}_{Language}_{Product}_{Audience}. Flag &ldquo;Prospecting&rdquo; audience, wrong product names, LinkedIn UTM mismatches.</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- Creative Strategist sub-panel -->
-    <div class="sub-panel" style="--sub-color:var(--purple)">
-      <div class="sub-header">
-        <span class="sub-arrow">&#8618;</span>
-        <span class="sub-name">Creative Strategist</span>
-        <span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span>
-        <a href="https://qoyod.app.n8n.cloud/workflow/smHaEhWloComRQyz" target="_blank" class="n8n-link">Creative sub-flow &rarr;</a>
-        <span class="sub-chip">PERFORMANCE</span>
-      </div>
-      <div class="sub-body">
-        <div class="grid">
-          <div class="card">
-            <div class="ctitle">Creative Analysis</div>
-            <div class="cdesc2">Rank creatives by qualified leads, CPQL, CTR, and video VTR (video-aware analysis)</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">Creative Brief</div>
-            <div class="cdesc2">Generate brief for next creative batch: winning patterns, variants, OCEAN mapping, copy hooks</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">Creative Audit</div>
-            <div class="cdesc2">Audit live creatives for fatigue (&gt;30d), duplicate variants, CTR &lt;0.5%, VTR &lt;15%</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-          <div class="card">
-            <div class="ctitle">OCEAN Persona Map</div>
-            <div class="cdesc2">Map target audiences to OCEAN dimensions (O/C/E/A/N) for a product or campaign</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Layer 3 CRO Chain -->
-<div class="sec">Layer 3 &mdash; CRO Chain</div>
-
-<!-- CRO Specialist -->
-<div class="agent-panel" style="--panel-color:var(--orange)">
-  <div class="agent-header">
-    <span class="agent-icon">&#128200;</span>
-    <span class="agent-name">CRO Specialist</span>
-    <span class="agent-desc">LP briefs &middot; qual ratio decisions (redirect at &lt;30%) &middot; A/B test hypotheses &middot; test result calls</span>
-    <a href="https://qoyod.app.n8n.cloud/workflow/jfE5KKnPJQBf7MCj" target="_blank" class="n8n-link">CPQL sub-flow &rarr;</a>
-    <a href="https://qoyod.app.n8n.cloud/workflow/PxFBmtXDVgcNGzIM" target="_blank" class="n8n-link">Qual sub-flow &rarr;</a>
-    <span class="dept-chip">CRO CHAIN</span>
-  </div>
-  <div class="agent-body">
-    <div class="grid-2" style="margin-bottom:18px">
-      <div class="card">
-        <div class="ctitle">LP Brief</div>
-        <div class="cdesc2">8-section LP brief: objective, OCEAN audience, hypothesis, success criteria, ZATCA badge, timeline</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">LP Performance Analysis</div>
-        <div class="cdesc2">Analyse qual rate by destination_url. Flag LPs &lt;30% qual rate for immediate redirect.</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-    </div>
-    <!-- UI/UX Designer sub-panel -->
-    <div class="sub-panel" style="--sub-color:var(--warm-orange)">
-      <div class="sub-header">
-        <span class="sub-arrow">&#8618;</span>
-        <span class="sub-name">UI/UX Designer</span>
-        <span class="sub-desc">LP design from CRO brief &middot; OCEAN-aligned visual tone &middot; ZATCA badge above fold &middot; mobile-first 375px</span>
-        <span class="sub-chip">CRO CHAIN</span>
-      </div>
-      <div class="sub-body">
-        <div class="grid-2" style="margin-bottom:14px">
-          <div class="card">
-            <div class="ctitle">Design Brief</div>
-            <div class="cdesc2">Generate LP design brief: OCEAN visual mapping, ZATCA placement, RTL layout, form field names, interaction notes, handoff checklist for Developer</div>
-            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-          </div>
-        </div>
-        <!-- Developer sub-panel (nested) -->
-        <div class="sub-panel" style="--sub-color:var(--lgreen);margin-left:0">
-          <div class="sub-header">
-            <span class="sub-arrow">&#8618;</span>
-            <span class="sub-name">Developer</span>
-            <span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span>
-            <span class="sub-chip">CRO CHAIN</span>
-          </div>
-          <div class="sub-body">
-            <div class="grid-2">
-              <div class="card">
-                <div class="ctitle">UTM Form Check</div>
-                <div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div>
-                <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
-              </div>
-              <div class="card">
-                <div class="ctitle">Pixel Verification</div>
-                <div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div>
-                <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Layer 3 Data -->
-<div class="sec">Layer 3 &mdash; Data</div>
-
-<!-- Growth Analyst -->
-<div class="agent-panel" style="--panel-color:var(--green)">
-  <div class="agent-header">
-    <span class="agent-icon">&#128202;</span>
-    <span class="agent-name">Growth Analyst</span>
-    <span class="agent-desc">BQ analysis &middot; period comparisons &middot; flag investigations &middot; forecasts &middot; owns memory/08_pitfalls.md</span>
-    <a href="https://qoyod.app.n8n.cloud/workflow/MHCdIiAtKzHNve1x" target="_blank" class="n8n-link">ROAS sub-flow &rarr;</a>
-    <span class="dept-chip">DATA</span>
-  </div>
-  <div class="agent-body">
-    <div class="grid">
-      <div class="card">
-        <div class="ctitle">Period Comparison</div>
-        <div class="cdesc2">7d vs prior-7d for all channels: spend, leads, SQLs, CPQL, CPL, ROAS, qual rate, IS, CTR</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Campaign Deep Dive</div>
-        <div class="cdesc2">Root cause analysis on a specific CPQL/ROAS/qual flag: contributing factors, attribution</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-      <div class="card">
-        <div class="ctitle">Forecast</div>
-        <div class="cdesc2">End-of-month projection: spend, leads, SQLs, CPQL, ROAS &mdash; status-quo vs post-action paths</div>
-        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
-      </div>
-    </div>
-  </div>
+<!-- APPROVAL FOOTER -->
+<div class="approval-footer">
+  📋 <strong>Approval channel:</strong>
+  <a href="https://qoyod.slack.com/channels/C0AT1AP8TJ4" target="_blank" style="color:var(--orange)">
+    #approvals (C0AT1AP8TJ4)
+  </a> — React ✅ to execute all scale/pause items, ❌ to skip.
+  optimize / junk / drilldown items are review-only — Asana tasks already created, no further execution needed.
 </div>
 
 </main>
-</body></html>
+
+<script>
+const secs = document.querySelectorAll('.sec[id^="sec-h-"]');
+secs.forEach(function(sec, i) {
+  const body = document.getElementById('sec-' + i);
+  if (!body) return;
+  body.style.maxHeight = body.scrollHeight + 'px';
+  sec.addEventListener('click', function() {
+    const collapsed = sec.classList.toggle('collapsed');
+    body.classList.toggle('collapsed', collapsed);
+    if (!collapsed) body.style.maxHeight = body.scrollHeight + 'px';
+    const arrow = sec.querySelector('.sec-arrow');
+    if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+  });
+});
+document.getElementById('toggle-all').addEventListener('click', function() {
+  const allOpen = [...document.querySelectorAll('.section-body')].every(function(b) { return !b.classList.contains('collapsed'); });
+  document.querySelectorAll('.sec[id^="sec-h-"]').forEach(function(s) {
+    s.classList.toggle('collapsed', allOpen);
+    const arrow = s.querySelector('.sec-arrow');
+    if (arrow) arrow.textContent = allOpen ? '▸' : '▾';
+  });
+  document.querySelectorAll('.section-body').forEach(function(b) {
+    b.classList.toggle('collapsed', allOpen);
+    if (!allOpen) b.style.maxHeight = b.scrollHeight + 'px';
+  });
+  this.textContent = allOpen ? 'Expand All' : 'Collapse All';
+});
+</script>
+</body>
+</html>
