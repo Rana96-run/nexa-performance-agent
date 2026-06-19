@@ -144,6 +144,200 @@ GROUP BY date, channel
 """
 
 
+UNIFIED_CHANNEL_DAILY_SQL = f"""
+CREATE OR REPLACE VIEW `{P}.{D}.v_unified_channel_daily` AS
+
+-- Branch 1: Paid channels — from paid_channel_daily (channel-grain rollup of wide_ads)
+SELECT
+  date,
+  channel,
+  'paid'                          AS source_type,
+  spend,
+  impressions,
+  clicks,
+  CAST(NULL AS INT64)             AS sessions,
+  CAST(NULL AS INT64)             AS new_users,
+  CAST(NULL AS FLOAT64)           AS bounce_rate,
+  leads_total,
+  qualified                       AS leads_qualified,
+  cpl,
+  cpql,
+  qual_rate_pct,
+  roas,
+  CAST(NULL AS INT64)             AS search_impressions,
+  CAST(NULL AS FLOAT64)           AS avg_position,
+  CAST(NULL AS INT64)             AS engagements,
+  CAST(NULL AS INT64)             AS reach,
+  CAST(NULL AS INT64)             AS followers_gained,
+  CAST(NULL AS FLOAT64)           AS watch_time_min
+FROM `{P}.{D}.paid_channel_daily`
+
+UNION ALL
+
+-- Branch 2: Organic search — Google Search Console, aggregated to date grain
+SELECT
+  date,
+  'organic_search'                AS channel,
+  'organic'                       AS source_type,
+  CAST(NULL AS FLOAT64)           AS spend,
+  CAST(NULL AS INT64)             AS impressions,
+  SUM(clicks)                     AS clicks,
+  CAST(NULL AS INT64)             AS sessions,
+  CAST(NULL AS INT64)             AS new_users,
+  CAST(NULL AS FLOAT64)           AS bounce_rate,
+  CAST(NULL AS INT64)             AS leads_total,
+  CAST(NULL AS INT64)             AS leads_qualified,
+  CAST(NULL AS FLOAT64)           AS cpl,
+  CAST(NULL AS FLOAT64)           AS cpql,
+  CAST(NULL AS FLOAT64)           AS qual_rate_pct,
+  CAST(NULL AS FLOAT64)           AS roas,
+  SUM(impressions)                AS search_impressions,
+  ROUND(AVG(position), 1)         AS avg_position,
+  CAST(NULL AS INT64)             AS engagements,
+  CAST(NULL AS INT64)             AS reach,
+  CAST(NULL AS INT64)             AS followers_gained,
+  CAST(NULL AS FLOAT64)           AS watch_time_min
+FROM `{P}.{D}.gsc_organic_daily`
+GROUP BY date
+
+UNION ALL
+
+-- Branch 3: Organic web — GA4 sessions, aggregated across property_ids per date
+SELECT
+  date,
+  'organic_web'                   AS channel,
+  'organic'                       AS source_type,
+  CAST(NULL AS FLOAT64)           AS spend,
+  CAST(NULL AS INT64)             AS impressions,
+  CAST(NULL AS INT64)             AS clicks,
+  SUM(sessions)                   AS sessions,
+  SUM(new_users)                  AS new_users,
+  AVG(bounce_rate)                AS bounce_rate,
+  CAST(NULL AS INT64)             AS leads_total,
+  CAST(NULL AS INT64)             AS leads_qualified,
+  CAST(NULL AS FLOAT64)           AS cpl,
+  CAST(NULL AS FLOAT64)           AS cpql,
+  CAST(NULL AS FLOAT64)           AS qual_rate_pct,
+  CAST(NULL AS FLOAT64)           AS roas,
+  CAST(NULL AS INT64)             AS search_impressions,
+  CAST(NULL AS FLOAT64)           AS avg_position,
+  CAST(NULL AS INT64)             AS engagements,
+  CAST(NULL AS INT64)             AS reach,
+  CAST(NULL AS INT64)             AS followers_gained,
+  CAST(NULL AS FLOAT64)           AS watch_time_min
+FROM `{P}.{D}.ga4_sessions_daily`
+GROUP BY date
+
+UNION ALL
+
+-- Branch 4: Meta Facebook organic — one row per date from organic_page_daily
+SELECT
+  date,
+  'meta_organic'                  AS channel,
+  'organic'                       AS source_type,
+  CAST(NULL AS FLOAT64)           AS spend,
+  fb_impressions                  AS impressions,
+  CAST(NULL AS INT64)             AS clicks,
+  CAST(NULL AS INT64)             AS sessions,
+  CAST(NULL AS INT64)             AS new_users,
+  CAST(NULL AS FLOAT64)           AS bounce_rate,
+  CAST(NULL AS INT64)             AS leads_total,
+  CAST(NULL AS INT64)             AS leads_qualified,
+  CAST(NULL AS FLOAT64)           AS cpl,
+  CAST(NULL AS FLOAT64)           AS cpql,
+  CAST(NULL AS FLOAT64)           AS qual_rate_pct,
+  CAST(NULL AS FLOAT64)           AS roas,
+  CAST(NULL AS INT64)             AS search_impressions,
+  CAST(NULL AS FLOAT64)           AS avg_position,
+  fb_engagements                  AS engagements,
+  fb_reach                        AS reach,
+  fb_new_followers                AS followers_gained,
+  CAST(NULL AS FLOAT64)           AS watch_time_min
+FROM `{P}.{D}.organic_page_daily`
+
+UNION ALL
+
+-- Branch 5: Instagram organic — from organic_page_daily
+SELECT
+  date,
+  'instagram_organic'             AS channel,
+  'organic'                       AS source_type,
+  CAST(NULL AS FLOAT64)           AS spend,
+  ig_impressions                  AS impressions,
+  ig_website_clicks               AS clicks,
+  CAST(NULL AS INT64)             AS sessions,
+  CAST(NULL AS INT64)             AS new_users,
+  CAST(NULL AS FLOAT64)           AS bounce_rate,
+  CAST(NULL AS INT64)             AS leads_total,
+  CAST(NULL AS INT64)             AS leads_qualified,
+  CAST(NULL AS FLOAT64)           AS cpl,
+  CAST(NULL AS FLOAT64)           AS cpql,
+  CAST(NULL AS FLOAT64)           AS qual_rate_pct,
+  CAST(NULL AS FLOAT64)           AS roas,
+  CAST(NULL AS INT64)             AS search_impressions,
+  CAST(NULL AS FLOAT64)           AS avg_position,
+  CAST(NULL AS INT64)             AS engagements,
+  ig_reach                        AS reach,
+  ig_followers                    AS followers_gained,
+  CAST(NULL AS FLOAT64)           AS watch_time_min
+FROM `{P}.{D}.organic_page_daily`
+
+UNION ALL
+
+-- Branch 6: YouTube organic — from organic_page_daily
+SELECT
+  date,
+  'youtube_organic'               AS channel,
+  'organic'                       AS source_type,
+  CAST(NULL AS FLOAT64)           AS spend,
+  yt_views                        AS impressions,
+  CAST(NULL AS INT64)             AS clicks,
+  CAST(NULL AS INT64)             AS sessions,
+  CAST(NULL AS INT64)             AS new_users,
+  CAST(NULL AS FLOAT64)           AS bounce_rate,
+  CAST(NULL AS INT64)             AS leads_total,
+  CAST(NULL AS INT64)             AS leads_qualified,
+  CAST(NULL AS FLOAT64)           AS cpl,
+  CAST(NULL AS FLOAT64)           AS cpql,
+  CAST(NULL AS FLOAT64)           AS qual_rate_pct,
+  CAST(NULL AS FLOAT64)           AS roas,
+  CAST(NULL AS INT64)             AS search_impressions,
+  CAST(NULL AS FLOAT64)           AS avg_position,
+  CAST(NULL AS INT64)             AS engagements,
+  CAST(NULL AS INT64)             AS reach,
+  yt_subscribers                  AS followers_gained,
+  CAST(yt_watch_time_min AS FLOAT64) AS watch_time_min
+FROM `{P}.{D}.organic_page_daily`
+
+UNION ALL
+
+-- Branch 7: LinkedIn organic — from organic_page_daily
+SELECT
+  date,
+  'linkedin_organic'              AS channel,
+  'organic'                       AS source_type,
+  CAST(NULL AS FLOAT64)           AS spend,
+  li_impressions                  AS impressions,
+  li_clicks                       AS clicks,
+  CAST(NULL AS INT64)             AS sessions,
+  CAST(NULL AS INT64)             AS new_users,
+  CAST(NULL AS FLOAT64)           AS bounce_rate,
+  CAST(NULL AS INT64)             AS leads_total,
+  CAST(NULL AS INT64)             AS leads_qualified,
+  CAST(NULL AS FLOAT64)           AS cpl,
+  CAST(NULL AS FLOAT64)           AS cpql,
+  CAST(NULL AS FLOAT64)           AS qual_rate_pct,
+  CAST(NULL AS FLOAT64)           AS roas,
+  CAST(NULL AS INT64)             AS search_impressions,
+  CAST(NULL AS FLOAT64)           AS avg_position,
+  li_engagement                   AS engagements,
+  CAST(NULL AS INT64)             AS reach,
+  li_followers                    AS followers_gained,
+  CAST(NULL AS FLOAT64)           AS watch_time_min
+FROM `{P}.{D}.organic_page_daily`
+"""
+
+
 AGENT_ACTIVITY_DASHBOARD_SQL = f"""
 CREATE OR REPLACE VIEW `{P}.{D}.v_agent_activity_dashboard` AS
 -- Daily counts per category, last 180 days. Powers the Hex activity dashboard heatmap.
@@ -330,6 +524,8 @@ ALL_VIEWS = [
     # RESTORED 2026-06-19 — Hex campaign-grain cells and scripts (reconcile_views, cowork skills) query this
     # (previous "aggregation-of-aggregation bug" note was incorrect — SQL sources from wide_ads directly)
     ("paid_channel_campaign_daily",    PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
+    # Unified paid + organic view — single reporting table for Databox covering all channels (added 2026-06-19)
+    ("v_unified_channel_daily",        UNIFIED_CHANNEL_DAILY_SQL),
     # v_new_biz_daily and v_agent_activity_dashboard DROPPED 2026-06-16 (0 active consumers)
 ]
 
