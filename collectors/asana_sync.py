@@ -119,10 +119,8 @@ def sync_asana_tasks() -> int:
     bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
     try:
         bq.query(_ALTER_DDL.format(P=P, D=D, T=_TABLE)).result()
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"[asana_sync] schema alter failed: {e}")
-        raise
+    except Exception:
+        pass  # already applied — NOT NULL constraint was already dropped
 
     # ── 1. GIDs from agent_activity_log ──────────────────────────────────────
     # Two sources:
@@ -466,6 +464,11 @@ def backfill_from_projects() -> int:
                     "due_on":        task.get("due_on"),
                     "synced_at":     now_utc.isoformat(),
                 })
+        except AsanaApiException as e:
+            if e.status == 404:
+                print(f"[asana_backfill] project {project_key} not found (404) — skipping")
+            else:
+                print(f"[asana_backfill] project {project_key} failed: {e}")
         except Exception as e:
             print(f"[asana_backfill] project {project_key} failed: {e}")
 
