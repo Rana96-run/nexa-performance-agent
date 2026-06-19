@@ -38,7 +38,7 @@ def _headers() -> dict:
         # LinkedIn rolls API versions monthly; their N-12 retirement window
         # means we need to bump this roughly twice a year.  Bumped May 2026
         # because 202502 returned NONEXISTENT_VERSION; verified 202602 works.
-        "LinkedIn-Version": "202602",
+        "LinkedIn-Version": os.getenv("LINKEDIN_API_VERSION", "202602"),
         # NOTE: X-Restli-Protocol-Version: 2.0.0 intentionally REMOVED.
         # With v202502 it causes 400 "Projected field not present in schema"
         # errors on every field-projection call.  Without it all endpoints

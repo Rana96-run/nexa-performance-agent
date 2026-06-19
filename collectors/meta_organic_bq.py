@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from collectors.bq_writer import upsert_rows, get_client
 
 load_dotenv()
-GRAPH = "https://graph.facebook.com/v21.0"
+GRAPH = f"https://graph.facebook.com/{os.getenv('META_GRAPH_VERSION', 'v22.0')}"
 TOKEN = os.getenv("META_PAGE_ACCESS_TOKEN")
 FB_PAGE = os.getenv("META_FB_PAGE_ID")
 IG_BIZ = os.getenv("META_IG_BUSINESS_ID")
