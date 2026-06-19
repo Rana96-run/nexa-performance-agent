@@ -145,7 +145,7 @@ GROUP BY date, channel
 
 
 UNIFIED_CHANNEL_DAILY_SQL = f"""
-CREATE OR REPLACE VIEW `{P}.{D}.v_unified_channel_daily` AS
+CREATE OR REPLACE VIEW `{P}.{D}.unified_channel_daily` AS
 
 -- Branch 1: Paid channels — from paid_channel_daily (channel-grain rollup of wide_ads)
 SELECT
@@ -525,7 +525,7 @@ ALL_VIEWS = [
     # (previous "aggregation-of-aggregation bug" note was incorrect — SQL sources from wide_ads directly)
     ("paid_channel_campaign_daily",    PAID_CHANNEL_CAMPAIGN_DAILY_SQL),
     # Unified paid + organic view — single reporting table for Databox covering all channels (added 2026-06-19)
-    ("v_unified_channel_daily",        UNIFIED_CHANNEL_DAILY_SQL),
+    ("unified_channel_daily",          UNIFIED_CHANNEL_DAILY_SQL),
     # v_new_biz_daily and v_agent_activity_dashboard DROPPED 2026-06-16 (0 active consumers)
 ]
 
