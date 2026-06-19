@@ -196,26 +196,12 @@ jobs:
         continue-on-error: true
         run: python collectors/hubspot_deals_bq.py mirror
 
-      - name: Collector — YouTube
-        id: youtube
-        timeout-minutes: 15
-        if: ${{ inputs.collector == '' || inputs.collector == 'youtube' }}
-        continue-on-error: true
-        run: python collectors/youtube_bq.py
-
       - name: Collector — GA4
         id: ga4
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'ga4' }}
         continue-on-error: true
         run: python collectors/ga4_bq.py --incremental
-
-      - name: Collector — Meta Organic
-        id: meta_organic
-        timeout-minutes: 15
-        if: ${{ inputs.collector == '' || inputs.collector == 'meta_organic' }}
-        continue-on-error: true
-        run: python collectors/meta_organic_bq.py
 
       - name: Collector — GSC organic search
         id: gsc
