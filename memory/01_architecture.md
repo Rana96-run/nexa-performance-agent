@@ -95,6 +95,9 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 | Nexa · Sub-Flow D (Qual Ratio Fix) | `PxFBmtXDVgcNGzIM` | Called by Master Switch | — | ACTIVE |
 | Nexa · Sub-Flow E (Impression Share Fix) | `eL0V6ReftV2U1wNf` | Called by Master Switch | — | ACTIVE |
 | Nexa · Sub-Flow F (Creative & CTR Fix) | `smHaEhWloComRQyz` | Called by Master Switch | — | ACTIVE |
+| Infra: Agent Activity Dashboard → GitHub Pages | `Szq6QhBIn44SfaHH` | Every 1 hour | 7 | ACTIVE |
+
+**GitHub Pages activity dashboard:** `https://rana96-run.github.io/nexa-performance-agent/` — built by workflow `Szq6QhBIn44SfaHH`. Queries `agent_activity_log` (last 50), `asana_task_status` (open, 20), `connector_health_log` (last 24h). Pushes `docs/index.html` via GitHub Contents API. Repo made public 2026-06-19 to enable Pages. GITHUB_TOKEN added to n8n variables.
 
 **Deleted 2026-06-17 (stale/superseded):**
 - `7ZEROvwTg3UrGAP6` — Nexa · Databox Sync (superseded; Databox reads directly from BQ via native connector)
