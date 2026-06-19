@@ -30,11 +30,15 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   letter-spacing:1.2px;color:var(--muted);margin:32px 0 14px;
   display:flex;align-items:center;gap:8px}
 .sec::after{content:"";flex:1;height:1px;background:var(--border)}
+/* Health bar */
 .hbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px}
 .hchip{display:flex;align-items:center;gap:7px;background:var(--card);
-  border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px}
+  border:1px solid var(--border);border-radius:20px;padding:6px 14px;
+  font-size:12px}
 .hdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.hlabel{color:var(--dim)}.hval{font-weight:600}
+.hlabel{color:var(--dim)}
+.hval{font-weight:600}
+/* Connector cards */
 .conn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 @media(max-width:900px){.conn-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.conn-grid{grid-template-columns:1fr}}
@@ -45,6 +49,7 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 .conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .conn-ts{font-size:11px;color:var(--muted)}
 .conn-status{font-size:11px;font-weight:600}
+/* Heatmap */
 .hm-wrap{overflow-x:auto}
 .hm-table{border-collapse:collapse;font-size:10px}
 .hm-h{color:var(--muted);padding:2px 3px;text-align:center;font-weight:400;width:22px}
@@ -54,6 +59,7 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 .hm-legend{display:flex;align-items:center;gap:8px;margin-top:8px}
 .hm-grad{width:80px;height:10px;border-radius:4px;
   background:linear-gradient(to right,var(--border),var(--accent))}
+/* Activity feed */
 .feed-row{display:flex;align-items:center;gap:10px;padding:8px 12px;
   border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap}
 .feed-row:last-child{border-bottom:none}
@@ -67,6 +73,7 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 .feed-empty{color:var(--muted);font-size:12px;padding:16px;
   background:var(--card);border:1px solid var(--border);border-radius:8px}
 .feed-wrap{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+/* Cadence */
 .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 @media(max-width:700px){.cgrid{grid-template-columns:1fr}}
 .ccard{background:var(--card);border:1px solid var(--border);border-radius:8px;
@@ -76,6 +83,7 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 .cdesc{font-size:11px;color:var(--muted);margin-top:3px}
 .csched{font-size:11px;color:var(--muted);background:#111;
   padding:3px 8px;border-radius:4px;font-family:monospace;white-space:nowrap;flex-shrink:0}
+/* Agent panels */
 .agent-panel{border-left:4px solid var(--panel-color,#444);
   background:var(--panel);border-radius:8px;margin-bottom:18px;overflow:hidden}
 .agent-header{display:flex;align-items:center;gap:10px;
@@ -117,11 +125,13 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 @media(max-width:600px){.grid-2{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--border);border-radius:7px;
-  padding:14px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+  padding:14px;display:flex;flex-direction:column;gap:8px;
+  transition:border-color .15s}
 .card:hover{border-color:#3a3a3a}
 .ctitle{font-size:13px;font-weight:600}
 .cdesc2{font-size:12px;color:var(--dim);flex:1}
-.cfoot{display:flex;align-items:center;justify-content:space-between;margin-top:4px;gap:6px}
+.cfoot{display:flex;align-items:center;justify-content:space-between;
+  margin-top:4px;gap:6px}
 .cnote{font-size:11px;color:var(--muted)}
 .n8n-link{color:#f0883e;font-size:11px;text-decoration:none;
   border:1px solid #f0883e44;padding:2px 8px;border-radius:4px;white-space:nowrap}
@@ -136,7 +146,8 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   padding:16px;display:flex;flex-direction:column;gap:6px}
 .at-title{font-size:13px;font-weight:700;margin-bottom:4px}
 .at-row{font-size:11px;color:var(--dim);padding:4px 0;
-  border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;
+  align-items:center}
 .at-row:last-child{border-bottom:none}
 .at-role{color:var(--blue);font-weight:600;min-width:90px}
 .at-status-ok{color:var(--green);font-weight:600}
@@ -154,17 +165,19 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 </header>
 <main>
 
+<!-- SYSTEM HEALTH BAR -->
 <div class="sec">System Health</div>
 <div class="hbar">
-  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">BQ Activity</span><span class="hval" style="color:var(--green)">3h ago</span></div>
+  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">BQ Activity</span><span class="hval" style="color:var(--green)">4h ago</span></div>
   <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">n8n Master</span><span class="hval" style="color:var(--muted)">Daily 08:00 AST</span></div>
   <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">GitHub Actions</span><span class="hval" style="color:var(--muted)">Every 6h</span></div>
   <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">GitHub Pages</span><span class="hval" style="color:var(--green)">Serving</span></div>
-  <div class="hchip"><span class="hlabel">&#8987; Next run in</span><span class="hval" style="color:var(--muted)">14h 5m</span></div>
+  <div class="hchip"><span class="hlabel">&#8987; Next run in</span><span class="hval" style="color:var(--muted)">12h 59m</span></div>
   <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/jOnJxdpdaO3Vbi0B" target="_blank" class="n8n-link">Data Collection &rarr;</a></div>
   <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/5Acqsbxsk0XQ5k9e" target="_blank" class="n8n-link">Approval Listener &rarr;</a></div>
 </div>
 
+<!-- CONNECTOR HEALTH CARDS -->
 <div class="sec">Connector Health</div>
 <div class="conn-grid">
 <div class="conn-card">
@@ -209,34 +222,18 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 </div>
 </div>
 
+<!-- ACTIVITY HEAT MAP -->
 <div class="sec">Activity Heat Map &mdash; Last 7 Days</div>
-<div class="hm-wrap"><table class="hm-table"><thead><tr><th></th><th class="hm-h">00</th><th class="hm-h">01</th><th class="hm-h">02</th><th class="hm-h">03</th><th class="hm-h">04</th><th class="hm-h">05</th><th class="hm-h">06</th><th class="hm-h">07</th><th class="hm-h">08</th><th class="hm-h">09</th><th class="hm-h">10</th><th class="hm-h">11</th><th class="hm-h">12</th><th class="hm-h">13</th><th class="hm-h">14</th><th class="hm-h">15</th><th class="hm-h">16</th><th class="hm-h">17</th><th class="hm-h">18</th><th class="hm-h">19</th><th class="hm-h">20</th><th class="hm-h">21</th><th class="hm-h">22</th><th class="hm-h">23</th></tr></thead><tbody><tr><th class="hm-row">Mon</th><td class="hm-cell" style="background:rgba(0,255,136,0.18)" title="45 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="37 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="43 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.11)" title="28 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.05)" title="13 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Tue</th><td class="hm-cell" style="background:rgba(0,255,136,0.46)" title="115 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,1.00)" title="248 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="4 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.24)" title="59 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.44)" title="110 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.38)" title="93 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td></tr><tr><th class="hm-row">Wed</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.22)" title="54 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td></tr><tr><th class="hm-row">Thu</th><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td></tr><tr><th class="hm-row">Fri</th><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td></tr><tr><th class="hm-row">Sat</th><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="50 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="41 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="16 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Sun</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.31)" title="76 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="38 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr></tbody></table>
+<div class="hm-wrap"><table class="hm-table"><thead><tr><th></th><th class="hm-h">00</th><th class="hm-h">01</th><th class="hm-h">02</th><th class="hm-h">03</th><th class="hm-h">04</th><th class="hm-h">05</th><th class="hm-h">06</th><th class="hm-h">07</th><th class="hm-h">08</th><th class="hm-h">09</th><th class="hm-h">10</th><th class="hm-h">11</th><th class="hm-h">12</th><th class="hm-h">13</th><th class="hm-h">14</th><th class="hm-h">15</th><th class="hm-h">16</th><th class="hm-h">17</th><th class="hm-h">18</th><th class="hm-h">19</th><th class="hm-h">20</th><th class="hm-h">21</th><th class="hm-h">22</th><th class="hm-h">23</th></tr></thead><tbody><tr><th class="hm-row">Mon</th><td class="hm-cell" style="background:rgba(0,255,136,0.18)" title="45 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="37 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="43 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.11)" title="28 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.05)" title="13 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Tue</th><td class="hm-cell" style="background:rgba(0,255,136,0.46)" title="115 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,1.00)" title="248 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="4 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.24)" title="59 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.44)" title="110 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.38)" title="93 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td></tr><tr><th class="hm-row">Wed</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.22)" title="54 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td></tr><tr><th class="hm-row">Thu</th><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td></tr><tr><th class="hm-row">Fri</th><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td></tr><tr><th class="hm-row">Sat</th><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="50 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="41 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="16 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Sun</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.31)" title="76 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="38 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr></tbody></table>
 <div class="hm-legend"><span style="color:var(--muted);font-size:11px">Less</span><div class="hm-grad"></div><span style="color:var(--muted);font-size:11px">More</span><span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh &middot; last 7 days</span></div></div>
 
+<!-- RECENT AGENT ACTIVITY -->
 <div class="sec">Recent Agent Activity</div>
 <div class="feed-wrap">
-<div class="feed-row"><span class="feed-ts">Jun 19 11:16 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 18 20:37 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 18 20:27 UTC</span><span class="feed-role">task_creator</span><span class="feed-action">asana_task_created</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 21:07 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 20:42 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 14:35 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 14:23 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 08:54 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 08:53 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 08:41 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 08:30 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 08:19 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 08:08 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:57 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:45 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:34 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:24 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:22 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:11 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
-<div class="feed-row"><span class="feed-ts">Jun 17 07:05 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">databox_push</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div>
+<div class="feed-row"><span class="feed-ts">19 Jun 11:16 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">18 Jun 20:37 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">18 Jun 20:27 UTC</span><span class="feed-role">task_creator</span><span class="feed-action">asana_task_created</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 21:07 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 20:42 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div><div class="feed-row"><span class="feed-ts">17 Jun 14:35 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 14:23 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div><div class="feed-row"><span class="feed-ts">17 Jun 08:54 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:24 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:05 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">databox_push</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:04 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">slack_digest_posted</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:04 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">scheduler_daily</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:03 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">hubspot_deals</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:02 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">linkedin</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:02 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">google</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 07:00 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:37 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:37 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:36 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div><div class="feed-row"><span class="feed-ts">17 Jun 06:36 UTC</span><span class="feed-role">ops_scheduler</span><span class="feed-action">self_heal</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div>
 </div>
 
+<!-- CADENCE FLOWS -->
 <div class="sec">Cadence Flows</div>
 <div class="cgrid">
   <div class="ccard">
@@ -265,28 +262,11 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   </div>
 </div>
 
+<!-- ACTIONS & TASKS -->
 <div class="sec">Actions &amp; Tasks</div>
 <div class="at-grid">
-<div class="at-card"><div class="at-title">Recent Actions</div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">3h ago</span></div>
-<div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">18h ago</span></div>
-<div class="at-row"><span class="at-role">task_creator</span><span style="flex:1">asana_task_created</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">18h ago</span></div>
-<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div>
-<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div>
-<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-fail">failed</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
-<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
-<div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
-<div class="at-row"><span class="at-role">slack_listener</span><span style="flex:1">heartbeat</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
-<div class="at-row"><span class="at-role">slack_listener</span><span style="flex:1">heartbeat</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div></div>
-<div class="at-card"><div class="at-title">Open Asana Tasks</div><div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
-<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div></div>
+<div class="at-card"><div class="at-title">Recent Actions</div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">4h ago</span></div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">19h ago</span></div><div class="at-row"><span class="at-role">task_creator</span><span style="flex:1">asana_task_created</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">19h ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-fail">failed</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">project_coordinator</span><span style="flex:1">slack_audit_complete</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div><div class="at-row"><span class="at-role">health_monitor</span><span style="flex:1">connector_escalated &middot; databox_push</span><span class="at-status-fail">failed</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div></div>
+<div class="at-card"><div class="at-title">Open Asana Tasks</div><div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div><div class="at-row"><span style="flex:1">Launch Microsoft ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">Launch Snapchat ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">Launch Google ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">Launch Meta ads Campaign  &middot; Rana khalid <span style="color:var(--muted);font-size:10px">q_flavours</span></span><span class="at-status-pend at-overdue">2026-04-12</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: Search_AR_Qflavours_Feature (acc1, PAUSED) &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: ImpressionShare_Search_AR_Invoice (acc2, ENABLED) &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — SNAPCHAT: Snapchat_LeadGen_Invoice_Prospecting_Broad_Instantform &middot; Donia Mohamed <span style="color:var(--muted);font-size:10px">snapchat</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — GOOGLE_ADS: WebsiteTraffic_Search_AR_Invoice &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div><div class="at-row"><span style="flex:1">[Recommendation | Fix] UTM Attribution Gap — META: Meta_LeadGen_E-Invoice_Phase2_Retargeting_Instantform &middot; Donia Mohamed <span style="color:var(--muted);font-size:10px">meta</span></span><span class="at-status-pend at-overdue">2026-04-29</span></div></div>
 <div class="at-card"><div class="at-title">Pending Approvals</div>
 <div style="font-size:12px;color:var(--dim);line-height:1.7">Approvals are managed in Slack <strong>#approvals</strong>.<br>React <strong>&#10003;</strong> to execute all scale + pause items.<br>React <strong>&#10007;</strong> to skip.</div>
 <div style="margin-top:10px"><a href="#" class="n8n-link">Open #approvals in Slack &rarr;</a></div>
@@ -294,6 +274,8 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
 
 <!-- AGENT TEAM -->
 <div class="sec">Agent Team</div>
+
+<!-- AI Orchestrator -->
 <div class="agent-panel" style="--panel-color:#f0883e">
   <div class="agent-header">
     <span class="agent-icon">&#127775;</span>
@@ -319,7 +301,11 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
     </div>
   </div>
 </div>
+
+<!-- Layer 2 Operations -->
 <div class="sec">Layer 2 &mdash; Operations</div>
+
+<!-- QA Auditor -->
 <div class="agent-panel" style="--panel-color:var(--red)">
   <div class="agent-header">
     <span class="agent-icon">&#128270;</span>
@@ -330,10 +316,16 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   </div>
   <div class="agent-body">
     <div class="grid-2">
-      <div class="card"><div class="ctitle">QA Validation Run</div><div class="cdesc2">Run validation checklist on recent agent outputs: data integrity, task completeness, approval gate, format, technical checks</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card">
+        <div class="ctitle">QA Validation Run</div>
+        <div class="cdesc2">Run validation checklist on recent agent outputs: data integrity, task completeness, approval gate, format, technical checks</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
     </div>
   </div>
 </div>
+
+<!-- Project Coordinator -->
 <div class="agent-panel" style="--panel-color:var(--grey)">
   <div class="agent-header">
     <span class="agent-icon">&#128295;</span>
@@ -344,21 +336,57 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   <div class="agent-body">
     <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);border-bottom:1px solid color-mix(in srgb,var(--blue) 25%,var(--border));padding-bottom:6px">Campaign Coordination</div>
     <div class="grid" style="margin-bottom:22px">
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Seasonal Campaign Brief</div><div class="cdesc2">Kick off a seasonal campaign (National Day &middot; Founding Day &middot; Ramadan &middot; End of Year). Timeline, budget, naming, Asana tasks for all seats.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Seasonal Campaign Monitor</div><div class="cdesc2">Status check: Asana tasks on track, blockers in Slack, mid-campaign CPQL vs target, delivery dates</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Product Campaign Brief</div><div class="cdesc2">Launch a product/industry campaign (Bookkeeping &middot; Qflavours &middot; QHR &middot; POS). Includes HubSpot lead module check, deal pipeline, UTM structure, all-seat Asana tasks.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Product Campaign Monitor</div><div class="cdesc2">Monitor active product campaigns: HubSpot attribution, deal pipeline conversion, CPQL vs target, Slack blockers</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Monthly Campaign Report</div><div class="cdesc2">End-of-month report: all seasonal + product campaigns. Spend &middot; leads &middot; SQLs &middot; CPQL vs target &middot; deal value. Creates follow-up Asana tasks for misses.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Seasonal Campaign Brief</div>
+        <div class="cdesc2">Kick off a seasonal campaign (National Day &middot; Founding Day &middot; Ramadan &middot; End of Year). Timeline, budget, naming, Asana tasks for all seats.</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Seasonal Campaign Monitor</div>
+        <div class="cdesc2">Status check: Asana tasks on track, blockers in Slack, mid-campaign CPQL vs target, delivery dates</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Product Campaign Brief</div>
+        <div class="cdesc2">Launch a product/industry campaign (Bookkeeping &middot; Qflavours &middot; QHR &middot; POS). Includes HubSpot lead module check, deal pipeline, UTM structure, all-seat Asana tasks.</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Product Campaign Monitor</div>
+        <div class="cdesc2">Monitor active product campaigns: HubSpot attribution, deal pipeline conversion, CPQL vs target, Slack blockers</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))">
+        <div class="ctitle" style="color:var(--blue)">Monthly Campaign Report</div>
+        <div class="cdesc2">End-of-month report: all seasonal + product campaigns. Spend &middot; leads &middot; SQLs &middot; CPQL vs target &middot; deal value. Creates follow-up Asana tasks for misses.</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
     </div>
     <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--grey);border-bottom:1px solid color-mix(in srgb,var(--grey) 25%,var(--border));padding-bottom:6px">Technical Health</div>
     <div class="grid">
-      <div class="card"><div class="ctitle">Connector Health</div><div class="cdesc2">Check BQ freshness for all source tables. Flag STALE (&gt;12h) or DEAD (&gt;24h) connectors.</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
-      <div class="card"><div class="ctitle">GTM Audit</div><div class="cdesc2">Audit GTM-TFH26VC2 (web) + GTM-PK6924TJ (server): tags, triggers, UTM passthrough, duplicates</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">Meta Pixel Health</div><div class="cdesc2">Verify both Meta pixels fire on every LP form submit. Flag gaps in Events Manager.</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
+      <div class="card">
+        <div class="ctitle">Connector Health</div>
+        <div class="cdesc2">Check BQ freshness for all source tables. Flag STALE (&gt;12h) or DEAD (&gt;24h) connectors.</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">GTM Audit</div>
+        <div class="cdesc2">Audit GTM-TFH26VC2 (web) + GTM-PK6924TJ (server): tags, triggers, UTM passthrough, duplicates</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Meta Pixel Health</div>
+        <div class="cdesc2">Verify both Meta pixels fire on every LP form submit. Flag gaps in Events Manager.</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
+      </div>
     </div>
   </div>
 </div>
+
+<!-- Layer 3 Performance -->
 <div class="sec">Layer 3 &mdash; Performance</div>
+
+<!-- Performance Lead -->
 <div class="agent-panel" style="--panel-color:var(--blue)">
   <div class="agent-header">
     <span class="agent-icon">&#127919;</span>
@@ -369,37 +397,107 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   </div>
   <div class="agent-body">
     <div class="grid" style="margin-bottom:18px">
-      <div class="card"><div class="ctitle">Campaign Brief</div><div class="cdesc2">Full brief for a new campaign: audience, creative direction, budget, naming, KPI gates</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">Monthly Plan</div><div class="cdesc2">Monthly performance plan with targets, channel allocation, and action priorities</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">Quarterly Plan</div><div class="cdesc2">Quarterly strategy: OKRs, budget roadmap by month, risk &amp; upside analysis</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">KPI Threshold Review</div><div class="cdesc2">Review live CPQL/CPL/ROAS against config.py thresholds &mdash; flag if calibration needed</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card">
+        <div class="ctitle">Campaign Brief</div>
+        <div class="cdesc2">Full brief for a new campaign: audience, creative direction, budget, naming, KPI gates</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Monthly Plan</div>
+        <div class="cdesc2">Monthly performance plan with targets, channel allocation, and action priorities</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Quarterly Plan</div>
+        <div class="cdesc2">Quarterly strategy: OKRs, budget roadmap by month, risk &amp; upside analysis</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">KPI Threshold Review</div>
+        <div class="cdesc2">Review live CPQL/CPL/ROAS against config.py thresholds &mdash; flag if calibration needed</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
     </div>
+    <!-- Campaign Manager sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--lblue)">
-      <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">Campaign Manager</span><span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span><a href="https://qoyod.app.n8n.cloud/workflow/eL0V6ReftV2U1wNf" target="_blank" class="n8n-link">IS sub-flow &rarr;</a><span class="sub-chip">PERFORMANCE</span></div>
+      <div class="sub-header">
+        <span class="sub-arrow">&#8618;</span>
+        <span class="sub-name">Campaign Manager</span>
+        <span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span>
+        <a href="https://qoyod.app.n8n.cloud/workflow/eL0V6ReftV2U1wNf" target="_blank" class="n8n-link">IS sub-flow &rarr;</a>
+        <span class="sub-chip">PERFORMANCE</span>
+      </div>
       <div class="sub-body">
         <div class="grid">
-          <div class="card"><div class="ctitle">Keyword Audit</div><div class="cdesc2">Scan enabled keywords for policy violations: always-negative patterns, wrong language, QS&lt;5+IS&gt;80%</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">Ad Audit</div><div class="cdesc2">Scan live ads: zero-conv ($70/7d), junk leads (60%+ disqualified), high CPL (&gt;$50/10d)</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">Campaign Health</div><div class="cdesc2">ROAS &rarr; CPQL &rarr; CPL waterfall per channel. Flag campaigns outside KPI zones.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">Scale Proposal</div><div class="cdesc2">Identify campaigns with CPQL &le;$60 over 14d and generate full scale proposals for #approvals</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">Campaign Naming Audit</div><div class="cdesc2">Validate all live campaign names against &#123;Channel&#125;_&#123;Type&#125;_&#123;Language&#125;_&#123;Product&#125;_&#123;Audience&#125;. Flag &ldquo;Prospecting&rdquo; audience.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card">
+            <div class="ctitle">Keyword Audit</div>
+            <div class="cdesc2">Scan enabled keywords for policy violations: always-negative patterns, wrong language, QS&lt;5+IS&gt;80%</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Ad Audit</div>
+            <div class="cdesc2">Scan live ads: zero-conv ($70/7d), junk leads (60%+ disqualified), high CPL (&gt;$50/10d)</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Campaign Health</div>
+            <div class="cdesc2">ROAS &rarr; CPQL &rarr; CPL waterfall per channel. Flag campaigns outside KPI zones.</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Scale Proposal</div>
+            <div class="cdesc2">Identify campaigns with CPQL &le;$60 over 14d and generate full scale proposals for #approvals</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Campaign Naming Audit</div>
+            <div class="cdesc2">Validate all live campaign names against {Channel}_{Type}_{Language}_{Product}_{Audience}. Flag &ldquo;Prospecting&rdquo; audience, wrong product names, LinkedIn UTM mismatches.</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
         </div>
       </div>
     </div>
+    <!-- Creative Strategist sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--purple)">
-      <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">Creative Strategist</span><span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span><a href="https://qoyod.app.n8n.cloud/workflow/smHaEhWloComRQyz" target="_blank" class="n8n-link">Creative sub-flow &rarr;</a><span class="sub-chip">PERFORMANCE</span></div>
+      <div class="sub-header">
+        <span class="sub-arrow">&#8618;</span>
+        <span class="sub-name">Creative Strategist</span>
+        <span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span>
+        <a href="https://qoyod.app.n8n.cloud/workflow/smHaEhWloComRQyz" target="_blank" class="n8n-link">Creative sub-flow &rarr;</a>
+        <span class="sub-chip">PERFORMANCE</span>
+      </div>
       <div class="sub-body">
         <div class="grid">
-          <div class="card"><div class="ctitle">Creative Analysis</div><div class="cdesc2">Rank creatives by qualified leads, CPQL, CTR, and video VTR (video-aware analysis)</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">Creative Brief</div><div class="cdesc2">Generate brief for next creative batch: winning patterns, variants, OCEAN mapping, copy hooks</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">Creative Audit</div><div class="cdesc2">Audit live creatives for fatigue (&gt;30d), duplicate variants, CTR &lt;0.5%, VTR &lt;15%</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-          <div class="card"><div class="ctitle">OCEAN Persona Map</div><div class="cdesc2">Map target audiences to OCEAN dimensions (O/C/E/A/N) for a product or campaign</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card">
+            <div class="ctitle">Creative Analysis</div>
+            <div class="cdesc2">Rank creatives by qualified leads, CPQL, CTR, and video VTR (video-aware analysis)</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Creative Brief</div>
+            <div class="cdesc2">Generate brief for next creative batch: winning patterns, variants, OCEAN mapping, copy hooks</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Creative Audit</div>
+            <div class="cdesc2">Audit live creatives for fatigue (&gt;30d), duplicate variants, CTR &lt;0.5%, VTR &lt;15%</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
+          <div class="card">
+            <div class="ctitle">OCEAN Persona Map</div>
+            <div class="cdesc2">Map target audiences to OCEAN dimensions (O/C/E/A/N) for a product or campaign</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Layer 3 CRO Chain -->
 <div class="sec">Layer 3 &mdash; CRO Chain</div>
+
+<!-- CRO Specialist -->
 <div class="agent-panel" style="--panel-color:var(--orange)">
   <div class="agent-header">
     <span class="agent-icon">&#128200;</span>
@@ -411,21 +509,53 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   </div>
   <div class="agent-body">
     <div class="grid-2" style="margin-bottom:18px">
-      <div class="card"><div class="ctitle">LP Brief</div><div class="cdesc2">8-section LP brief: objective, OCEAN audience, hypothesis, success criteria, ZATCA badge, timeline</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">LP Performance Analysis</div><div class="cdesc2">Analyse qual rate by destination_url. Flag LPs &lt;30% qual rate for immediate redirect.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card">
+        <div class="ctitle">LP Brief</div>
+        <div class="cdesc2">8-section LP brief: objective, OCEAN audience, hypothesis, success criteria, ZATCA badge, timeline</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">LP Performance Analysis</div>
+        <div class="cdesc2">Analyse qual rate by destination_url. Flag LPs &lt;30% qual rate for immediate redirect.</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
     </div>
+    <!-- UI/UX Designer sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--warm-orange)">
-      <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">UI/UX Designer</span><span class="sub-desc">LP design from CRO brief &middot; OCEAN-aligned visual tone &middot; ZATCA badge above fold &middot; mobile-first 375px</span><span class="sub-chip">CRO CHAIN</span></div>
+      <div class="sub-header">
+        <span class="sub-arrow">&#8618;</span>
+        <span class="sub-name">UI/UX Designer</span>
+        <span class="sub-desc">LP design from CRO brief &middot; OCEAN-aligned visual tone &middot; ZATCA badge above fold &middot; mobile-first 375px</span>
+        <span class="sub-chip">CRO CHAIN</span>
+      </div>
       <div class="sub-body">
         <div class="grid-2" style="margin-bottom:14px">
-          <div class="card"><div class="ctitle">Design Brief</div><div class="cdesc2">Generate LP design brief: OCEAN visual mapping, ZATCA placement, RTL layout, form field names, interaction notes, handoff checklist for Developer</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card">
+            <div class="ctitle">Design Brief</div>
+            <div class="cdesc2">Generate LP design brief: OCEAN visual mapping, ZATCA placement, RTL layout, form field names, interaction notes, handoff checklist for Developer</div>
+            <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+          </div>
         </div>
+        <!-- Developer sub-panel (nested) -->
         <div class="sub-panel" style="--sub-color:var(--lgreen);margin-left:0">
-          <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">Developer</span><span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span><span class="sub-chip">CRO CHAIN</span></div>
+          <div class="sub-header">
+            <span class="sub-arrow">&#8618;</span>
+            <span class="sub-name">Developer</span>
+            <span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span>
+            <span class="sub-chip">CRO CHAIN</span>
+          </div>
           <div class="sub-body">
             <div class="grid-2">
-              <div class="card"><div class="ctitle">UTM Form Check</div><div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
-              <div class="card"><div class="ctitle">Pixel Verification</div><div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
+              <div class="card">
+                <div class="ctitle">UTM Form Check</div>
+                <div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div>
+                <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
+              </div>
+              <div class="card">
+                <div class="ctitle">Pixel Verification</div>
+                <div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div>
+                <div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -433,7 +563,11 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
     </div>
   </div>
 </div>
+
+<!-- Layer 3 Data -->
 <div class="sec">Layer 3 &mdash; Data</div>
+
+<!-- Growth Analyst -->
 <div class="agent-panel" style="--panel-color:var(--green)">
   <div class="agent-header">
     <span class="agent-icon">&#128202;</span>
@@ -444,9 +578,21 @@ main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
   </div>
   <div class="agent-body">
     <div class="grid">
-      <div class="card"><div class="ctitle">Period Comparison</div><div class="cdesc2">7d vs prior-7d for all channels: spend, leads, SQLs, CPQL, CPL, ROAS, qual rate, IS, CTR</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">Campaign Deep Dive</div><div class="cdesc2">Root cause analysis on a specific CPQL/ROAS/qual flag: contributing factors, attribution</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
-      <div class="card"><div class="ctitle">Forecast</div><div class="cdesc2">End-of-month projection: spend, leads, SQLs, CPQL, ROAS &mdash; status-quo vs post-action paths</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card">
+        <div class="ctitle">Period Comparison</div>
+        <div class="cdesc2">7d vs prior-7d for all channels: spend, leads, SQLs, CPQL, CPL, ROAS, qual rate, IS, CTR</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Campaign Deep Dive</div>
+        <div class="cdesc2">Root cause analysis on a specific CPQL/ROAS/qual flag: contributing factors, attribution</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Forecast</div>
+        <div class="cdesc2">End-of-month projection: spend, leads, SQLs, CPQL, ROAS &mdash; status-quo vs post-action paths</div>
+        <div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div>
+      </div>
     </div>
   </div>
 </div>
