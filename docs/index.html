@@ -4,543 +4,452 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="refresh" content="3600">
-<title>Qoyod Agent Activity</title>
+<title>Nexa Performance Agent</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f7f8fa; color: #1a1a2e; font-size: 14px; }
-  header { background: #1a1a2e; color: #fff; padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; }
-  header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.3px; }
-  header .meta { font-size: 12px; color: #a0aec0; margin-top: 4px; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
-  .section { background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 24px; overflow: hidden; }
-  .section-header { padding: 14px 20px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
-  .section-header h2 { font-size: 15px; font-weight: 600; color: #2d3748; }
-  .section-header .count { background: #edf2f7; color: #4a5568; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #f7f8fa; text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-  td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #fafbfc; }
-  tr.row-err td { background: #fff5f5; }
-  tr.row-warn td { background: #fffdf0; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
-  .badge.ok { background: #c6f6d5; color: #22543d; }
-  .badge.err { background: #fed7d7; color: #742a2a; }
-  .badge.warn { background: #fefcbf; color: #744210; }
-  .badge.neutral { background: #e2e8f0; color: #4a5568; }
-  .detail { color: #718096; font-size: 12px; max-width: 400px; word-break: break-word; }
-  code { font-family: 'SF Mono', 'Fira Code', monospace; background: #edf2f7; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
-  .empty { text-align: center; color: #a0aec0; padding: 24px; font-style: italic; }
-  footer { text-align: center; padding: 16px; color: #a0aec0; font-size: 12px; }
-  a { color: inherit; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0d;--card:#1a1a1a;--panel:#141414;--border:#2a2a2a;
+  --text:#e6e6e6;--dim:#aaa;--muted:#888;
+  --blue:#58a6ff;--lblue:#79c0ff;--purple:#d2a8ff;
+  --orange:#f0883e;--warm-orange:#ffa657;--green:#3fb950;--lgreen:#7ee787;
+  --grey:#8b949e;--red:#f85149;--accent:#00ff88;
+}
+body{background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:14px;line-height:1.5;min-height:100vh}
+header{display:flex;align-items:center;gap:10px;padding:16px 24px;
+  border-bottom:1px solid var(--border);background:#111;
+  position:sticky;top:0;z-index:100}
+header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 6px var(--accent);flex-shrink:0}
+.htag{margin-left:auto;font-size:11px;color:var(--muted);background:#222;
+  padding:3px 8px;border-radius:4px;border:1px solid var(--border)}
+main{max-width:1160px;margin:0 auto;padding:28px 20px 60px}
+.sec{font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.2px;color:var(--muted);margin:32px 0 14px;
+  display:flex;align-items:center;gap:8px}
+.sec::after{content:"";flex:1;height:1px;background:var(--border)}
+.hbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px}
+.hchip{display:flex;align-items:center;gap:7px;background:var(--card);
+  border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px}
+.hdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.hlabel{color:var(--dim)}.hval{font-weight:600}
+.conn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:900px){.conn-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.conn-grid{grid-template-columns:1fr}}
+.conn-card{background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:5px}
+.conn-top{display:flex;align-items:center;justify-content:space-between}
+.conn-name{font-size:13px;font-weight:600}
+.conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.conn-ts{font-size:11px;color:var(--muted)}
+.conn-status{font-size:11px;font-weight:600}
+.hm-wrap{overflow-x:auto}
+.hm-table{border-collapse:collapse;font-size:10px}
+.hm-h{color:var(--muted);padding:2px 3px;text-align:center;font-weight:400;width:22px}
+.hm-row{color:var(--dim);padding:2px 8px 2px 0;text-align:right;
+  font-size:11px;white-space:nowrap;font-weight:500}
+.hm-cell{width:22px;height:18px;border-radius:3px;cursor:default}
+.hm-legend{display:flex;align-items:center;gap:8px;margin-top:8px}
+.hm-grad{width:80px;height:10px;border-radius:4px;
+  background:linear-gradient(to right,var(--border),var(--accent))}
+.feed-row{display:flex;align-items:center;gap:10px;padding:8px 12px;
+  border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap}
+.feed-row:last-child{border-bottom:none}
+.feed-ts{color:var(--muted);white-space:nowrap;min-width:110px}
+.feed-role{color:var(--blue);font-weight:600;min-width:120px}
+.feed-ch{background:#1f1f1f;color:var(--dim);border:1px solid var(--border);
+  border-radius:4px;padding:1px 6px;font-size:10px}
+.feed-action{flex:1;color:var(--text)}
+.feed-badge{font-size:10px;font-weight:700;text-transform:uppercase;
+  padding:2px 7px;border-radius:10px;border:1px solid;white-space:nowrap}
+.feed-empty{color:var(--muted);font-size:12px;padding:16px;
+  background:var(--card);border:1px solid var(--border);border-radius:8px}
+.feed-wrap{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:700px){.cgrid{grid-template-columns:1fr}}
+.ccard{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;display:flex;justify-content:space-between;
+  align-items:flex-start;gap:12px}
+.cname{font-size:13px;font-weight:600}
+.cdesc{font-size:11px;color:var(--muted);margin-top:3px}
+.csched{font-size:11px;color:var(--muted);background:#111;
+  padding:3px 8px;border-radius:4px;font-family:monospace;white-space:nowrap;flex-shrink:0}
+.agent-panel{border-left:4px solid var(--panel-color,#444);
+  background:var(--panel);border-radius:8px;margin-bottom:18px;overflow:hidden}
+.agent-header{display:flex;align-items:center;gap:10px;
+  padding:14px 18px;border-bottom:1px solid var(--border);
+  background:color-mix(in srgb,var(--panel-color,#444) 8%,var(--panel))}
+.agent-icon{font-size:18px}
+.agent-name{font-size:15px;font-weight:700;color:var(--panel-color,#e6e6e6)}
+.agent-desc{font-size:12px;color:var(--dim);flex:1}
+.dept-chip{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.8px;padding:2px 8px;border-radius:10px;
+  border:1px solid currentColor;color:var(--panel-color,#888);opacity:.8;white-space:nowrap}
+.agent-body{padding:16px 18px}
+.orch-card{background:color-mix(in srgb,#f0883e 6%,#111);
+  border:1px solid color-mix(in srgb,#f0883e 20%,var(--border));
+  border-radius:8px;padding:16px 20px}
+.orch-title{font-size:13px;font-weight:700;color:#f0883e;margin-bottom:8px}
+.orch-loop{list-style:none;counter-reset:loop;display:flex;flex-direction:column;gap:5px}
+.orch-loop li{counter-increment:loop;display:flex;align-items:flex-start;gap:8px;
+  font-size:12px;color:var(--dim)}
+.orch-loop li::before{content:counter(loop);min-width:18px;height:18px;
+  border-radius:50%;background:color-mix(in srgb,#f0883e 25%,#222);
+  color:#f0883e;font-size:10px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;margin-top:1px}
+.sub-panel{border-left:2px solid var(--sub-color,#444);
+  background:color-mix(in srgb,var(--sub-color,#444) 5%,#0f0f0f);
+  border-radius:6px;margin-bottom:14px;overflow:hidden;margin-left:24px}
+.sub-header{display:flex;align-items:center;gap:8px;
+  padding:10px 14px;border-bottom:1px solid var(--border)}
+.sub-arrow{font-size:14px;color:var(--dim);flex-shrink:0}
+.sub-name{font-size:13px;font-weight:700;color:var(--sub-color,#e6e6e6)}
+.sub-desc{font-size:11px;color:var(--muted);flex:1}
+.sub-chip{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.8px;padding:2px 8px;border-radius:10px;
+  border:1px solid currentColor;color:var(--sub-color,#888);opacity:.8;white-space:nowrap}
+.sub-body{padding:12px 14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:600px){.grid-2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:7px;
+  padding:14px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+.card:hover{border-color:#3a3a3a}
+.ctitle{font-size:13px;font-weight:600}
+.cdesc2{font-size:12px;color:var(--dim);flex:1}
+.cfoot{display:flex;align-items:center;justify-content:space-between;margin-top:4px;gap:6px}
+.cnote{font-size:11px;color:var(--muted)}
+.n8n-link{color:#f0883e;font-size:11px;text-decoration:none;
+  border:1px solid #f0883e44;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.n8n-link:hover{background:#f0883e22}
+.n8n-run-btn{color:#111;background:#f0883e;font-size:12px;font-weight:700;
+  text-decoration:none;border:none;padding:5px 14px;border-radius:6px;
+  white-space:nowrap;display:inline-block;margin-top:10px}
+.n8n-run-btn:hover{background:#ffa657}
+.at-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:900px){.at-grid{grid-template-columns:1fr}}
+.at-card{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:16px;display:flex;flex-direction:column;gap:6px}
+.at-title{font-size:13px;font-weight:700;margin-bottom:4px}
+.at-row{font-size:11px;color:var(--dim);padding:4px 0;
+  border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.at-row:last-child{border-bottom:none}
+.at-role{color:var(--blue);font-weight:600;min-width:90px}
+.at-status-ok{color:var(--green);font-weight:600}
+.at-status-fail{color:#e05c5c;font-weight:600}
+.at-status-pend{color:var(--orange);font-weight:600}
+.at-overdue{color:#e05c5c;font-weight:600}
+.at-empty{color:var(--muted);font-size:12px;font-style:italic}
 </style>
 </head>
 <body>
 <header>
-  <div>
-    <h1>Qoyod Agent Activity</h1>
-    <div class="meta">Auto-refreshes every hour &bull; Last updated: 19 Jun 2026 16:49 AST</div>
-  </div>
+  <div class="dot"></div>
+  <h1>Nexa Performance Agent</h1>
+  <span class="htag">n8n Cloud &bull; GitHub Pages</span>
 </header>
-<div class="container">
+<main>
 
-  <div class="section">
-    <div class="section-header">
-      <h2>Recent Agent Actions</h2>
-      <span class="count">50 rows</span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Timestamp (AST)</th><th>Role</th><th>Action</th><th>Status</th><th>Detail</th>
-        </tr></thead>
-        <tbody>
-<tr>
-  <td>19 Jun 2026 14:16 AST</td>
-  <td><code>claude_session</code></td>
-  <td>code_committed</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"commit": "83b49aa", "files_changed": 1, "files": ["_fix_infra.py"], "stat": "_fix_infra.py | 117 ----------------------------------------------------------\n 1 file changed, 117 deletions(-)"}</td>
-</tr>
-<tr>
-  <td>18 Jun 2026 23:37 AST</td>
-  <td><code>claude_session</code></td>
-  <td>code_committed</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"commit": "29da4d0", "files_changed": 2, "files": ["executors/tiktok.py", "scripts/bulk_ads.py"], "stat": "executors/tiktok.py | 2 +-\n scripts/bulk_ads.py | 2 +-\n 2 files changed, 2 insertions(+), 2 deletions(-)"}</td>
-</tr>
-<tr>
-  <td>18 Jun 2026 23:27 AST</td>
-  <td><code>task_creator</code></td>
-  <td>asana_task_created</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"gid": "1215845331755397", "title": "[Recommendation | Review] TikTok Invoice Websiteform + ZATCA \u2014 CPQL &amp; Qual Rate Issues", "project_key": "daily_activity", "asset_level": "campaign", "backfilled": true}</td>
-</tr>
-<tr>
-  <td>18 Jun 2026 00:07 AST</td>
-  <td><code>collector</code></td>
-  <td>hubspot_deals_mirror</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"completed_at": "2026-06-17T21:07:58.815552+00:00"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 23:42 AST</td>
-  <td><code>collector</code></td>
-  <td>hubspot_deals_mirror</td>
-  <td><span class="badge warn">running</span></td>
-  <td class="detail">{"pid": 39428, "started_at": "2026-06-17T20:42:27.775580+00:00"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 17:35 AST</td>
-  <td><code>collector</code></td>
-  <td>hubspot_deals_sync</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"error": "400 angular-axle-492812-q4:qoyod_marketing.hubspot_deals_daily is not allowed for this operation because it currently has type VIEW.; reason: invalid, message: angular-axle-492812-q4:qoyod_marketing.hubspot_deals_daily is not allowed for this operation because it currently has type VIEW.\n\nLocation: "}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 17:23 AST</td>
-  <td><code>collector</code></td>
-  <td>hubspot_deals_sync</td>
-  <td><span class="badge warn">running</span></td>
-  <td class="detail">{"pid": 34196, "started_at": "2026-06-17T14:23:24.929466+00:00"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 11:54 AST</td>
-  <td><code>claude_session</code></td>
-  <td>code_committed</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"commit": "057aeaa", "files_changed": 1, "files": ["reports/templates/"], "stat": "reports/templates/activity.html | 3022 +++++++++++++++++++++++++++++++++++++++\n reports/templates/team.html     |  762 ++++++++++\n 2 files changed, 3784 insertions(+)"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 11:53 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 11:41 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 11:30 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 11:19 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 11:08 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:57 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:45 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:34 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:24 AST</td>
-  <td><code>project_coordinator</code></td>
-  <td>slack_audit_complete</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"digests_checked":1,"reminders_sent":0,"execution_gaps":0,"note":"Digest ts:1781594331.740719 age=24.1h no reaction. Reminder already in thread (ts:1781679611.623209). No duplicate reminder sent per one-reminder rule. No executed actions to verify."}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:22 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:11 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:05 AST</td>
-  <td><code>health_monitor</code></td>
-  <td>connector_escalated</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"label": "Databox: All Grains push", "checks": ["- push_freshness: BROKEN \u2014 Databox: All Grains push: no successful push found in agent_activity_log"], "task_gid": null}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:04 AST</td>
-  <td><code>health_monitor</code></td>
-  <td>connector_escalated</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"label": "Slack approvals digest", "checks": ["- delivery: BROKEN \u2014 Slack approvals digest: no successful 'posted_approvals_digest' in last 26h"], "task_gid": null}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:04 AST</td>
-  <td><code>health_monitor</code></td>
-  <td>connector_escalated</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"label": "Daily scheduler", "checks": ["- execution: BROKEN \u2014 No successful 'daily_digest' run found in last 26h \u2014 daily job may have stalled"], "task_gid": null}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:03 AST</td>
-  <td><code>health_monitor</code></td>
-  <td>connector_escalated</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"label": "hubspot_deals", "checks": ["- row_integrity: BROKEN \u2014 no detail"], "task_gid": null}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:02 AST</td>
-  <td><code>health_monitor</code></td>
-  <td>connector_escalated</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"label": "linkedin", "checks": ["- liveness: BROKEN \u2014 Token rejected: HTTP 401 \u2014 expired or revoked"], "task_gid": null}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:02 AST</td>
-  <td><code>health_monitor</code></td>
-  <td>connector_escalated</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"label": "google", "checks": ["- row_integrity: BROKEN \u2014 no detail"], "task_gid": null}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:00 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 10:00 AST</td>
-  <td><code>project_coordinator</code></td>
-  <td>slack_audit_complete</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"digests_checked": 1, "reminders_sent": 1, "escalations": 0, "execution_gaps": 0}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:49 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:37 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:37 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>self_heal</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"summary": {"stale_views": 1, "failed_collectors": 0, "dashboard_errors": 0, "stuck_approvals": 0, "memory_update": 0}, "total_healed": 1}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:37 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>self_heal</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"healer": "failed_collector", "collector": "collect_hubspot_leads", "prior_failures": 2, "retry_ok": false}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:36 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>self_heal</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"healer": "failed_collector", "collector": "collect_google_ads", "prior_failures": 2, "retry_ok": false}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:36 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>self_heal</td>
-  <td><span class="badge err">failed</span></td>
-  <td class="detail">{"healer": "failed_collector", "collector": "collect_hubspot_deals", "prior_failures": 2, "retry_ok": false}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:30 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>self_heal</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"healer": "stale_views", "lag_days": 2, "action": "materialize_heavy_views"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:26 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:15 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 09:04 AST</td>
-  <td><code>slack_listener</code></td>
-  <td>heartbeat</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"poll_channels": 2}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:56 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>nightly_audit_complete</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"audit_tasks_created": 0, "health_tasks_created": 0}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:55 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>junk_leads_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"junk_leads": true, "qual_rate": 3.0, "cpql": 461.06, "asana_gid": "1215713580583533"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:55 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>scale_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"avg_spend": 122.93846153846154, "new_budget": 153.67, "cpql": 91.97, "asana_gid": "1215710916617150"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:55 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>scale_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"avg_spend": 174.45, "new_budget": 218.06, "cpql": 87.22, "asana_gid": "1215707352983627"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>scale_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"avg_spend": 85.15357142857144, "new_budget": 106.44, "cpql": 43.84, "asana_gid": "1215710916610993"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>scale_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"avg_spend": 166.30461538461537, "new_budget": 207.88, "cpql": 41.98, "asana_gid": "1215713580329875"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>scale_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"avg_spend": 110.99615384615383, "new_budget": 138.75, "cpql": 41.23, "asana_gid": "1215707352655652"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>performance_audit</code></td>
-  <td>scale_task_created</td>
-  <td><span class="badge neutral">pending_approval</span></td>
-  <td class="detail">{"avg_spend": 40.659285714285716, "new_budget": 50.82, "cpql": 38.44, "asana_gid": "1214843491775101"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>spike_detector</code></td>
-  <td>detect_spikes</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"spikes": ["google_ads:spend", "google_ads:qualified_rate", "google_ads:disqualified_rate", "meta:disqualified_rate", "snapchat:qualified_rate", "snapchat:disqualified_rate", "microsoft_ads:spend", "microsoft_ads:leads"]}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>ops_scheduler</code></td>
-  <td>cadence_daily_complete</td>
-  <td><span class="badge ok">success</span></td>
-  <td class="detail">{"cadence": "daily"}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>llm_cadence</code></td>
-  <td>cadence_complete</td>
-  <td><span class="badge ok">ok</span></td>
-  <td class="detail">{"cadence": "daily", "tasks_created": 0, "approvals_requested": 0, "roles_run": 0}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:54 AST</td>
-  <td><code>llm_cadence</code></td>
-  <td>bq_cache_loaded</td>
-  <td><span class="badge ok">ok</span></td>
-  <td class="detail">{"channels": ["google_ads", "snapchat", "microsoft_ads", "tiktok"]}</td>
-</tr>
-<tr>
-  <td>17 Jun 2026 08:53 AST</td>
-  <td><code>llm_cadence</code></td>
-  <td>cadence_started</td>
-  <td><span class="badge ok">ok</span></td>
-  <td class="detail">{"cadence": "daily"}</td>
-</tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-header">
-      <h2>Open Tasks</h2>
-      <span class="count">20 open</span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Title</th><th>Assignee</th><th>Due</th>
-        </tr></thead>
-        <tbody>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr>
-<tr>
-  <td>Post-Restructure Monitoring</td>
-  <td>Rana khalid</td>
-  <td>2026-02-26</td>
-</tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-header">
-      <h2>Connector Health (Last 24h)</h2>
-      <span class="count">0 connectors</span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Channel</th><th>Status</th><th>Checks Passed</th><th>Checks Failed</th><th>Last Seen (AST)</th>
-        </tr></thead>
-        <tbody><tr><td colspan="6" class="empty">No connector health data in last 24h</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
+<div class="sec">System Health</div>
+<div class="hbar">
+  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">BQ Activity</span><span class="hval" style="color:var(--green)">3h ago</span></div>
+  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">n8n Master</span><span class="hval" style="color:var(--muted)">Daily 08:00 AST</span></div>
+  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">GitHub Actions</span><span class="hval" style="color:var(--muted)">Every 6h</span></div>
+  <div class="hchip"><span class="hdot" style="background:var(--green);box-shadow:0 0 5px var(--green)"></span><span class="hlabel">GitHub Pages</span><span class="hval" style="color:var(--green)">Serving</span></div>
+  <div class="hchip"><span class="hlabel">&#8987; Next run in</span><span class="hval" style="color:var(--muted)">14h 5m</span></div>
+  <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/jOnJxdpdaO3Vbi0B" target="_blank" class="n8n-link">Data Collection &rarr;</a></div>
+  <div class="hchip"><a href="https://qoyod.app.n8n.cloud/workflow/5Acqsbxsk0XQ5k9e" target="_blank" class="n8n-link">Approval Listener &rarr;</a></div>
 </div>
-<footer>Qoyod Performance Agent &bull; <a href="https://qoyod.app.n8n.cloud">n8n Cloud</a> &bull; Updated 19 Jun 2026 16:49 AST</footer>
-</body>
-</html>
+
+<div class="sec">Connector Health</div>
+<div class="conn-grid">
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">Google Ads</span><span class="conn-dot" style="background:var(--orange);box-shadow:0 0 4px var(--orange)"></span></div>
+  <div class="conn-ts">2026-06-18</div>
+  <div class="conn-status" style="color:var(--orange)">1d stale</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">Meta</span><span class="conn-dot" style="background:var(--orange);box-shadow:0 0 4px var(--orange)"></span></div>
+  <div class="conn-ts">2026-06-18</div>
+  <div class="conn-status" style="color:var(--orange)">1d stale</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">Snapchat</span><span class="conn-dot" style="background:var(--orange);box-shadow:0 0 4px var(--orange)"></span></div>
+  <div class="conn-ts">2026-06-18</div>
+  <div class="conn-status" style="color:var(--orange)">1d stale</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">TikTok</span><span class="conn-dot" style="background:var(--orange);box-shadow:0 0 4px var(--orange)"></span></div>
+  <div class="conn-ts">2026-06-18</div>
+  <div class="conn-status" style="color:var(--orange)">1d stale</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">LinkedIn</span><span class="conn-dot" style="background:var(--muted);box-shadow:0 0 4px var(--muted)"></span></div>
+  <div class="conn-ts">No data</div>
+  <div class="conn-status" style="color:var(--muted)">—</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">Microsoft Ads</span><span class="conn-dot" style="background:var(--orange);box-shadow:0 0 4px var(--orange)"></span></div>
+  <div class="conn-ts">2026-06-18</div>
+  <div class="conn-status" style="color:var(--orange)">1d stale</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">HubSpot Leads</span><span class="conn-dot" style="background:var(--green);box-shadow:0 0 4px var(--green)"></span></div>
+  <div class="conn-ts">2026-06-19</div>
+  <div class="conn-status" style="color:var(--green)">Fresh</div>
+</div>
+<div class="conn-card">
+  <div class="conn-top"><span class="conn-name">HubSpot Deals</span><span class="conn-dot" style="background:#e05c5c;box-shadow:0 0 4px #e05c5c"></span></div>
+  <div class="conn-ts">2026-06-17</div>
+  <div class="conn-status" style="color:#e05c5c">2d stale</div>
+</div>
+</div>
+
+<div class="sec">Activity Heat Map &mdash; Last 7 Days</div>
+<div class="hm-wrap"><table class="hm-table"><thead><tr><th></th><th class="hm-h">00</th><th class="hm-h">01</th><th class="hm-h">02</th><th class="hm-h">03</th><th class="hm-h">04</th><th class="hm-h">05</th><th class="hm-h">06</th><th class="hm-h">07</th><th class="hm-h">08</th><th class="hm-h">09</th><th class="hm-h">10</th><th class="hm-h">11</th><th class="hm-h">12</th><th class="hm-h">13</th><th class="hm-h">14</th><th class="hm-h">15</th><th class="hm-h">16</th><th class="hm-h">17</th><th class="hm-h">18</th><th class="hm-h">19</th><th class="hm-h">20</th><th class="hm-h">21</th><th class="hm-h">22</th><th class="hm-h">23</th></tr></thead><tbody><tr><th class="hm-row">Mon</th><td class="hm-cell" style="background:rgba(0,255,136,0.18)" title="45 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="37 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="43 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.11)" title="28 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.05)" title="13 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Tue</th><td class="hm-cell" style="background:rgba(0,255,136,0.46)" title="115 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,1.00)" title="248 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="4 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.24)" title="59 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.44)" title="110 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.38)" title="93 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td></tr><tr><th class="hm-row">Wed</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.22)" title="54 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.04)" title="10 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td></tr><tr><th class="hm-row">Thu</th><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.01)" title="2 events"></td></tr><tr><th class="hm-row">Fri</th><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.00)" title="1 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:var(--border)" title="0 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.27)" title="68 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="57 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.23)" title="58 events"></td></tr><tr><th class="hm-row">Sat</th><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="50 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="24 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.17)" title="41 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.16)" title="40 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="14 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.06)" title="16 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr><tr><th class="hm-row">Sun</th><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.10)" title="25 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.20)" title="49 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.31)" title="76 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.03)" title="7 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.09)" title="23 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.15)" title="38 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="6 events"></td><td class="hm-cell" style="background:rgba(0,255,136,0.02)" title="5 events"></td></tr></tbody></table>
+<div class="hm-legend"><span style="color:var(--muted);font-size:11px">Less</span><div class="hm-grad"></div><span style="color:var(--muted);font-size:11px">More</span><span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh &middot; last 7 days</span></div></div>
+
+<div class="sec">Recent Agent Activity</div>
+<div class="feed-wrap">
+<div class="feed-row"><span class="feed-ts">Jun 19 11:16 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 18 20:37 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 18 20:27 UTC</span><span class="feed-role">task_creator</span><span class="feed-action">asana_task_created</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 21:07 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 20:42 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_mirror</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 14:35 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 14:23 UTC</span><span class="feed-role">collector</span><span class="feed-action">hubspot_deals_sync</span><span class="feed-badge" style="color:var(--dim);border-color:var(--dim)">running</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 08:54 UTC</span><span class="feed-role">claude_session</span><span class="feed-action">code_committed</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 08:53 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 08:41 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 08:30 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 08:19 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 08:08 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:57 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:45 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:34 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:24 UTC</span><span class="feed-role">project_coordinator</span><span class="feed-action">slack_audit_complete</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:22 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:11 UTC</span><span class="feed-role">slack_listener</span><span class="feed-action">heartbeat</span><span class="feed-badge" style="color:var(--green);border-color:var(--green)">success</span></div>
+<div class="feed-row"><span class="feed-ts">Jun 17 07:05 UTC</span><span class="feed-role">health_monitor</span><span class="feed-ch">databox_push</span><span class="feed-action">connector_escalated</span><span class="feed-badge" style="color:#e05c5c;border-color:#e05c5c">failed</span></div>
+</div>
+
+<div class="sec">Cadence Flows</div>
+<div class="cgrid">
+  <div class="ccard">
+    <div>
+      <div class="cname">Daily Master</div>
+      <div class="cdesc">Full daily analysis: spend, leads, CPQL, anomaly detection, Slack summary, pause/scale candidates</div>
+      <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a></div>
+    </div>
+    <div class="csched">05:00 UTC daily</div>
+  </div>
+  <div class="ccard">
+    <div>
+      <div class="cname">Weekly Review</div>
+      <div class="cdesc">7-day vs prior-7 period comparison, keyword autofix, channel flags, weekly Slack digest</div>
+      <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/iNSdpXH7Rc9Lb8h8" target="_blank" class="n8n-link">Open Weekly in n8n &rarr;</a></div>
+    </div>
+    <div class="csched">Sun 05:00 UTC</div>
+  </div>
+  <div class="ccard">
+    <div>
+      <div class="cname">Monthly Review</div>
+      <div class="cdesc">MoM review, OKR tracking, budget reconciliation, 30-day forecast</div>
+      <div style="margin-top:8px"><a href="https://qoyod.app.n8n.cloud/workflow/0Zh45UoTtjjhRn8U" target="_blank" class="n8n-link">Open Monthly in n8n &rarr;</a></div>
+    </div>
+    <div class="csched">1st 05:00 UTC</div>
+  </div>
+</div>
+
+<div class="sec">Actions &amp; Tasks</div>
+<div class="at-grid">
+<div class="at-card"><div class="at-title">Recent Actions</div><div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">3h ago</span></div>
+<div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">18h ago</span></div>
+<div class="at-row"><span class="at-role">task_creator</span><span style="flex:1">asana_task_created</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">18h ago</span></div>
+<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div>
+<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_mirror</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">1d ago</span></div>
+<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-fail">failed</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
+<div class="at-row"><span class="at-role">collector</span><span style="flex:1">hubspot_deals_sync</span><span class="at-status-pend">running</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
+<div class="at-row"><span class="at-role">claude_session</span><span style="flex:1">code_committed</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
+<div class="at-row"><span class="at-role">slack_listener</span><span style="flex:1">heartbeat</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div>
+<div class="at-row"><span class="at-role">slack_listener</span><span style="flex:1">heartbeat</span><span class="at-status-ok">success</span><span style="color:var(--muted);font-size:10px;margin-left:6px">2d ago</span></div></div>
+<div class="at-card"><div class="at-title">Open Asana Tasks</div><div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">optimization</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div>
+<div class="at-row"><span style="flex:1">Post-Restructure Monitoring &middot; Rana khalid <span style="color:var(--muted);font-size:10px">google_ads</span></span><span class="at-status-pend at-overdue">2026-02-26</span></div></div>
+<div class="at-card"><div class="at-title">Pending Approvals</div>
+<div style="font-size:12px;color:var(--dim);line-height:1.7">Approvals are managed in Slack <strong>#approvals</strong>.<br>React <strong>&#10003;</strong> to execute all scale + pause items.<br>React <strong>&#10007;</strong> to skip.</div>
+<div style="margin-top:10px"><a href="#" class="n8n-link">Open #approvals in Slack &rarr;</a></div>
+<div style="margin-top:14px;font-size:11px;color:var(--muted)">optimize / junk / drilldown items are review-only &mdash; Asana tasks already created, no further execution needed.</div></div></div>
+
+<!-- AGENT TEAM -->
+<div class="sec">Agent Team</div>
+<div class="agent-panel" style="--panel-color:#f0883e">
+  <div class="agent-header">
+    <span class="agent-icon">&#127775;</span>
+    <span class="agent-name">AI Orchestrator</span>
+    <span class="agent-desc">Routes all work &middot; gates every &#10003; &middot; daily 8-step loop at 08:00 Riyadh</span>
+    <a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a>
+    <span class="dept-chip">MANAGER</span>
+  </div>
+  <div class="agent-body">
+    <div class="orch-card">
+      <div class="orch-title">The 8-Step Intelligence Loop (runs every daily cadence)</div>
+      <a href="https://qoyod.app.n8n.cloud/workflow/T8icImtZFLYeCa7e" target="_blank" class="n8n-run-btn">&#9654; Run Daily Now</a>
+      <ol class="orch-loop" style="margin-top:12px">
+        <li>OBSERVE &mdash; pull live data from BQ, never yesterday&#39;s recollection</li>
+        <li>COMPARE period-over-period &mdash; last 7d vs prior 7d via period_compare.py</li>
+        <li>INVESTIGATE root cause &mdash; campaign mix, audience, launch waves, silent deaths, LP routing</li>
+        <li>DECIDE with full setup &mdash; complete campaign/adset/creative/LP spec, not just &ldquo;pause this&rdquo;</li>
+        <li>EXECUTE only after &#10003; approval &mdash; #approvals + &#10003;/&#10007; flow</li>
+        <li>MONITOR post-action &mdash; re-evaluate every action at 7d and 14d</li>
+        <li>LEARN &mdash; record outcome in memory/14_learning_patterns.md</li>
+        <li>FORECAST &mdash; end-of-month projection via forecaster.py (spend, leads, SQLs, CPQL, ROAS)</li>
+      </ol>
+    </div>
+  </div>
+</div>
+<div class="sec">Layer 2 &mdash; Operations</div>
+<div class="agent-panel" style="--panel-color:var(--red)">
+  <div class="agent-header">
+    <span class="agent-icon">&#128270;</span>
+    <span class="agent-name">QA Auditor</span>
+    <span class="agent-desc">Validates every agent output &middot; stamps QA_PASSED or QA_FAILED &middot; nothing ships without passing</span>
+    <a href="https://qoyod.app.n8n.cloud/workflow/ug3niLKrjPfO9Iz7" target="_blank" class="n8n-link">QA Gate &rarr;</a>
+    <span class="dept-chip">GATEKEEPER</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid-2">
+      <div class="card"><div class="ctitle">QA Validation Run</div><div class="cdesc2">Run validation checklist on recent agent outputs: data integrity, task completeness, approval gate, format, technical checks</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+    </div>
+  </div>
+</div>
+<div class="agent-panel" style="--panel-color:var(--grey)">
+  <div class="agent-header">
+    <span class="agent-icon">&#128295;</span>
+    <span class="agent-name">Project Coordinator</span>
+    <span class="agent-desc">Seasonal &amp; product campaign coordination &middot; all-seat Asana task creation &middot; Slack monitoring &middot; monthly campaign reports &middot; connector health &middot; GTM &middot; pixel audit</span>
+    <span class="dept-chip">OPS</span>
+  </div>
+  <div class="agent-body">
+    <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);border-bottom:1px solid color-mix(in srgb,var(--blue) 25%,var(--border));padding-bottom:6px">Campaign Coordination</div>
+    <div class="grid" style="margin-bottom:22px">
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Seasonal Campaign Brief</div><div class="cdesc2">Kick off a seasonal campaign (National Day &middot; Founding Day &middot; Ramadan &middot; End of Year). Timeline, budget, naming, Asana tasks for all seats.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Seasonal Campaign Monitor</div><div class="cdesc2">Status check: Asana tasks on track, blockers in Slack, mid-campaign CPQL vs target, delivery dates</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Product Campaign Brief</div><div class="cdesc2">Launch a product/industry campaign (Bookkeeping &middot; Qflavours &middot; QHR &middot; POS). Includes HubSpot lead module check, deal pipeline, UTM structure, all-seat Asana tasks.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Product Campaign Monitor</div><div class="cdesc2">Monitor active product campaigns: HubSpot attribution, deal pipeline conversion, CPQL vs target, Slack blockers</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--blue) 18%,var(--border))"><div class="ctitle" style="color:var(--blue)">Monthly Campaign Report</div><div class="cdesc2">End-of-month report: all seasonal + product campaigns. Spend &middot; leads &middot; SQLs &middot; CPQL vs target &middot; deal value. Creates follow-up Asana tasks for misses.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+    </div>
+    <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--grey);border-bottom:1px solid color-mix(in srgb,var(--grey) 25%,var(--border));padding-bottom:6px">Technical Health</div>
+    <div class="grid">
+      <div class="card"><div class="ctitle">Connector Health</div><div class="cdesc2">Check BQ freshness for all source tables. Flag STALE (&gt;12h) or DEAD (&gt;24h) connectors.</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
+      <div class="card"><div class="ctitle">GTM Audit</div><div class="cdesc2">Audit GTM-TFH26VC2 (web) + GTM-PK6924TJ (server): tags, triggers, UTM passthrough, duplicates</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">Meta Pixel Health</div><div class="cdesc2">Verify both Meta pixels fire on every LP form submit. Flag gaps in Events Manager.</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
+    </div>
+  </div>
+</div>
+<div class="sec">Layer 3 &mdash; Performance</div>
+<div class="agent-panel" style="--panel-color:var(--blue)">
+  <div class="agent-header">
+    <span class="agent-icon">&#127919;</span>
+    <span class="agent-name">Performance Lead</span>
+    <span class="agent-desc">KPI thresholds &middot; budget allocation &middot; channel mix &middot; triage to Campaign Manager or Creative Strategist</span>
+    <a href="https://qoyod.app.n8n.cloud/workflow/Qd5SoGxZbgT1ohYP" target="_blank" class="n8n-link">CPL sub-flow &rarr;</a>
+    <span class="dept-chip">PERFORMANCE</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid" style="margin-bottom:18px">
+      <div class="card"><div class="ctitle">Campaign Brief</div><div class="cdesc2">Full brief for a new campaign: audience, creative direction, budget, naming, KPI gates</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">Monthly Plan</div><div class="cdesc2">Monthly performance plan with targets, channel allocation, and action priorities</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">Quarterly Plan</div><div class="cdesc2">Quarterly strategy: OKRs, budget roadmap by month, risk &amp; upside analysis</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">KPI Threshold Review</div><div class="cdesc2">Review live CPQL/CPL/ROAS against config.py thresholds &mdash; flag if calibration needed</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+    </div>
+    <div class="sub-panel" style="--sub-color:var(--lblue)">
+      <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">Campaign Manager</span><span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span><a href="https://qoyod.app.n8n.cloud/workflow/eL0V6ReftV2U1wNf" target="_blank" class="n8n-link">IS sub-flow &rarr;</a><span class="sub-chip">PERFORMANCE</span></div>
+      <div class="sub-body">
+        <div class="grid">
+          <div class="card"><div class="ctitle">Keyword Audit</div><div class="cdesc2">Scan enabled keywords for policy violations: always-negative patterns, wrong language, QS&lt;5+IS&gt;80%</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">Ad Audit</div><div class="cdesc2">Scan live ads: zero-conv ($70/7d), junk leads (60%+ disqualified), high CPL (&gt;$50/10d)</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">Campaign Health</div><div class="cdesc2">ROAS &rarr; CPQL &rarr; CPL waterfall per channel. Flag campaigns outside KPI zones.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">Scale Proposal</div><div class="cdesc2">Identify campaigns with CPQL &le;$60 over 14d and generate full scale proposals for #approvals</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">Campaign Naming Audit</div><div class="cdesc2">Validate all live campaign names against &#123;Channel&#125;_&#123;Type&#125;_&#123;Language&#125;_&#123;Product&#125;_&#123;Audience&#125;. Flag &ldquo;Prospecting&rdquo; audience.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="sub-panel" style="--sub-color:var(--purple)">
+      <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">Creative Strategist</span><span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span><a href="https://qoyod.app.n8n.cloud/workflow/smHaEhWloComRQyz" target="_blank" class="n8n-link">Creative sub-flow &rarr;</a><span class="sub-chip">PERFORMANCE</span></div>
+      <div class="sub-body">
+        <div class="grid">
+          <div class="card"><div class="ctitle">Creative Analysis</div><div class="cdesc2">Rank creatives by qualified leads, CPQL, CTR, and video VTR (video-aware analysis)</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">Creative Brief</div><div class="cdesc2">Generate brief for next creative batch: winning patterns, variants, OCEAN mapping, copy hooks</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">Creative Audit</div><div class="cdesc2">Audit live creatives for fatigue (&gt;30d), duplicate variants, CTR &lt;0.5%, VTR &lt;15%</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+          <div class="card"><div class="ctitle">OCEAN Persona Map</div><div class="cdesc2">Map target audiences to OCEAN dimensions (O/C/E/A/N) for a product or campaign</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="sec">Layer 3 &mdash; CRO Chain</div>
+<div class="agent-panel" style="--panel-color:var(--orange)">
+  <div class="agent-header">
+    <span class="agent-icon">&#128200;</span>
+    <span class="agent-name">CRO Specialist</span>
+    <span class="agent-desc">LP briefs &middot; qual ratio decisions (redirect at &lt;30%) &middot; A/B test hypotheses &middot; test result calls</span>
+    <a href="https://qoyod.app.n8n.cloud/workflow/jfE5KKnPJQBf7MCj" target="_blank" class="n8n-link">CPQL sub-flow &rarr;</a>
+    <a href="https://qoyod.app.n8n.cloud/workflow/PxFBmtXDVgcNGzIM" target="_blank" class="n8n-link">Qual sub-flow &rarr;</a>
+    <span class="dept-chip">CRO CHAIN</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid-2" style="margin-bottom:18px">
+      <div class="card"><div class="ctitle">LP Brief</div><div class="cdesc2">8-section LP brief: objective, OCEAN audience, hypothesis, success criteria, ZATCA badge, timeline</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">LP Performance Analysis</div><div class="cdesc2">Analyse qual rate by destination_url. Flag LPs &lt;30% qual rate for immediate redirect.</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+    </div>
+    <div class="sub-panel" style="--sub-color:var(--warm-orange)">
+      <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">UI/UX Designer</span><span class="sub-desc">LP design from CRO brief &middot; OCEAN-aligned visual tone &middot; ZATCA badge above fold &middot; mobile-first 375px</span><span class="sub-chip">CRO CHAIN</span></div>
+      <div class="sub-body">
+        <div class="grid-2" style="margin-bottom:14px">
+          <div class="card"><div class="ctitle">Design Brief</div><div class="cdesc2">Generate LP design brief: OCEAN visual mapping, ZATCA placement, RTL layout, form field names, interaction notes, handoff checklist for Developer</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+        </div>
+        <div class="sub-panel" style="--sub-color:var(--lgreen);margin-left:0">
+          <div class="sub-header"><span class="sub-arrow">&#8618;</span><span class="sub-name">Developer</span><span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span><span class="sub-chip">CRO CHAIN</span></div>
+          <div class="sub-body">
+            <div class="grid-2">
+              <div class="card"><div class="ctitle">UTM Form Check</div><div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
+              <div class="card"><div class="ctitle">Pixel Verification</div><div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div><div class="cfoot"><span class="cnote">Results &rarr; #data-health</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="sec">Layer 3 &mdash; Data</div>
+<div class="agent-panel" style="--panel-color:var(--green)">
+  <div class="agent-header">
+    <span class="agent-icon">&#128202;</span>
+    <span class="agent-name">Growth Analyst</span>
+    <span class="agent-desc">BQ analysis &middot; period comparisons &middot; flag investigations &middot; forecasts &middot; owns memory/08_pitfalls.md</span>
+    <a href="https://qoyod.app.n8n.cloud/workflow/MHCdIiAtKzHNve1x" target="_blank" class="n8n-link">ROAS sub-flow &rarr;</a>
+    <span class="dept-chip">DATA</span>
+  </div>
+  <div class="agent-body">
+    <div class="grid">
+      <div class="card"><div class="ctitle">Period Comparison</div><div class="cdesc2">7d vs prior-7d for all channels: spend, leads, SQLs, CPQL, CPL, ROAS, qual rate, IS, CTR</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">Campaign Deep Dive</div><div class="cdesc2">Root cause analysis on a specific CPQL/ROAS/qual flag: contributing factors, attribution</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+      <div class="card"><div class="ctitle">Forecast</div><div class="cdesc2">End-of-month projection: spend, leads, SQLs, CPQL, ROAS &mdash; status-quo vs post-action paths</div><div class="cfoot"><span class="cnote">Results &rarr; #approvals</span></div></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</body></html>
