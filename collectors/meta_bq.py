@@ -246,8 +246,8 @@ def _ad_metadata_lookup(account_id: str) -> dict[str, dict]:
                     ad_id = ad_creative_map.get(cid)
                     if ad_id and ad_id in result:
                         result[ad_id]["creative_type"] = ctype
-                except Exception:
-                    pass   # single creative failure doesn't abort the whole batch
+                except Exception as e:
+                    print(f"[meta] creative fetch failed: {e}")   # single creative failure doesn't abort the whole batch
 
         print(f"[meta]   ad metadata fetched for {account_id}: {len(result)} ads")
     except Exception as e:
@@ -298,7 +298,6 @@ def collect_ads_and_write(days: int = None, incremental: bool = False):
                     "ad_id":         str(ins.get("ad_id")),
                     "ad_name":       ins.get("ad_name"),
                     "utm_content":   ins.get("ad_name"),  # Meta {{ad.name}} resolves to this
-                    "status":        None,
                     "spend":         round(spend, 2),
                     "impressions":   int(ins.get("impressions", 0) or 0),
                     "clicks":        int(ins.get("clicks", 0) or 0),

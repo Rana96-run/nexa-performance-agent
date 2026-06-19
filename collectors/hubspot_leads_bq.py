@@ -97,6 +97,7 @@ PROPERTIES = [
     "leads_disqualification_reason__ops",
     "leads_disqualification_reason__sub_reasons",
     "leads_disqualification_reason__ops_qflavour",
+    "leads_disqualification_reason__sub_reasons_qflavour",
     "disqualification_reason_bookkeeping",
     # GA4 client ID — calculated property on Lead Module synced from Contact.ga4_client_id.
     # Enables exact session-to-lead join via GA4 user_pseudo_id = lead_ga4_client_id.
@@ -178,7 +179,7 @@ def collect_and_write(days: int = None, start_date: date = None,
     else:
         start = date(end.year, 1, 1)
     print(f"[leads] Window: {start} -> {end}")
-    since_ms = int(datetime(start.year, start.month, start.day).timestamp() * 1000)
+    since_ms = int(datetime(start.year, start.month, start.day, tzinfo=timezone.utc).timestamp() * 1000)
 
     # bucket key: (date, qoyod_source, pipeline, stage, utm_campaign, utm_audience, utm_content, utm_source, utm_medium, utm_term)
     buckets = defaultdict(lambda: {"total": 0, "qualified": 0, "disqualified": 0, "open": 0,
@@ -193,8 +194,8 @@ def collect_and_write(days: int = None, start_date: date = None,
     end_dt = end + timedelta(days=1)
     while win_start < end_dt:
         win_end = min(win_start + window, end_dt)
-        w_since = int(datetime(win_start.year, win_start.month, win_start.day).timestamp() * 1000)
-        w_until = int(datetime(win_end.year, win_end.month, win_end.day).timestamp() * 1000)
+        w_since = int(datetime(win_start.year, win_start.month, win_start.day, tzinfo=timezone.utc).timestamp() * 1000)
+        w_until = int(datetime(win_end.year, win_end.month, win_end.day, tzinfo=timezone.utc).timestamp() * 1000)
         after = None
         win_count = 0
         pages = 0  # reset per window

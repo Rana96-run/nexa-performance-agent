@@ -360,6 +360,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
             meta         = ad_meta.get(ad_id, {})
             spend_native = float(metrics.get("spend", 0) or 0)
             spend        = to_usd(spend_native, native_cur)
+            leads        = int(metrics.get("conversion", 0) or 0)
             _ad_name = metrics.get("ad_name") or meta.get("name")
             rows.append({
                 "date":          day,
@@ -376,8 +377,9 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "impressions":   int(metrics.get("impressions", 0) or 0),
                 "clicks":        int(metrics.get("clicks", 0) or 0),
                 "ctr":           float(metrics.get("ctr", 0) or 0),
-                "leads":         int(metrics.get("conversion", 0) or 0),
-                "conversions":   float(metrics.get("conversion", 0) or 0),
+                "leads":         leads,
+                "conversions":   float(leads),
+                "cpl":           round(spend / leads, 2) if spend and spend > 0 and leads and leads > 0 else None,
                 "currency":      "USD",
                 "creative_type": meta.get("creative_type"),
                 "status":        meta.get("status"),

@@ -642,7 +642,6 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                     "ad_id":         ad_id,
                     "ad_name":       _ad_name,
                     "utm_content":   _ad_name,
-                    "status":        None,
                     "spend":         round(spend, 2),
                     "impressions":   impressions,
                     "clicks":        clicks,

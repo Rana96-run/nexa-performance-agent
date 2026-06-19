@@ -164,7 +164,7 @@ def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
         url = "https://api.hubapi.com/crm/v3/objects/0-136/search"
         hdr = {"Authorization": f"Bearer {os.environ['HUBSPOT_ACCESS_TOKEN']}",
                "Content-Type": "application/json"}
-        hs_paid = 0; after = 0
+        hs_paid = 0; after = None
         while True:
             body = {
                 "filterGroups": [{
@@ -175,8 +175,10 @@ def check_bq_hubspot_reconcile(drift_threshold: float = 0.05) -> QACheckResult:
                          "value": int(end_local.timestamp() * 1000)},
                     ]}],
                 "properties": ["lead_utm_campaign"],
-                "limit": 100, "after": after,
+                "limit": 100,
             }
+            if after:
+                body["after"] = after
             r = requests.post(url, headers=hdr, json=body, timeout=30)
             r.raise_for_status()
             data = r.json()
@@ -381,8 +383,8 @@ def _reconcile_deals_scope(scope_name: str, pipeline_labels: tuple[str, ...] | N
         "bq_amount_won":    float(bq_r.amount_won or 0),
         "hs_deals_total":   hs_count,
         "hs_deals_won":     hs_won,
-        "hs_amount_total":  round(hs_amt / 3.75, 2),
-        "hs_amount_won":    round(hs_won_amt / 3.75, 2),
+        "hs_amount_total":  round(hs_amt / 3.75, 2),    # HubSpot Search API returns amount in native SAR. Divide by 3.75 to compare against BQ USD. Correct here only.
+        "hs_amount_won":    round(hs_won_amt / 3.75, 2),  # HubSpot Search API returns amount in native SAR. Divide by 3.75 to compare against BQ USD. Correct here only.
     }
 
 

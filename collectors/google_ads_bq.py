@@ -628,6 +628,8 @@ def collect_pmax_asset_groups_and_write(days: int = None, incremental: bool = Fa
 
     query = f"""
         SELECT
+            customer.id,
+            customer.currency_code,
             asset_group.id,
             asset_group.name,
             asset_group.status,
@@ -656,7 +658,9 @@ def collect_pmax_asset_groups_and_write(days: int = None, incremental: bool = Fa
         count = 0
         try:
             for r in ga.search(customer_id=cid, query=query):
-                spend = r.metrics.cost_micros / 1_000_000
+                spend_native = r.metrics.cost_micros / 1_000_000
+                native_cur   = normalize_currency(r.customer.currency_code)
+                spend        = to_usd(spend_native, native_cur)
                 rows.append({
                     "date":               str(r.segments.date),
                     "customer_id":        cid,

@@ -378,10 +378,10 @@ def collect_and_write(days: int = None, start_date: date = None,
                     if deal_id:
                         seen_ids.add(deal_id)
                     p = row.get("properties", {})
-                    created = (p.get("createdate") or "")[:10]
+                    created = _to_riyadh_date(p.get("createdate") or "")
                     if not created:
                         continue
-                    closed = (p.get("closedate") or "")[:10] or None
+                    closed = _to_riyadh_date(p.get("closedate") or "") or None
                     plabel, slabel, status = _classify_stage(
                         p.get("dealstage"),
                         hs_is_closed_won=p.get("hs_is_closed_won"),

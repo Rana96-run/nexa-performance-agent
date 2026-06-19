@@ -701,7 +701,6 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
                 "leads":         leads,
                 "conversions":   float(leads),
                 "cpl":           round(cpl_usd, 2) if cpl_usd else None,
-                "frequency":     None,
                 "currency":      "USD",
                 "final_url":     row.get("FinalUrl", ""),
                 "updated_at":    now,
