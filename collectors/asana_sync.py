@@ -119,8 +119,10 @@ def sync_asana_tasks() -> int:
     bq.query(_CREATE_DDL.format(P=P, D=D, T=_TABLE)).result()
     try:
         bq.query(_ALTER_DDL.format(P=P, D=D, T=_TABLE)).result()
-    except Exception:
-        pass  # already nullable or table doesn't support alter — non-fatal
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"[asana_sync] schema alter failed: {e}")
+        raise
 
     # ── 1. GIDs from agent_activity_log ──────────────────────────────────────
     # Two sources:

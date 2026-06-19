@@ -394,8 +394,10 @@ def _ensure_table_exists():
             client.query(
                 f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
             ).result()
-        except Exception:
-            pass  # column already exists — upsert ALLOW_FIELD_ADDITION handles it
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[hubspot_leads] schema migration failed: {e}")
+            raise  # re-raise so the caller knows the migration failed
 
 
 # ── Cursor-based CDC (exact HubSpot mirror) ──────────────────────────────────

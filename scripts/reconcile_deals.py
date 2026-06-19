@@ -82,8 +82,11 @@ def run():
                 per_day[day]["won"] += 1
                 try:
                     per_day[day]["rev"] += float(p.get("amount") or 0) / 3.75  # SAR -> USD
-                except Exception:
-                    pass
+                except (ValueError, TypeError) as e:
+                    import logging
+                    raw_val = p.get("amount")
+                    logging.getLogger(__name__).warning(f"[reconcile_deals] could not parse amount '{raw_val}': {e} — defaulting to 0")
+                    amount = 0.0
         nxt   = data.get("paging", {}).get("next", {})
         after = nxt.get("after")
         if not after:

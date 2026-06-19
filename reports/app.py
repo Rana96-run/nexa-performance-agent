@@ -87,8 +87,10 @@ def _bq_query(sql: str) -> list[dict[str, Any]]:
 
         rows = client.query(sql).result()
         return [dict(row) for row in rows]
-    except Exception:
-        return []
+    except Exception as e:
+        import logging
+        logging.getLogger("reports.app").error(f"[dashboard] BQ query failed: {e}\nSQL: {sql[:200]}")
+        return []  # keep returning [] so dashboard doesn't crash, but now it's visible in logs
 
 
 # ─── Monitoring data fetchers ─────────────────────────────────────────────────
