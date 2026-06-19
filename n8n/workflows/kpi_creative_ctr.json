@@ -1,4 +1,4 @@
-{
+﻿{
     "updatedAt": "2026-06-17T20:33:55.970Z",
     "createdAt": "2026-06-16T19:46:05.220Z",
     "id": "smHaEhWloComRQyz",
@@ -35,7 +35,7 @@
             },
             "parameters": {
                 "operation": "executeQuery",
-                "projectId": "angular-axle-492812-q4",
+                "projectId": "={{ $vars.BQ_PROJECT }}",
                 "sqlQuery": "WITH baseline AS (\n  SELECT ad_id, ad_name, channel, campaign_name,\n         SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr_7d_baseline,\n         SUM(impressions) AS impressions_7d\n  FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.ads_daily`\n  WHERE date BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 10 DAY)\n                 AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 4 DAY)\n  GROUP BY ad_id, ad_name, channel, campaign_name\n),\nrecent AS (\n  SELECT ad_id,\n         SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr_3d,\n         SUM(impressions) AS impressions_3d,\n         SUM(spend) AS spend_3d\n  FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.ads_daily`\n  WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 3 DAY)\n  GROUP BY ad_id\n)\nSELECT b.channel, b.campaign_name, b.ad_name,\n       b.ctr_7d_baseline,\n       r.ctr_3d,\n       SAFE_DIVIDE(r.ctr_3d - b.ctr_7d_baseline, b.ctr_7d_baseline) AS ctr_delta_pct,\n       r.impressions_3d,\n       r.spend_3d\nFROM baseline b\nJOIN recent r ON b.ad_id = r.ad_id\nWHERE r.impressions_3d >= 1000\n  AND SAFE_DIVIDE(r.ctr_3d - b.ctr_7d_baseline, b.ctr_7d_baseline) < -0.20\nORDER BY ctr_delta_pct ASC",
                 "authentication": "serviceAccount",
                 "options": {}
@@ -300,7 +300,7 @@
                 },
                 "parameters": {
                     "operation": "executeQuery",
-                    "projectId": "angular-axle-492812-q4",
+                    "projectId": "={{ $vars.BQ_PROJECT }}",
                     "sqlQuery": "WITH baseline AS (\n  SELECT ad_id, ad_name, channel, campaign_name,\n         SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr_7d_baseline,\n         SUM(impressions) AS impressions_7d\n  FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.ads_daily`\n  WHERE date BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 10 DAY)\n                 AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 4 DAY)\n  GROUP BY ad_id, ad_name, channel, campaign_name\n),\nrecent AS (\n  SELECT ad_id,\n         SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)) AS ctr_3d,\n         SUM(impressions) AS impressions_3d,\n         SUM(spend) AS spend_3d\n  FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.ads_daily`\n  WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 3 DAY)\n  GROUP BY ad_id\n)\nSELECT b.channel, b.campaign_name, b.ad_name,\n       b.ctr_7d_baseline,\n       r.ctr_3d,\n       SAFE_DIVIDE(r.ctr_3d - b.ctr_7d_baseline, b.ctr_7d_baseline) AS ctr_delta_pct,\n       r.impressions_3d,\n       r.spend_3d\nFROM baseline b\nJOIN recent r ON b.ad_id = r.ad_id\nWHERE r.impressions_3d >= 1000\n  AND SAFE_DIVIDE(r.ctr_3d - b.ctr_7d_baseline, b.ctr_7d_baseline) < -0.20\nORDER BY ctr_delta_pct ASC",
                     "authentication": "serviceAccount",
                     "options": {}
