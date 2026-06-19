@@ -1566,3 +1566,51 @@ Invoke-RestMethod -Uri "..." -Headers $headers -Method PUT -Body $bytes -Content
 Or use `[System.Text.UTF8Encoding]::new($false).GetString(...)` to read back without BOM.
 
 **Risk:** An accidental PUT with a small/empty payload can wipe a workflow. Always save a backup JSON before any PUT.
+
+## 2026-06-19 — Full system audit findings
+
+### Collector: duplicate "status" key in row dict (meta_bq.py, snap_bq.py)
+When a BQ row dict has two entries with the same key, Python silently keeps only the last value.
+Found in meta_bq.py and snap_bq.py — a `"status": None` placeholder plus the real assignment.
+Fix: remove the None placeholder. Always check for duplicate keys before committing new collector row dicts.
+
+### Collector: PMax spend not converted to USD (google_ads_bq.py)
+`collect_pmax_asset_groups_and_write()` computed spend from `cost_micros / 1_000_000` but never applied `to_usd()`. Currency code was fetched but unused. Native SAR amounts were labeled as USD in BQ.
+Fix: always pipe `cost_micros / 1_000_000 → normalize_currency() → to_usd()` before writing any spend field.
+
+### Collector: naive datetime for API window boundaries (hubspot_leads_bq.py)
+`datetime(year, month, day)` without `tzinfo=timezone.utc` is system-TZ-dependent. On Railway (UTC) it was fine; locally or if TZ changes, the HubSpot fetch window drifts and leads near midnight are missed or duplicated.
+Fix: always use `datetime(..., tzinfo=timezone.utc)` for timestamp boundaries sent to any API.
+
+### Collector: property in row dict but not in PROPERTIES fetch list (hubspot_leads_bq.py)
+`leads_disqualification_reason__sub_reasons_qflavour` was mapped in the row dict but missing from the `PROPERTIES` list. HubSpot returns None for unrequested properties — Qflavour sub-reasons were always NULL in BQ.
+Fix: whenever adding a field to the row dict, immediately add its property name to the PROPERTIES/fields fetch list.
+
+### QA gate: HubSpot paging cursor `after = 0` breaks pagination
+HubSpot Search API rejects `"after": 0` in some versions, silently returning only page 1.
+Fix: use `after = None` as initial cursor; omit the key from the request body when falsy.
+
+### QA gate: check_pause_precedence silently passed because analysers/ was deleted
+`check_pause_precedence()` lazy-imports `from analysers.campaign_health import ...` inside a try/except. When the `analysers/` package was deleted 2026-06-16, every call raised ImportError, was caught silently, and the check returned `passed=True`. The safety gate was non-functional for weeks with no visible failure.
+Fix: restored `analysers/__init__.py` and `analysers/campaign_health.py` stub. Rule: any QA check with a lazy-import MUST log a warning when the import fails, not silently pass.
+
+### n8n: infra_data_collection.json was writing contacts data into hubspot_leads_module_daily
+The HubSpot node in the data collection workflow called `/crm/v3/objects/contacts/search` (Contacts API) and merged results into `hubspot_leads_module_daily`. The correct source is the Lead Module API (`/crm/v3/objects/0-136/search`). The Python Railway collector owns that table; the n8n MERGE was incorrect.
+Fix: removed the HubSpot MERGE block from n8n entirely. Python collector is the sole writer.
+
+### BQ views: HAVING clause invalid in VIEW definitions
+BQ does not allow aggregate functions in HAVING inside a VIEW SQL. `paid_channel_campaign_daily` had `HAVING SUM(spend) > 0` which caused the view to return 404. The filter is redundant anyway since `wide_ads` already filters `WHERE spend > 0`.
+Fix: never use HAVING with aggregates in BQ VIEW definitions.
+
+### Ghost BQ objects: memory says "dropped" but never actually deleted from BQ
+`platform_campaign_snapshot`, `pmax_asset_groups_daily`, and `v_channel_key_map` were declared dropped in memory/01_architecture.md on 2026-06-16 but were never deleted from BQ. Downstream code could accidentally join them.
+Fix: when memory says "dropped", verify the object is actually gone from BQ before closing the task. Use `c.delete_table(..., not_found_ok=True)` explicitly.
+
+### n8n: hardcoded BQ project/dataset in SQL strings (5 workflow files)
+Found in kpi_cpl.json, kpi_impression_share.json, kpi_cpql.json, kpi_creative_ctr.json, kpi_qual_ratio.json. SQL strings used backtick-quoted `angular-axle-492812-q4.qoyod_marketing.table` instead of `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.table`.
+Fix: all replaced. Rule: always use `{{ $vars.BQ_PROJECT }}` and `{{ $vars.BQ_DATASET }}` in all n8n SQL. The projectId field on BQ nodes must be an expression `="{{ $vars.BQ_PROJECT }}"` not a string literal.
+
+### Silent exception swallowing — the root cause of all of the above
+The common thread: `except Exception: pass` or `except Exception: return []` with no log.
+When a check, import, or query fails silently, the system appears healthy while producing wrong data.
+Rule: every except block must either re-raise or log at WARNING level minimum. Never silently return empty/None on a data path.

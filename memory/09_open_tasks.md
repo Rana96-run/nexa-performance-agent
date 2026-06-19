@@ -3,11 +3,12 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-18:** n8n Master + Data Collection running clean. 5 SQL bugs fixed in n8n report
-> workflows (wide_ads fan-out, MAX(qual_rate) pollution, daily-grain CPQL spike). MS Ads key_fields fixed.
-> Daily task review Cowork scheduled task created (09:00 Riyadh daily). TikTok pause pending ✅ in #approvals.
-> Google ZATCA campaigns flagged for re-evaluation on 2026-06-20 and 2026-06-23.
-> Remaining: Railway shutdown (pending confirmation), Databox $var + activation.
+> **Status as of 2026-06-19:** Full system audit completed — 25+ bugs found and fixed across collectors,
+> QA gate, n8n workflows, BQ views, dashboard, and agent role files. analysers/ stub restored so QA gate works.
+> n8n data collection HubSpot MERGE block removed (wrong endpoint). 5 more hardcoded BQ project/dataset
+> strings fixed in KPI sub-flows. Ghost BQ tables confirmed dropped. Pitfalls documented.
+> Still open: Google ZATCA re-evals (2026-06-20, 2026-06-23), Snapchat 3d staleness, Railway shutdown,
+> Databox $var + activation, TikTok pause pending ✅, HubSpot Invoice Lookalike placeholder IDs.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -243,11 +244,34 @@ Campaign IDs (customer 5753494964):
 - [ ] **TikTok VAT compliance hook + ZATCA warning hook pause** — Pending ✅ in #approvals (ts: 1781813472.822169). Not yet executed.
 - [ ] **Google ZATCA re-evaluation.** ZATCAVendorShop hits day 10 on 2026-06-20; ZATCAPhase2 on 2026-06-23. Asana task GID 1215845331755397 created for tracking. Re-eval: check CPQL and disq rate; apply pause rule if still >$90 CPQL at the 10d mark.
 
+## [DONE 2026-06-19] Full system audit — 25+ bugs found and fixed
+
+- [x] **Collectors:** duplicate status keys (meta_bq, snap_bq), PMax wrong currency (google_ads_bq),
+      naive datetime (hubspot_leads_bq), missing property (hubspot_leads_bq),
+      CPL field missing (tiktok_bq), explicit frequency:None (microsoft_ads_bq),
+      closedate naive truncation (hubspot_deals_bq)
+- [x] **QA gate:** paging cursor bug (`after=0` breaks HubSpot pagination), SAR divide undocumented,
+      check_pause_precedence silently disabled due to deleted analysers/ package
+- [x] **analysers/ stub restored** so QA gate works (analysers/__init__.py + campaign_health.py stub)
+- [x] **n8n:** 5 more hardcoded BQ project/dataset fixes (kpi_cpl, kpi_impression_share, kpi_cpql,
+      kpi_creative_ctr, kpi_qual_ratio), infra_data_collection wrong HubSpot endpoint removed
+      (was calling Contacts API, not Lead Module API — n8n MERGE block deleted)
+- [x] **BQ:** ghost tables dropped (platform_campaign_snapshot, pmax_asset_groups_daily),
+      v_channel_key_map TikTok casing fixed
+- [x] **Dashboard:** Asana task column names fixed (6 wrong names)
+- [x] **Agent role files:** 8 stale references cleaned
+- [x] **CLAUDE.md:** dead period_compare.py + forecaster.py references updated
+- [x] **Pitfalls documented** in memory/08_pitfalls.md (root cause: silent exception swallowing)
+
 ## Open monitoring tasks (added 2026-06-18)
 
 - [ ] **Monitor TikTok pause execution** — Check #approvals for ✅/❌ reaction on ts `1781813472.822169`. If ✅, verify TikTok ads are paused in platform (confirm status in TikTok Ads Manager). If ❌ or no reaction by EOD, re-surface next session.
 - [ ] **Verify n8n report accuracy** — On 2026-06-19 08:00 Riyadh, check that the Master workflow Slack post shows correct lead counts and CPQL (should match BQ via new CTE queries). Compare against previous report. If numbers look right → close. If still off → diagnose.
 - [ ] **Google ZATCA re-eval 2026-06-20** — ZATCAVendorShop hits 10 days on 2026-06-20. Query BQ for CPQL + disq rate over last 10 days. If CPQL > $90 AND disq_rate >= 60% → pause (after ✅ in #approvals). If improving → leave. Update Asana task GID 1215845331755397.
+- [ ] **Google ZATCAPhase2 re-eval 2026-06-23** — ZATCAPhase2 hits 10 days on 2026-06-23. Same eval criteria as VendorShop above.
+- [ ] **Snapchat 3d staleness check** — Snapchat data has shown 3-day lag in past. Verify MAX(date) in campaigns_daily for channel='snapchat' is within 2 days of current date. If stale, check collector logs.
+- [ ] **Monitor n8n Master workflow first run with corrected SQL** — Verify 2026-06-19 08:00 Riyadh Slack post shows accurate lead counts and CPQL numbers matching BQ hubspot_leads_module_daily. Close if correct; diagnose if still wrong.
+- [ ] **HubSpot Invoice Lookalike placeholder pipeline/stage IDs** — `executors/hubspot_lists.py` has placeholder pipeline and stage IDs for the Invoice Lookalike audience. Need real IDs from HubSpot CRM settings before this executor can run safely.
 
 ## Done this session (2026-06-16) — n8n full build
 
