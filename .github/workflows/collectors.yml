@@ -28,6 +28,8 @@ jobs:
     timeout-minutes: 60
 
     env:
+      PYTHONPATH: ${{ github.workspace }}
+
       # ── BigQuery ──────────────────────────────────────────────────────────────
       BQ_PROJECT_ID: ${{ secrets.BQ_PROJECT_ID }}
       BQ_DATASET: ${{ secrets.BQ_DATASET }}
