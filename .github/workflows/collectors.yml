@@ -203,13 +203,6 @@ jobs:
         continue-on-error: true
         run: python collectors/ga4_bq.py --incremental
 
-      - name: Collector — Meta Organic (Instagram + LinkedIn page metrics)
-        id: meta_organic
-        timeout-minutes: 15
-        if: ${{ inputs.collector == '' || inputs.collector == 'meta_organic' }}
-        continue-on-error: true
-        run: python collectors/meta_organic_bq.py
-
       - name: Collector — GSC organic search
         id: gsc
         timeout-minutes: 15
