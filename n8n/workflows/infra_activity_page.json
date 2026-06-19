@@ -113,7 +113,7 @@
             "parameters": {
                 "operation": "executeQuery",
                 "projectId": "={{ $vars.BQ_PROJECT }}",
-                "sqlQuery": "SELECT CAST(ts AS STRING) AS ts, role, action, status, channel, details\nFROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log`\nORDER BY ts DESC LIMIT 20",
+                "sqlQuery": "SELECT CAST(ts AS STRING) AS ts, role, action, status, channel, details\nFROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log`\nWHERE action != 'heartbeat'\nORDER BY ts DESC LIMIT 20",
                 "authentication": "serviceAccount",
                 "options": {}
             }
@@ -133,7 +133,7 @@
             "parameters": {
                 "operation": "executeQuery",
                 "projectId": "={{ $vars.BQ_PROJECT }}",
-                "sqlQuery": "SELECT title, assignee_name, CAST(due_on AS STRING) AS due_on, project_key\nFROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.asana_task_status`\nWHERE completed = FALSE\n  AND title IS NOT NULL AND title != ''\n  AND title NOT LIKE '[Direct Log]%'\n  AND title NOT LIKE '[Agent Connection Test]%'\nORDER BY due_on ASC NULLS LAST LIMIT 10",
+                "sqlQuery": "SELECT title, assignee_name, CAST(due_on AS STRING) AS due_on, project_key\nFROM (\n  SELECT title, assignee_name, due_on, project_key,\n         ROW_NUMBER() OVER (PARTITION BY gid ORDER BY due_on ASC NULLS LAST) AS rn\n  FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.asana_task_status`\n  WHERE completed = FALSE\n  AND title IS NOT NULL AND title != ''\n  AND title NOT LIKE '[Direct Log]%'\n  AND title NOT LIKE '[Agent Connection Test]%'\n)\nWHERE rn = 1\nORDER BY due_on ASC NULLS LAST LIMIT 10",
                 "authentication": "serviceAccount",
                 "options": {}
             }
