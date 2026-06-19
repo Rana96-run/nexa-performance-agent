@@ -398,6 +398,10 @@ def _get_open_asana_tasks() -> list[dict[str, Any]]:
         SELECT title, assignee_name, due_on, project_key, completed
         FROM `{BQ_PROJECT}.{BQ_DATASET}.asana_task_status`
         WHERE completed = FALSE
+        AND title IS NOT NULL
+        AND title != ''
+        AND title NOT LIKE '[Direct Log]%'
+        AND title NOT LIKE '[Agent Connection Test]%'
         ORDER BY due_on ASC
         LIMIT 10
     """)
