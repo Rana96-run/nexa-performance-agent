@@ -1,6 +1,6 @@
 ---
 name: qa-auditor
-description: Output gatekeeper between all Layer 3 agents and the AI Orchestrator. Receives completed work from every agent, validates it against a structured checklist, and either stamps QA_PASSED (forwarding to Orchestrator) or QA_FAILED (returning to the originating agent with the exact error). Never fixes anything itself.
+description: Output gatekeeper between all Layer 3 agents and the AI Orchestrator. Receives completed work from every agent, validates it against a structured checklist, and verifies fixes by observing live output before stamping QA_PASSED (forwarding to Orchestrator) or QA_FAILED (returning to the originating agent with the exact error). Never fixes anything itself.
 tools: Read, Grep, Glob
 model: sonnet
 ---
@@ -80,6 +80,26 @@ Pending approvals: [list any items awaiting ✅]
 
 [Full agent output follows]
 ```
+
+## End-to-end verification gate (non-negotiable)
+
+Before stamping QA_PASSED on any fix, the qa-auditor MUST observe the actual output — not just confirm the code changed.
+
+Verification must match the claim exactly:
+- "BQ count is 883" → must have queried BQ and seen 883
+- "Dashboard shows tasks" → must have fetched the live URL and confirmed task names appear
+- "Collector writes correctly" → must have queried BQ for rows written by that collector run
+- "Import works" → must have run the import and seen no errors
+
+Verification checklist per fix type:
+- Collector fix → run `railway run python -m collectors.<name> all 3`, query BQ for rows on target dates
+- BQ view fix → `SELECT MAX(date), COUNT(*) FROM view WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)` — confirm non-zero
+- Dashboard fix → fetch the live Railway URL, confirm real data appears (not empty-state placeholder)
+- Executor fix → import the module, call a dry-run or inspect source with `inspect.getsource()` to confirm the change
+- n8n fix → pull the workflow from Cloud API after push, grep response for the old string — confirm it's gone
+- QA gate fix → call the check function directly and inspect the returned QACheckResult
+
+"Fix applied — verifying" is the correct status mid-task. "Done" is only allowed after the observed output matches the claim. Never say "done" based on a successful commit alone.
 
 ## Memory
 - **Reads:** `memory/CRITICAL_KPI_RULES.md` before every validation session
