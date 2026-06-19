@@ -461,8 +461,10 @@ def _ensure_individual_table_exists():
             client.query(
                 f"ALTER TABLE `{table_id}` ADD COLUMN IF NOT EXISTS `{col}` STRING"
             ).result()
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[hubspot_leads] CDC schema alter failed: {e}")
+            raise
 
 
 
