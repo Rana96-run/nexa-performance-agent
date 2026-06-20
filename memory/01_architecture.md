@@ -450,3 +450,22 @@ v_agent_consumption_daily, v_new_biz_daily
 | Organic Social | 221 |
 | LinkedIn Ads | 17 |
 | Twitter Ads | 15 |
+
+### UTM Dynamic Token Mapping (platform dynamic parameters)
+
+When these appear as literal strings in lead_utm_* fields, the token fired but
+was not replaced — indicates a misconfigured UTM template on that ad.
+
+| Platform token         | Maps to UTM field      | Notes                                      |
+|------------------------|------------------------|--------------------------------------------|
+| {{placement}}          | lead_utm_medium        | Meta — placement where ad showed (Feed, Reels, Stories, etc.) |
+| {{site_source_name}}   | lead_utm_source        | Meta — site source (facebook, instagram, audience_network) |
+| {keyword}              | lead_utm_term          | Google Ads — matched keyword               |
+| Asset Group Name       | lead_utm_audience      | Google PMax — asset group name maps to audience field |
+
+Key rule: if lead_utm_medium = '{{placement}}' or lead_utm_source = '{{site_source_name}}'
+appears in BQ, that lead's UTM template was misconfigured — the dynamic value was never
+injected. These are NOT valid medium/source values; they are broken UTM tags.
+
+For Google PMax campaigns, the asset group name is passed as lead_utm_audience.
+This is NOT the same as a Meta or Snapchat audience segment — it's a creative grouping.

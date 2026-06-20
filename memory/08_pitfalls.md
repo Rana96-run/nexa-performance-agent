@@ -608,6 +608,11 @@ once. Per-iteration upserts on overlapping scopes cause silent data loss.
 `lead_utm_audience`. `v_adset_performance` Strategy B already joins on
 `lead_utm_audience` correctly. Date discovered: 2026-05-13.
 
+## UTM dynamic tokens appearing as literals ({{placement}}, {{site_source_name}}, {keyword})
+When these appear verbatim in BQ, the ad's UTM template was misconfigured — the platform
+never substituted the dynamic value. Flag these leads as unattributed, do not treat the
+literal string as a valid field value.
+
 ## ID property naming — different at every layer (DO NOT confuse)
 
 The platform ad-group level has 4+ different names across our stack. Whenever
