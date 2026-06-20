@@ -112,7 +112,7 @@ def query_bq_leads(client: bigquery.Client) -> tuple[int, int]:
       COUNT(*)                                AS leads_total,
       COUNTIF(is_qualified)                   AS leads_qualified
     FROM `{PROJECT_ID}.{DATASET}.hubspot_leads_individual`
-    WHERE DATE(hs_createdate, 'Asia/Riyadh')
+    WHERE hs_createdate
         BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
             AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
     """
@@ -131,7 +131,7 @@ def query_bq_deals(client: bigquery.Client) -> tuple[int, float]:
       COUNT(*)                                              AS deals_total,
       ROUND(SUM(COALESCE(amount, 0)), 2)                   AS amount_total
     FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_individual`
-    WHERE DATE(createdate, 'Asia/Riyadh')
+    WHERE createdate
         BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
             AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
     """
