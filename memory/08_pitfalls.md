@@ -1622,3 +1622,11 @@ Fix: all replaced. Rule: always use `{{ $vars.BQ_PROJECT }}` and `{{ $vars.BQ_DA
 The common thread: `except Exception: pass` or `except Exception: return []` with no log.
 When a check, import, or query fails silently, the system appears healthy while producing wrong data.
 Rule: every except block must either re-raise or log at WARNING level minimum. Never silently return empty/None on a data path.
+
+## HubSpot Lead Module ≠ Contacts (2026-06-20)
+We work with the HubSpot Lead Module (object `0-136`), NOT contacts.
+- Collector: `collectors/hubspot_leads_bq.py` uses `LEAD_OBJ = "0-136"` and queries `/crm/v3/objects/0-136/search`
+- BQ table: `hubspot_leads_individual` stores Lead Module records, keyed by `hs_object_id`
+- Any HubSpot API call that needs to count or fetch leads MUST use object `0-136`, not `/contacts/search`
+- Contacts and Leads are different HubSpot objects — count comparisons between them are meaningless
+- Fix applied in `scripts/reconcile_hubspot_bq.py` commit after 2026-06-20 session: changed endpoint from contacts to 0-136
