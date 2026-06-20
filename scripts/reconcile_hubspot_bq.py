@@ -146,7 +146,7 @@ _HS_HEADERS = {
     "Content-Type":  "application/json",
 }
 
-_HS_CONTACTS_URL = "https://api.hubapi.com/crm/v3/objects/contacts/search"
+_HS_LEADS_MODULE_URL = "https://api.hubapi.com/crm/v3/objects/0-136/search"
 _HS_DEALS_URL    = "https://api.hubapi.com/crm/v3/objects/deals/search"
 
 
@@ -158,13 +158,13 @@ def _hs_date_filter(prop: str, gte_ms: int, lte_ms: int) -> list[dict]:
 
 
 def query_hs_leads() -> int:
-    """Return total contact count created in the window."""
+    """Return total Lead Module (0-136) count created in the window."""
     payload = {
-        "filterGroups": [{"filters": _hs_date_filter("createdate", HS_START_MS, HS_END_MS)}],
-        "properties": ["createdate"],
+        "filterGroups": [{"filters": _hs_date_filter("hs_createdate", HS_START_MS, HS_END_MS)}],
+        "properties": ["hs_createdate"],
         "limit": 1,
     }
-    resp = requests.post(_HS_CONTACTS_URL, headers=_HS_HEADERS, json=payload, timeout=30)
+    resp = requests.post(_HS_LEADS_MODULE_URL, headers=_HS_HEADERS, json=payload, timeout=30)
     resp.raise_for_status()
     return int(resp.json().get("total", 0))
 
@@ -248,7 +248,7 @@ def main() -> int:
     deals_bq, amount_bq = query_bq_deals(client)
 
     # --- HubSpot side ---
-    print("Querying HubSpot leads (contacts)...")
+    print("Querying HubSpot leads (Lead Module 0-136)...")
     leads_hs = query_hs_leads()
 
     print("Querying HubSpot deals (paginating)...")
