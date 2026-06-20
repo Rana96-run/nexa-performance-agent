@@ -121,18 +121,22 @@ def query_bq_leads(client: bigquery.Client) -> tuple[int, int]:
 
 
 def query_bq_deals(client: bigquery.Client) -> tuple[int, float]:
-    """Returns (deals_total, revenue_won_usd) from hubspot_deals_individual."""
+    """Returns (deals_total, amount_total_usd) from hubspot_deals_individual.
+
+    Sums ALL deals' amounts (not won-only) to match the HubSpot API response,
+    which returns amounts for all deals in the window regardless of stage.
+    """
     sql = f"""
     SELECT
       COUNT(*)                                              AS deals_total,
-      ROUND(SUM(IF(is_won, amount, 0)), 2)                 AS revenue_won
+      ROUND(SUM(COALESCE(amount, 0)), 2)                   AS amount_total
     FROM `{PROJECT_ID}.{DATASET}.hubspot_deals_individual`
     WHERE DATE(createdate, 'Asia/Riyadh')
         BETWEEN DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)
             AND DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 DAY)
     """
     row = list(client.query(sql).result())[0]
-    return int(row.deals_total), float(row.revenue_won or 0.0)
+    return int(row.deals_total), float(row.amount_total or 0.0)
 
 
 # ── HubSpot API calls ─────────────────────────────────────────────────────────
