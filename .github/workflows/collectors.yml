@@ -17,7 +17,8 @@ on:
           Collector to run (leave blank to run all).
           Options: google_ads | meta | snapchat | tiktok | linkedin |
                    microsoft_ads | hubspot_leads | hubspot_deals | reconcile |
-                   youtube | ga4 | meta_organic | gsc | views | asana_sync
+                   youtube | ga4 | meta_organic | gsc | views | asana_sync |
+                   agent_config
         required: false
         default: ""
         type: string
@@ -231,7 +232,15 @@ jobs:
           print(f"Asana sync complete: {n} rows")
           PYEOF
 
-      # Step 8 (Report failures to Slack) removed 2026-06-18.
+      # ── 8. Agent config sync ──────────────────────────────────────────────────
+      - name: Sync agent config to BQ
+        id: agent_config_sync
+        timeout-minutes: 5
+        if: ${{ inputs.collector == '' || inputs.collector == 'agent_config' }}
+        continue-on-error: true
+        run: python collectors/agent_config_sync.py
+
+      # Step 9 (Report failures to Slack) removed 2026-06-18.
       # n8n Data Collection workflow (jOnJxdpdaO3Vbi0B) already alerts #data-health
       # on collector failures. This step was posting duplicates every 6h run.
 
