@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import os
 import threading
-import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlencode, urlparse, parse_qs
 import requests
@@ -78,9 +77,11 @@ def main():
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
 
-    print("\nOpening LinkedIn authorization in your browser...")
-    print(f"If it doesn't open, visit:\n  {auth_url}\n")
-    webbrowser.open(auth_url)
+    print("=== Paste this URL into your browser ===")
+    print(auth_url)
+    print("========================================")
+    print("Waiting for callback (5 min timeout)...")
+    # webbrowser.open(auth_url)  # disabled — paste the URL manually
 
     _done.wait(timeout=300)
     server.shutdown()
