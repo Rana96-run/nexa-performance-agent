@@ -185,7 +185,7 @@ organic_social_deals AS (
   FROM `{P}.{D}.hubspot_deals_individual`
   WHERE qoyod_source = 'Organic Social'
   GROUP BY createdate
-),
+)
 
 -- Branch 1: Paid channels — from paid_channel_daily (channel-grain rollup of wide_ads)
 SELECT
