@@ -363,6 +363,26 @@ Campaign IDs (customer 5753494964):
 - [x] **Creative & Landing Pages on-demand section added to dashboard (`d771ffc`).** Three new cards: (1) Creative Performance Audit → creates Asana task for Creative Strategist with best-to-scale/worst-to-replace direction; (2) New Creative Variants Brief → OCEAN-aligned A/B brief per segment for Creative Strategist; (3) New Landing Page Brief → auto-fills `create_lp_brief()` from live BQ CPQL data, creates Asana chain CRO → UI/UX → Developer.
 - [x] **Activity dashboard fully structured.** On-Demand Actions panel now has three rows: Campaign Operations, Audits, Creative & Landing Pages. All existing actions confirmed healthy.
 
+## BQ ↔ HubSpot Reconciliation
+Last check: 2026-06-19, window 2026-06-12 to 2026-06-18
+
+| Metric | BQ | HubSpot | Delta | Status |
+|--------|-----|---------|-------|--------|
+| Deals  | 1,690 | 1,690 | 0.00% | PASS ✓ |
+| Leads  | 1,381 | 2,131 | -35%  | SCOPE (expected — BQ = paid UTM only) |
+| Amount | $104,307 | $281,800 | -63%  | NEEDS INVESTIGATION |
+
+Notes:
+- Deals count is exact match — HubSpot→BQ sync is healthy
+- Lead delta is by design: hubspot_leads_individual only stores paid-channel leads
+  with lead_utm_campaign attribution. HubSpot contacts API counts all contacts.
+  This is expected scope difference, not a data issue.
+- Amount delta ($177K gap) needs investigation: possible causes are (a) reconcile
+  script comparing wrong scope (all deals vs won-only), (b) amount NULL for open
+  deals in BQ, or (c) script applying /3.75 conversion incorrectly.
+- Daily automation: scripts/reconcile_hubspot_bq.py runs every 6h via GH Actions
+  (step "Reconcile HubSpot ↔ BQ"). Results stored in BQ table reconciliation_results.
+
 ## Done this session (2026-06-10, continued)
 
 - [x] **`/activity` UnboundLocalError resolved (`f7101e5`).** Cache read path was missing 8 variables added after the cache was designed (`user_rows`, `intel_rows`, `task_status_rows`, `executed_rows`, `followup_rows`, `new_ads_rows_raw`, `hc_rows`, `fresh_rows`) — caused `UnboundLocalError` on every request served from cache.
