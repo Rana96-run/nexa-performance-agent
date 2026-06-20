@@ -1635,3 +1635,7 @@ We work with the HubSpot Lead Module (object `0-136`), NOT contacts.
 - Any HubSpot API call that needs to count or fetch leads MUST use object `0-136`, not `/contacts/search`
 - Contacts and Leads are different HubSpot objects — count comparisons between them are meaningless
 - Fix applied in `scripts/reconcile_hubspot_bq.py` commit after 2026-06-20 session: changed endpoint from contacts to 0-136
+
+## gh CLI path and auth (2026-06-20)
+
+- **gh CLI not on default PATH**: Binary lives at `C:\Program Files\GitHub CLI\gh.exe`. System PATH already includes it, but new PowerShell sessions launched from Claude Code tools sometimes don't inherit it. Use full path `& "C:\Program Files\GitHub CLI\gh.exe"` as fallback, or prefix `$env:PATH += ";C:\Program Files\GitHub CLI"`. Authenticated as `Rana96-run`, repo slug `Rana96-run/nexa-performance-agent`. Token scopes: repo + workflow (sufficient for Actions log reads).
