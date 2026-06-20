@@ -250,3 +250,203 @@ v_agent_consumption_daily, v_new_biz_daily
   Superseded All Grains IDs: v3 `eff4621e` (bad schema wrapper → string types), v1/v2 all-string.
   Run backfill: `railway run python -c "from collectors.databox_pusher import run_push; run_push(days=365)"`
   Police check: `analysers/connector_tracker.py` SYSTEM_MONITORS includes both datasets.
+
+## HubSpot Field Distinct Values (confirmed from BQ — 2026-06-19)
+
+### hubspot_leads_individual — qoyod_source
+
+| qoyod_source | cnt |
+|---|---|
+| Google Ads | 10535 |
+| Direct Traffic | 4435 |
+| Snapchat Ads | 4053 |
+| Meta Ads | 4029 |
+| Organic Search | 3934 |
+| Offline | 2436 |
+| Tiktok Ads | 1645 |
+| Direct In-app Purchase | 1502 |
+| Microsoft Ads | 750 |
+| Organic Social | 185 |
+| Email Marketing | 163 |
+| Referrals | 159 |
+| Other | 59 |
+| LinkedIn Ads | 9 |
+| youtube | 1 |
+| Twitter Ads | 1 |
+
+### hubspot_leads_individual — lead_utm_medium
+
+| lead_utm_medium | cnt |
+|---|---|
+| NULL | 12010 |
+| ppc | 10441 |
+| Meta_LeadGen_Form_CallTimeAdded_New | 1582 |
+| Snapchat_LeadGenForm_Generic | 1498 |
+| INSTANT_FORM | 1118 |
+| Snpchat_Beginning2026_Short | 1007 |
+| Meta_Form_Beginning2026_MoreVolume_Short | 922 |
+| none | 629 |
+| New Structure Form 2025 | 546 |
+| Phone Call | 509 |
+| Meta_Bookkeeping_MoreVolume | 399 |
+| organic | 348 |
+| Snapchat_Generic_Form_New_Account | 336 |
+| Snpchat_NewAcc_Beginning2026_Short | 257 |
+| Meta_Form_Beginning2026_HigherIntent_Short | 246 |
+| Whatsapp_Marketing_Messages | 218 |
+| email | 201 |
+| Pangle | 190 |
+| social | 186 |
+| Snapchat_Bookkeeping_Qoyod2024 | 133 |
+| organic search | 126 |
+| Bookkeeping2026_NewAcc | 104 |
+| Meta_Bookkeeping_HigherIntent | 92 |
+| Facebook_Mobile_Feed | 79 |
+| Whatsapp | 78 |
+| an | 77 |
+| Facebook_Mobile_Reels | 75 |
+| paidsocial | 51 |
+| referral | 35 |
+| Bookkeeping_Form_New_Account | 31 |
+| paid | 30 |
+| Snapchat_FoundingDay_SimpleForm | 30 |
+| Whatsapp_Meta_Flow | 27 |
+| Snapchat_Bookkeeping_Simpleform | 26 |
+| Instagram_Reels | 25 |
+| Tiktok_Form_Beginning2026_Short | 20 |
+| TikTok | 19 |
+| Comment | 18 |
+| __PLACEMENT__ | 12 |
+| Tiktok_LeadGenForm_Generic_NewAccount | 12 |
+| internal | 10 |
+| Message | 10 |
+| facebook_feed | 9 |
+| Tiktok | 8 |
+| Snapchat | 8 |
+| Instagram_Feed | 8 |
+| Office Visit | 7 |
+| snapchat | 6 |
+| test-med | 5 |
+| - | 5 |
+| facebook_mobile_feed | 5 |
+| Social | 5 |
+| LinkedIn_E-Invoice_Form | 4 |
+| Facebook_Stories | 4 |
+| Email | 4 |
+| Ads | 3 |
+| offline | 3 |
+| Instagram_Stories | 3 |
+| Others | 3 |
+| test_medium | 3 |
+| Facbook_Mobile_Feed | 3 |
+| Facebook_Instream_Video | 3 |
+| Facebook_Desktop_Feed | 2 |
+| linkedin | 2 |
+| Facebook_Notification | 2 |
+| Snapchat_LeadGen_QFlavours_2024 | 2 |
+| Event | 2 |
+| Meta | 2 |
+| reseller | 2 |
+| Twitter | 2 |
+| . | 2 |
+| Snpachat | 1 |
+| PPC | 1 |
+| Tiktok_MainForm_TimeAdded_NewZap/EOY | 1 |
+| unknown | 1 |
+| {{placement}} | 1 |
+| Paid Social | 1 |
+| POP-UP | 1 |
+| Behavior Based | 1 |
+| c | 1 |
+| call | 1 |
+
+### hubspot_leads_individual — lead_utm_source
+
+| lead_utm_source | cnt |
+|---|---|
+| NULL | 11383 |
+| Google | 9442 |
+| Snapchat | 4017 |
+| fb | 3168 |
+| Tiktok | 1550 |
+| Bing | 916 |
+| ig | 697 |
+| direct | 630 |
+| Other | 587 |
+| google.com | 400 |
+| hs_email | 191 |
+| chatgpt.com | 172 |
+| bing.com | 110 |
+| an | 91 |
+| tiktok.com | 79 |
+| tiktok | 66 |
+| bing | 64 |
+| instagram.com | 26 |
+| snapchat | 26 |
+| Meta | 25 |
+| Email Marketing | 23 |
+| snapchat.com | 19 |
+| twitter.com | 19 |
+| qoyod.com | 18 |
+| Facebook.com | 18 |
+| partnerstack | 14 |
+| youtube.com | 11 |
+| qoyod | 10 |
+| Offline | 10 |
+| facebook.com | 9 |
+| Instagram.com | 9 |
+| adwords | 9 |
+| Event | 8 |
+| search.yahoo.com | 8 |
+| - | 5 |
+| LinkedIn | 5 |
+| facebook | 5 |
+| google | 5 |
+| test-so | 5 |
+| app.qoyod.com | 4 |
+| Social media | 4 |
+| copilot.com | 3 |
+| LinkedIn.com | 3 |
+| test_source | 3 |
+| Email | 3 |
+| . | 2 |
+| linkedin.com | 2 |
+| com.google.android.googlequicksearchbox | 2 |
+| partnership | 2 |
+| Snapchat.com | 2 |
+| email | 1 |
+| call | 1 |
+| {{site_source_name}} | 1 |
+| tagassistant.com | 1 |
+| Whatsapp | 1 |
+| c | 1 |
+| yahoo.com | 1 |
+| template | 1 |
+| Twitter | 1 |
+| hs_automation | 1 |
+| perplexity | 1 |
+| personal | 1 |
+| Qoyod | 1 |
+| Snpachat | 1 |
+| Tiktok.com | 1 |
+| ا | 1 |
+
+### hubspot_deals_individual — qoyod_source
+
+| qoyod_source | cnt |
+|---|---|
+| Google Ads | 27272 |
+| Offline | 18854 |
+| Direct Traffic | 13199 |
+| Organic Search | 6732 |
+| Other | 5704 |
+| Meta Ads | 4306 |
+| Snapchat Ads | 3499 |
+| Tiktok Ads | 2734 |
+| Email Marketing | 1139 |
+| Referrals | 572 |
+| Direct In-app Purchase | 416 |
+| Microsoft Ads | 320 |
+| Organic Social | 221 |
+| LinkedIn Ads | 17 |
+| Twitter Ads | 15 |
