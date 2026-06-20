@@ -323,3 +323,21 @@ Before ANY pause recommendation, CPQL flag, or "worst performer" label:
 - This applies to: daily Slack summaries, ZATCA re-evals, bulk_ads audit, n8n KPI nodes, period comparisons, any "top/worst" channel ranking
 - In `bulk_ads.py`: the `_fetch_already_paused_ads()` function pre-fetches inactive ad names and filters them before the flagging loop
 - Established 2026-06-19 after ZATCA pause recommendations were sent for ZATCAVendorShop and ZATCAPhase2 — both already paused
+
+---
+
+## HubSpot Lead Object: ALWAYS `0-136`, NEVER contacts (non-negotiable)
+
+Any HubSpot API call involving leads MUST use the Lead Module object `0-136`:
+
+```
+/crm/v3/objects/0-136/search
+```
+
+NEVER use `/crm/v3/objects/contacts/search` to count or fetch leads.
+Contacts and Leads are separate HubSpot objects. A contacts count compared
+to a BQ leads count is a meaningless comparison and will always produce
+a false gap.
+
+Applies to: reconciliation scripts, ad-hoc queries, any new HubSpot API call.
+Collector reference: `collectors/hubspot_leads_bq.py` → `LEAD_OBJ = "0-136"`
