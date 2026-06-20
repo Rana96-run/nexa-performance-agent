@@ -840,18 +840,29 @@ def materialize_heavy_views():
 def refresh_all_views():
     client = get_client()
     all_views = ALL_VIEWS + _sub_campaign_views()
+    # Views that reference optional upstream tables (e.g. gsc_organic_daily may not
+    # exist until the GSC collector runs for the first time). These log a warning
+    # but do NOT fail the step so the other views still refresh correctly.
+    OPTIONAL_VIEWS = {"unified_channel_daily"}
     failed = []
+    warned = []
     for name, sql in all_views:
         try:
             client.query(sql).result()
             print(f"[views] OK: {name}")
         except Exception as e:
             print(f"[views] FAIL: {name}: {e}")
-            failed.append((name, str(e)))
+            if name in OPTIONAL_VIEWS:
+                warned.append((name, str(e)))
+            else:
+                failed.append((name, str(e)))
+    if warned:
+        wnames = ", ".join(n for n, _ in warned)
+        print(f"[views] WARNING: {len(warned)} optional view(s) skipped (non-fatal): {wnames}")
     if failed:
         names = ", ".join(n for n, _ in failed)
         raise RuntimeError(f"[views] {len(failed)} view(s) failed: {names}")
-    print(f"[views] Refreshed {len(all_views)} views.")
+    print(f"[views] Refreshed {len(all_views) - len(warned)} views.")
     # Materialise heavy views as physical tables so Hex reads are instant.
     # Runs immediately after view DDL so the tables always reflect the latest SQL.
     materialize_heavy_views()
