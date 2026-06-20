@@ -25,9 +25,9 @@ load_dotenv(override=True)
 CLIENT_ID     = os.getenv("LI_CLIENT_ID")
 CLIENT_SECRET = os.getenv("LI_CLIENT_SECRET")
 REDIRECT_URI  = os.getenv("LI_REDIRECT_URI", "http://localhost:8080/callback")
-SCOPES        = "r_ads r_ads_reporting rw_ads rw_organization_admin r_basicprofile openid profile email"
-# rw_organization_admin added 2026-05-13: required to list and clone ad creatives
-# that reference organization-owned media (images, videos, organic posts).
+SCOPES        = "r_ads r_ads_reporting rw_ads r_basicprofile"
+# rw_organization_admin removed: causes unauthorized_scope_error in some app configurations.
+# openid/profile/email removed: OIDC scopes not authorized for this app.
 
 _code: str | None = None
 _done = threading.Event()
@@ -113,14 +113,16 @@ def main():
     if refresh:
         print(f"  refresh_token ({len(refresh)} chars): {refresh[:40]}...")
 
-    # Quick validation
+    # Quick validation — use ads accounts endpoint (no OIDC scope required)
     headers = {"Authorization": f"Bearer {access}", "LinkedIn-Version": "202502"}
-    v = requests.get("https://api.linkedin.com/v2/userinfo", headers=headers, timeout=10)
+    v = requests.get(
+        "https://api.linkedin.com/v2/adAccountsV2?q=search&search.type.values[0]=BUSINESS",
+        headers=headers, timeout=10,
+    )
     if v.ok:
-        name = v.json().get("name", "?")
-        print(f"\nLinkedIn account: {name} — token valid")
+        print(f"\nToken valid — ads API reachable (status {v.status_code})")
     else:
-        print(f"\nWARN: token saved but validation returned {v.status_code}")
+        print(f"\nWARN: token saved but ads API returned {v.status_code}: {v.text[:200]}")
 
 
 if __name__ == "__main__":
