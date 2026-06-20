@@ -3,12 +3,14 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-19:** Full system audit completed — 25+ bugs found and fixed across collectors,
-> QA gate, n8n workflows, BQ views, dashboard, and agent role files. analysers/ stub restored so QA gate works.
-> n8n data collection HubSpot MERGE block removed (wrong endpoint). 5 more hardcoded BQ project/dataset
-> strings fixed in KPI sub-flows. Ghost BQ tables confirmed dropped. Pitfalls documented.
-> Still open: Google ZATCA re-evals (2026-06-20, 2026-06-23), Snapchat 3d staleness, Railway shutdown,
-> Databox $var + activation, TikTok pause pending ✅, HubSpot Invoice Lookalike placeholder IDs.
+> **Status as of 2026-06-20:** wide_ads staleness fixed (trailing-comma bug in
+> unified_channel_daily SQL, commit a2fe0c4 — wide_ads now current to 2026-06-19).
+> agent_config BQ table built; n8n Master workflow now reads live memory files (8 keys).
+> gh CLI authenticated. Prior 2026-06-19 audit: 25+ bugs fixed across collectors, QA gate,
+> n8n workflows, BQ views, dashboard, agent role files; analysers/ stub restored; n8n data
+> collection HubSpot MERGE block removed; 5 hardcoded BQ project/dataset strings fixed.
+> Still open: Snapchat 3d staleness, Railway shutdown, Databox $var + activation,
+> TikTok pause pending ✅, HubSpot Invoice Lookalike placeholder IDs.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -228,6 +230,19 @@ Campaign IDs (customer 5753494964):
 - [ ] Snapchat organic (doubtful — no public page metrics API)
 
 ---
+
+## Completed 2026-06-20 — wide_ads fix, agent_config live-memory sync, gh CLI auth
+
+- [x] **wide_ads staleness fixed.** `wide_ads` was stuck at 2026-06-16 — root cause
+      was a trailing comma after the last CTE in the `unified_channel_daily` SQL
+      (`collectors/views.py`). Fixed in commit `a2fe0c4`. wide_ads now current to 2026-06-19. Verified fresh.
+- [x] **agent_config BQ table built + n8n Master workflow reads live memory.** New
+      `agent_config` BQ table holds 8 keys synced from live memory files:
+      `kpi_rules`, `learning_patterns`, `attribution_rules`, `brand_playbook`, and the
+      4 agent role files. n8n Master workflow updated to read config from BQ
+      (no longer hardcoded). Syncs every 6h via `collectors.yml`.
+- [x] **gh CLI authenticated.** GitHub CLI binary at `C:\Program Files\GitHub CLI\gh.exe`,
+      account `Rana96-run`, repo `Rana96-run/nexa-performance-agent`. PATH set system-wide.
 
 ## Done this session (2026-06-18) — collector fixes, n8n hardening, report SQL fixes
 
