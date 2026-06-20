@@ -458,14 +458,16 @@ was not replaced — indicates a misconfigured UTM template on that ad.
 
 | Platform token         | Maps to UTM field      | Notes                                      |
 |------------------------|------------------------|--------------------------------------------|
-| {{placement}}          | lead_utm_medium        | Meta — placement where ad showed (Feed, Reels, Stories, etc.) |
-| {{site_source_name}}   | lead_utm_source        | Meta — site source (facebook, instagram, audience_network) |
+| {{placement}}          | lead_utm_medium        | All social platforms — placement where ad showed (Feed, Reels, Stories, etc.) |
+| {{site_source_name}}   | lead_utm_source        | All social platforms — site source (facebook, instagram, audience_network) |
 | {keyword}              | lead_utm_term          | Google Ads — matched keyword               |
 | Asset Group Name       | lead_utm_audience      | Google PMax — asset group name maps to audience field |
 
 Key rule: if lead_utm_medium = '{{placement}}' or lead_utm_source = '{{site_source_name}}'
 appears in BQ, that lead's UTM template was misconfigured — the dynamic value was never
 injected. These are NOT valid medium/source values; they are broken UTM tags.
+All social media platforms (Meta, Snapchat, TikTok, LinkedIn, etc.) can pass placement
+and site source as dynamic UTM tokens — these tokens are not Meta-exclusive.
 
 For Google PMax campaigns, the asset group name is passed as lead_utm_audience.
 This is NOT the same as a Meta or Snapchat audience segment — it's a creative grouping.
