@@ -341,3 +341,25 @@ a false gap.
 
 Applies to: reconciliation scripts, ad-hoc queries, any new HubSpot API call.
 Collector reference: `collectors/hubspot_leads_bq.py` → `LEAD_OBJ = "0-136"`
+
+---
+
+## RULE: NEVER invent field values, filter conditions, or column names
+
+Before writing any SQL filter, Python condition, or Slack message that references
+a specific field VALUE (not just a field name), that value MUST be confirmed from
+one of:
+1. A live BQ query (`SELECT DISTINCT field FROM table`)
+2. `memory/01_architecture.md` or another memory file that explicitly lists the values
+3. The collector source code that writes the field
+
+NEVER guess or invent values such as:
+- `qoyod_source = 'Paid Social'`   — unless confirmed by querying DISTINCT values
+- `lead_utm_medium = 'paid'`       — unless confirmed by querying DISTINCT values
+- Any column alias, view name, or table field not verified against live schema
+
+If the values are unknown, say "I need to query the distinct values first" and do so
+before writing the filter.
+
+This applies to: SQL WHERE clauses, Python filter conditions, Slack copy, Asana tasks,
+and any output that references data field values.
