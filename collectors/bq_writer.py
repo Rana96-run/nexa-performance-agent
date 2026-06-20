@@ -964,7 +964,7 @@ FROM platform p
 LEFT JOIN deals d
   ON p.date = d.date
   AND p.channel = d.channel
-  AND LOWER(TRIM(p.utm_campaign)) = d.utm_campaign
+  AND LOWER(TRIM(p.campaign_name)) = d.utm_campaign
   AND LOWER(TRIM(p.utm_term))     = d.utm_term
 """
 
