@@ -31,8 +31,14 @@ load_dotenv(override=True)
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 FILES_TO_SYNC: dict[str, str] = {
+    # KPI rules + learning — read by all agents
     "kpi_rules":                "memory/CRITICAL_KPI_RULES.md",
     "learning_patterns":        "memory/14_learning_patterns.md",
+    # Attribution rules — UTM join patterns, qoyod_source keys (growth-analyst)
+    "attribution_rules":        "memory/07_attribution.md",
+    # Brand playbook — voice, audience, MSA Arabic rules (creative-strategist)
+    "brand_playbook":           "docs/PLAYBOOK.md",
+    # Agent role definitions
     "growth_analyst_role":      ".claude/agents/growth-analyst.md",
     "performance_lead_role":    ".claude/agents/performance-lead.md",
     "campaign_manager_role":    ".claude/agents/campaign-manager.md",
