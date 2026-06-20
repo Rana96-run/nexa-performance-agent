@@ -16,7 +16,7 @@ on:
         description: >
           Collector to run (leave blank to run all).
           Options: google_ads | meta | snapchat | tiktok | linkedin |
-                   microsoft_ads | hubspot_leads | hubspot_deals |
+                   microsoft_ads | hubspot_leads | hubspot_deals | reconcile |
                    youtube | ga4 | meta_organic | gsc | views | asana_sync
         required: false
         default: ""
@@ -195,6 +195,13 @@ jobs:
         if: ${{ inputs.collector == '' || inputs.collector == 'hubspot_deals' }}
         continue-on-error: true
         run: python collectors/hubspot_deals_bq.py mirror
+
+      - name: Reconcile HubSpot ↔ BQ
+        id: reconcile
+        timeout-minutes: 5
+        if: ${{ inputs.collector == '' || inputs.collector == 'reconcile' }}
+        continue-on-error: true
+        run: python scripts/reconcile_hubspot_bq.py
 
       - name: Collector — GA4
         id: ga4
