@@ -149,19 +149,6 @@ CREATE OR REPLACE VIEW `{P}.{D}.unified_channel_daily` AS
 
 WITH
 
--- Organic Search leads (HubSpot qoyod_source = 'Organic Search'), aggregated to date grain
-organic_search_leads AS (
-  SELECT
-    hs_createdate                                    AS date,
-    COUNT(*)                                         AS leads_total,
-    COUNTIF(is_qualified)                            AS leads_qualified,
-    COUNTIF(is_disqualified)                         AS leads_disqualified,
-    COUNTIF(is_open)                                 AS open_leads
-  FROM `{P}.{D}.hubspot_leads_individual`
-  WHERE qoyod_source = 'Organic Search'
-  GROUP BY hs_createdate
-),
-
 -- Organic Social leads (HubSpot qoyod_source = 'Organic Social'), aggregated to date grain
 -- HubSpot does not split by platform — all organic social (Meta/IG/YT/LinkedIn) is one bucket
 organic_social_leads AS (
@@ -174,29 +161,6 @@ organic_social_leads AS (
   FROM `{P}.{D}.hubspot_leads_individual`
   WHERE qoyod_source = 'Organic Social'
   GROUP BY hs_createdate
-),
-
--- Organic Search deals (HubSpot qoyod_source = 'Organic Search'), aggregated to date grain
-organic_search_deals AS (
-  SELECT
-    createdate                                                    AS date,
-    COUNTIF(is_won)                                              AS deals_won,
-    COUNTIF(is_lost)                                             AS deals_lost,
-    COUNTIF(is_open)                                             AS deals_open,
-    ROUND(SUM(IF(is_won, amount, 0)), 2)                        AS revenue_won,
-    ROUND(SUM(IF(is_lost, amount, 0)), 2)                       AS amount_lost,
-    ROUND(SUM(IF(is_open, amount, 0)), 2)                       AS amount_open,
-    COUNTIF(is_won AND is_new_biz)                              AS new_biz_deals_won,
-    COUNTIF(is_lost AND is_new_biz)                             AS new_biz_deals_lost,
-    COUNTIF(is_open AND is_new_biz)                             AS new_biz_deals_open,
-    COUNTIF(is_new_biz)                                         AS new_biz_deals_total,
-    ROUND(SUM(IF(is_won AND is_new_biz, amount, 0)), 2)         AS new_biz_revenue_won,
-    ROUND(SUM(IF(is_lost AND is_new_biz, amount, 0)), 2)        AS new_biz_amount_lost,
-    ROUND(SUM(IF(is_open AND is_new_biz, amount, 0)), 2)        AS new_biz_amount_open,
-    ROUND(SUM(IF(is_new_biz, amount, 0)), 2)                    AS new_biz_amount_total
-  FROM `{P}.{D}.hubspot_deals_individual`
-  WHERE qoyod_source = 'Organic Search'
-  GROUP BY createdate
 ),
 
 -- Organic Social deals (HubSpot qoyod_source = 'Organic Social'), aggregated to date grain
@@ -222,17 +186,6 @@ organic_social_deals AS (
   WHERE qoyod_source = 'Organic Social'
   GROUP BY createdate
 ),
-
--- GSC aggregated to date grain (pre-aggregated so we can LEFT JOIN leads/deals onto it)
-gsc_daily AS (
-  SELECT
-    date,
-    SUM(clicks)          AS clicks,
-    SUM(impressions)     AS search_impressions,
-    ROUND(AVG(position), 1) AS avg_position
-  FROM `{P}.{D}.gsc_organic_daily`
-  GROUP BY date
-)
 
 -- Branch 1: Paid channels — from paid_channel_daily (channel-grain rollup of wide_ads)
 SELECT
@@ -278,57 +231,7 @@ FROM `{P}.{D}.paid_channel_daily`
 
 UNION ALL
 
--- Branch 2: Organic search — GSC traffic + HubSpot Organic Search leads/deals
--- GSC pre-aggregated in gsc_daily CTE; leads/deals LEFT JOINed from organic_search_* CTEs
-SELECT
-  gsc.date,
-  'organic_search'                                                      AS channel,
-  'organic'                                                             AS source_type,
-  CAST(NULL AS FLOAT64)                                                 AS spend,
-  CAST(NULL AS INT64)                                                   AS impressions,
-  gsc.clicks,
-  CAST(NULL AS INT64)                                                   AS sessions,
-  CAST(NULL AS INT64)                                                   AS new_users,
-  CAST(NULL AS FLOAT64)                                                 AS bounce_rate,
-  COALESCE(osl.leads_total, 0)                                         AS leads_total,
-  COALESCE(osl.leads_qualified, 0)                                     AS leads_qualified,
-  COALESCE(osl.leads_disqualified, 0)                                  AS leads_disqualified,
-  COALESCE(osl.open_leads, 0)                                          AS open_leads,
-  COALESCE(osd.deals_won, 0)                                           AS deals_won,
-  COALESCE(osd.deals_lost, 0)                                          AS deals_lost,
-  COALESCE(osd.deals_open, 0)                                          AS deals_open,
-  COALESCE(osd.revenue_won, 0.0)                                       AS revenue_won,
-  COALESCE(osd.amount_lost, 0.0)                                       AS amount_lost,
-  COALESCE(osd.amount_open, 0.0)                                       AS amount_open,
-  COALESCE(osd.new_biz_deals_won, 0)                                   AS new_biz_deals_won,
-  COALESCE(osd.new_biz_deals_lost, 0)                                  AS new_biz_deals_lost,
-  COALESCE(osd.new_biz_deals_open, 0)                                  AS new_biz_deals_open,
-  COALESCE(osd.new_biz_deals_total, 0)                                 AS new_biz_deals_total,
-  COALESCE(osd.new_biz_revenue_won, 0.0)                               AS new_biz_revenue_won,
-  COALESCE(osd.new_biz_amount_lost, 0.0)                               AS new_biz_amount_lost,
-  COALESCE(osd.new_biz_amount_open, 0.0)                               AS new_biz_amount_open,
-  COALESCE(osd.new_biz_amount_total, 0.0)                              AS new_biz_amount_total,
-  CAST(NULL AS FLOAT64)                                                 AS new_biz_roas,
-  CAST(NULL AS FLOAT64)                                                 AS cpl,
-  CAST(NULL AS FLOAT64)                                                 AS cpql,
-  ROUND(SAFE_DIVIDE(
-    COALESCE(osl.leads_qualified, 0),
-    NULLIF(COALESCE(osl.leads_qualified, 0) + COALESCE(osl.leads_disqualified, 0), 0)
-  ) * 100, 2)                                                           AS qual_rate_pct,
-  CAST(NULL AS FLOAT64)                                                 AS roas,
-  gsc.search_impressions,
-  gsc.avg_position,
-  CAST(NULL AS INT64)                                                   AS engagements,
-  CAST(NULL AS INT64)                                                   AS reach,
-  CAST(NULL AS INT64)                                                   AS followers_gained,
-  CAST(NULL AS FLOAT64)                                                 AS watch_time_min
-FROM gsc_daily gsc
-LEFT JOIN organic_search_leads osl ON gsc.date = osl.date
-LEFT JOIN organic_search_deals osd ON gsc.date = osd.date
-
-UNION ALL
-
--- Branch 8: Organic social — HubSpot Organic Social leads/deals as a single combined row.
+-- Branch 2: Organic social — HubSpot Organic Social leads/deals as a single combined row.
 -- HubSpot does not split organic social by platform (Meta/IG/YT/LinkedIn all share one bucket).
 -- Traffic metrics (impressions, clicks, sessions) are NULL — cannot attribute GA4/GSC to this bucket.
 -- Anchored to the organic_social_leads date; uses FULL OUTER JOIN to capture deal-only dates too.
@@ -840,10 +743,7 @@ def materialize_heavy_views():
 def refresh_all_views():
     client = get_client()
     all_views = ALL_VIEWS + _sub_campaign_views()
-    # Views that reference optional upstream tables (e.g. gsc_organic_daily may not
-    # exist until the GSC collector runs for the first time). These log a warning
-    # but do NOT fail the step so the other views still refresh correctly.
-    OPTIONAL_VIEWS = {"unified_channel_daily"}
+    OPTIONAL_VIEWS: set = set()
     failed = []
     warned = []
     for name, sql in all_views:

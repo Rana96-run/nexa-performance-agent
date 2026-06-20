@@ -203,15 +203,6 @@ jobs:
         continue-on-error: true
         run: python collectors/ga4_bq.py --incremental
 
-      - name: Collector — GSC organic search
-        id: gsc
-        timeout-minutes: 15
-        if: ${{ inputs.collector == '' || inputs.collector == 'gsc' }}
-        continue-on-error: true
-        env:
-          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
-        run: python -m collectors.gsc_bq 3
-
       # ── 6. Views refresh ───────────────────────────────────────────────────────
       - name: Refresh BQ views
         id: views
