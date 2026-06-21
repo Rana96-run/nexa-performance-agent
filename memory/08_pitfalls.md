@@ -1,5 +1,19 @@
 # Pitfalls & Known Traps
 
+## [2026-06-21] Anomaly alerts must pass the "drives action" test
+
+Every alert posted to Slack must answer: **"What do I do now?"** If the reader cannot take a concrete step, the alert is noise and must be removed or suppressed.
+
+Specific patterns that are noise and must be suppressed:
+- **Paused campaigns flagged as "dark"** — spend=0 AND impressions=0 for the full window = paused, not dark. Not actionable.
+- **Campaigns that never ran** — no historical spend = never launched. Not actionable.
+- **LinkedIn token warning when token is valid** — check `platform_tokens` table first; if `refreshed_at` < 24h and not expired, suppress entirely. The GitHub Action already handled it.
+- **Broken connector names listed in Slack** — connector issues should auto-fix silently; only post to Slack if self-heal also failed. Never list connector names in the Slack message itself — details go to Asana only.
+- **Mass-fire (> 5 anomalies at once)** — almost always a systemic event (platform outage, scheduled budget pause). Post one summary alert, not individual ones.
+- **Metrics with fewer than 3 days of baseline data** — not enough history for a meaningful signal.
+
+Rule: before adding any new alert, ask "if this fires, what does the reader do?" If the answer is "nothing" or "check something", suppress it until there's a clear action.
+
 ## [2026-06-17] n8n Claude nodes: `tool_choice:{type:'required'}` is invalid → 400 crash
 
 **Symptom:** Master workflow crashes at first Claude node (`Claude · Data Guard`) with:

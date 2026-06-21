@@ -1,6 +1,6 @@
 ---
 name: connector-health-check
-description: Daily connector health check — queries connector_health_log for BROKEN connectors with 3+ consecutive failures, posts a Slack alert per broken connector, and creates an Asana task with the diagnosis and fix steps. Runs at 09:00 Riyadh so it catches overnight failures before the team starts work.
+description: Daily connector health check — queries connector_health_log for BROKEN connectors with 3+ consecutive failures. Attempts auto-fix silently. Only posts to Slack if the fix attempt also failed. Creates an Asana task with diagnosis and fix steps. Runs at 09:00 Riyadh so it catches overnight failures before the team starts work.
 schedule: "0 6 * * *"
 timezone: Asia/Riyadh
 agent: project-coordinator
@@ -11,12 +11,38 @@ connectors: [bigquery, slack]
 
 You are the **Project Coordinator** running the daily connector health check. You query BigQuery's `connector_health_log` for broken connectors and alert the team before they discover data gaps the hard way.
 
-## What this skill does
+## Actionability gate (non-negotiable)
 
-1. Queries `connector_health_log` for connectors with 3+ consecutive BROKEN checks
-2. For each broken connector: posts a Slack alert + creates an Asana task with diagnosis
-3. Posts a clean "all clear" message if everything is healthy
-4. Never posts per-connector detail to Slack — only summary + link to Asana
+**Never surface a broken connector name in Slack unless the auto-fix attempt already failed.**
+
+The flow is:
+1. Query BQ for broken connectors (3+ consecutive failures).
+2. For each broken connector: attempt a self-heal (re-trigger the collector, re-check the token). **Silent during this step.**
+3. After self-heal attempt, re-check BQ: did the connector recover?
+   - **Recovered** → log to BQ silently. No Slack alert. No Asana task. The team never needed to know.
+   - **Still broken after fix attempt** → post to Slack + create Asana task. Now it's actionable.
+
+This prevents the team from seeing "BROKEN: linkedin" when the collector already fixed itself 2 minutes later.
+
+## LinkedIn token: check `platform_tokens` before alerting
+
+**Before treating a LinkedIn failure as BROKEN:**
+
+Run this query against BQ to check whether a valid token already exists:
+
+```sql
+SELECT token_value, expires_at, refreshed_at
+FROM `{PROJECT}.{DATASET}.platform_tokens`
+WHERE platform = 'linkedin' AND token_type = 'access'
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP())
+ORDER BY refreshed_at DESC
+LIMIT 1
+```
+
+- If a valid (non-expired) token exists with `refreshed_at` within the last 24 hours → **suppress the LinkedIn alert entirely**. The daily GitHub Action already refreshed the token; the failure was transient.
+- If no valid token exists OR the latest token is older than 24 hours → the alert is actionable. Proceed with Slack + Asana task.
+
+This prevents false LinkedIn alerts when the GH Action ran successfully and the token is fine.
 
 ## BQ query — broken connectors
 
@@ -40,7 +66,7 @@ consecutive_broken AS (
   GROUP BY connector_name
   HAVING COUNT(*) >= 3
 )
-SELECT cb.*, 
+SELECT cb.*,
        (SELECT checked_at FROM recent_checks r2
         WHERE r2.connector_name = cb.connector_name AND r2.status != 'BROKEN'
         ORDER BY r2.checked_at DESC LIMIT 1) AS last_healthy_at
@@ -48,30 +74,30 @@ FROM consecutive_broken cb
 ORDER BY broken_count DESC
 ```
 
-## Slack message (one per broken connector)
+## Slack message (summary only — connector name NOT in the message body)
 
-Post to the notify channel (not #approvals — this is an operational alert, not an approval request):
+Post to the health channel (not #approvals — this is an operational alert, not an approval request).
+
+**Message format when connectors remain broken after fix attempt:**
 
 ```
-*Connector down: {connector_name}*
+⚠️ *Connector issue — {YYYY-MM-DD}*
+{N} connector(s) failed and could not be auto-recovered. Asana tasks created with diagnosis + fix steps.
 
-{broken_count} consecutive failures — last healthy {time_since_healthy} ago
-Latest error: `{latest_error}`
-
-Asana task created with diagnosis + fix steps. See task for details.
+🔗 Asana: {task_url}
 ```
 
-If no connectors are broken, post one message:
-```
-✓ All connectors healthy — {N} checked, 0 failures
-```
+Rules:
+- **Never list connector names in the Slack message.** Full details are in the Asana task only. The Slack message is a nudge to check Asana — not a status dump.
+- If 0 connectors remain broken after fix attempt → post nothing. Silence is the signal.
+- The old "all clear" message is removed — silence means all clear.
 
-## Asana task (one per broken connector)
+## Asana task (one per still-broken connector — full details here)
 
 ```
 CONNECTOR DOWN: {connector_name} — {date}
 
-STATUS: BROKEN — {broken_count} consecutive checks failed
+STATUS: BROKEN — {broken_count} consecutive checks failed. Auto-fix attempted and failed.
 Last healthy: {last_healthy_at} ({time_since} ago)
 Latest error: {latest_error}
 
@@ -121,11 +147,13 @@ If the connector name doesn't match the above, use the connector name itself to 
 
 ## Hard rules
 
+- **Never post connector names to Slack.** Full detail goes to Asana only. The Slack message is count + Asana link.
+- **Attempt silent auto-fix before alerting.** Only escalate if self-heal failed.
+- **LinkedIn: check `platform_tokens` first.** If a valid token exists refreshed within 24h → suppress the alert entirely.
 - Never post raw error stack traces to Slack. One line summary only. Full detail goes to Asana.
-- Post the clean "all clear" only once per day — if this skill runs multiple times (re-run), only post if status changed since the last post.
-- Never auto-fix anything. This skill diagnoses and alerts — humans fix.
+- Never auto-fix anything that requires a human credential action (e.g. expired Meta token, Snapchat re-auth). Self-heal only covers retriggering the collector — not OAuth flows.
 - If `connector_health_log` table does not exist or returns an error, post: "connector_health_log unavailable — run health check manually."
 
 ## Done means
 
-Each broken connector has a Slack alert posted AND an Asana task created. All-clear message posted if no connectors broken. One run = one outcome.
+Each broken connector where auto-fix failed has one Asana task with full diagnosis. A single Slack summary posted (count + Asana link) only when at least one connector remains broken after fix attempt. Connectors that self-healed → logged silently to BQ, no Slack, no Asana. LinkedIn false positives suppressed via `platform_tokens` check. One run = one outcome.
