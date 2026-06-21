@@ -1653,3 +1653,7 @@ We work with the HubSpot Lead Module (object `0-136`), NOT contacts.
 ## gh CLI path and auth (2026-06-20)
 
 - **gh CLI not on default PATH**: Binary lives at `C:\Program Files\GitHub CLI\gh.exe`. System PATH already includes it, but new PowerShell sessions launched from Claude Code tools sometimes don't inherit it. Use full path `& "C:\Program Files\GitHub CLI\gh.exe"` as fallback, or prefix `$env:PATH += ";C:\Program Files\GitHub CLI"`. Authenticated as `Rana96-run`, repo slug `Rana96-run/nexa-performance-agent`. Token scopes: repo + workflow (sufficient for Actions log reads).
+
+## n8n Cloud PUT /api/v1/workflows/{id} — strip extra fields before PUT (2026-06-21)
+
+n8n Cloud PUT /api/v1/workflows/{id} only accepts `{name, nodes, connections, settings}`. Any extra fields (`updatedAt`, `createdAt`, `versionId`, `shared`) cause 400. Strip them before PUT.
