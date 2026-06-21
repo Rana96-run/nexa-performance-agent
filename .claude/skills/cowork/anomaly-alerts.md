@@ -1,4 +1,4 @@
----
+﻿---
 name: anomaly-alerts
 description: Detects sudden anomalies — spend doubling overnight, leads dropping 50%+, a campaign going dark, CPQL spiking 2× the 7-day average. Posts an immediate Slack alert. Runs daily in the morning loop before the nightly digest.
 schedule: "0 4 * * *"
@@ -71,15 +71,25 @@ WHERE d.date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
 
 ### Check 3 — Campaign went dark
 ```sql
-SELECT campaign_name, channel, MAX(date) AS last_seen
-FROM `{PROJECT}.{DATASET}.campaigns_daily`
-WHERE spend > 0
-GROUP BY campaign_name, channel
-HAVING DATE_DIFF(CURRENT_DATE(), MAX(date), DAY) BETWEEN 1 AND 3
-   AND MAX(date) < DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+-- Exclude campaigns where spend=0 AND impressions=0 for all rows in the last 2 days (those are paused, not dark)
+WITH paused_campaigns AS (
+  SELECT campaign_name, channel
+  FROM `{PROJECT}.{DATASET}.campaigns_daily`
+  WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 DAY)
+  GROUP BY campaign_name, channel
+  HAVING SUM(spend) = 0 AND SUM(impressions) = 0
+)
+SELECT c.campaign_name, c.channel, MAX(c.date) AS last_seen
+FROM `{PROJECT}.{DATASET}.campaigns_daily` c
+LEFT JOIN paused_campaigns p
+  ON c.campaign_name = p.campaign_name AND c.channel = p.channel
+WHERE c.spend > 0
+  AND p.campaign_name IS NULL  -- exclude paused campaigns
+GROUP BY c.campaign_name, c.channel
+HAVING DATE_DIFF(CURRENT_DATE(), MAX(c.date), DAY) BETWEEN 1 AND 3
+   AND MAX(c.date) < DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
 ```
-**Fires if:** a campaign that was spending 2+ days ago has 0 spend for 1–3 days (silent death).
-
+**Fires if:** a campaign that was spending 2+ days ago has 0 spend for 1–3 days (silent death) — AND it is not paused (i.e., it had spend or impressions > 0 in the last 2 days).
 ### Check 4 — CPQL spike
 ```sql
 WITH daily AS (
@@ -107,14 +117,15 @@ WHERE d.date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
 For every campaign flagged by Check 3, **re-query BQ** before creating or updating any Asana task:
 
 ```sql
-SELECT SUM(spend) AS spend_today
+SELECT SUM(spend) AS spend_today, SUM(impressions) AS impressions_today
 FROM `{PROJECT}.{DATASET}.campaigns_daily`
 WHERE campaign_name = '{campaign_name}'
   AND date = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
 ```
 
 - If `spend_today > 0` → campaign already recovered. Skip task creation. Log: `"[campaign_name] already recovered — skipping task"`.
-- If `spend_today = 0` or no row → anomaly still present. Proceed to Step 2 (Asana task).
+- If `spend_today = 0 AND impressions_today = 0` → campaign is paused. Skip task creation. Log: `"[campaign_name] is paused (spend=0, impressions=0) — skipping task"`.
+- If `spend_today = 0 AND impressions_today > 0` or no row → anomaly still present (active but not spending). Proceed to Step 2 (Asana task).
 
 This BQ-confirm step does not apply to Checks 1, 2, or 4 — those are aggregate metrics confirmed by their own SQL above.
 
