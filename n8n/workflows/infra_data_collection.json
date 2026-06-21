@@ -1,4 +1,4 @@
-{
+﻿{
     "updatedAt":  "2026-06-21T07:27:17.085Z",
     "createdAt":  "2026-06-16T21:07:12.580Z",
     "id":  "jOnJxdpdaO3Vbi0B",
@@ -843,19 +843,19 @@
                                        -2608
                                    ],
                       "credentials":  {
-                                          "httpHeaderAuth":  {
-                                                                 "id":  "gks4aGu697ztHt0I",
-                                                                 "name":  "Microsoft Ads (Qoyod)"
-                                                             }
+
                                       },
                       "parameters":  {
                                          "method":  "POST",
                                          "url":  "https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit",
-                                         "authentication":  "genericCredentialType",
-                                         "genericAuthType":  "httpHeaderAuth",
+                                         "authentication":  "none",
                                          "sendHeaders":  true,
                                          "headerParameters":  {
                                                                   "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{ \u0027Bearer \u0027 + $(\u0027Refresh MS Token\u0027).item.json.access_token }}"
+                                                                                     },
                                                                                      {
                                                                                          "name":  "CustomerAccountId",
                                                                                          "value":  "188176729"
@@ -885,19 +885,19 @@
                                        -2428
                                    ],
                       "credentials":  {
-                                          "httpHeaderAuth":  {
-                                                                 "id":  "gks4aGu697ztHt0I",
-                                                                 "name":  "Microsoft Ads (Qoyod)"
-                                                             }
+
                                       },
                       "parameters":  {
                                          "method":  "POST",
                                          "url":  "https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit",
-                                         "authentication":  "genericCredentialType",
-                                         "genericAuthType":  "httpHeaderAuth",
+                                         "authentication":  "none",
                                          "sendHeaders":  true,
                                          "headerParameters":  {
                                                                   "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{ \u0027Bearer \u0027 + $(\u0027Refresh MS Token\u0027).item.json.access_token }}"
+                                                                                     },
                                                                                      {
                                                                                          "name":  "CustomerAccountId",
                                                                                          "value":  "187231519"
@@ -1066,6 +1066,90 @@
                                                                  "id":  "YwdlGwXs943DQrfh",
                                                                  "name":  "Slack (Qoyod)"
                                                              }
+                                      }
+                  },
+                  {
+                      "id":  "refresh-ms-token-001",
+                      "name":  "Refresh MS Token",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       150,
+                                       -2518
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "=https://login.microsoftonline.com/{{ $vars.MS_TENANT_ID }}/oauth2/v2.0/token",
+                                         "authentication":  "none",
+                                         "sendBody":  true,
+                                         "contentType":  "form-urlencoded",
+                                         "bodyParameters":  {
+                                                                "parameters":  [
+                                                                                   {
+                                                                                       "name":  "grant_type",
+                                                                                       "value":  "refresh_token"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "refresh_token",
+                                                                                       "value":  "1.AS8A2sRviyQcL0OwiSNV0i8Cjf_wFz3A-TRHtsLSMcZ4-6gAAP0vAA.BQABAwEAAAADAOz_BQD0_0V2b1N0c0FydGlmYWN0cwIAAAAAAHT1fbB62HYQJxVuV9hCe3wTulG-0okMaSIUtiJiuc3wg1ghq0BvZPZULG29D6bYRh9oIkgR8jGvQ0GBuhq6GsUru8LgTdcRNVVHHn6G5c0dgThnNr_795qzxJR4juZQYdBgVdvv2w4Y3FdqmNtrIvgcE_0HG-5ut9NzEe59cBs1htpyp0Sqw62J5qBn0jwr1lksc7nfwsbM0zOUomd1BOMPWLUqOLjcPkmKDRgMxRhGEqMby6NQiAWNyyllw3wVwZ1vBayxbzWKkCDG-NfGNm2_W7d86PVvgz7GVhLg0odPvORO6x-dAwDG6Da8n7t1c4ICjW2aqfQJudJ-UXJj_kpqTtOIgY7TXz92aALAHrQ1hT_rF9rW-LVpMJ-G7DhS1xNBkntPAWMCRymIFWM3GB2wafQmkUxZx4NJoc4K67Id5FPqjT1Tnr-G6TP0T5sa281wOMGh3emlTgQRdJTH4JC4aAKKL27HbVamSn_PMW8m1U6zrunnt6wAOCKRFDNUQWqTobuYpXPstaLBH7qq-iLj8VmRD7FLyJY9MFKIiI243Yn1ALQuwJOdWwtGUkbuVPZGMweYWgOaCCjGvBmapgBOBJDTpsuWO68MyshB9cBo0Jg84K_R-cCl-WJTqc9bUraPKRNwjoRWLC4yi2uQgwaKN17WM_N9hOukL638vOYoR1FwVOoBysdIX-r3T8iZdaYEdUfxmIF4VOx50JSVyEBGZU6kQAEhJlvt1j5FYWRnbQiQYr--R-z2Uk2al8axi633fyzaLzRl000_kDEJelza7PMMKU--H3pVPQjSfHp1Gv312J-Tpu1eCZTccJXyLDDxZ2NBLCSD7n2auF-F9vDNMRe5_51F-Co72QWzYkCZs0ilM0Nk6cjqx1QpAuH7NAxAY7w49F5YJFOFZfkRL3acYJ_PLigeBYUkmhxvC8zgdNXFjRafLBTjw93fZpKDCxhhIpJEOCRwah25NE-FY7UVNtv-NmRPeD8w6N2p5I_Q-WI8Xdi-DjBWqYbXB0mLMIU_jQZQzU3-L827PbEJJIQsbvhN-qjYjsAqGonr6Un2811PU4ZRGBI5jiDn43IrTWJK3z6hni2pOh8K-uADSk-WJGacJmzyFst04SrPyc7OmGwICgqRfTMmYgqwr9bfSiRL_0gRtInqFA4RlcLJhrjPlYsMVA6RSR58kIBPbRyzSOyjxbdT6-P9c9DpiTjoSkmCUORP9co_pWtoxxuMpFW0pGwJltli6aiMm0PQ8oaq87e8P8e_DrnbDfDMqK0108PBzPd7q0sgNOISdDvtIeiwABTf7bfg8hkhVPqA7POq-mSgP1lpYH2r02vCoHHmhbr0E60WoU_KdbJJfGhEshyGiZTOPn8QbFFviEt94ILSwwd_eaHIKw"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "client_id",
+                                                                                       "value":  "={{ $vars.MS_CLIENT_ID }}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "client_secret",
+                                                                                       "value":  "={{ $vars.MS_CLIENT_SECRET }}"
+                                                                                   },
+                                                                                   {
+                                                                                       "name":  "scope",
+                                                                                       "value":  "https://ads.microsoft.com/msads.manage offline_access"
+                                                                                   }
+                                                                               ]
+                                                            },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "credentials":  {
+
+                                      }
+                  },
+                  {
+                      "id":  "store-ms-refresh-token-001",
+                      "name":  "Store New MS Refresh Token",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       290,
+                                       -2518
+                                   ],
+                      "parameters":  {
+                                         "method":  "PATCH",
+                                         "url":  "https://qoyod.app.n8n.cloud/api/v1/credentials/gks4aGu697ztHt0I",
+                                         "authentication":  "none",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "X-N8N-API-KEY",
+                                                                                         "value":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyYTZlMDMwNC0wN2RhLTRjNzktYTUwNi0zYzkyYjU5ODFiZDEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiMjA2Yjk1Y2YtNzJiOS00ZGM0LWIxOTAtNTY0Y2QyNzdhMDNiIiwiaWF0IjoxNzgxMTgxODU3fQ.UvVwQcF0-bW8ipJlgSTPEYe1Zg8tdJE3ZoJ-vJIFi8s"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={\"name\":\"Microsoft Ads (Qoyod)\",\"type\":\"httpHeaderAuth\",\"data\":{\"name\":\"Authorization\",\"value\":\"Bearer {{ $json.access_token }}\"}}",
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "neverError":  true
+                                                                                       }
+                                                                      }
+                                                     }
+                                     },
+                      "credentials":  {
+
                                       }
                   }
               ],
@@ -1691,12 +1775,7 @@
                                                              "index":  0
                                                          },
                                                          {
-                                                             "node":  "Microsoft Ads Â· 188176729",
-                                                             "type":  "main",
-                                                             "index":  0
-                                                         },
-                                                         {
-                                                             "node":  "Microsoft Ads Â· 187231519",
+                                                             "node":  "Refresh MS Token",
                                                              "type":  "main",
                                                              "index":  0
                                                          }
@@ -1742,7 +1821,34 @@
                                                                     }
                                                                 ]
                                                             ]
-                                               }
+                                               },
+                        "Refresh MS Token":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Store New MS Refresh Token",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Store New MS Refresh Token":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Microsoft Ads Â· 188176729",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            },
+                                                                            {
+                                                                                "node":  "Microsoft Ads Â· 187231519",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       }
                     },
     "settings":  {
                      "executionOrder":  "v1",
