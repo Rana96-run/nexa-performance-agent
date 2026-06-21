@@ -258,6 +258,15 @@ def collect_and_write(days: int = None, incremental: bool = False):
                 d           = (pt.get("start_time") or "")[:10]
                 if not d:
                     continue
+                # Skip zero-activity rows from PAUSED campaigns — they create
+                # name-collision duplicates in campaigns_daily when a second
+                # campaign with the same name is running (e.g. a renamed/recreated
+                # campaign). Rows with spend=0 AND impressions=0 from PAUSED
+                # campaigns provide no analytical value and inflate the table.
+                # (2026-06-22: root cause of Snap 3-campaign duplicate bug.)
+                if (spend == 0.0 and impressions == 0
+                        and (c.get("status") or "").upper() == "PAUSED"):
+                    continue
                 rows.append({
                     "date":             d,
                     "channel":          "snapchat",

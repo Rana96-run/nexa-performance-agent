@@ -329,9 +329,54 @@ def collect_and_write(days: int = None, incremental: bool = False) -> int:
 
     if not all_rows:
         return 0
+
+    # Deduplicate by (date, campaign_name) before writing — multiple MS Ads accounts
+    # can have campaigns with the same name (e.g. Bing_Search_AR_Brand appears in
+    # both account 187231519 and 188176729). Keeping two rows with the same name
+    # creates downstream attribution double-counting when views group by campaign_name.
+    # Strategy: keep the ACTIVE/higher-spend campaign's identity fields (campaign_id,
+    # account_id, status) but SUM the metrics (spend, impressions, clicks, conversions).
+    # (2026-06-22: root cause of MS Ads 1-campaign duplicate bug.)
+    from collections import defaultdict
+    _merged: dict[tuple, dict] = {}
+    for row in all_rows:
+        key = (row["date"], row["campaign_name"])
+        if key not in _merged:
+            _merged[key] = dict(row)
+        else:
+            existing = _merged[key]
+            # Prefer the ACTIVE campaign as the canonical identity
+            def _is_active(r): return (r.get("status") or "").lower() == "active"
+            if _is_active(row) and not _is_active(existing):
+                # Swap identity fields to the active campaign, keep summed metrics
+                _summed_spend = existing["spend"] + row["spend"]
+                _summed_impr  = existing["impressions"] + row["impressions"]
+                _summed_clicks = existing["clicks"] + row["clicks"]
+                _summed_leads = existing["leads"] + row["leads"]
+                _summed_conv  = existing["conversions"] + row["conversions"]
+                _merged[key] = dict(row)
+                _merged[key]["spend"]       = round(_summed_spend, 2)
+                _merged[key]["impressions"] = _summed_impr
+                _merged[key]["clicks"]      = _summed_clicks
+                _merged[key]["leads"]       = _summed_leads
+                _merged[key]["conversions"] = _summed_conv
+                _merged[key]["ctr"]         = round(_summed_clicks / _summed_impr, 6) if _summed_impr else 0.0
+            else:
+                # Keep existing identity, sum metrics
+                existing["spend"]       = round(existing["spend"] + row["spend"], 2)
+                existing["impressions"] += row["impressions"]
+                existing["clicks"]      += row["clicks"]
+                existing["leads"]       += row["leads"]
+                existing["conversions"] += row["conversions"]
+                existing["ctr"]         = round(existing["clicks"] / existing["impressions"], 6) if existing["impressions"] else 0.0
+    collapsed = list(_merged.values())
+    if len(collapsed) < len(all_rows):
+        print(f"[ms-bq] collapsed {len(all_rows)} rows -> {len(collapsed)} "
+              f"(merged {len(all_rows) - len(collapsed)} same-name cross-account campaigns)")
+
     # Single upsert with combined rows from all accounts. DELETE wipes the
     # (date, channel) partition once — both accounts' rows then re-inserted.
-    return upsert_rows("campaigns_daily", all_rows,
+    return upsert_rows("campaigns_daily", collapsed,
                        key_fields=["date", "channel", "campaign_id"])
 
 
