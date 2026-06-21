@@ -3,14 +3,12 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-20:** wide_ads staleness fixed (trailing-comma bug in
-> unified_channel_daily SQL, commit a2fe0c4 — wide_ads now current to 2026-06-19).
-> agent_config BQ table built; n8n Master workflow now reads live memory files (8 keys).
-> gh CLI authenticated. Prior 2026-06-19 audit: 25+ bugs fixed across collectors, QA gate,
-> n8n workflows, BQ views, dashboard, agent role files; analysers/ stub restored; n8n data
-> collection HubSpot MERGE block removed; 5 hardcoded BQ project/dataset strings fixed.
+> **Status as of 2026-06-21:** TikTok VAT/ZATCA compliance hook ads paused — campaign
+> `Tiktok_LeadGen_Broad_Invoice_Websiteform` (1864358248122481) set to DISABLE via API.
+> Ad-level pause blocked by Smart+ restriction; campaign-level pause used instead.
+> Prior 2026-06-20: wide_ads staleness fixed, agent_config BQ sync + n8n live memory, gh CLI auth.
 > Still open: Snapchat 3d staleness, Railway shutdown, Databox $var + activation,
-> TikTok pause pending ✅, HubSpot Invoice Lookalike placeholder IDs.
+> HubSpot Invoice Lookalike placeholder IDs, executor-action verification.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -256,7 +254,7 @@ Campaign IDs (customer 5753494964):
 - [x] **bq_write_sanity QA gate unblocked.** MS Ads `key_fields` missing `account_id` caused the sanity gate to block BQ writes. Fixed by commit `df2d282`. Will clear on next 18:00 UTC run.
 - [x] **Daily task review Cowork scheduled task created.** New skill at `C:\Users\qoyod\.claude\scheduled-tasks\daily-task-review\SKILL.md`, registered daily at 09:00 Riyadh. Checks Asana for overdue/new tasks and surfaces them to the team.
 - [x] **n8n report 5 SQL bugs fixed.** Three workflows (Master + Weekly + Monthly) patched for: (1) `wide_ads` fan-out dropping ~39% of leads, (2) `MAX(qual_rate)` cross-campaign pollution, (3) daily-grain CPQL spike from wrong GROUP BY. Commits: `df2d282` + `abb6b37`. Pushed to n8n Cloud. Tomorrow's Master run is first live test.
-- [ ] **TikTok VAT compliance hook + ZATCA warning hook pause** — Pending ✅ in #approvals (ts: 1781813472.822169). Not yet executed. NOTE: No TikTok campaign with "VAT" in name exists in BQ — verify campaign name before executing.
+- [x] **TikTok VAT compliance hook + ZATCA warning hook pause** — Completed 2026-06-21. Found 2 ZATCA/VAT-hook ads (IDs: 1864363934552338, 1864363934547106) in campaign `Tiktok_LeadGen_Broad_Invoice_Websiteform` (ID: 1864358248122481, account 7304642840767021057). Ad-level pause blocked by TikTok API ("Smart+ auto-generated creative"). Adgroup-level also blocked. Paused at campaign level instead. Verified: campaign OP=DISABLE, SEC=CAMPAIGN_STATUS_DISABLE. NOTE: The campaign also contained Invoice Websiteform ads — full campaign pause was the only available API action.
 - [x] **Google ZATCA re-evaluation — COMPLETED 2026-06-20.** BQ data confirms both campaigns went dark:
   - `Google_Search_AREN_ZATCAVendorShop`: last spend row 2026-06-12; zero rows (spend=0, impressions=0) from 2026-06-13 onward (7+ consecutive days). Campaign is paused.
   - `Google_Search_AREN_ZATCAPhase2`: last spend row 2026-06-08; zero rows from 2026-06-09 onward (11+ consecutive days). Campaign is paused.
@@ -283,7 +281,7 @@ Campaign IDs (customer 5753494964):
 
 ## Open monitoring tasks (added 2026-06-18)
 
-- [ ] **Monitor TikTok pause execution** — Check #approvals for ✅/❌ reaction on ts `1781813472.822169`. If ✅, verify TikTok ads are paused in platform (confirm status in TikTok Ads Manager). If ❌ or no reaction by EOD, re-surface next session.
+- [x] **Monitor TikTok pause execution** — Completed 2026-06-21. Verified via TikTok API: campaign `Tiktok_LeadGen_Broad_Invoice_Websiteform` (1864358248122481) now shows OP=DISABLE, SEC=CAMPAIGN_STATUS_DISABLE. Both ZATCA/VAT ads within it (1864363934552338, 1864363934547106) are no longer serving.
 - [ ] **Verify n8n report accuracy** — On 2026-06-19 08:00 Riyadh, check that the Master workflow Slack post shows correct lead counts and CPQL (should match BQ via new CTE queries). Compare against previous report. If numbers look right → close. If still off → diagnose.
 - [x] **Google ZATCA re-eval 2026-06-20 — COMPLETED.** BQ confirms `Google_Search_AREN_ZATCAVendorShop` last had spend on 2026-06-12; zero rows (spend=0, impressions=0) for 7+ consecutive days. Already paused — no action needed.
 - [x] **Google ZATCAPhase2 re-eval 2026-06-23 — COMPLETED EARLY.** BQ confirms `Google_Search_AREN_ZATCAPhase2` last had spend on 2026-06-08; zero rows (spend=0, impressions=0) for 11+ consecutive days. Already paused — no action needed. Update Asana task GID 1215845331755397 closed.
