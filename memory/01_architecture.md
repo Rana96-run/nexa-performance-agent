@@ -95,9 +95,13 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 | Nexa · Sub-Flow D (Qual Ratio Fix) | `PxFBmtXDVgcNGzIM` | Called by Master Switch | — | ACTIVE |
 | Nexa · Sub-Flow E (Impression Share Fix) | `eL0V6ReftV2U1wNf` | Called by Master Switch | — | ACTIVE |
 | Nexa · Sub-Flow F (Creative & CTR Fix) | `smHaEhWloComRQyz` | Called by Master Switch | — | ACTIVE |
-| Infra: Agent Activity Dashboard → GitHub Pages | `Szq6QhBIn44SfaHH` | Every 1 hour | 7 | INACTIVE (deactivated 2026-06-21 — GitHub Pages removed) |
 
 **GitHub Pages activity dashboard:** REMOVED 2026-06-21. Workflow `Szq6QhBIn44SfaHH` ("Infra: Agent Activity Dashboard → GitHub Pages") deactivated. `docs/index.html` deleted. Railway `/activity` is the sole activity dashboard going forward.
+
+### Deleted/Deactivated workflows
+
+**Deleted 2026-06-21:**
+- `Szq6QhBIn44SfaHH` — Infra: Agent Activity Dashboard → GitHub Pages. Deleted 2026-06-21 — GitHub Pages dashboard dropped; Railway /activity is sole dashboard.
 
 **Deleted 2026-06-17 (stale/superseded):**
 - `7ZEROvwTg3UrGAP6` — Nexa · Databox Sync (superseded; Databox reads directly from BQ via native connector)

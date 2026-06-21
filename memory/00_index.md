@@ -38,7 +38,7 @@ single concern. Read only what you need.
 | `13_hubspot_fields.md` | HubSpot BQ schema, UTM→BQ field map, qoyod_source channel key map, CPL/CPQL methodology at every grain |
 | `14_learning_patterns.md` | Outcome library — what worked / didn't after each recommended action. Read before recommending a similar action. |
 | `15_operational_history.md` | Institutional log of one-off learnings/steps/actions (distilled from the retired `scripts/_*.py`). "Have we done/investigated X before?" |
-| `16_activity_dashboard.md` | Nexa Agent Activity Hex app — design reference, BQ schema, SQL templates, canvas layout |
+| `16_activity_dashboard.md` | Hex Activity dashboard removed 2026-06-21 — Railway /activity is sole dashboard. |
 | `utm_template.md` | Canonical Google Ads UTM `final_url_suffix` template + custom-param convention. Read BEFORE proposing any UTM string. |
 
 ## The team (agents)
