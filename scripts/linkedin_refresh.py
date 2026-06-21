@@ -64,11 +64,11 @@ def _write_token(access_token: str, expires_in: int) -> None:
     ndjson = (json.dumps(row) + "\n").encode()
     job_cfg = bigquery.LoadJobConfig(
         schema=[
-            bigquery.SchemaField("platform",     "STRING"),
-            bigquery.SchemaField("token_type",   "STRING"),
-            bigquery.SchemaField("token_value",  "STRING"),
-            bigquery.SchemaField("expires_at",   "TIMESTAMP"),
-            bigquery.SchemaField("refreshed_at", "TIMESTAMP"),
+            bigquery.SchemaField("platform",     "STRING",    mode="REQUIRED"),
+            bigquery.SchemaField("token_type",   "STRING",    mode="REQUIRED"),
+            bigquery.SchemaField("token_value",  "STRING",    mode="REQUIRED"),
+            bigquery.SchemaField("expires_at",   "TIMESTAMP", mode="NULLABLE"),
+            bigquery.SchemaField("refreshed_at", "TIMESTAMP", mode="REQUIRED"),
         ],
         source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
