@@ -1657,3 +1657,13 @@ We work with the HubSpot Lead Module (object `0-136`), NOT contacts.
 ## n8n Cloud PUT /api/v1/workflows/{id} — strip extra fields before PUT (2026-06-21)
 
 n8n Cloud PUT /api/v1/workflows/{id} only accepts `{name, nodes, connections, settings}`. Any extra fields (`updatedAt`, `createdAt`, `versionId`, `shared`) cause 400. Strip them before PUT.
+
+**Also**: the `settings` object itself must not contain newer fields like `availableInMCP` or `binaryMode` — these cause `400: request/body/settings must NOT have additional properties`. Safe settings fields: `executionOrder`, `saveManualExecutions`, `callerPolicy`, `errorWorkflow`, `timezone`. Strip everything else.
+
+## n8n Weekly Review IF node crash — BQ returns numeric as string (2026-06-21)
+
+**Symptom:** Weekly Review workflow (`iNSdpXH7Rc9Lb8h8`) fails at node `IF ⚡ Data Fresh?` with `NodeOperationError: Wrong type: '2' is a string but was expecting a number`.
+
+**Root cause:** BQ `googleBigQuery` node returns `DATE_DIFF()` result as a string. The IF node with `typeValidation: "strict"` refuses to compare a string against a number `rightValue`.
+
+**Fix:** Change IF node `parameters.conditions.options.typeValidation` from `"strict"` to `"loose"`. This allows n8n to coerce the string to number automatically. Applied 2026-06-21 via API PUT.
