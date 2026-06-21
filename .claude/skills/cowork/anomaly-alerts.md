@@ -36,7 +36,7 @@ If there is no concrete action, suppress it silently. Never post noise.
   ⚠️ *Multiple anomalies detected — {YYYY-MM-DD}*
   {count} checks fired simultaneously. Likely cause: scheduled budget pause or platform outage. Check the dashboard — no individual action needed until the cause is clear.
 
-  📊 Dashboard: {activity_dashboard_url}
+  📊 Dashboard: <https://nexa-web-production-6a6b.up.railway.app/activity|activity dashboard>
   ```
 - Create a single Asana task: `[Anomaly] Mass-fire — {date}` with the count and a note to investigate the cause before acting.
 - Do NOT create one task per anomaly when the mass-fire guard triggers.
@@ -207,7 +207,7 @@ Post to `SLACK_CHANNEL_HEALTH` **only if at least one anomaly is new** (not prev
 {summary line — e.g. "3 campaigns went dark (Check 3)" or "Spend spiked 2.4× (Check 1)"}
 
 🔗 Asana: {task_url}
-📊 Dashboard: {activity_dashboard_url}
+📊 Dashboard: <https://nexa-web-production-6a6b.up.railway.app/activity|activity dashboard>
 ```
 
 Rules:
