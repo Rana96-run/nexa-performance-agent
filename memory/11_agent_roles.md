@@ -65,7 +65,7 @@ finding — assign it before it runs unattended (see `docs/_shared/police-loop.m
 - Donia Mohamed: `1211896896006183`
 - Tony Helmy (thelmy@qoyod.com): `1211659245827014`
 
-**Dashboard must mirror this.** The Hex Agent Activity dashboard (`Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`) mirrors this mapping. (`reports/app.py` was deleted 2026-06-16.)
+**Dashboard:** The Railway `/activity` endpoint (served by `reports/app.py`) is the sole activity dashboard as of 2026-06-21. The Hex Agent Activity dashboard (`Nexa-Agent-Activity-033ArC9Xytz3SK6tPXwk9D`) and GitHub Pages dashboard were removed 2026-06-21. `reports/app.py` is still live on Railway.
 
 Shared runtime context: `qoyod-manager-os.md` ↔ `CLAUDE.manager.md`;
 `qoyod-brand-identity.md` ↔ `docs/landing-pages/reference/brand/`.

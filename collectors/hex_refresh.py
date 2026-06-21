@@ -3,20 +3,20 @@ Hex notebook refresh — triggers a re-run of published Hex apps via the
 Hex REST API so dashboards always show fresh BQ data after each collector
 pass.
 
-Called at the end of run_refresh() in reporting_scheduler.py.
-
 Env vars required:
   HEX_API_TOKEN              — Hex Settings → API Keys → Create token
   HEX_PERFORMANCE_PROJECT_ID — project token from the performance dashboard URL
-  HEX_ACTIVITY_PROJECT_ID    — project token from the activity dashboard URL
 
 Project IDs come from the app URL slug — the alphanumeric part after the
 last dash in the path segment:
   .../app/Qoyod-marketing-performance-<token>/latest
-  Set HEX_PERFORMANCE_PROJECT_ID and HEX_ACTIVITY_PROJECT_ID in Railway.
+  Set HEX_PERFORMANCE_PROJECT_ID in Railway.
 
 If HEX_API_TOKEN is not set, this module no-ops silently so local dev
 and offline runs are not affected.
+
+Note: HEX_ACTIVITY_PROJECT_ID and the Hex Activity dashboard were removed
+2026-06-21. Railway /activity is the sole activity dashboard going forward.
 """
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ _BASE   = "https://app.hex.tech/api/v1"
 _TOKEN  = os.getenv("HEX_API_TOKEN")
 
 # Project IDs extracted from app URLs (alphanumeric suffix after last dash)
+# Activity dashboard removed 2026-06-21 — Railway /activity is the sole activity view.
 _PROJECTS = {
     "performance": os.getenv("HEX_PERFORMANCE_PROJECT_ID", "019de9ff-969c-7000-8463-5dfe9a5f730a"),
-    "activity":    os.getenv("HEX_ACTIVITY_PROJECT_ID",    "019df2e4-5f15-7000-8317-f5db0af316d3"),
 }
 
 _POLL_INTERVAL = 5   # seconds between status checks
