@@ -1,5 +1,20 @@
 # Pitfalls & Known Traps
 
+## [2026-06-22] Snapchat + Microsoft Ads campaign_name duplicates in campaigns_daily
+
+**Symptom:** `campaigns_daily` has multiple rows for the same `(date, channel, campaign_name)` — one from an ACTIVE campaign, one from a PAUSED campaign (same name, different `campaign_id`). Snapchat: 3 campaigns, 5 days (510 extra rows). Microsoft Ads: 1 campaign, 4 days (40 extra rows).
+
+**Root cause:** Two separate issues:
+1. **Snapchat**: Same Snap account had two campaigns with identical names — an older PAUSED campaign and a newer ACTIVE one. The PAUSED campaign had $0 spend/$0 impressions in the duplicated window. The `upsert_rows` key is `(date, channel, campaign_id)` so both rows legitimately insert with no key collision.
+2. **Microsoft Ads**: `Bing_Search_AR_Brand` existed in two different accounts (187231519 PAUSED, 188176729 ACTIVE) with real spend on both. The multi-account collector correctly wrote both rows.
+
+**Fix applied 2026-06-22:**
+- `snap_bq.collect_and_write`: skip rows where `spend=0 AND impressions=0 AND status=PAUSED` — prevents zero-activity paused campaigns from polluting the table.
+- `microsoft_ads_bq.collect_and_write`: collapse `all_rows` by `(date, campaign_name)` before upserting, summing metrics and keeping ACTIVE campaign_id as canonical identity.
+- One-time BQ dedup: 46666 → 45719 total rows; strategy = SUM metrics within `(date, channel, campaign_name)`, keep ACTIVE `campaign_id`.
+
+**Rule going forward:** Any analysis grouping `campaigns_daily` by `campaign_name` must use `SUM(spend)` not `MAX(spend)` — multiple campaign_ids can legitimately share a name. The `spend_campaign` CTE in `utm_paid_attribution_daily` already does this correctly.
+
 ## [2026-06-21] Anomaly alerts must pass the "drives action" test
 
 Every alert posted to Slack must answer: **"What do I do now?"** If the reader cannot take a concrete step, the alert is noise and must be removed or suppressed.
