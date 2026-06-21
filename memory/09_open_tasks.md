@@ -304,8 +304,7 @@ Campaign IDs (customer 5753494964):
 - [x] **n8n Workflow 4: Nexa · AI Content Agent** (`yOD1l9n7qOfbpWfM`, 13 nodes) — built and ACTIVE. 4 independent chains: daily-ai-digest, competitor-post-poller, weekly-ai-digest, monthly-content-calendar.
 - [x] **Cowork tasks disabled** — 6 tasks now fully covered by n8n and disabled: `daily-ai-digest`, `competitor-post-poller`, `weekly-ai-digest`, `monthly-content-calendar`, `monday-review`, `monthly-review`.
 - [x] **Activated:** `Nexa · Master Performance Workflow`, `Nexa · Weekly Performance Review`, `Nexa · Monthly Performance Review`, `Nexa · Monitor Follow-up` — all toggled ON.
-- [ ] **⚠️ ACTIVATION NEEDED:** Toggle ON `Nexa · Databox Sync` (`7ZEROvwTg3UrGAP6`) in n8n UI (requires `DATABOX_TOKEN` $var first).
-- [ ] **⚠️ n8n $var NEEDED:** Set `DATABOX_TOKEN` in n8n UI → Settings → Variables (PAK token, not push token). Required by `Nexa · Databox Sync` workflow `7ZEROvwTg3UrGAP6`. Dataset ID: `6158be78`.
+- [x] **CANCELLED — Databox Sync workflow (`7ZEROvwTg3UrGAP6`) deleted 2026-06-17.** Databox connects directly to BQ via native connector — no push workflow needed. Confirmed 404 from n8n API 2026-06-21.
 
 ## P0 — Post-n8n-migration: pending items (2026-06-17)
 
