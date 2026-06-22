@@ -45,15 +45,20 @@ N8N_WORKFLOWS = {
 }
 
 # Connectors tracked in the health cards
+# (name, display_key) — display_key is used as the dict key in _get_connector_health()
 CONNECTORS = [
-    ("Google Ads",      "google_ads"),
-    ("Meta",            "meta"),
-    ("Snapchat",        "snapchat"),
-    ("TikTok",          "tiktok"),
-    ("LinkedIn",        "linkedin"),
-    ("Microsoft Ads",   "microsoft_ads"),
-    ("HubSpot Leads",   "hubspot_leads"),
-    ("HubSpot Deals",   "hubspot_deals"),
+    ("Meta",            "Meta"),
+    ("Google Ads",      "Google Ads"),
+    ("Snapchat",        "Snapchat"),
+    ("TikTok",          "TikTok"),
+    ("LinkedIn",        "LinkedIn"),
+    ("Microsoft Ads",   "Microsoft Ads"),
+    ("YouTube",         "YouTube"),
+    ("GA4",             "GA4"),
+    ("GSC",             "GSC"),
+    ("HubSpot Leads",   "HubSpot Leads"),
+    ("HubSpot Deals",   "HubSpot Deals"),
+    ("GTM Audit",       "GTM Audit"),
 ]
 
 
@@ -109,15 +114,21 @@ def _get_system_health() -> dict[str, Any]:
 
 
 def _get_connector_health() -> dict[str, dict[str, Any]]:
-    """Return freshness info per channel from campaigns_daily and hubspot tables.
+    """Return freshness info per connector from all source tables.
 
-    Returns a dict keyed by channel slug, each value is
-    {"last_date": date_obj, "days_stale": int}.
-    Falls back to agent_activity_log only if campaigns_daily returns nothing.
+    Returns a dict keyed by display name (matching CONNECTORS), each value is
+    {"last_date": date_obj_or_None, "days_stale": int_or_None}.
+
+    Sources:
+    - campaigns_daily (GROUP BY channel) → Meta, Google Ads, Snapchat, TikTok, LinkedIn, Microsoft Ads
+    - youtube_daily, ga4_daily, gsc_daily → YouTube, GA4, GSC
+    - hubspot_leads_module_daily → HubSpot Leads
+    - hubspot_deals_daily → HubSpot Deals
+    - agent_activity_log (GTM audit entries) → GTM Audit
     """
     result: dict[str, dict[str, Any]] = {}
 
-    # Ad-platform channels from campaigns_daily
+    # ── 1. Paid channels from campaigns_daily (GROUP BY channel) ──────────────
     ad_rows = _bq_query(f"""
         SELECT channel, MAX(date) AS last_date,
                DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_stale
@@ -125,18 +136,39 @@ def _get_connector_health() -> dict[str, dict[str, Any]]:
         WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
         GROUP BY channel
     """)
+    # campaigns_daily channel values are expected to match display names exactly
+    # (e.g. "Meta", "Google Ads", "Snapchat", "TikTok", "LinkedIn", "Microsoft Ads")
     for r in ad_rows:
         ch = r.get("channel")
         if ch:
             result[ch] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
 
-    # HubSpot tables
+    # ── 2. Organic / analytics tables ─────────────────────────────────────────
+    organic_rows = _bq_query(f"""
+        SELECT 'YouTube' AS channel, MAX(date) AS last_date,
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_stale
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.youtube_daily`
+        UNION ALL
+        SELECT 'GA4', MAX(date),
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.ga4_daily`
+        UNION ALL
+        SELECT 'GSC', MAX(date),
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.gsc_daily`
+    """)
+    for r in organic_rows:
+        ch = r.get("channel")
+        if ch:
+            result[ch] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
+
+    # ── 3. HubSpot tables ─────────────────────────────────────────────────────
     hs_rows = _bq_query(f"""
-        SELECT 'hubspot_leads' AS channel, MAX(date) AS last_date,
+        SELECT 'HubSpot Leads' AS channel, MAX(date) AS last_date,
                DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_stale
         FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_leads_module_daily`
         UNION ALL
-        SELECT 'hubspot_deals', MAX(date),
+        SELECT 'HubSpot Deals', MAX(date),
                DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
         FROM `{BQ_PROJECT}.{BQ_DATASET}.hubspot_deals_daily`
     """)
@@ -144,6 +176,21 @@ def _get_connector_health() -> dict[str, dict[str, Any]]:
         ch = r.get("channel")
         if ch:
             result[ch] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
+
+    # ── 4. GTM Audit — check agent_activity_log for GTM entries ───────────────
+    gtm_rows = _bq_query(f"""
+        SELECT MAX(DATE(ts, 'Asia/Riyadh')) AS last_date,
+               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(DATE(ts, 'Asia/Riyadh')), DAY) AS days_stale
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+        WHERE action LIKE '%gtm%' OR action LIKE '%GTM%' OR details LIKE '%GTM%'
+    """)
+    if gtm_rows:
+        result["GTM Audit"] = {
+            "last_date": gtm_rows[0].get("last_date"),
+            "days_stale": gtm_rows[0].get("days_stale"),
+        }
+    else:
+        result["GTM Audit"] = {"last_date": None, "days_stale": None}
 
     return result
 
@@ -330,7 +377,8 @@ def _build_health_bar(system_health: dict[str, Any]) -> str:
 def _build_connector_cards(connector_map: dict[str, Any]) -> str:
     cards = []
     for name, key in CONNECTORS:
-        info = connector_map.get(key) or {}
+        # key == name in the new scheme; fall back to name if key not found
+        info = connector_map.get(key) or connector_map.get(name) or {}
         last_date  = info.get("last_date")
         days_stale = info.get("days_stale")
 
@@ -695,6 +743,120 @@ def _build_actions_tasks(
 </div>"""
 
 
+# ─── Agent Profiles ──────────────────────────────────────────────────────────
+
+AGENT_PROFILES = {
+    "ai-orchestrator": {
+        "role": "Manager over all 3 departments. Routes tasks, runs daily 8-step loop, queues decisions.",
+        "department": "Operations HQ",
+        "capabilities": ["Daily intelligence loop", "Cross-dept routing", "Approval queue management", "Outcome monitoring"],
+        "escalates_to": "Amar (human) via Slack #approvals",
+    },
+    "qa-auditor": {
+        "role": "Output gatekeeper. Validates all agent work before it reaches the Orchestrator.",
+        "department": "Operations HQ",
+        "capabilities": ["Checklist validation", "Live output verification", "QA_PASSED / QA_FAILED stamps", "Return to originating agent on failure"],
+        "escalates_to": "AI Orchestrator",
+    },
+    "project-coordinator": {
+        "role": "Cross-cutting ops layer: UTM policy, pixel health, HubSpot mapping, Railway env vars, connector failures.",
+        "department": "Operations HQ",
+        "capabilities": ["UTM structure policy", "Meta pixel health", "Railway credential rotation", "GTM audit", "Overdue task reminders"],
+        "escalates_to": "AI Orchestrator",
+    },
+    "growth-analyst": {
+        "role": "Data analyst. Runs 8-step intelligence loop on live BQ. Owns memory/.",
+        "department": "Operations HQ",
+        "capabilities": ["Period-over-period BQ analysis", "CRO A/B result reads", "Monthly forecasting", "memory/08_pitfalls.md maintenance", "Sunday hygiene scan"],
+        "escalates_to": "AI Orchestrator + CRO Specialist (on qual issues)",
+    },
+    "performance-lead": {
+        "role": "Strategic lead for budget reallocation, channel launch/sunset, and KPI threshold changes.",
+        "department": "Performance",
+        "capabilities": ["Budget reallocation across channels", "Channel launch & sunset decisions", "KPI threshold changes in config.py", "Weekly channel mix review"],
+        "escalates_to": "AI Orchestrator",
+    },
+    "campaign-manager": {
+        "role": "Builds and configures paid campaigns. Applies naming spec, Meta pixels, keyword policy, audiences.",
+        "department": "Performance",
+        "capabilities": ["12-field campaign naming spec", "Meta pixel configuration", "Keyword-policy bucketing", "Audience setup", "Pause/scale execution post-✓"],
+        "escalates_to": "Performance Lead",
+    },
+    "creative-strategist": {
+        "role": "Owns copy and creative strategy. OCEAN persona mapping, A/B creative variants, LP asset alignment.",
+        "department": "Performance",
+        "capabilities": ["OCEAN persona mapping", "A/B creative variant scoping", "Channel-specific copy", "LP asset alignment with CRO"],
+        "escalates_to": "Performance Lead",
+    },
+    "cro-specialist": {
+        "role": "Leads CRO / LP chain. LP briefs, OCEAN-aligned design spec, qual ratio decisions, A/B test results.",
+        "department": "CRO Chain",
+        "capabilities": ["8-section LP brief", "OCEAN-aligned design spec", "Qual ratio decisions (<30% redirect)", "A/B test hypotheses", "Weekly pixel audit"],
+        "escalates_to": "AI Orchestrator",
+    },
+    "developer": {
+        "role": "Builds and ships LP variant. UTM passthrough, Meta pixels, mobile QA, deploy to production.",
+        "department": "CRO Chain",
+        "capabilities": ["LP implementation", "UTM hidden fields on all forms", "Meta pixel wiring + Events Manager verify", "Mobile 375px QA", "Production deploy"],
+        "escalates_to": "CRO Specialist",
+    },
+}
+
+
+def _build_agent_profile(slug: str, n8n_key: str | None = None) -> str:
+    """Return the collapsible agent profile card HTML for a given agent slug."""
+    p = AGENT_PROFILES.get(slug)
+    if not p:
+        return ""
+
+    caps_html = "\n".join(f"<li>{c}</li>" for c in p.get("capabilities", []))
+    n8n_html = ""
+    if n8n_key and n8n_key in N8N_WORKFLOWS:
+        n8n_html = f'<a href="{N8N_BASE}/{N8N_WORKFLOWS[n8n_key]}" target="_blank" class="profile-link">Open in n8n &rarr;</a>'
+    else:
+        n8n_html = '<span style="color:var(--muted);font-size:11px">—</span>'
+
+    return f"""
+<div class="profile-card">
+  <div class="profile-toggle" onclick="toggleSection('profile-{slug}')">
+    <span class="profile-title">&#128203; Agent Profile</span>
+    <span class="toggle-arrow" id="arr-profile-{slug}" style="margin-left:auto">&#9660;</span>
+  </div>
+  <div class="profile-body" id="profile-{slug}">
+    <div class="profile-grid">
+      <div class="profile-field" style="grid-column:1/-1">
+        <span class="profile-label">Role</span>
+        <span class="profile-value">{p['role']}</span>
+      </div>
+      <div class="profile-field">
+        <span class="profile-label">Department</span>
+        <span class="profile-value">{p['department']}</span>
+      </div>
+      <div class="profile-field">
+        <span class="profile-label">Escalates to</span>
+        <span class="profile-value">{p['escalates_to']}</span>
+      </div>
+      <div class="profile-field">
+        <span class="profile-label">Playbook</span>
+        <span class="profile-value"><a href="https://github.com/Rana96-run/nexa-performance-agent/blob/main/docs/PLAYBOOK.md" target="_blank" class="profile-link">docs/PLAYBOOK.md &rarr;</a></span>
+      </div>
+      <div class="profile-field">
+        <span class="profile-label">Memory Index</span>
+        <span class="profile-value"><a href="https://github.com/Rana96-run/nexa-performance-agent/blob/main/memory/00_index.md" target="_blank" class="profile-link">memory/00_index.md &rarr;</a></span>
+      </div>
+      <div class="profile-field">
+        <span class="profile-label">n8n Workflow</span>
+        <span class="profile-value">{n8n_html}</span>
+      </div>
+      <div class="profile-field" style="grid-column:1/-1">
+        <span class="profile-label">Capabilities</span>
+        <ul class="profile-caps">{caps_html}</ul>
+      </div>
+    </div>
+  </div>
+</div>"""
+
+
 # ─── Dashboard HTML ───────────────────────────────────────────────────────────
 
 def _render_dashboard(
@@ -759,7 +921,8 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 /* ── Connector cards ── */
 .conn-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}
-@media(max-width:900px){{.conn-grid{{grid-template-columns:repeat(2,1fr)}}}}
+@media(max-width:1100px){{.conn-grid{{grid-template-columns:repeat(3,1fr)}}}}
+@media(max-width:800px){{.conn-grid{{grid-template-columns:repeat(2,1fr)}}}}
 @media(max-width:520px){{.conn-grid{{grid-template-columns:1fr}}}}
 .conn-card{{background:var(--card);border:1px solid var(--border);
   border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:5px}}
@@ -908,6 +1071,48 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 /* ── Data Hygiene section ── */
 .section-header{{font-size:13px;font-weight:700;color:var(--accent);
   margin-bottom:12px;display:flex;align-items:center;gap:8px}}
+
+/* ── Team Structure ── */
+.team-dept{{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:16px 18px;margin-bottom:14px}}
+.team-dept-name{{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:1.2px;margin-bottom:12px;padding-bottom:6px;
+  border-bottom:1px solid var(--border)}}
+.team-dept-name.ops{{color:var(--orange)}}
+.team-dept-name.perf{{color:var(--blue)}}
+.team-dept-name.cro{{color:var(--lgreen)}}
+.team-agents{{display:flex;flex-wrap:wrap;gap:10px;align-items:center}}
+.team-agent{{display:flex;align-items:center;gap:6px}}
+.agent-pill{{background:#1f1f1f;border:1px solid var(--border);border-radius:20px;
+  padding:5px 12px;font-size:12px;font-weight:600;white-space:nowrap}}
+.agent-pill.ops{{color:var(--orange);border-color:color-mix(in srgb,var(--orange) 35%,var(--border))}}
+.agent-pill.perf{{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 35%,var(--border))}}
+.agent-pill.cro{{color:var(--lgreen);border-color:color-mix(in srgb,var(--lgreen) 35%,var(--border))}}
+.agent-pill.mgr{{color:var(--warm-orange);border-color:color-mix(in srgb,var(--warm-orange) 35%,var(--border))}}
+.team-arrow{{color:var(--muted);font-size:12px;font-weight:700;flex-shrink:0}}
+.team-row{{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}}
+.team-row:last-child{{margin-bottom:0}}
+
+/* ── Agent Profile card ── */
+.profile-card{{background:#0d0d1a;border:1px solid color-mix(in srgb,var(--panel-color,#444) 25%,var(--border));
+  border-radius:7px;padding:14px 16px;margin-bottom:16px}}
+.profile-toggle{{display:flex;align-items:center;gap:8px;cursor:pointer;
+  user-select:none;margin-bottom:0}}
+.profile-toggle:hover{{opacity:.85}}
+.profile-title{{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:1px;color:var(--panel-color,#888)}}
+.profile-body{{margin-top:12px}}
+.profile-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+@media(max-width:600px){{.profile-grid{{grid-template-columns:1fr}}}}
+.profile-field{{display:flex;flex-direction:column;gap:3px}}
+.profile-label{{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.8px;color:var(--muted)}}
+.profile-value{{font-size:12px;color:var(--dim);line-height:1.5}}
+.profile-caps{{list-style:none;padding:0;display:flex;flex-direction:column;gap:2px}}
+.profile-caps li{{font-size:11px;color:var(--dim)}}
+.profile-caps li::before{{content:"› ";color:var(--panel-color,#888)}}
+.profile-link{{color:var(--orange);font-size:11px;text-decoration:none}}
+.profile-link:hover{{text-decoration:underline}}
 </style>
 </head>
 <body>
@@ -931,6 +1136,86 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   <div class="conn-grid">
   {connector_cards}
   </div>
+</div>
+
+<!-- ── TEAM STRUCTURE ── -->
+<div class="sec" onclick="toggleSection('ab-team-structure')" style="cursor:pointer;user-select:none">
+  &#127959; Team Structure
+  <span class="toggle-arrow" id="arr-ab-team-structure">&#9660;</span>
+</div>
+<div id="ab-team-structure">
+
+  <!-- OPERATIONS HQ -->
+  <div class="team-dept">
+    <div class="team-dept-name ops">Operations HQ</div>
+    <div class="team-row">
+      <span class="agent-pill mgr">&#127775; AI Orchestrator</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill ops">Performance Lead</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill cro">CRO Specialist</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill ops">Growth Analyst</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill ops">Project Coordinator</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill ops">QA Auditor</span>
+    </div>
+    <div class="team-row" style="margin-top:6px">
+      <span class="agent-pill ops">&#128270; QA Auditor</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill mgr">AI Orchestrator</span>
+    </div>
+    <div class="team-row" style="margin-top:4px">
+      <span class="agent-pill ops">&#128295; Project Coordinator</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill perf">Campaign Manager</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill perf">Creative Strategist</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill cro">Developer</span>
+    </div>
+    <div class="team-row" style="margin-top:4px">
+      <span class="agent-pill ops">&#128202; Growth Analyst</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill cro">CRO Specialist</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill mgr">AI Orchestrator</span>
+    </div>
+  </div>
+
+  <!-- PERFORMANCE -->
+  <div class="team-dept">
+    <div class="team-dept-name perf">Performance</div>
+    <div class="team-row">
+      <span class="agent-pill perf">&#127919; Performance Lead</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill perf">Campaign Manager</span>
+      <span class="team-arrow">&middot;</span>
+      <span class="agent-pill perf">Creative Strategist</span>
+    </div>
+    <div class="team-row" style="margin-top:6px">
+      <span class="agent-pill perf">Campaign Manager</span>
+      <span class="team-arrow">&#8646;</span>
+      <span class="agent-pill perf">Creative Strategist</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:4px">(parallel)</span>
+    </div>
+  </div>
+
+  <!-- CRO CHAIN -->
+  <div class="team-dept">
+    <div class="team-dept-name cro">CRO Chain &mdash; Sequential</div>
+    <div class="team-row">
+      <span class="agent-pill cro">&#128200; CRO Specialist</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill cro">&#128187; Developer</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill ops">QA Auditor</span>
+      <span class="team-arrow">&#8594;</span>
+      <span class="agent-pill mgr">AI Orchestrator</span>
+    </div>
+  </div>
+
 </div>
 
 <!-- ── ACTIVITY HEAT MAP ── -->
@@ -994,6 +1279,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="toggle-arrow" id="arr-ab-orchestrator">&#9660;</span>
   </div>
   <div class="agent-body" id="ab-orchestrator">
+    {_build_agent_profile("ai-orchestrator", "orchestrator")}
     <div class="orch-card">
       <div class="orch-title">The 8-Step Intelligence Loop (runs every daily cadence)</div>
       <a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-run-btn">&#9654; Run Daily Now</a>
@@ -1025,6 +1311,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="toggle-arrow" id="arr-ab-qa-auditor">&#9660;</span>
   </div>
   <div class="agent-body" id="ab-qa-auditor">
+    {_build_agent_profile("qa-auditor", "qa")}
     <div class="grid-2">
       <div class="card">
         <div class="ctitle">QA Validation Run</div>
@@ -1047,6 +1334,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="toggle-arrow" id="arr-ab-project-coordinator">&#9660;</span>
   </div>
   <div class="agent-body" id="ab-project-coordinator">
+    {_build_agent_profile("project-coordinator", None)}
 
     <!-- Campaign Coordination sub-section -->
     <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);border-bottom:1px solid color-mix(in srgb,var(--blue) 25%,var(--border));padding-bottom:6px">Campaign Coordination</div>
@@ -1131,6 +1419,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="toggle-arrow" id="arr-ab-performance-lead">&#9660;</span>
   </div>
   <div class="agent-body" id="ab-performance-lead">
+    {_build_agent_profile("performance-lead", "perf_lead")}
     <div class="grid" style="margin-bottom:18px">
       <div class="card">
         <div class="ctitle">Campaign Brief</div>
@@ -1173,6 +1462,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <span class="toggle-arrow" id="arr-sb-campaign-manager">&#9660;</span>
       </div>
       <div class="sub-body" id="sb-campaign-manager">
+        {_build_agent_profile("campaign-manager", "campaign_mgr")}
         <div class="grid">
           <div class="card">
             <div class="ctitle">Keyword Audit</div>
@@ -1224,6 +1514,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <span class="toggle-arrow" id="arr-sb-creative-strategist">&#9660;</span>
       </div>
       <div class="sub-body" id="sb-creative-strategist">
+        {_build_agent_profile("creative-strategist", "creative")}
         <div class="grid">
           <div class="card">
             <div class="ctitle">Creative Analysis</div>
@@ -1275,6 +1566,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="toggle-arrow" id="arr-ab-cro-specialist">&#9660;</span>
   </div>
   <div class="agent-body" id="ab-cro-specialist">
+    {_build_agent_profile("cro-specialist", "cro")}
     <div class="grid-2" style="margin-bottom:18px">
       <div class="card">
         <div class="ctitle">LP Brief</div>
@@ -1309,6 +1601,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
         <span class="toggle-arrow" id="arr-sb-developer">&#9660;</span>
       </div>
       <div class="sub-body" id="sb-developer">
+        {_build_agent_profile("developer", None)}
         <div class="grid-2">
           <div class="card">
             <div class="ctitle">UTM Form Check</div>
@@ -1345,6 +1638,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
     <span class="toggle-arrow" id="arr-ab-growth-analyst">&#9660;</span>
   </div>
   <div class="agent-body" id="ab-growth-analyst">
+    {_build_agent_profile("growth-analyst", "growth_analyst")}
     <div class="grid">
       <div class="card">
         <div class="ctitle">Period Comparison</div>
