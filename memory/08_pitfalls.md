@@ -1,5 +1,30 @@
 # Pitfalls & Known Traps
 
+## [2026-06-23] n8n IF node v2 — days_stale returns string from BQ, causes type error even with typeValidation=loose
+
+**Symptom:** Cadence Weekly workflow (iNSdpXH7Rc9Lb8h8) errored on 2026-06-21 at the "IF Data Fresh?" node with: `Wrong type: '2' is a string but was expecting a number [condition 0, item 0]`. Workflow halted immediately — zero downstream nodes ran.
+
+**Root cause:** The BQ Freshness Check node query returns `DATE_DIFF(...)` as an integer in BQ, but n8n's `googleBigQuery` node v2.1 serialises all BQ values as strings in `$json`. The IF node has `operator.type = "number"` and `typeValidation = "loose"` — but n8n v2 IF node does NOT auto-coerce strings to numbers even in loose mode when the comparison type is `number`.
+
+**Fix:** Two options (either works):
+1. Wrap the BQ column in `CAST(DATE_DIFF(...) AS INT64)` — BQ still sends a number type; n8n respects it.
+2. Change the IF condition `operator.type` to `"string"` and compare `rightValue: "1"` (string comparison). Simpler but fragile for > 9 day staleness.
+   Preferred: option 1 (CAST).
+
+**Rule:** Any n8n IF node comparing a BQ-sourced integer field with `operator.type = "number"` must use CAST in the BQ query to guarantee the value arrives as a number, not a string.
+
+**Applied fix (2026-06-23):** Updated `BQ Freshness Check` node `sqlQuery` in workflow `iNSdpXH7Rc9Lb8h8` — `DATE_DIFF(...)` wrapped in `CAST(... AS INT64)`. Confirmed via PUT 200.
+
+## [2026-06-23] n8n LP Audit node — `destination_url` does not exist in campaigns_daily or v_ad_performance; use ads_daily.final_url
+
+**Symptom:** `BQ LP Audit` node in cadence_weekly workflow used `campaigns_daily.destination_url` which doesn't exist. Query would have errored with `Name destination_url not found inside c` on any execution that reached that node.
+
+**Root cause:** The node was written referencing a non-existent column. Neither `campaigns_daily`, `v_ad_performance`, nor `v_adset_performance` have a `destination_url` column. The correct source for LP URL data is `ads_daily.final_url` (ad-level table).
+
+**Fix:** Rewrite LP Audit query to use `ads_daily` grouped by `final_url`, joined to HubSpot via `campaign_name`. Applied to workflow iNSdpXH7Rc9Lb8h8 on 2026-06-23.
+
+**Rule:** Always query `ads_daily.final_url` (not `campaigns_daily.destination_url`) for landing page URL analysis.
+
 ## [2026-06-23] GH Actions env block — always cross-check collector os.getenv calls
 
 **Symptom:** Snapchat wrote 0 rows every GH Actions run for weeks. Step showed green (exit 0). Dashboard showed 3-day staleness. Snapchat had been silently broken since the workflow was first written.
