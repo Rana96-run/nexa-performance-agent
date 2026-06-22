@@ -200,6 +200,13 @@ jobs:
         continue-on-error: true
         run: python collectors/hubspot_deals_bq.py 60
 
+      - name: Refresh LinkedIn access token
+        id: linkedin_refresh
+        timeout-minutes: 5
+        if: ${{ inputs.collector == '' || inputs.collector == 'linkedin_refresh' }}
+        continue-on-error: true
+        run: python scripts/linkedin_refresh.py
+
       - name: Reconcile HubSpot ↔ BQ
         id: reconcile
         timeout-minutes: 5
