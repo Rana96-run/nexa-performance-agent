@@ -263,6 +263,74 @@ jobs:
       # n8n Data Collection workflow (jOnJxdpdaO3Vbi0B) already alerts #data-health
       # on collector failures. This step was posting duplicates every 6h run.
 
+      # ── 9. Zero-row guard — alert Slack if any channel has no data today ──────
+      - name: Zero-row guard
+        id: zero_row_guard
+        timeout-minutes: 5
+        if: ${{ inputs.collector == '' }}
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_HEALTH: ${{ secrets.SLACK_CHANNEL_HEALTH }}
+        run: |
+          python - <<'PYEOF'
+          import os, sys
+          from google.cloud import bigquery
+          from datetime import date, timedelta
+
+          bq = bigquery.Client()
+          P  = os.environ["BQ_PROJECT_ID"]
+          D  = os.environ["BQ_DATASET"]
+          today = date.today().isoformat()
+          yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+          checks = [
+              ("campaigns_daily", "channel", "Meta"),
+              ("campaigns_daily", "channel", "Google Ads"),
+              ("campaigns_daily", "channel", "Snapchat"),
+              ("campaigns_daily", "channel", "TikTok"),
+              ("campaigns_daily", "channel", "LinkedIn"),
+              ("campaigns_daily", "channel", "Microsoft Ads"),
+              ("hubspot_leads_module_daily", None, "HubSpot Leads"),
+              ("hubspot_deals_daily",        None, "HubSpot Deals"),
+          ]
+
+          stale = []
+          for table, col, label in checks:
+              where = f"AND {col} = '{label}'" if col else ""
+              q = f"""
+                SELECT MAX(date) AS last_date
+                FROM `{P}.{D}.{table}`
+                WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 3 DAY)
+                {where}
+              """
+              rows = list(bq.query(q).result())
+              last = rows[0].last_date if rows else None
+              if last is None or str(last) < yesterday:
+                  stale.append(f"• *{label}*: last={last or 'never'}")
+
+          if not stale:
+              print("Zero-row guard: all channels fresh.")
+              sys.exit(0)
+
+          msg = (
+              f":warning: *Collector zero-row alert — {today}*\n"
+              + "\n".join(stale)
+              + "\nCheck GH Actions logs for the failing step."
+          )
+          import urllib.request, json
+          req = urllib.request.Request(
+              "https://slack.com/api/chat.postMessage",
+              data=json.dumps({"channel": os.environ["SLACK_CHANNEL_HEALTH"], "text": msg}).encode(),
+              headers={
+                  "Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}",
+                  "Content-Type": "application/json",
+              },
+          )
+          urllib.request.urlopen(req, timeout=10)
+          print("Slack alert sent.")
+          PYEOF
+
 # ──────────────────────────────────────────────────────────────────────────────
 # SECRETS NEEDED IN GITHUB:
 # Go to repo Settings → Secrets and variables → Actions → New repository secret
