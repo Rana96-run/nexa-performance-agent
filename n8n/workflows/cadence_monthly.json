@@ -166,7 +166,7 @@
                     "mode": "expression",
                     "value": "={{ $vars.BQ_PROJECT }}"
                 },
-                "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_action_log` WHERE event_date>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY event_date DESC LIMIT 30",
+                "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE event_date>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY event_date DESC LIMIT 30",
                 "options": {}
             }
         },
@@ -346,7 +346,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_action_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('monthly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
+                "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('monthly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
             }
         },
         {
@@ -1262,7 +1262,7 @@
                         "mode": "expression",
                         "value": "={{ $vars.BQ_PROJECT }}"
                     },
-                    "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_action_log` WHERE event_date>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY event_date DESC LIMIT 30",
+                    "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE event_date>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY event_date DESC LIMIT 30",
                     "options": {}
                 }
             },
@@ -1442,7 +1442,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_action_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('monthly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
+                    "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('monthly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
                 }
             },
             {
