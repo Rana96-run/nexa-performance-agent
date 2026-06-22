@@ -142,7 +142,7 @@ Deal sync columns added to `hubspot_deals_daily`:
 YTD backfill complete (15,431 rows). Coverage: Snap 94%, Meta 88%, TikTok 87%,
 Google 1% (expected — those go through name-fallback).
 
-### Hex follow-up (manual — flagged for Amar)
+### [x] Hex follow-up (manual — flagged for Amar) — confirmed done by Amar 2026-06-23
 
 Hex dashboards reading `deals_won`, `revenue_won`, `roas`, `amount_total`,
 `amount_lost`, `amount_open` from the 3 views will break. Rename to:
