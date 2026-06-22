@@ -37,7 +37,7 @@
       },
       "parameters": {
         "projectId": {"__rl": true, "value": "angular-axle-492812-q4", "mode": "id"},
-        "sqlQuery": "SELECT pipeline, SUM(deals_total) AS deals\nFROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`\nWHERE date BETWEEN DATE(DATETIME_TRUNC(CURRENT_DATETIME('Asia/Riyadh'), YEAR))\n               AND CURRENT_DATE('Asia/Riyadh')\n  AND qoyod_source IN ('Meta Ads','Google Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads')\n  AND pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')\nGROUP BY pipeline",
+        "sqlQuery": "SELECT pipeline, SUM(deals_total) AS deals\nFROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`\nWHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 60 DAY)\n  AND qoyod_source IN ('Meta Ads','Google Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads')\n  AND pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')\nGROUP BY pipeline",
         "options": {},
         "authentication": "serviceAccount"
       }
@@ -74,7 +74,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [{ filters: [ { propertyName: 'pipeline', operator: 'IN', values: ['default','509382644','3464043709'] }, { propertyName: 'deal_qoyod_source', operator: 'IN', values: ['Meta Ads','Google Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads'] }, { propertyName: 'createdate', operator: 'BETWEEN', value: $('Set Dates').first().json.ytd_start_ms, highValue: $('Set Dates').first().json.today_end_ms } ] }], limit: 1 }) }}"
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [{ filters: [ { propertyName: 'pipeline', operator: 'IN', values: ['default','509382644','3464043709'] }, { propertyName: 'deal_qoyod_source', operator: 'IN', values: ['Meta Ads','Google Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads'] }, { propertyName: 'createdate', operator: 'BETWEEN', value: $('Set Dates').first().json.days60_ms, highValue: $('Set Dates').first().json.today_end_ms } ] }], limit: 1 }) }}"
       }
     },
     {
