@@ -1,0 +1,138 @@
+{
+  "id": "sgC6o3e7J9sk8VVr",
+  "name": "Nexa · [Infra] Data Health",
+  "active": true,
+  "settings": {"executionOrder": "v1"},
+  "nodes": [
+    {
+      "id": "dh-cron-001",
+      "name": "Daily 9am Riyadh",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 6 * * *"}]
+        }
+      }
+    },
+    {
+      "id": "dh-dates-001",
+      "name": "Set Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst ytdStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));\nconst days60 = new Date(now.getTime() - 60 * 86400 * 1000);\ndays60.setUTCHours(0, 0, 0, 0);\nconst todayEnd = new Date(now);\ntodayEnd.setUTCHours(23, 59, 59, 999);\nreturn [{ json: {\n  ytd_start_ms: String(ytdStart.getTime()),\n  days60_ms: String(days60.getTime()),\n  today_end_ms: String(todayEnd.getTime()),\n  ytd_start_date: ytdStart.toISOString().slice(0, 10),\n  days60_date: days60.toISOString().slice(0, 10),\n  today_date: now.toISOString().slice(0, 10)\n} }];"
+      }
+    },
+    {
+      "id": "dh-bqdeals-001",
+      "name": "BQ Deals",
+      "type": "n8n-nodes-base.googleBigQuery",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "credentials": {
+        "googleApi": {"id": "kE5RxM61mQkpV21N", "name": "BigQuery (Qoyod)"}
+      },
+      "parameters": {
+        "projectId": {"__rl": true, "value": "angular-axle-492812-q4", "mode": "id"},
+        "sqlQuery": "SELECT pipeline, SUM(deals_total) AS deals\nFROM `angular-axle-492812-q4.qoyod_marketing.hubspot_deals_daily`\nWHERE date BETWEEN DATE(DATETIME_TRUNC(CURRENT_DATETIME('Asia/Riyadh'), YEAR))\n               AND CURRENT_DATE('Asia/Riyadh')\n  AND qoyod_source IN ('Meta Ads','Google Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads')\n  AND pipeline IN ('Sales Pipeline','Bookkeeping','Qflavours')\nGROUP BY pipeline",
+        "options": {},
+        "authentication": "serviceAccount"
+      }
+    },
+    {
+      "id": "dh-bqleads-001",
+      "name": "BQ Leads",
+      "type": "n8n-nodes-base.googleBigQuery",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "credentials": {
+        "googleApi": {"id": "kE5RxM61mQkpV21N", "name": "BigQuery (Qoyod)"}
+      },
+      "parameters": {
+        "projectId": {"__rl": true, "value": "angular-axle-492812-q4", "mode": "id"},
+        "sqlQuery": "SELECT SUM(leads_total) AS leads\nFROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\nWHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 60 DAY)",
+        "options": {},
+        "authentication": "serviceAccount"
+      }
+    },
+    {
+      "id": "dh-hsdeals-001",
+      "name": "HS Deals",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "credentials": {
+        "httpHeaderAuth": {"id": "ZAs81URWwwoiDZ5e", "name": "HubSpot (Qoyod)"}
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/deals/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [{ filters: [ { propertyName: 'pipeline', operator: 'IN', values: ['default','509382644','3464043709'] }, { propertyName: 'deal_qoyod_source', operator: 'IN', values: ['Meta Ads','Google Ads','Snapchat Ads','Tiktok Ads','Microsoft Ads'] }, { propertyName: 'createdate', operator: 'BETWEEN', value: $('Set Dates').first().json.ytd_start_ms, highValue: $('Set Dates').first().json.today_end_ms } ] }], limit: 1 }) }}"
+      }
+    },
+    {
+      "id": "dh-hsleads-001",
+      "name": "HS Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0],
+      "credentials": {
+        "httpHeaderAuth": {"id": "ZAs81URWwwoiDZ5e", "name": "HubSpot (Qoyod)"}
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/0-136/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [{ filters: [ { propertyName: 'hs_createdate', operator: 'GTE', value: $('Set Dates').first().json.days60_ms } ] }], limit: 1 }) }}"
+      }
+    },
+    {
+      "id": "dh-report-001",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0],
+      "parameters": {
+        "jsCode": "const bqDealsRows = $('BQ Deals').all().map(i => i.json);\nconst bqLeadsRows = $('BQ Leads').all().map(i => i.json);\n\nconst bqDealsTotal = bqDealsRows.reduce((s, r) => s + Number(r.deals || 0), 0);\nconst bqLeadsTotal = bqLeadsRows.reduce((s, r) => s + Number(r.leads || 0), 0);\n\nconst hsDealsTotal = Number($('HS Deals').first().json.total || 0);\nconst hsLeadsTotal = Number($('HS Leads').first().json.total || 0);\n\nconst dealsRate = hsDealsTotal > 0 ? Math.round(bqDealsTotal / hsDealsTotal * 100) : null;\nconst leadsRate = hsLeadsTotal > 0 ? Math.round(bqLeadsTotal / hsLeadsTotal * 100) : null;\n\nconst today = $('Set Dates').first().json.today_date;\nconst ytdStart = $('Set Dates').first().json.ytd_start_date;\nconst days60 = $('Set Dates').first().json.days60_date;\n\nconst fmt = (rate, bq, hs) => {\n  if (rate === null) return `⚠️ HS error | BQ ${bq.toLocaleString()}`;\n  const icon = rate >= 85 ? '✅' : '❌';\n  return `${icon} ${rate}%  BQ ${bq.toLocaleString()} / HS ${hs.toLocaleString()}`;\n};\n\nlet msg = `📊 *Data Health — ${today}*\\n`;\nmsg += `Deals (${ytdStart} → today, paid): ${fmt(dealsRate, bqDealsTotal, hsDealsTotal)}\\n`;\nmsg += `Leads (${days60} → today): ${fmt(leadsRate, bqLeadsTotal, hsLeadsTotal)}`;\n\nif ((dealsRate !== null && dealsRate < 85) || (leadsRate !== null && leadsRate < 85)) {\n  msg += `\\n_Gap detected — next collector run (≤6h via GitHub Actions) will auto-backfill._`;\n}\n\nreturn [{ json: { text: msg } }];"
+      }
+    },
+    {
+      "id": "dh-slack-001",
+      "name": "Post Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "credentials": {
+        "httpHeaderAuth": {"id": "YwdlGwXs943DQrfh", "name": "Slack (Qoyod)"}
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'C0ARMQKK8GK', text: $json.text, unfurl_links: false }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Daily 9am Riyadh": {"main": [[{"node": "Set Dates", "type": "main", "index": 0}]]},
+    "Set Dates": {"main": [[{"node": "BQ Deals", "type": "main", "index": 0}]]},
+    "BQ Deals": {"main": [[{"node": "BQ Leads", "type": "main", "index": 0}]]},
+    "BQ Leads": {"main": [[{"node": "HS Deals", "type": "main", "index": 0}]]},
+    "HS Deals": {"main": [[{"node": "HS Leads", "type": "main", "index": 0}]]},
+    "HS Leads": {"main": [[{"node": "Build Report", "type": "main", "index": 0}]]},
+    "Build Report": {"main": [[{"node": "Post Slack", "type": "main", "index": 0}]]}
+  }
+}

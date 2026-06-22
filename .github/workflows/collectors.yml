@@ -156,7 +156,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'meta' }}
         continue-on-error: true
-        run: python collectors/meta_bq.py all 30
+        run: python collectors/meta_bq.py all 60
 
       - name: Collector — Snapchat
         id: snapchat
@@ -170,7 +170,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'tiktok' }}
         continue-on-error: true
-        run: python collectors/tiktok_bq.py all 30
+        run: python collectors/tiktok_bq.py all 60
 
       - name: Collector — LinkedIn
         id: linkedin
@@ -184,7 +184,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'microsoft_ads' }}
         continue-on-error: true
-        run: python collectors/microsoft_ads_bq.py all 30
+        run: python collectors/microsoft_ads_bq.py all 60
 
       - name: Collector — HubSpot Leads (cursor sync)
         id: hubspot_leads
