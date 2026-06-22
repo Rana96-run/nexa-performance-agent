@@ -58,6 +58,8 @@ jobs:
       SNAPCHAT_CLIENT_ID: ${{ secrets.SNAPCHAT_CLIENT_ID }}
       SNAPCHAT_CLIENT_SECRET: ${{ secrets.SNAPCHAT_CLIENT_SECRET }}
       SNAPCHAT_REFRESH_TOKEN: ${{ secrets.SNAPCHAT_REFRESH_TOKEN }}
+      SNAPCHAT_AD_ACCOUNT_2024: ${{ secrets.SNAPCHAT_AD_ACCOUNT_2024 }}
+      SNAPCHAT_AD_ACCOUNT_2025: ${{ secrets.SNAPCHAT_AD_ACCOUNT_2025 }}
 
       # ── TikTok ────────────────────────────────────────────────────────────────
       TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}

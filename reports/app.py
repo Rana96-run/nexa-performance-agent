@@ -243,15 +243,17 @@ def _freshness_status(ts: Any) -> tuple[str, str]:
         return "#e05c5c", f"{int(delta_h)}h ago"
 
 
-def _staleness_color(days_stale: Any) -> str:
-    """Return CSS color for a days-stale integer (0=green, 1=yellow, 2+=red)."""
+def _staleness_color(days_stale: Any, lag: int = 0) -> str:
+    """Return CSS color for a days-stale integer.
+    lag: expected natural lag (e.g. 1 for TikTok which always writes yesterday).
+    Effective stale = days_stale - lag; green ≤0, yellow 1, red ≥2."""
     if days_stale is None:
         return "var(--muted)"
     try:
-        d = int(days_stale)
+        d = int(days_stale) - lag
     except (TypeError, ValueError):
         return "var(--muted)"
-    if d == 0:
+    if d <= 0:
         return "var(--green)"
     elif d == 1:
         return "var(--orange)"
@@ -382,7 +384,9 @@ def _build_connector_cards(connector_map: dict[str, Any]) -> str:
         last_date  = info.get("last_date")
         days_stale = info.get("days_stale")
 
-        color = _staleness_color(days_stale)
+        # TikTok always writes yesterday by design — 1d stale is normal
+        lag = 1 if name == "TikTok" else 0
+        color = _staleness_color(days_stale, lag=lag)
 
         if last_date is None:
             date_str   = "No data"
@@ -394,7 +398,8 @@ def _build_connector_cards(connector_map: dict[str, Any]) -> str:
             else:
                 date_str = str(last_date)
             d = int(days_stale) if days_stale is not None else 0
-            stale_str = "Fresh" if d == 0 else f"{d}d stale"
+            effective = d - lag
+            stale_str = "Fresh" if effective <= 0 else f"{d}d stale"
 
         cards.append(f"""
     <div class="conn-card">
