@@ -81,14 +81,7 @@ Surfaced by `connector_health_log` + freshness check. Route via the police loop
 - [x] **`hubspot_deals` ~10-day stale → self-resolved.** VERIFY (2026-06-08) showed
       the collector caught up: MAX(date)=2026-06-08, continuous daily rows since
       2026-05-28. Was a transient incremental-window lag, now fresh. No action.
-- [ ] **🔴 PHONE NUMBER IN DEAL AMOUNT (HUMAN fix needed):** deal **`505631711439`**
-      ("نوادر الانعام - New Deal", Bookkeeping pipeline, owner **Nouran Emad**) has
-      `amount` = **966504406958 SAR** = the phone number **+966 50 440 6958** (966 = KSA
-      code) typed into the Amount field — inflating pipeline value to $257.7B.
-      Link: https://app.hubspot.com/contacts/144952270/record/0-3/505631711439
-      **HubSpot read-only → human sets Amount to the real SAR value**, then re-run
-      `collectors/hubspot_deals_bq.py`. Police now auto-detects this (amount_sanity +
-      `_looks_like_phone` on the native SAR value).
+- [x] **🔴 PHONE NUMBER IN DEAL AMOUNT — DONE 2026-06-22.** Fixed by Nouran in HubSpot 2026-06-22. Verified via API: amount = 11,680 SAR. Deals collector re-run confirmed clean pipeline ($24,302 total, max $2,957).
 
 ## P1 — Police expansion: watch the WHOLE system, not just inbound connectors
 
@@ -285,7 +278,7 @@ Campaign IDs (customer 5753494964):
 - [x] **Verify n8n report accuracy** — On 2026-06-19 08:00 Riyadh, check that the Master workflow Slack post shows correct lead counts and CPQL (should match BQ via new CTE queries). Compare against previous report. If numbers look right → close. If still off → diagnose. (run completed)
 - [x] **Google ZATCA re-eval 2026-06-20 — COMPLETED.** BQ confirms `Google_Search_AREN_ZATCAVendorShop` last had spend on 2026-06-12; zero rows (spend=0, impressions=0) for 7+ consecutive days. Already paused — no action needed.
 - [x] **Google ZATCAPhase2 re-eval 2026-06-23 — COMPLETED EARLY.** BQ confirms `Google_Search_AREN_ZATCAPhase2` last had spend on 2026-06-08; zero rows (spend=0, impressions=0) for 11+ consecutive days. Already paused — no action needed. Update Asana task GID 1215845331755397 closed.
-- [ ] **Snapchat 3d staleness check** — Snapchat data has shown 3-day lag in past. Verify MAX(date) in campaigns_daily for channel='snapchat' is within 2 days of current date. If stale, check collector logs.
+- [x] **Snapchat 3d staleness check — DONE 2026-06-22.** Verified — MAX(date) = 2026-06-19, 2 days stale, within normal 3-day Snapchat API lag. No action needed.
 - [x] **Monitor n8n Master workflow first run with corrected SQL** — Verify 2026-06-19 08:00 Riyadh Slack post shows accurate lead counts and CPQL numbers matching BQ hubspot_leads_module_daily. Close if correct; diagnose if still wrong. (run completed)
 - [ ] **HubSpot Invoice Lookalike placeholder pipeline/stage IDs** — `executors/hubspot_lists.py` has placeholder pipeline and stage IDs for the Invoice Lookalike audience. Need real IDs from HubSpot CRM settings before this executor can run safely.
 
