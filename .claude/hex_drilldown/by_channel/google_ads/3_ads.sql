@@ -48,7 +48,7 @@ SELECT * FROM (
     AND date BETWEEN {{ start_date }} AND {{ end_date }}
         -- Exclude PMax asset groups — they appear at adset grain, not ad grain.
     -- PMax campaigns always contain 'pmax' in the campaign name.
-    AND LOWER(utm_campaign) NOT LIKE '%pmax%'
+    AND LOWER(campaign_name) NOT LIKE '%pmax%'
     {% if effective_campaign %}
     AND LOWER(TRIM(campaign_name)) = LOWER(TRIM({{ effective_campaign }}))
     {% endif %}
