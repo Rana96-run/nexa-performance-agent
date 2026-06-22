@@ -954,7 +954,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   <div class="agent-header">
     <span class="agent-icon">&#127919;</span>
     <span class="agent-name">Performance Lead</span>
-    <span class="agent-desc">KPI thresholds &middot; budget allocation &middot; channel mix &middot; triage to Campaign Manager or Creative Strategist</span>
+    <span class="agent-desc">Budget reallocation &middot; channel launch &amp; sunset &middot; KPI threshold changes &middot; weekly channel mix review</span>
     <a href="{N8N_BASE}/{N8N_WORKFLOWS['perf_lead']}" target="_blank" class="n8n-link">CPL sub-flow &rarr;</a>
     <span class="dept-chip">PERFORMANCE</span>
   </div>
@@ -1094,7 +1094,7 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
   <div class="agent-header">
     <span class="agent-icon">&#128200;</span>
     <span class="agent-name">CRO Specialist</span>
-    <span class="agent-desc">LP briefs &middot; qual ratio decisions (redirect at &lt;30%) &middot; A/B test hypotheses &middot; test result calls</span>
+    <span class="agent-desc">LP briefs &middot; OCEAN-aligned design spec &middot; qual ratio decisions (&lt;30% redirect) &middot; A/B test hypotheses &middot; weekly pixel audit</span>
     <a href="{N8N_BASE}/{N8N_WORKFLOWS['cro']}" target="_blank" class="n8n-link">CPQL sub-flow &rarr;</a>
     <a href="{N8N_BASE}/{N8N_WORKFLOWS['qual']}" target="_blank" class="n8n-link">Qual sub-flow &rarr;</a>
     <span class="dept-chip">CRO CHAIN</span>
@@ -1115,55 +1115,40 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
           <span class="cnote">Results &rarr; #approvals</span>
         </div>
       </div>
+      <div class="card">
+        <div class="ctitle">Design Spec</div>
+        <div class="cdesc2">OCEAN-aligned LP design spec: visual tone, ZATCA badge above fold, RTL layout, form field annotations, interaction notes, Developer handoff checklist</div>
+        <div class="cfoot">
+          <span class="cnote">Results &rarr; #approvals</span>
+        </div>
+      </div>
     </div>
 
-    <!-- &#8618; UI/UX Designer sub-panel -->
-    <div class="sub-panel" style="--sub-color:var(--warm-orange)">
+    <!-- &#8618; Developer sub-panel -->
+    <div class="sub-panel" style="--sub-color:var(--lgreen)">
       <div class="sub-header">
         <span class="sub-arrow">&#8618;</span>
-        <span class="sub-name">UI/UX Designer</span>
-        <span class="sub-desc">LP design from CRO brief &middot; OCEAN-aligned visual tone &middot; ZATCA badge above fold &middot; mobile-first 375px</span>
+        <span class="sub-name">Developer</span>
+        <span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span>
         <span class="sub-chip">CRO CHAIN</span>
       </div>
       <div class="sub-body">
-        <div class="grid-2" style="margin-bottom:14px">
+        <div class="grid-2">
           <div class="card">
-            <div class="ctitle">Design Brief</div>
-            <div class="cdesc2">Generate LP design brief: OCEAN visual mapping, ZATCA placement, RTL layout, form field names, interaction notes, handoff checklist for Developer</div>
+            <div class="ctitle">UTM Form Check</div>
+            <div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div>
             <div class="cfoot">
-              <span class="cnote">Results &rarr; #approvals</span>
+              <span class="cnote">Results &rarr; #data-health</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ctitle">Pixel Verification</div>
+            <div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div>
+            <div class="cfoot">
+              <span class="cnote">Results &rarr; #data-health</span>
             </div>
           </div>
         </div>
-
-        <!-- &#8618; Developer sub-panel (nested inside UI/UX) -->
-        <div class="sub-panel" style="--sub-color:var(--lgreen);margin-left:0">
-          <div class="sub-header">
-            <span class="sub-arrow">&#8618;</span>
-            <span class="sub-name">Developer</span>
-            <span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span>
-            <span class="sub-chip">CRO CHAIN</span>
-          </div>
-          <div class="sub-body">
-            <div class="grid-2">
-              <div class="card">
-                <div class="ctitle">UTM Form Check</div>
-                <div class="cdesc2">Audit all active LPs: hidden UTM fields on every form, HubSpot capturing all UTMs, mobile 375px renders correctly, &lt;3s load time</div>
-                <div class="cfoot">
-                  <span class="cnote">Results &rarr; #data-health</span>
-                </div>
-              </div>
-              <div class="card">
-                <div class="ctitle">Pixel Verification</div>
-                <div class="cdesc2">Verify both Meta pixels firing (base + Lead event) on all active LPs via Events Manager</div>
-                <div class="cfoot">
-                  <span class="cnote">Results &rarr; #data-health</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
 
