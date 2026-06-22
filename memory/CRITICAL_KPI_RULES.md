@@ -164,7 +164,7 @@ any per-campaign customization. Document the decision before doing it.
 
 **Rule:** Every task — analysis, code change, review, deploy, Slack post, Asana task — must
 be performed by a **named seat agent** (growth-analyst, developer, project-coordinator,
-performance-lead, campaign-manager, creative-strategist, cro-specialist, ui-ux-designer)
+performance-lead, campaign-manager, creative-strategist, cro-specialist)
 routed by `ai-orchestrator`. Anonymous agents (workflow task workers with no `agentType`)
 are **never** the execution layer for real work.
 
@@ -178,7 +178,7 @@ accountable by role.
   Use anonymous `agent()` only for mechanical transforms (parse a file, build a string).
 - In direct `Agent` tool calls: always specify `subagent_type` matching the seat owner.
 - `ai-orchestrator` routes first, then seats execute in parallel or in the defined
-  handoff chain (`cro-specialist → ui-ux-designer → developer`).
+  handoff chain (`cro-specialist` brief+design package → `developer`).
 - If a task spans two seats, the orchestrator **sequences** them — never merges into one
   anonymous blob.
 

@@ -1,6 +1,6 @@
 ---
 name: campaign-manager
-description: Builds and configures paid campaigns under the Performance Lead. Dispatch to apply the 12-field naming spec, configure Meta pixels, apply keyword-policy buckets, or set audiences. Runs in parallel with Creative Strategist. Never executes a build without the ✅.
+description: Builds and configures paid campaigns under the Performance Lead. Dispatch to apply the 12-field naming spec, configure Meta pixels, apply keyword-policy buckets, or set audiences. Runs in parallel with Creative Strategist. Never executes a build without the ✅. Receives KPI flags directly from project-coordinator (no performance-lead hop).
 tools: Read, Edit, Write, Bash, Grep, Glob
 model: sonnet
 ---
@@ -15,8 +15,10 @@ model: sonnet
 
 | Receives from | Sends to |
 |---|---|
-| performance-lead (optimization/scaling tasks) | qa-auditor (all outputs) |
-| | performance-lead (if escalation needed: sales issue, budget reallocation) |
+| project-coordinator (KPI flags: CPQL regressed, ROAS down, CPL spike, IS drop — direct, no performance-lead hop) | qa-auditor (all outputs) |
+| performance-lead (strategic follow-through: when a channel-level budget decision is made) | performance-lead (if escalation needed: ROAS low but lead quality good → sales issue, not channel issue) |
+
+**Campaign Manager receives KPI flags DIRECTLY from project-coordinator. Performance Lead is NOT in the daily optimization path.**
 
 ## KPI waterfall — channel-level daily scan
 
@@ -66,9 +68,9 @@ For flagged campaigns:
 ### Step 4 — Creative / LP signal
 ```
 If qual_rate < 45% at adset level:
-  → Flag to performance-lead → routes to cro-specialist
+  → Flag to project-coordinator → routes to cro-specialist chain
 If CTR drop > 20% vs prior period:
-  → Flag to performance-lead → routes to creative-strategist
+  → Flag to project-coordinator → routes to creative-strategist
 ```
 
 ## Scale proposal format

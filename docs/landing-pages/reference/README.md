@@ -12,8 +12,8 @@ run time. Copied 2026-06-08 from `D:\Landing Page Agent\`.
 | Path | What | Used by |
 |---|---|---|
 | `lp-design-system.md` | Paid/conversion design reference (tokens, brand truth, sections) | all CRO |
-| `brand/design-system.md` | Full design system that built qoyod.com | `ui-ux-designer` |
-| `brand/landing-page-wireframes.md` | Section-by-section LP wireframes | `cro-specialist`, `ui-ux-designer` |
+| `brand/design-system.md` | Full design system that built qoyod.com | `cro-specialist` |
+| `brand/landing-page-wireframes.md` | Section-by-section LP wireframes | `cro-specialist` |
 | `brand/value-proposition.md` · `messaging-strategies.md` · `segments.md` | Positioning, messaging, audience segments | `cro-specialist`, `creative-strategist` |
 | `brand/identity-guidelines.md` · `ethical-guidelines.md` | Brand identity + ethical limits | all CRO |
 | `brand/anti-claims.md` | Claims we may NOT make (compliance) | `cro-specialist`, `developer` |

@@ -194,7 +194,7 @@ The team is **9 Claude Code subagents** = 1 manager + 3 departments (see
 `CLAUDE.manager.md` for how they run):
 - **Manager:** `ai-orchestrator` — 8-step loop 08:00, gates writes ✅, owns handoffs.
 - **Performance** (LEAD `performance-lead`): `campaign-manager` ∥ `creative-strategist`.
-- **CRO / Landing Page** (sequential): `cro-specialist` → `ui-ux-designer` → `developer`.
+- **CRO / Landing Page** (sequential): `cro-specialist` (brief + design) → `developer`.
 - **Support** (parallel): `project-coordinator` ∥ `growth-analyst` (owns `memory/`).
 
 > **Note:** `claude/roles.py`, `runtime_personas/`, `main.py`, and `reporting_scheduler.py`

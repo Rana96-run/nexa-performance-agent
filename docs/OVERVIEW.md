@@ -28,7 +28,7 @@ overloaded brain.
 - **Manager:** `ai-orchestrator` — runs the daily 8-step loop (08:00 Riyadh),
   routes every request, gates **every write on the human ✅**, owns all handoffs.
 - **Dept 1 — Performance** (LEAD `performance-lead`): `campaign-manager` ∥ `creative-strategist` (parallel).
-- **Dept 2 — CRO / Landing Page** (sequential): `cro-specialist → ui-ux-designer → developer`.
+- **Dept 2 — CRO / Landing Page** (sequential): `cro-specialist` (brief + design) → `developer`.
 - **Dept 3 — Support** (parallel, serve both): `project-coordinator` ∥ `growth-analyst` (owns memory/).
 
 **Flow:** observe live BQ → compare period-over-period → investigate → decide with
@@ -39,7 +39,7 @@ linked to any other (default flow is structured; the orchestrator can wire any p
 ## 4. What it contains (the file map)
 | Area | Path | Holds |
 |---|---|---|
-| Agents | `.claude/agents/*.md` | the 9 subagents + `_TEMPLATE` + `_archived/` |
+| Agents | `.claude/agents/*.md` | the 8 subagents + `_TEMPLATE` + `_archived/` |
 | Manager OS | `CLAUDE.manager.md` | how `ai-orchestrator` runs the team |
 | Shared playbook | `docs/playbooks/_shared.md` | shared data + activities every role reads |
 | Per-role playbooks | `docs/playbooks/<dept>/<role>.md` | each seat's procedure |
@@ -56,7 +56,7 @@ linked to any other (default flow is structured; the orchestrator can wire any p
 - **Hallucination** → isolated per-role context (each agent loads only its files).
 - **Scattered knowledge** → consolidated: one shared layer + one per-role layer for
   memory, playbooks, and indexes.
-- **"Which roles exist?" confusion** → the org chart is the single roster (9 agents),
+- **"Which roles exist?" confusion** → the org chart is the single roster (8 agents),
   not the 13 `agent_activity_log` log-labels.
 - **Lost learnings** → `growth-analyst` owns `memory/`; every trap → `08_pitfalls.md`,
   every outcome → `14_learning_patterns.md`.
@@ -65,15 +65,15 @@ linked to any other (default flow is structured; the orchestrator can wire any p
   LP tests, tracking/pixels, forecasts — each owned by a clear seat.
 
 ## 6. What it has (capabilities, by seat)
-KPI thresholds + budget + sign-off (`performance-lead`) · campaign build, naming,
-pixels, keyword policy (`campaign-manager`) · persona/creative direction +
-A/B (`creative-strategist`) · LP test brief→design→build→verify (`cro-specialist`,
-`ui-ux-designer`, `developer`) · UTM/pixel/secrets (`project-coordinator`) · live-BQ
-analysis, period-compare, forecasts, memory ownership (`growth-analyst`) · routing +
-the daily loop + the gate (`ai-orchestrator`).
+Budget/channel strategy + KPI thresholds (`performance-lead`) · campaign build, naming,
+pixels, keyword policy, KPI flag response (`campaign-manager`) · persona/creative direction +
+A/B (`creative-strategist`) · LP test brief+design+build+verify (`cro-specialist` → `developer`) ·
+UTM/pixel/secrets + Sunday infra hygiene (`project-coordinator`) · live-BQ
+analysis, period-compare, forecasts, memory ownership, Sunday data hygiene (`growth-analyst`) ·
+routing + the daily loop + the gate, QA_PASSED only (`ai-orchestrator`).
 
 ## 7. How we built it
-1. Read the live org chart (the dashboard) → the team is **9 agents**, not the
+1. Read the live org chart (the dashboard) → the team is **8 agents** (as of 2026-06-22 restructure), not the
    15 I first invented nor the 13 activity-log labels.
 2. Built each as a Claude Code subagent (`.claude/agents/`) with tight identity +
    tools + model; gave each a playbook (`docs/playbooks/`) and memory (`memory/agents/`).

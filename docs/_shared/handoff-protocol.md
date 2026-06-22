@@ -35,27 +35,30 @@ queues every write into ONE #approvals digest, **gates every write on ✅**, and
 owns all cross-department handoffs. Routes a request to one department, never
 fans out blindly.
 
-### Dept 1 — Performance (parallel directs)
+### Dept 1 — Performance
 ```
-performance-lead ──┬──► campaign-manager      (build: naming, pixels, keywords)
-                   └──► creative-strategist   (copy, A/B, persona)
+project-coordinator ──► campaign-manager      (KPI flags: CPQL, CPL, ROAS, IS, CTR — DIRECT, no performance-lead hop)
+project-coordinator ──► creative-strategist   (copy, A/B, persona — DIRECT)
+
+performance-lead ──► campaign-manager         (strategic follow-through only: budget reallocation, channel launch/sunset)
+performance-lead ──► creative-strategist      (strategic creative direction change)
 ```
 `campaign-manager` and `creative-strategist` run **in parallel — they do NOT hand
-off to each other.** Both return to `performance-lead`, who gates and reports up.
-`creative-strategist` makes ONE cross-dept handoff: align LP assets with
-`cro-specialist` before a test goes live.
+off to each other.** KPI flags bypass performance-lead and go project-coordinator → campaign-manager directly.
+`performance-lead` is reserved for 4 strategic cases: budget reallocation, channel launch/sunset, KPI threshold change, weekly channel mix review.
+`creative-strategist` makes ONE cross-dept handoff: align LP assets with `cro-specialist` before a test goes live.
 
-### Dept 2 — CRO / Landing Page (direct sequential chain)
+### Dept 2 — CRO / Landing Page (direct sequential chain — 2 steps)
 ```
-cro-specialist ──► ui-ux-designer ──► developer ──► (back to) cro-specialist
-   (brief +          (annotated         (build, UTM,        (calls the
-    hypothesis)       design + notes)     pixels, deploy,     test result)
-                                          verify in Events Mgr)
+cro-specialist ──► developer ──► (back to) cro-specialist
+   (brief +          (build, UTM,        (calls the
+    design spec)      pixels, deploy,     test result)
+                      verify in Events Mgr)
 ```
-This is the only **direct, sequential handoff chain** in the org. Each link waits
-for the previous one's output. The artifact travels through the shared workspace
-`docs/landing-pages/` with **one filename per test**: `briefs/` (cro-specialist)
-→ `designs/` (ui-ux-designer) → `specs/` (developer) → result back to cro-specialist.
+This is the only **direct, sequential handoff chain** in the org. CRO Specialist produces BOTH
+the 8-section brief AND the annotated design spec, then hands the combined package to developer.
+The artifact travels through the shared workspace `docs/landing-pages/` with **one filename per test**:
+`briefs/` (cro-specialist brief) → developer implements from the same package → result back to cro-specialist.
 
 ### Dept 3 — Support (parallel, no internal handoff)
 ```

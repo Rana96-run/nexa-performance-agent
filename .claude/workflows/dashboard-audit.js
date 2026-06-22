@@ -148,7 +148,7 @@ For each violation in the list above:
      daily_digest    → project-coordinator    (posts the Slack digest)
      cro_analysis    → cro-specialist   (LP brief + hypothesis)
      lp_deploy       → developer        (ships to production)
-     lp_design       → ui-ux-designer   (LP design)
+     lp_design       → cro-specialist   (LP design — merged from ui-ux-designer 2026-06-22)
      performance_audit → performance-lead
      keyword_management → campaign-manager
      health_monitor  → project-coordinator

@@ -5,17 +5,18 @@ mirror the department's sequential handoff chain — each stage writes its artif
 into the next folder and hands off:
 
 ```
-cro-specialist  ──►  ui-ux-designer  ──►  developer  ──►  (back to) cro-specialist
-   writes              writes               writes            reads result,
-   briefs/             designs/             specs/            calls the test
+cro-specialist  ──►  developer  ──►  (back to) cro-specialist
+   writes              writes           reads result,
+   briefs/             specs/           calls the test
+   (incl. design spec)
 ```
 
 | Folder | Owner | Holds |
 |---|---|---|
 | `reference/` | shared (read-only) | local snapshot of the LP Agent's knowledge — design system, wireframes, brand, anti-claims, build prompts (see `reference/README.md`) |
 | `_templates/` | shared | the 8-section LP brief template + the ZATCA/pixel/UTM compliance checklist |
-| `briefs/` | `cro-specialist` | one brief per test: hypothesis, 8 sections, success criteria (14-day CPQL + destination_url) |
-| `designs/` | `ui-ux-designer` | annotated LP designs aligned to the OCEAN persona, ZATCA badge above fold, interaction notes |
+| `briefs/` | `cro-specialist` | one brief per test: hypothesis, 8 sections, success criteria (14-day CPQL + destination_url), OCEAN-aligned design spec |
+| `designs/` | `cro-specialist` | annotated LP designs (now produced by cro-specialist, not a separate ui-ux-designer step) |
 | `specs/` | `developer` | build/deploy spec: UTM passthrough map, both pixel fires, deploy target, Events-Manager verification |
 
 ## Naming convention

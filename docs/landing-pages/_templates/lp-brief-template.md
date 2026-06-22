@@ -1,7 +1,7 @@
 # LP Brief Template — 8 sections (owned by cro-specialist)
 
 Copy this to `../briefs/YYYY-MM-DD_<product>_<hypothesis-slug>.md` and fill in.
-The brief is the first artifact in the chain → hands to `ui-ux-designer`.
+The brief (including the annotated design spec) is the first artifact in the chain → hands to `developer`.
 
 ---
 test_id: <YYYY-MM-DD_product_slug>

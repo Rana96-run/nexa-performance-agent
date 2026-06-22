@@ -96,15 +96,15 @@ Good: a skill that says "you are X, you think like Y, you always output Z, you n
 
 ## Multi-Agent Architecture
 
-**Current (the team):** 9 in-house Claude Code subagents — see
-`docs/_shared/org-chart.md` and `CLAUDE.manager.md`. CRO/Landing Page is now an
-**in-house** department (`cro-specialist → ui-ux-designer → developer`); Marketing
-Ops + Growth are in-house **Support** seats (`project-coordinator`, `growth-analyst`).
+**Current (the team):** 8 in-house Claude Code subagents — see
+`docs/_shared/org-chart.md` and `CLAUDE.manager.md`. CRO/Landing Page is an
+**in-house** department (`cro-specialist` brief+design → `developer`); Support
+seats are `project-coordinator` and `growth-analyst`.
 
 ```
-ai-orchestrator (mgr, gates ✅)
-    ├── Performance : performance-lead → campaign-manager ∥ creative-strategist
-    ├── CRO / LP    : cro-specialist → ui-ux-designer → developer
+ai-orchestrator (mgr, gates ✅, receives QA_PASSED only)
+    ├── Performance : performance-lead (strategic) · campaign-manager ∥ creative-strategist
+    ├── CRO / LP    : cro-specialist (brief+design) → developer
     └── Support     : project-coordinator ∥ growth-analyst   (growth-analyst owns memory/)
             ↕ docs/landing-pages/reference/  (local snapshot of D:\Landing Page Agent)
 ```

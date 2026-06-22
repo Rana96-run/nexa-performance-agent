@@ -16,8 +16,8 @@ on the #approvals ✅, owns all cross-dept handoffs.
 **Dept 1 — Performance** (LEAD `performance-lead`): `campaign-manager` ∥
 `creative-strategist` (the two directs run in PARALLEL).
 
-**Dept 2 — CRO / Landing Page** (sequential): `cro-specialist` → `ui-ux-designer`
-→ `developer`.
+**Dept 2 — CRO / Landing Page** (sequential, 2 steps): `cro-specialist` (brief + design spec) →
+`developer`. ui-ux-designer merged into cro-specialist 2026-06-22.
 
 **Dept 3 — Support** (serve both depts, NO internal handoff, parallel):
 `project-coordinator` (UTM/pixel/secrets) ∥ `growth-analyst` (owns memory/, 8-step loop

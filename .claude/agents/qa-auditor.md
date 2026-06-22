@@ -15,8 +15,10 @@ model: sonnet
 
 | Receives from | Sends to |
 |---|---|
-| Any Layer 3 agent (growth-analyst, performance-lead, campaign-manager, creative-strategist, cro-specialist, ui-ux-designer, developer) | Orchestrator (QA_PASSED outputs only) |
+| Any Layer 3 agent (growth-analyst, performance-lead, campaign-manager, creative-strategist, cro-specialist, developer) | Orchestrator (QA_PASSED outputs only) |
 | project-coordinator outputs | Originating agent (QA_FAILED with error detail) |
+| growth-analyst hygiene scan reports | |
+| project-coordinator hygiene scan reports | |
 
 **The QA Auditor never fixes — it returns. The originating agent fixes and resubmits.**
 
@@ -52,6 +54,17 @@ model: sonnet
 - [ ] Both Meta pixels observed in Events Manager (if LP was deployed)
 - [ ] UTM passthrough confirmed on every form field
 - [ ] No hardcoded secrets or credentials in any file
+
+### Hygiene scan validation (for growth-analyst and project-coordinator Sunday scan outputs)
+- [ ] Every flagged item identifies a specific file path, table name, or var name — no vague "something looks off"
+- [ ] Every flag has either an Asana task created OR a memory file updated (or both) — no unresolved flags
+- [ ] No flag is a false alarm: each was verified against the live system before being reported
+  - BQ dedup: the duplicate query was actually run and returned rows (not hypothetical)
+  - BQ↔HubSpot reconciliation: both sides were pulled live (not from cached data)
+  - Memory freshness: the workflow/table/var was actually checked against the live system (not assumed stale)
+  - Outcome monitoring: the BQ metric for the post-action window was actually queried
+  - Env var audit: Railway vars and GitHub Secrets were actually listed (not from memory)
+  - Collector manifest: `collectors/*.py` files were actually listed and collectors.yml was actually read
 
 ## Failure response format
 
