@@ -18,7 +18,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-from flask import Flask, jsonify, redirect
+from flask import Flask, jsonify, redirect, Response
 
 
 # BQ coordinates (fallback to known defaults)
@@ -238,16 +238,37 @@ def create_app() -> Flask:
 
     @app.get("/activity")
     def activity():
-        system_health   = _get_system_health()
-        connector_map   = _get_connector_health()
-        heatmap_rows    = _get_heatmap_data()
-        activity_rows   = _get_recent_activity()
-        recent_actions  = _get_recent_actions()
-        open_tasks      = _get_open_asana_tasks()
+        system_health      = _get_system_health()
+        connector_map      = _get_connector_health()
+        heatmap_rows       = _get_heatmap_data()
+        activity_rows      = _get_recent_activity()
+        recent_actions     = _get_recent_actions()
+        open_tasks         = _get_open_asana_tasks()
+        done_tasks         = _get_done_asana_tasks()
+        rescheduled_tasks  = _get_rescheduled_asana_tasks()
         return _render_dashboard(
             system_health, connector_map, heatmap_rows, activity_rows,
-            recent_actions, open_tasks,
+            recent_actions, open_tasks, done_tasks, rescheduled_tasks,
         )
+
+    @app.get("/api/day-detail/<date>")
+    def day_detail(date: str):
+        import re
+        # Basic validation — YYYY-MM-DD
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+            return jsonify({"rows": [], "error": "Invalid date format"})
+        try:
+            rows = _bq_query(f"""
+                SELECT role, action, channel, status, details,
+                       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', ts) AS created_at
+                FROM `{BQ_PROJECT}.{BQ_DATASET}.agent_activity_log`
+                WHERE DATE(ts, 'Asia/Riyadh') = '{date}'
+                ORDER BY ts DESC
+                LIMIT 50
+            """)
+            return jsonify({"rows": rows})
+        except Exception as exc:
+            return jsonify({"rows": [], "error": str(exc)})
 
     return app
 
@@ -340,6 +361,9 @@ def _build_connector_cards(connector_map: dict[str, Any]) -> str:
 
 
 def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
+    import datetime as _dt
+    import pytz as _pytz
+
     # dow: 1=Sun … 7=Sat in BQ DAYOFWEEK. We show Mon–Sun (2–7, 1).
     DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     DOW_ORDER  = [2, 3, 4, 5, 6, 7, 1]  # Mon=2 … Sat=7, Sun=1
@@ -350,21 +374,40 @@ def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
 
     max_cnt = max(lookup.values(), default=1)
 
+    # Build a dow → YYYY-MM-DD mapping for the last 7 days (Riyadh time)
+    _riyadh = _pytz.timezone("Asia/Riyadh")
+    _today = _dt.datetime.now(_riyadh).date()
+    dow_to_date: dict[int, str] = {}
+    for delta in range(7):
+        d = _today - _dt.timedelta(days=delta)
+        # Python isoweekday: Mon=1…Sun=7; BQ DAYOFWEEK: Sun=1…Sat=7
+        py_dow = d.isoweekday()  # 1=Mon … 7=Sun
+        bq_dow = (py_dow % 7) + 1  # convert: Mon→2, Tue→3, … Sun→1
+        dow_to_date[bq_dow] = d.strftime("%Y-%m-%d")
+
     hour_headers = "".join(
         f'<th class="hm-h">{h:02d}</th>' for h in range(24)
     )
 
     rows_html = []
     for i, dow in enumerate(DOW_ORDER):
+        date_str = dow_to_date.get(dow, "")
         cells = []
         for hr in range(24):
             cnt = lookup.get((dow, hr), 0)
             intensity = int((cnt / max_cnt) * 255) if max_cnt else 0
             bg = f"rgba(0,255,136,{intensity/255:.2f})" if cnt else "var(--border)"
-            title = f"{cnt} events" if cnt else "no activity"
-            cells.append(
-                f'<td class="hm-cell" style="background:{bg}" title="{title}"></td>'
-            )
+            title_attr = f"{cnt} events" if cnt else "no activity"
+            if cnt > 0 and date_str:
+                cells.append(
+                    f'<td class="hm-cell" style="background:{bg};cursor:pointer" '
+                    f'title="{title_attr}" data-date="{date_str}" '
+                    f'onclick="showDayDetail(\'{date_str}\')"></td>'
+                )
+            else:
+                cells.append(
+                    f'<td class="hm-cell" style="background:{bg};cursor:default" title="{title_attr}"></td>'
+                )
         rows_html.append(
             f'<tr><th class="hm-row">{DOW_LABELS[i]}</th>{"".join(cells)}</tr>'
         )
@@ -379,9 +422,10 @@ def _build_heatmap(heatmap_rows: list[dict[str, Any]]) -> str:
     <span style="color:var(--muted);font-size:11px">Less</span>
     <div class="hm-grad"></div>
     <span style="color:var(--muted);font-size:11px">More</span>
-    <span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh &middot; last 7 days</span>
+    <span style="color:var(--muted);font-size:11px;margin-left:16px">Asia/Riyadh &middot; last 7 days &middot; click a cell to drill down</span>
   </div>
-</div>"""
+</div>
+<div id="day-detail-panel" style="display:none"></div>"""
 
 
 def _get_recent_actions() -> list[dict[str, Any]]:
@@ -400,6 +444,41 @@ def _get_open_asana_tasks() -> list[dict[str, Any]]:
         SELECT title, assignee_name, due_on, project_key, completed
         FROM `{BQ_PROJECT}.{BQ_DATASET}.asana_task_status`
         WHERE completed = FALSE
+        AND title IS NOT NULL
+        AND title != ''
+        AND title NOT LIKE '[Direct Log]%'
+        AND title NOT LIKE '[Agent Connection Test]%'
+        ORDER BY due_on ASC
+        LIMIT 10
+    """)
+
+
+def _get_done_asana_tasks() -> list[dict[str, Any]]:
+    """Return Asana tasks completed in the last 7 days."""
+    return _bq_query(f"""
+        SELECT title, assignee_name, due_on, project_key, completed_at
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.asana_task_status`
+        WHERE completed = TRUE
+        AND completed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        AND title IS NOT NULL
+        AND title != ''
+        AND title NOT LIKE '[Direct Log]%'
+        AND title NOT LIKE '[Agent Connection Test]%'
+        ORDER BY completed_at DESC
+        LIMIT 10
+    """)
+
+
+def _get_rescheduled_asana_tasks() -> list[dict[str, Any]]:
+    """Return open rescheduled Asana tasks (rescheduled = TRUE column).
+
+    Returns empty list if the column does not exist — caller handles gracefully.
+    """
+    return _bq_query(f"""
+        SELECT title, assignee_name, due_on, project_key
+        FROM `{BQ_PROJECT}.{BQ_DATASET}.asana_task_status`
+        WHERE completed = FALSE
+        AND rescheduled = TRUE
         AND title IS NOT NULL
         AND title != ''
         AND title NOT LIKE '[Direct Log]%'
@@ -443,12 +522,20 @@ def _build_activity_feed(activity_rows: list[dict[str, Any]]) -> str:
     return "\n".join(items)
 
 
-def _build_actions_tasks(recent_actions: list[dict[str, Any]], open_tasks: list[dict[str, Any]]) -> str:
-    """Build the Actions & Tasks 3-column section."""
+def _build_actions_tasks(
+    recent_actions: list[dict[str, Any]],
+    open_tasks: list[dict[str, Any]],
+    done_tasks: list[dict[str, Any]] | None = None,
+    rescheduled_tasks: list[dict[str, Any]] | None = None,
+) -> str:
+    """Build the Actions & Tasks section."""
     import datetime as _dt
     import pytz as _pytz
     _riyadh = _pytz.timezone("Asia/Riyadh")
     _today = _dt.datetime.now(_riyadh).date()
+
+    done_tasks        = done_tasks or []
+    rescheduled_tasks = rescheduled_tasks or []
 
     # Column 1 — Recent Actions
     if recent_actions:
@@ -491,25 +578,24 @@ def _build_actions_tasks(recent_actions: list[dict[str, Any]], open_tasks: list[
     else:
         actions_html = '<div class="at-empty">No recent actions — Daily workflow has not completed yet</div>'
 
-    # Column 2 — Open Asana Tasks
+    def _task_due_str(due: Any, today: Any) -> tuple[str, bool]:
+        """Return (due_str, is_overdue)."""
+        if due is None:
+            return "—", False
+        if hasattr(due, "strftime"):
+            due_str = due.strftime("%Y-%m-%d")
+            d = due.date() if hasattr(due, "date") else due
+            return due_str, d < today
+        return str(due), False
+
+    # Open tasks column
     if open_tasks:
         task_items = []
         for r in open_tasks:
-            name    = r.get("title") or "—"
-            assign  = r.get("assignee_name") or ""
-            due     = r.get("due_on")
-            proj    = r.get("project_key") or ""
-            overdue = False
-            due_str = "—"
-            if due is not None:
-                if hasattr(due, "strftime"):
-                    due_str = due.strftime("%Y-%m-%d")
-                    if hasattr(due, "date"):
-                        overdue = due.date() < _today
-                    else:
-                        overdue = due < _today
-                else:
-                    due_str = str(due)
+            name       = r.get("title") or "—"
+            assign     = r.get("assignee_name") or ""
+            due_str, overdue = _task_due_str(r.get("due_on"), _today)
+            proj       = r.get("project_key") or ""
             overdue_cls = " at-overdue" if overdue else ""
             assign_part = f" &middot; {assign}" if assign else ""
             proj_part   = f'<span style="color:var(--muted);font-size:10px">{proj}</span>' if proj else ""
@@ -519,12 +605,52 @@ def _build_actions_tasks(recent_actions: list[dict[str, Any]], open_tasks: list[
                 f'<span class="at-status-pend{overdue_cls}">{due_str}</span>'
                 f'</div>'
             )
-        tasks_html = "\n".join(task_items)
+        open_html = "\n".join(task_items)
     else:
-        tasks_html = '<div class="at-empty">No open tasks found</div>'
+        open_html = '<div class="at-empty">No open tasks found</div>'
+
+    # Rescheduled tasks column (may be empty if column absent in BQ)
+    if rescheduled_tasks:
+        rescheduled_items = []
+        for r in rescheduled_tasks:
+            name    = r.get("title") or "—"
+            assign  = r.get("assignee_name") or ""
+            due_str, _ = _task_due_str(r.get("due_on"), _today)
+            assign_part = f" &middot; {assign}" if assign else ""
+            rescheduled_items.append(
+                f'<div class="at-row">'
+                f'<span style="flex:1">{name}{assign_part}</span>'
+                f'<span class="at-status-pend">{due_str}</span>'
+                f'</div>'
+            )
+        rescheduled_html = "\n".join(rescheduled_items)
+    else:
+        rescheduled_html = '<div class="at-empty">No rescheduled tasks</div>'
+
+    # Done tasks column (last 7d)
+    if done_tasks:
+        done_items = []
+        for r in done_tasks:
+            name       = r.get("title") or "—"
+            completed  = r.get("completed_at")
+            if completed is not None and hasattr(completed, "strftime"):
+                comp_str = completed.strftime("%Y-%m-%d")
+            elif completed is not None:
+                comp_str = str(completed)[:10]
+            else:
+                comp_str = "—"
+            done_items.append(
+                f'<div class="at-row">'
+                f'<span style="flex:1">{name}</span>'
+                f'<span class="at-status-ok">{comp_str}</span>'
+                f'</div>'
+            )
+        done_html = "\n".join(done_items)
+    else:
+        done_html = '<div class="at-empty">No tasks completed in last 7 days</div>'
 
     return f"""
-<div class="at-grid">
+<div class="at-grid at-grid-tasks">
 
   <!-- Recent Actions -->
   <div class="at-card">
@@ -532,10 +658,22 @@ def _build_actions_tasks(recent_actions: list[dict[str, Any]], open_tasks: list[
     {actions_html}
   </div>
 
-  <!-- Open Asana Tasks -->
-  <div class="at-card">
-    <div class="at-title">Open Asana Tasks</div>
-    {tasks_html}
+  <!-- Open Tasks -->
+  <div class="at-card at-scrollable">
+    <div class="at-title">Open Tasks</div>
+    {open_html}
+  </div>
+
+  <!-- Rescheduled Tasks -->
+  <div class="at-card at-scrollable">
+    <div class="at-title">Rescheduled</div>
+    {rescheduled_html}
+  </div>
+
+  <!-- Done (last 7d) -->
+  <div class="at-card at-scrollable">
+    <div class="at-title">Done — Last 7d</div>
+    {done_html}
   </div>
 
   <!-- Pending Approvals -->
@@ -566,12 +704,17 @@ def _render_dashboard(
     activity_rows: list[dict[str, Any]],
     recent_actions: list[dict[str, Any]],
     open_tasks: list[dict[str, Any]],
+    done_tasks: list[dict[str, Any]] | None = None,
+    rescheduled_tasks: list[dict[str, Any]] | None = None,
 ) -> str:
     health_bar       = _build_health_bar(system_health)
     connector_cards  = _build_connector_cards(connector_map)
     heatmap          = _build_heatmap(heatmap_rows)
     activity_feed    = _build_activity_feed(activity_rows)
-    actions_tasks    = _build_actions_tasks(recent_actions, open_tasks)
+    actions_tasks    = _build_actions_tasks(
+        recent_actions, open_tasks,
+        done_tasks or [], rescheduled_tasks or [],
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -731,9 +874,12 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 /* ── Actions & Tasks section ── */
 .at-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}}
-@media(max-width:900px){{.at-grid{{grid-template-columns:1fr}}}}
+.at-grid-tasks{{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1100px){{.at-grid-tasks{{grid-template-columns:repeat(2,1fr)}}}}
+@media(max-width:900px){{.at-grid{{grid-template-columns:1fr}};.at-grid-tasks{{grid-template-columns:1fr}}}}
 .at-card{{background:var(--card);border:1px solid var(--border);border-radius:8px;
   padding:16px;display:flex;flex-direction:column;gap:6px}}
+.at-scrollable{{max-height:300px;overflow-y:auto}}
 .at-title{{font-size:13px;font-weight:700;margin-bottom:4px}}
 .at-row{{font-size:11px;color:var(--dim);padding:4px 0;
   border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;
@@ -745,6 +891,23 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 .at-status-pend{{color:var(--orange);font-weight:600}}
 .at-overdue{{color:#e05c5c;font-weight:600}}
 .at-empty{{color:var(--muted);font-size:12px;font-style:italic}}
+
+/* ── Collapsible sections ── */
+.agent-header,.sub-header{{cursor:pointer;user-select:none}}
+.agent-header:hover,.sub-header:hover{{opacity:0.9}}
+.toggle-arrow{{margin-left:auto;font-size:11px;color:#888;flex-shrink:0}}
+
+/* ── Day detail panel ── */
+#day-detail-panel{{background:#1a1a2e;border:1px solid var(--border);
+  border-radius:8px;padding:16px;margin-top:16px}}
+#day-detail-panel table th{{text-align:left;padding:4px 8px;
+  border-bottom:1px solid var(--border)}}
+#day-detail-panel table td{{padding:4px 8px;border-bottom:1px solid #222;
+  vertical-align:top}}
+
+/* ── Data Hygiene section ── */
+.section-header{{font-size:13px;font-weight:700;color:var(--accent);
+  margin-bottom:12px;display:flex;align-items:center;gap:8px}}
 </style>
 </head>
 <body>
@@ -759,10 +922,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 <div class="sec">System Health</div>
 {health_bar}
 
-<!-- ── CONNECTOR HEALTH CARDS ── -->
-<div class="sec">Connector Health</div>
-<div class="conn-grid">
-{connector_cards}
+<!-- ── DATA HYGIENE ── -->
+<div class="sec" onclick="toggleSection('ab-data-hygiene')" style="cursor:pointer;user-select:none">
+  Data Hygiene &mdash; Collector Status
+  <span class="toggle-arrow" id="arr-ab-data-hygiene">&#9660;</span>
+</div>
+<div id="ab-data-hygiene">
+  <div class="conn-grid">
+  {connector_cards}
+  </div>
 </div>
 
 <!-- ── ACTIVITY HEAT MAP ── -->
@@ -817,14 +985,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 <!-- AI Orchestrator — info card only, no run buttons -->
 <div class="agent-panel" style="--panel-color:#f0883e">
-  <div class="agent-header">
+  <div class="agent-header" onclick="toggleSection('ab-orchestrator')">
     <span class="agent-icon">&#127775;</span>
     <span class="agent-name">AI Orchestrator</span>
     <span class="agent-desc">Routes all work &middot; gates every &#10003; &middot; daily 8-step loop at 08:00 Riyadh</span>
-    <a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-link">Open Daily in n8n &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">Open Daily in n8n &rarr;</a>
     <span class="dept-chip">MANAGER</span>
+    <span class="toggle-arrow" id="arr-ab-orchestrator">&#9660;</span>
   </div>
-  <div class="agent-body">
+  <div class="agent-body" id="ab-orchestrator">
     <div class="orch-card">
       <div class="orch-title">The 8-Step Intelligence Loop (runs every daily cadence)</div>
       <a href="{N8N_BASE}/{N8N_WORKFLOWS['orchestrator']}" target="_blank" class="n8n-run-btn">&#9654; Run Daily Now</a>
@@ -847,14 +1016,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 <!-- QA Auditor -->
 <div class="agent-panel" style="--panel-color:var(--red)">
-  <div class="agent-header">
+  <div class="agent-header" onclick="toggleSection('ab-qa-auditor')">
     <span class="agent-icon">&#128270;</span>
     <span class="agent-name">QA Auditor</span>
     <span class="agent-desc">Validates every agent output &middot; stamps QA_PASSED or QA_FAILED &middot; nothing ships without passing</span>
-    <a href="{N8N_BASE}/{N8N_WORKFLOWS['qa']}" target="_blank" class="n8n-link">QA Gate &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['qa']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">QA Gate &rarr;</a>
     <span class="dept-chip">GATEKEEPER</span>
+    <span class="toggle-arrow" id="arr-ab-qa-auditor">&#9660;</span>
   </div>
-  <div class="agent-body">
+  <div class="agent-body" id="ab-qa-auditor">
     <div class="grid-2">
       <div class="card">
         <div class="ctitle">QA Validation Run</div>
@@ -869,13 +1039,14 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 <!-- Project Coordinator -->
 <div class="agent-panel" style="--panel-color:var(--grey)">
-  <div class="agent-header">
+  <div class="agent-header" onclick="toggleSection('ab-project-coordinator')">
     <span class="agent-icon">&#128295;</span>
     <span class="agent-name">Project Coordinator</span>
     <span class="agent-desc">Seasonal &amp; product campaign coordination &middot; all-seat Asana task creation &middot; Slack monitoring &middot; monthly campaign reports &middot; connector health &middot; GTM &middot; pixel audit</span>
     <span class="dept-chip">OPS</span>
+    <span class="toggle-arrow" id="arr-ab-project-coordinator">&#9660;</span>
   </div>
-  <div class="agent-body">
+  <div class="agent-body" id="ab-project-coordinator">
 
     <!-- Campaign Coordination sub-section -->
     <div style="margin-bottom:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);border-bottom:1px solid color-mix(in srgb,var(--blue) 25%,var(--border));padding-bottom:6px">Campaign Coordination</div>
@@ -951,14 +1122,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 <!-- Performance Lead -->
 <div class="agent-panel" style="--panel-color:var(--blue)">
-  <div class="agent-header">
+  <div class="agent-header" onclick="toggleSection('ab-performance-lead')">
     <span class="agent-icon">&#127919;</span>
     <span class="agent-name">Performance Lead</span>
     <span class="agent-desc">Budget reallocation &middot; channel launch &amp; sunset &middot; KPI threshold changes &middot; weekly channel mix review</span>
-    <a href="{N8N_BASE}/{N8N_WORKFLOWS['perf_lead']}" target="_blank" class="n8n-link">CPL sub-flow &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['perf_lead']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">CPL sub-flow &rarr;</a>
     <span class="dept-chip">PERFORMANCE</span>
+    <span class="toggle-arrow" id="arr-ab-performance-lead">&#9660;</span>
   </div>
-  <div class="agent-body">
+  <div class="agent-body" id="ab-performance-lead">
     <div class="grid" style="margin-bottom:18px">
       <div class="card">
         <div class="ctitle">Campaign Brief</div>
@@ -992,14 +1164,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
     <!-- &#8618; Campaign Manager sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--lblue)">
-      <div class="sub-header">
+      <div class="sub-header" onclick="toggleSection('sb-campaign-manager')">
         <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Campaign Manager</span>
         <span class="sub-desc">Campaign optimization &middot; keyword policy &middot; ad audit &middot; scale &amp; pause proposals &middot; naming convention</span>
-        <a href="{N8N_BASE}/{N8N_WORKFLOWS['campaign_mgr']}" target="_blank" class="n8n-link">IS sub-flow &rarr;</a>
+        <a href="{N8N_BASE}/{N8N_WORKFLOWS['campaign_mgr']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">IS sub-flow &rarr;</a>
         <span class="sub-chip">PERFORMANCE</span>
+        <span class="toggle-arrow" id="arr-sb-campaign-manager">&#9660;</span>
       </div>
-      <div class="sub-body">
+      <div class="sub-body" id="sb-campaign-manager">
         <div class="grid">
           <div class="card">
             <div class="ctitle">Keyword Audit</div>
@@ -1042,14 +1215,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
     <!-- &#8618; Creative Strategist sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--purple)">
-      <div class="sub-header">
+      <div class="sub-header" onclick="toggleSection('sb-creative-strategist')">
         <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Creative Strategist</span>
         <span class="sub-desc">OCEAN persona mapping &middot; creative variants &middot; MSA Arabic copy &middot; LP asset alignment</span>
-        <a href="{N8N_BASE}/{N8N_WORKFLOWS['creative']}" target="_blank" class="n8n-link">Creative sub-flow &rarr;</a>
+        <a href="{N8N_BASE}/{N8N_WORKFLOWS['creative']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">Creative sub-flow &rarr;</a>
         <span class="sub-chip">PERFORMANCE</span>
+        <span class="toggle-arrow" id="arr-sb-creative-strategist">&#9660;</span>
       </div>
-      <div class="sub-body">
+      <div class="sub-body" id="sb-creative-strategist">
         <div class="grid">
           <div class="card">
             <div class="ctitle">Creative Analysis</div>
@@ -1091,15 +1265,16 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 <!-- CRO Specialist -->
 <div class="agent-panel" style="--panel-color:var(--orange)">
-  <div class="agent-header">
+  <div class="agent-header" onclick="toggleSection('ab-cro-specialist')">
     <span class="agent-icon">&#128200;</span>
     <span class="agent-name">CRO Specialist</span>
     <span class="agent-desc">LP briefs &middot; OCEAN-aligned design spec &middot; qual ratio decisions (&lt;30% redirect) &middot; A/B test hypotheses &middot; weekly pixel audit</span>
-    <a href="{N8N_BASE}/{N8N_WORKFLOWS['cro']}" target="_blank" class="n8n-link">CPQL sub-flow &rarr;</a>
-    <a href="{N8N_BASE}/{N8N_WORKFLOWS['qual']}" target="_blank" class="n8n-link">Qual sub-flow &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['cro']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">CPQL sub-flow &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['qual']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">Qual sub-flow &rarr;</a>
     <span class="dept-chip">CRO CHAIN</span>
+    <span class="toggle-arrow" id="arr-ab-cro-specialist">&#9660;</span>
   </div>
-  <div class="agent-body">
+  <div class="agent-body" id="ab-cro-specialist">
     <div class="grid-2" style="margin-bottom:18px">
       <div class="card">
         <div class="ctitle">LP Brief</div>
@@ -1126,13 +1301,14 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
     <!-- &#8618; Developer sub-panel -->
     <div class="sub-panel" style="--sub-color:var(--lgreen)">
-      <div class="sub-header">
+      <div class="sub-header" onclick="toggleSection('sb-developer')">
         <span class="sub-arrow">&#8618;</span>
         <span class="sub-name">Developer</span>
         <span class="sub-desc">LP build &middot; UTM hidden fields on every form &middot; Meta pixel wiring &middot; mobile QA &middot; deploy to production</span>
         <span class="sub-chip">CRO CHAIN</span>
+        <span class="toggle-arrow" id="arr-sb-developer">&#9660;</span>
       </div>
-      <div class="sub-body">
+      <div class="sub-body" id="sb-developer">
         <div class="grid-2">
           <div class="card">
             <div class="ctitle">UTM Form Check</div>
@@ -1160,14 +1336,15 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 
 <!-- Growth Analyst -->
 <div class="agent-panel" style="--panel-color:var(--green)">
-  <div class="agent-header">
+  <div class="agent-header" onclick="toggleSection('ab-growth-analyst')">
     <span class="agent-icon">&#128202;</span>
     <span class="agent-name">Growth Analyst</span>
     <span class="agent-desc">BQ analysis &middot; period comparisons &middot; flag investigations &middot; forecasts &middot; owns memory/08_pitfalls.md</span>
-    <a href="{N8N_BASE}/{N8N_WORKFLOWS['growth_analyst']}" target="_blank" class="n8n-link">ROAS sub-flow &rarr;</a>
+    <a href="{N8N_BASE}/{N8N_WORKFLOWS['growth_analyst']}" target="_blank" class="n8n-link" onclick="event.stopPropagation()">ROAS sub-flow &rarr;</a>
     <span class="dept-chip">DATA</span>
+    <span class="toggle-arrow" id="arr-ab-growth-analyst">&#9660;</span>
   </div>
-  <div class="agent-body">
+  <div class="agent-body" id="ab-growth-analyst">
     <div class="grid">
       <div class="card">
         <div class="ctitle">Period Comparison</div>
@@ -1195,5 +1372,40 @@ main{{max-width:1160px;margin:0 auto;padding:28px 20px 60px}}
 </div>
 
 </main>
+
+<script>
+function toggleSection(id) {{
+  const body = document.getElementById(id);
+  const arr  = document.getElementById('arr-' + id);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (arr) arr.textContent = open ? '▶' : '▼';
+}}
+
+async function showDayDetail(date) {{
+  const panel = document.getElementById('day-detail-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = '<p style="color:#888">Loading…</p>';
+  try {{
+    const r = await fetch('/api/day-detail/' + date);
+    const d = await r.json();
+    if (!d.rows || d.rows.length === 0) {{
+      panel.innerHTML = '<p style="color:#666">No activity logged for ' + date + '</p>';
+      return;
+    }}
+    const rows = d.rows.map(function(r) {{
+      return '<tr><td>' + (r.role||'') + '</td><td>' + (r.action||'') + '</td><td>' + (r.channel||'') + '</td><td style="color:' + (r.status==='ok'?'#4caf50':'#ff6b6b') + '">' + (r.status||'') + '</td><td style="color:#aaa;font-size:11px">' + ((r.details||'').slice(0,80)) + '</td></tr>';
+    }}).join('');
+    panel.innerHTML = '<h4 style="margin:0 0 10px;color:#ccc">Activity on ' + date + '</h4>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="color:#888"><th>Role</th><th>Action</th><th>Channel</th><th>Status</th><th>Details</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table>'
+      + '<button onclick="document.getElementById(\'day-detail-panel\').style.display=\'none\'" style="margin-top:10px;background:#333;color:#aaa;border:none;padding:4px 12px;cursor:pointer;border-radius:4px">Close</button>';
+  }} catch(e) {{
+    panel.innerHTML = '<p style="color:#f66">Failed to load: ' + e + '</p>';
+  }}
+}}
+</script>
 </body>
 </html>"""
