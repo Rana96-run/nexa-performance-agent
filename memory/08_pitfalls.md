@@ -1,5 +1,20 @@
 # Pitfalls & Known Traps
 
+## [2026-06-23] GH Actions env block — always cross-check collector os.getenv calls
+
+**Symptom:** Snapchat wrote 0 rows every GH Actions run for weeks. Step showed green (exit 0). Dashboard showed 3-day staleness. Snapchat had been silently broken since the workflow was first written.
+
+**Root cause:** `collectors.yml` env block had auth vars (`SNAPCHAT_CLIENT_ID/SECRET/REFRESH_TOKEN`) but was missing the account ID vars (`SNAPCHAT_AD_ACCOUNT_2024`, `SNAPCHAT_AD_ACCOUNT_2025`). `snap_bq.py::_ad_accounts()` returns empty list when those vars are absent — no error, no rows. The secrets existed in GitHub but were never injected into the job.
+
+**Why it wasn't caught:** After writing the workflow, no one triggered a manual run and queried `MAX(date)` per channel in BQ to confirm actual data flow. Step-level `continue-on-error: true` + silent zero-row exits make GH Actions an unreliable health signal.
+
+**Rule:** Any time a new collector step is added to `collectors.yml`, the verification is:
+1. `grep -E "os.getenv|os.environ" collectors/<name>_bq.py` — list every env var the script reads
+2. Cross-check every one against the `env:` block in `collectors.yml`
+3. After the next scheduled run, query `SELECT MAX(date) FROM campaigns_daily WHERE channel = '...'` — confirm it equals today or yesterday
+
+**Zero-row guard:** A post-run step now fires on every full run and posts to #data-health if any channel's MAX(date) < yesterday. This is the detection layer. The above is the prevention layer.
+
 ## [2026-06-22] Snapchat + Microsoft Ads campaign_name duplicates in campaigns_daily
 
 **Symptom:** `campaigns_daily` has multiple rows for the same `(date, channel, campaign_name)` — one from an ACTIVE campaign, one from a PAUSED campaign (same name, different `campaign_id`). Snapchat: 3 campaigns, 5 days (510 extra rows). Microsoft Ads: 1 campaign, 4 days (40 extra rows).
