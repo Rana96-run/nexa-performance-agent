@@ -3,12 +3,12 @@
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 
-> **Status as of 2026-06-21:** TikTok VAT/ZATCA compliance hook ads paused — campaign
-> `Tiktok_LeadGen_Broad_Invoice_Websiteform` (1864358248122481) set to DISABLE via API.
-> Ad-level pause blocked by Smart+ restriction; campaign-level pause used instead.
-> Prior 2026-06-20: wide_ads staleness fixed, agent_config BQ sync + n8n live memory, gh CLI auth.
-> Still open: Snapchat 3d staleness, Railway shutdown, Databox $var + activation,
-> HubSpot Invoice Lookalike placeholder IDs, executor-action verification.
+> **Status as of 2026-06-22:** Phase 4 daily loop closed — n8n master workflow `T8icImtZFLYeCa7e`
+> (67 nodes, all 8 intelligence loop steps) is the production implementation; Cowork approach retired.
+> HubSpot Invoice Lookalike IDs verified: `lead-pipeline-id` / `qualified-stage-id` / `connected-stage-id`
+> are real HubSpot string IDs (confirmed via API 2026-06-22). Prior 2026-06-21: TikTok ZATCA campaign
+> paused; 2026-06-20: wide_ads staleness fixed, agent_config BQ sync + n8n live memory, gh CLI auth.
+> Still open: Railway shutdown, Databox $var + activation, executor-action verification.
 
 ## P0 — Agent clarity + Cowork migration (spec approved 2026-06-11)
 
@@ -39,13 +39,10 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       - [x] Drive folder shared with service account; subfolder IDs set in Railway
       - [x] `collectors/drive_reader.py` complete with upload/find_in_folder
       Note: Slack connector uses a local dev custom Slack app — token lives in Railway (`SLACK_BOT_TOKEN`), all IDs readable from Railway env.
-- [ ] **Phase 4 — Daily loop on Cowork.** Multi-agent chain (ai-orchestrator → growth-analyst
-      → performance-lead → campaign-manager ∥ creative-strategist) with approval gate.
-      Full workflow spec: `docs/cowork-phase4-workflow.md`.
-      Key constraint: Cowork sandbox cannot run BQ analysis — Railway runs analysers, Cowork
-      reads outputs via Asana + BQ connector. Schedule Cowork at 08:05 Riyadh (5 min after
-      Railway 08:00). Run parallel for 14 days, then retire Railway LLM layer.
-      Start condition: all 6 Phase 3 connectors wired.
+- [x] **Phase 4 — Daily loop in n8n (DONE 2026-06-22).** n8n master workflow `T8icImtZFLYeCa7e`
+      covers the full chain (67 nodes, all 8 intelligence loop steps). Cowork approach retired —
+      n8n Cloud is 24/7, no computer needed. Multi-agent chain: growth-analyst → performance-lead
+      → campaign-manager ∥ creative-strategist with approval gate — all implemented in n8n.
 - [ ] **Phase 5 — n8n wiring (optional, independent).** Replace Railway Python collectors
       one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays <2% delta
       after each replacement. Owner: `project-coordinator`. Can run independently of Phases 1-4.
@@ -280,7 +277,7 @@ Campaign IDs (customer 5753494964):
 - [x] **Google ZATCAPhase2 re-eval 2026-06-23 — COMPLETED EARLY.** BQ confirms `Google_Search_AREN_ZATCAPhase2` last had spend on 2026-06-08; zero rows (spend=0, impressions=0) for 11+ consecutive days. Already paused — no action needed. Update Asana task GID 1215845331755397 closed.
 - [x] **Snapchat 3d staleness check — DONE 2026-06-22.** Verified — MAX(date) = 2026-06-19, 2 days stale, within normal 3-day Snapchat API lag. No action needed.
 - [x] **Monitor n8n Master workflow first run with corrected SQL** — Verify 2026-06-19 08:00 Riyadh Slack post shows accurate lead counts and CPQL numbers matching BQ hubspot_leads_module_daily. Close if correct; diagnose if still wrong. (run completed)
-- [ ] **HubSpot Invoice Lookalike placeholder pipeline/stage IDs** — `executors/hubspot_lists.py` has placeholder pipeline and stage IDs for the Invoice Lookalike audience. Need real IDs from HubSpot CRM settings before this executor can run safely.
+- [x] **HubSpot Invoice Lookalike pipeline/stage IDs — DONE 2026-06-22.** Verified via GET /crm/v3/pipelines/0-136: HubSpot uses human-readable string IDs for the Invoice "Lead pipeline" (`lead-pipeline-id`, stages `qualified-stage-id` and `connected-stage-id`). The values in `executors/hubspot_lists.py` were already correct — they ARE the real IDs. Updated code comment to clarify.
 
 ## Done this session (2026-06-16) — n8n full build
 

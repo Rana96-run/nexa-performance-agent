@@ -98,10 +98,12 @@ except ImportError:
 
 logs_section = ""
 try:
-    log_out = _run(["railway", "logs", "--tail", "20"])
-    if log_out and "error" in log_out.lower():
-        # Only surface if there are errors
-        logs_section = f"\nRecent Railway log errors:\n{log_out[-1500:]}"
+    import shutil as _shutil
+    if _shutil.which("railway"):
+        log_out = _run(["railway", "logs", "--tail", "20"])
+        # Only surface real log errors, not CLI-not-found WinErrors
+        if log_out and "error" in log_out.lower() and not log_out.startswith("(error:"):
+            logs_section = f"\nRecent Railway log errors:\n{log_out[-1500:]}"
 except Exception:
     pass   # railway CLI not available — skip
 

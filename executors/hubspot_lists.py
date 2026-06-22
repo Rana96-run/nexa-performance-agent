@@ -296,7 +296,9 @@ DEAL_PRODUCT_MAP: dict[str, dict[str, list[str]]] = {
 
 LEAD_PRODUCT_MAP: dict[str, dict[str, list[str]]] = {
     "Invoice": {
-        # Default Lead pipeline covers Invoice/Accounting SQL flow
+        # "Lead pipeline" (id=lead-pipeline-id, created 2024-07-23).
+        # HubSpot uses human-readable string IDs for this pipeline — these
+        # ARE the real IDs (confirmed via GET /crm/v3/pipelines/0-136 on 2026-06-22).
         "pipelines":  ["lead-pipeline-id"],
         "qualified":  ["qualified-stage-id", "connected-stage-id"],
     },
