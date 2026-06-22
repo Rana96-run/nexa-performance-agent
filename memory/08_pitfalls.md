@@ -1682,3 +1682,23 @@ n8n Cloud PUT /api/v1/workflows/{id} only accepts `{name, nodes, connections, se
 **Root cause:** BQ `googleBigQuery` node returns `DATE_DIFF()` result as a string. The IF node with `typeValidation: "strict"` refuses to compare a string against a number `rightValue`.
 
 **Fix:** Change IF node `parameters.conditions.options.typeValidation` from `"strict"` to `"loose"`. This allows n8n to coerce the string to number automatically. Applied 2026-06-21 via API PUT.
+
+## n8n Approval Listener — wrong Resume URL (2026-06-22)
+
+**Symptom:** Approval Listener workflow (`5Acqsbxsk0XQ5k9e`) errored on every ✅ reaction with: `404 - "The requested webhook POST {messageTs}-approval/resume is not registered."` Error execution ID 67, first occurred 2026-06-18.
+
+**Root cause:** The `Resume Waiting Execution` node constructed a dynamic URL from the Slack `messageTs`:
+```
+https://qoyod.app.n8n.cloud/webhook/{{ $('Extract Reaction').first().json.messageTs }}-approval/resume
+```
+This webhook path is never registered. n8n Wait nodes (with `resume: "webhook"`) register a **static** URL at:
+```
+https://qoyod.app.n8n.cloud/webhook/{webhookId}
+```
+The `webhookId` comes from the node definition field, not the message timestamp.
+
+**Fix:** Changed URL to the static `webhookId` of the `Wait Campaign Approval` node in `cadence_daily` (`T8icImtZFLYeCa7e`):
+```
+https://qoyod.app.n8n.cloud/webhook/campaign-approval-webhook-001
+```
+Also enriched the POST body to include `messageTs` and `channel` for downstream Slack threading. Applied 2026-06-22 via API PUT. Workflow confirmed `active: true`, versionId `26b33ed6`.
