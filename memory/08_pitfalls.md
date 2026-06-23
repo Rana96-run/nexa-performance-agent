@@ -1697,13 +1697,18 @@ NULL-channel-with-leads count + distinct channel values present.
 
 **Root cause:** PowerShell's `Set-Content` and `ConvertTo-Json | Out-File` write UTF-8 with BOM (bytes EF-BB-BF at start). The n8n Cloud API rejects BOM-prefixed payloads.
 
-**Fix:** Strip the BOM before sending:
+**Fix:** Use `curl.exe --data-binary` instead of `Invoke-RestMethod`. Even with BOM-free bytes, `Invoke-RestMethod` returns HTTP 500 from n8n Cloud on large payloads (>30KB). `curl.exe` works reliably:
 ```powershell
-$json = $wf | ConvertTo-Json -Depth 20 -Compress
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
-Invoke-RestMethod -Uri "..." -Headers $headers -Method PUT -Body $bytes -ContentType "application/json"
+# Write payload to temp file (no BOM)
+$json = $payload | ConvertTo-Json -Depth 30 -Compress
+[System.IO.File]::WriteAllText("D:\tmp\wf_put.json", $json, [System.Text.UTF8Encoding]::new($false))
+# PUT via curl.exe
+curl.exe -s -X PUT "https://qoyod.app.n8n.cloud/api/v1/workflows/{id}" `
+    -H "X-N8N-API-KEY: $apiKey" `
+    -H "Content-Type: application/json" `
+    --data-binary "@D:\tmp\wf_put.json"
 ```
-Or use `[System.Text.UTF8Encoding]::new($false).GetString(...)` to read back without BOM.
+Confirmed working 2026-06-23 for cadence_weekly (28 nodes) and cadence_monthly (32 nodes).
 
 **Risk:** An accidental PUT with a small/empty payload can wipe a workflow. Always save a backup JSON before any PUT.
 

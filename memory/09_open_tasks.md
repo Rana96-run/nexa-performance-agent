@@ -47,25 +47,12 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays <2% delta
       after each replacement. Owner: `project-coordinator`. Can run independently of Phases 1-4.
 
-## P0 — n8n manual import required: Asana project routing fix (2026-06-23)
+## [DONE 2026-06-23] P0 — n8n Asana project routing fix pushed
 
-Fix applied locally and committed (`0eebad1`) but n8n cloud PUT API returns 500 globally
-(server-side bug in current n8n cloud deployment — affects ALL workflows, not just ours).
-The local JSON files are correct.
-
-**Action required (manual, ~5 min):**
-1. Open n8n cloud UI: https://qoyod.app.n8n.cloud
-2. For cadence_weekly (`iNSdpXH7Rc9Lb8h8`): Settings → Import → paste/upload `n8n/workflows/cadence_weekly.json`
-3. For cadence_monthly (`0Zh45UoTtjjhRn8U`): same — paste/upload `n8n/workflows/cadence_monthly.json`
-4. Note: the weekly workflow currently has 0 nodes in n8n (pre-existing issue, versionCounter=61).
-   The import will restore it from our local file which has 28 nodes with the routing fix.
-
-**What changed:**
-- `Expand Asana Tasks` Code node now maps action.channel → correct project GID:
-  Meta→1213280413868927, Google→1213239419217795, Snapchat→1214135546324721,
-  TikTok→1214135614950965, Microsoft→1213294555250809, HubSpot→1214135615075674, default→1214135581886045
-- LP review, Creative Report, LP Draft tasks: hardcoded to default GID 1214135581886045 (cross-channel)
-- `$vars.ASANA_PROJECT_PAID` fully eliminated from both workflows
+- cadence_weekly (`iNSdpXH7Rc9Lb8h8`): pushed via curl.exe PUT — HTTP 200. Was 0 nodes, now 28 nodes live.
+- cadence_monthly (`0Zh45UoTtjjhRn8U`): pushed via curl.exe PUT — HTTP 200. 32 nodes confirmed.
+- `Expand Asana Tasks` channel→GID routing live in both workflows (channelMap present, ASANA_PROJECT_PAID gone).
+- Root cause of prior PUT 500: `Invoke-RestMethod` PowerShell HTTP client quirk — `curl.exe --data-binary` worked correctly.
 
 ## P1 — n8n workflow node verification (in-progress 2026-06-23)
 
