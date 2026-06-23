@@ -12,6 +12,30 @@
 
 **Rule:** Any n8n `executeWorkflow` node that calls a sub-workflow needing date context MUST pass the date fields explicitly. Sub-workflows only see what the calling node passes as input — they cannot reference nodes from the parent workflow.
 
+## [2026-06-23] cadence_weekly (iNSdpXH7Rc9Lb8h8) — 6 schema/config bugs fixed on first complete run
+
+**Bugs found and fixed during manual trigger run 2026-06-23:**
+
+1. **`Query Ad Audit` (wkly-005):** SQL used `v.campaign_name` but `v_ad_performance` has `utm_campaign`. Fix: replace all 3 occurrences with `v.utm_campaign`.
+
+2. **`Query Monitor` (wkly-006):** SQL used `event_date`, `action_type`, `target_name`, `outcome` but `agent_activity_log` actual schema is `ts` (TIMESTAMP), `action`, `campaign_name`, `status`. Fix: rewrite using correct column names with `DATE(ts,'Asia/Riyadh') AS event_date` alias.
+
+3. **`Build ? performance-lead` (w-build-perf-001):** `tool_choice: {type: 'required'}` — Anthropic API doesn't accept `'required'`; valid values are `'auto'`, `'any'`, `'tool'`, `'none'`. Fix: change to `{type: 'any'}`.
+
+4. **`Parse ? weekly` (wkly-010):** Literal `0x0A` newline inside single-quoted JS string in `approvalsText` join pattern caused `SyntaxError`. Fix: rewrite using `String.fromCharCode(10)` instead of `\n` escape.
+
+5. **`Post Slack ? Approvals` (wkly-012):** Same literal-newline issue inside `jsonBody` expression. Fix: replace literal `\n\n` with `String.fromCharCode(10)+String.fromCharCode(10)`.
+
+6. **`BQ ? LP Audit` (wkly-lp-01):** Node had `query` parameter key but BigQuery v2 node expects `sqlQuery`. Fix: rename `query` → `sqlQuery`, add `resource: "database"`, `operation: "executeQuery"`.
+
+7. **`Build Audit SQL` (wkly-015):** INSERT into `agent_activity_log` used wrong column names (`action_type`, `target_name`, `event_date`, `outcome`, `created_at`). Fix: rewrite INSERT using actual schema (`activity_id`, `ts`, `session_id`, `role`, `action`, `status`, `channel`, `campaign_name`, `details`).
+
+8. **`Sheets ? Create LP Tab` / `Sheets ? Write LP Rows` (wkly-lp-03/04):** Google Sheets OAuth2 credential restricted from HTTP Request nodes; native `googleSheets` node type fails with "Forbidden" (OAuth account lacks Editor access to spreadsheet). Workaround: set `onError: continueErrorOutput` so workflow completes. PERMANENT FIX needed: share spreadsheet `120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg` with the Google account tied to OAuth2 credential `kBgcDkRIN5tMoACU`, OR update `nodesAccess` in n8n UI for the credential to allow HTTP Request nodes.
+
+**n8n expression parser gotcha:** When `specifyBody: "json"` is used on an HTTP Request node with `googleApi` credential type, the expression evaluator fails with `invalid syntax` even for valid `JSON.stringify({...})` expressions. This only affects `googleApi` credential type nodes. With `httpHeaderAuth` (Slack), the same expression works fine.
+
+**Rule:** After any new n8n cadence workflow is written, always do a manual test run immediately — never assume it works until all nodes complete at least once.
+
 ## [2026-06-23] n8n IF node v2 — days_stale returns string from BQ, causes type error even with typeValidation=loose
 
 **Symptom:** Cadence Weekly workflow (iNSdpXH7Rc9Lb8h8) errored on 2026-06-21 at the "IF Data Fresh?" node with: `Wrong type: '2' is a string but was expecting a number [condition 0, item 0]`. Workflow halted immediately — zero downstream nodes ran.
