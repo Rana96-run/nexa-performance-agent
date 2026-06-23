@@ -1,4 +1,4 @@
-﻿{
+{
     "updatedAt": "2026-06-22T09:39:05.075Z",
     "createdAt": "2026-06-15T10:52:17.069Z",
     "id": "iNSdpXH7Rc9Lb8h8",
@@ -593,28 +593,98 @@
         {
             "id": "wkly-017",
             "name": "Sheets â†’ Weekly Log",
-            "type": "n8n-nodes-base.httpRequest",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4,
             "position": [
                 7200,
                 600
             ],
-            "typeVersion": 4,
+            "parameters": {
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "WeeklyLog",
+                    "mode": "name"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "week_start": "={{ $node['Set Dates → Weekly'].first().json.last7start }}",
+                        "week_end": "={{ $node['Set Dates → Weekly'].first().json.last7end }}",
+                        "notes": "",
+                        "action_count": "={{ $input.first().json.actions.length }}",
+                        "reserved": "",
+                        "high_priority_titles": "={{ $input.first().json.actions.filter(a=>a.priority==='high').map(a=>a.title).join(' | ') }}"
+                    },
+                    "matchingColumns": [],
+                    "schema": [
+                        {
+                            "id": "week_start",
+                            "displayName": "week_start",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "week_end",
+                            "displayName": "week_end",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "notes",
+                            "displayName": "notes",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "action_count",
+                            "displayName": "action_count",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "reserved",
+                            "displayName": "reserved",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "high_priority_titles",
+                            "displayName": "high_priority_titles",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        }
+                    ]
+                },
+                "options": {}
+            },
             "credentials": {
                 "googleSheetsOAuth2Api": {
                     "id": "kBgcDkRIN5tMoACU",
                     "name": "Google Sheets OAuth2 API"
-                }
-            },
-            "parameters": {
-                "method": "POST",
-                "url": "https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg/values/WeeklyLog:append?valueInputOption=RAW",
-                "authentication": "predefinedCredentialType",
-                "nodeCredentialType": "googleSheetsOAuth2Api",
-                "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({values:[[$node['Set Dates â†’ Weekly'].first().json.last7start,$node['Set Dates â†’ Weekly'].first().json.last7end,'',$input.first().json.actions.length,'',$input.first().json.actions.filter(a=>a.priority==='high').map(a=>a.title).join(' | ')]]}) }}",
-                "options": {
-                    "continueOnFail": true
                 }
             }
         },
