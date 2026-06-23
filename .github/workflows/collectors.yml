@@ -214,7 +214,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'hubspot_deals' }}
         continue-on-error: true
-        run: python -m collectors.hubspot_deals_bq mirror
+        run: python -m collectors.hubspot_deals_bq mirror $(date -d '60 days ago' +%Y-%m-%d)
 
       - name: Refresh LinkedIn access token
         id: linkedin_refresh
