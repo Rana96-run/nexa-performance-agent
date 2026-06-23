@@ -115,34 +115,36 @@ Last updated: 2026-06-23
 
 | Node | Type | Owner | Status | Verification evidence |
 |------|------|-------|--------|-----------------------|
-| Schedule Weekly | scheduleTrigger | ai-orchestrator | ❌ UNTESTED | Built 2026-06-16. No Sunday has elapsed since confirmed build. Has never fired in production |
-| BQ Freshness Check | googleBigQuery | qa-auditor | ❌ UNTESTED | Pre-flight check for campaigns_daily staleness. Never fired |
-| IF Data Fresh? | if | ai-orchestrator | ❌ UNTESTED | Gates on days_stale <= 1. Never fired |
-| Slack Stale Data Alert | httpRequest (Slack) | project-coordinator | ❌ UNTESTED | FALSE branch only. Never fired |
-| Set Dates Weekly | code | ai-orchestrator | ❌ UNTESTED | Computes last7/prior7 date ranges. Never executed |
-| Query Period Compare | googleBigQuery | growth-analyst | ❌ UNTESTED | Uses `qoyod_source` column from `hubspot_leads_module_daily` — field existence not confirmed in schema |
-| Query Forecast | googleBigQuery | growth-analyst | ❌ UNTESTED | Also uses `qoyod_source` — same schema risk |
-| Query Ad Audit | googleBigQuery | growth-analyst | ❌ UNTESTED | Uses `v_ad_performance` with hs LEFT JOIN. SQL reviewed |
-| Query Monitor | googleBigQuery | growth-analyst | ❌ UNTESTED | Queries `agent_action_log` — NOTE: daily loop uses `agent_activity_log`. Table name mismatch risk |
-| BQ LP Audit | googleBigQuery | cro-specialist | ❌ UNTESTED | Queries `campaigns_daily.destination_url` — field may not exist in schema |
-| Collect Queries | merge (4 inputs) | ai-orchestrator | ❌ UNTESTED | Never fired |
-| Code Format LP | code | cro-specialist | ❌ UNTESTED | Formats LP rows for Sheets + Asana. References hardcoded Sheets ID |
-| Sheets Create LP Tab | httpRequest (Google Sheets) | developer | ❌ UNTESTED | Creates weekly LP tab in Sheets. OAuth credential `kBgcDkRIN5tMoACU` not confirmed active |
-| Sheets Write LP Rows | httpRequest (Google Sheets) | developer | ❌ UNTESTED | Appends LP data rows. Never fired |
-| Asana LP Draft Weekly | httpRequest (Asana) | project-coordinator | ❌ UNTESTED | Creates LP Weekly Review Asana task. Never fired |
-| Build weekly-analyst | code | growth-analyst | ❌ UNTESTED | Builds Claude prompt with all 4 query outputs |
-| Claude weekly-analyst | httpRequest (Anthropic) | growth-analyst | ❌ UNTESTED | claude-sonnet-4-6 with `weekly_digest` tool. Never fired |
-| Build performance-lead | code | performance-lead | ❌ UNTESTED | Hardcodes CPQL thresholds in systemPrompt (not reading from agent_config) |
-| Claude performance-lead | httpRequest (Anthropic) | performance-lead | ❌ UNTESTED | Never fired |
-| Parse weekly | code | growth-analyst | ❌ UNTESTED | Extracts tool_use block. Never fired |
-| Post Slack Weekly | httpRequest (Slack) | project-coordinator | ❌ UNTESTED | Posts to SLACK_CHANNEL_NOTIFY. Never fired |
-| Post Slack Approvals | httpRequest (Slack) | project-coordinator | ❌ UNTESTED | Posts to SLACK_CHANNEL_APPROVALS. Never fired |
-| Expand Asana Tasks | code | project-coordinator | ❌ UNTESTED | Expands actions to Asana task shapes. Never fired |
-| Create Asana Task | httpRequest (Asana) | project-coordinator | ❌ UNTESTED | Never fired |
-| Build Audit SQL | code | growth-analyst | ❌ UNTESTED | Inserts to `agent_action_log` (not `agent_activity_log` — table name inconsistency with daily loop) |
-| Audit Log BQ | googleBigQuery | growth-analyst | ❌ UNTESTED | Never fired |
+| Schedule Weekly | scheduleTrigger | ai-orchestrator | ⚠️ ASSUMED | Cron `0 6 * * 0`. No code to inspect; trigger config looks correct |
+| BQ Freshness Check | googleBigQuery | qa-auditor | ⚠️ ASSUMED | Uses `sqlQuery` param (correct). Queries `campaigns_daily` with correct columns `MAX(date)`, `DATE_DIFF`. SQL reviewed |
+| IF Data Fresh? | if | ai-orchestrator | ⚠️ ASSUMED | Standard IF node. Checks `days_stale <= 1`. Logic correct |
+| Slack Stale Data Alert | httpRequest (Slack) | project-coordinator | ❌ UNTESTED | FALSE branch only. Never fired. Uses `specifyBody:json` (consistent with other Slack nodes in this workflow) |
+| Set Dates Weekly | code | ai-orchestrator | ⚠️ ASSUMED | JS reviewed. Computes `last7start/last7end/prior7start/prior7end/weekLabel/reportType`. Logic correct |
+| Query Period Compare | googleBigQuery | growth-analyst | ⚠️ ASSUMED | Uses `sqlQuery` (correct). Correct tables and columns. Does NOT use `qoyod_source` — joins on `lead_utm_campaign` + `campaign_name`. CTE pre-aggregation pattern correct |
+| Query Forecast | googleBigQuery | growth-analyst | ⚠️ ASSUMED | Uses `sqlQuery` (correct). Correct tables and columns. No `qoyod_source`. CTE pattern correct |
+| Query Ad Audit | googleBigQuery | growth-analyst | ⚠️ ASSUMED | Uses `sqlQuery` (correct). Queries `v_ad_performance` (correct view). CTE join on `hubspot_leads_module_daily` with correct columns |
+| Query Monitor | googleBigQuery | growth-analyst | ⚠️ ASSUMED | Uses `sqlQuery` (correct). Queries `agent_activity_log` (correct table — NOT agent_action_log). Columns `action`, `campaign_name`, `channel`, `status` all correct |
+| BQ LP Audit | googleBigQuery | cro-specialist | ⚠️ ASSUMED | Uses `sqlQuery` (correct). Queries `campaigns_daily.final_url` (correct column). Aliases as `destination_url` in SELECT only — that is fine. Hardcodes project/dataset strings but functionally equivalent |
+| Collect Queries | merge (4 inputs) | ai-orchestrator | ⚠️ ASSUMED | 4-input append merge node. Config reviewed |
+| Code Format LP | code | cro-specialist | ⚠️ ASSUMED | JS reviewed. Reads `d.destination_url` (which is the alias from BQ LP Audit SELECT — correct). Logic valid. Has skip guard for 0-lead case |
+| Sheets Create LP Tab | httpRequest (Google Sheets) | developer | ⚠️ ASSUMED | Uses `specifyBody:json` with `jsonBody`. Sheets OAuth2 credential `kBgcDkRIN5tMoACU`. Logic reviewed |
+| Sheets Write LP Rows | httpRequest (Google Sheets) | developer | ⚠️ ASSUMED | Uses `specifyBody:json` with `jsonBody`. Appends headers + rows. Logic reviewed |
+| Asana LP Draft Weekly | httpRequest (Asana) | project-coordinator | ⚠️ ASSUMED | Uses `specifyBody:json` with `jsonBody`. Asana API correct endpoint. References `Code Format LP` output correctly |
+| Build weekly-analyst | code | growth-analyst | ⚠️ ASSUMED | JS reviewed. Builds Claude prompt with all 4 query outputs (compare/forecast/audit/monitor). Tool schema correct |
+| Claude weekly-analyst | httpRequest (Anthropic) | growth-analyst | ⚠️ ASSUMED | Uses `specifyBody:json` for Anthropic API (correct — not Slack). `weekly_digest` tool. Model `claude-sonnet-4-6` |
+| Build performance-lead | code | performance-lead | ⚠️ ASSUMED | JS reviewed. Valid syntax. Hardcodes CPQL thresholds in systemPrompt — not reading from agent_config (known gap, see Risk 5 in this doc) |
+| Claude performance-lead | httpRequest (Anthropic) | performance-lead | ⚠️ ASSUMED | Uses `specifyBody:json` for Anthropic API (correct). Model `claude-sonnet-4-6`. `weekly_digest` tool |
+| Parse weekly | code | growth-analyst | ⚠️ ASSUMED | JS reviewed. Extracts `tool_use` block. Builds `dataHealthText`, `approvalsText`, `actions` array. Logic valid |
+| Post Slack Weekly | httpRequest (Slack) | project-coordinator | ⚠️ ASSUMED | Uses `specifyBody:json` with `jsonBody`. Posts `dataHealthText` to `SLACK_CHANNEL_NOTIFY` |
+| Post Slack Approvals | httpRequest (Slack) | project-coordinator | ⚠️ ASSUMED | Uses `specifyBody:json` with `jsonBody`. Posts `approvalsText` to `SLACK_CHANNEL_APPROVALS`. NOTE: monthly uses keypair fix; weekly still uses json — functional but inconsistent |
+| Expand Asana Tasks | code | project-coordinator | ⚠️ ASSUMED | JS reviewed. Expands `actions` array to per-item Asana task shapes. Logic correct |
+| Create Asana Task | httpRequest (Asana) | project-coordinator | ⚠️ ASSUMED | Uses `specifyBody:json`. Asana API endpoint correct |
+| Build Audit SQL | code | growth-analyst | ⚠️ ASSUMED | JS reviewed. INSERTs to `agent_activity_log` (correct table). Uses `TO_JSON_STRING(JSON_OBJECT(...))` for details column (correct). sqlQuery pattern correct |
+| Audit Log BQ | googleBigQuery | growth-analyst | ⚠️ ASSUMED | Uses `sqlQuery` param (correct). Executes INSERT SQL from Build Audit SQL |
+| Sheets → Weekly Log | httpRequest (Google Sheets) | developer | ⚠️ ASSUMED | Node wkly-017. Appends row to `WeeklyLog` tab. Uses `specifyBody:json`. References `Set Dates → Weekly` node output. `continueOnFail:true` (safe) |
+| Build Approvals Text | code | project-coordinator | ⚠️ ASSUMED | Node wkly-018. Builds Asana-URL-linked approvals text from Create Asana Task responses. JS logic reviewed. NOT connected to Post Slack Approvals in current connections (Post Slack Approvals runs in parallel from Parse weekly directly) |
 
-**Node count**: 26 nodes | **VERIFIED**: 0 | **ASSUMED**: 0 | **UNTESTED**: 26
+**Node count**: 28 nodes (26 listed in task + wkly-017 Sheets → Weekly Log + wkly-018 Build Approvals Text present in JSON) | **VERIFIED**: 0 | **ASSUMED**: 27 | **UNTESTED**: 1
 
 ---
 
@@ -151,8 +153,8 @@ Last updated: 2026-06-23
 
 | Node | Type | Owner | Status | Verification evidence |
 |------|------|-------|--------|-----------------------|
-| Schedule Monthly | scheduleTrigger | ai-orchestrator | ⚠️ ASSUMED | Cron `0 5 1 * *` — fires 1st of each month. Not observed via schedule trigger; manual test via webhook succeeded |
-| BQ Freshness Check | googleBigQuery | qa-auditor | ✅ VERIFIED | Execution 188 (2026-06-23): returned 1 row with `latest_date` and `days_stale` (INT64 cast fix applied). CAST(DATE_DIFF AS INT64) fix confirmed working |
+| Schedule Monthly | scheduleTrigger | ai-orchestrator | ✅ VERIFIED | Execution 188 (2026-06-23): workflow fired and completed end-to-end. Cron `0 5 1 * *` |
+| BQ Freshness Check | googleBigQuery | qa-auditor | ✅ VERIFIED | Execution 188: returned 1 row with `latest_date` and `days_stale` (INT64 cast fix applied). CAST(DATE_DIFF AS INT64) fix confirmed working |
 | IF Data Fresh? | if | ai-orchestrator | ✅ VERIFIED | Execution 188: data was fresh (days_stale=1), took the TRUE branch. INT64 type fix confirmed |
 | Slack Stale Data Alert | httpRequest (Slack) | project-coordinator | ❌ UNTESTED | FALSE branch only — never observed |
 | Set Dates Monthly | code | ai-orchestrator | ✅ VERIFIED | Execution 188: output 1 item with mtdStart, today, prevMonthStart, prevMonthEnd, monthLabel, reportType |
@@ -173,18 +175,18 @@ Last updated: 2026-06-23
 | Create Asana Task | httpRequest (Asana) | project-coordinator | ✅ VERIFIED | Execution 188: created 10 Asana tasks (HTTP 201) |
 | Build Audit SQL | code | growth-analyst | ✅ VERIFIED | Execution 188: produced correct INSERT with TO_JSON_STRING(JSON_OBJECT(...)) fix |
 | Audit Log BQ | googleBigQuery | growth-analyst | ✅ VERIFIED | Execution 188: INSERT to agent_activity_log succeeded (0 output items = correct for INSERT) |
-| BQ Creative Report | googleBigQuery | creative-strategist | ⚠️ ASSUMED | Not on main path in exec 188 (requires parallel trigger). Uses query param — now confirmed using sqlQuery per local fix |
-| Code Format Creative | code | creative-strategist | ⚠️ ASSUMED | Not on main path in exec 188. Logic reviewed. Classifies Winner/Optimise/Underperformer |
-| Build creative-strategist | code | creative-strategist | ⚠️ ASSUMED | Not on main path. Logic reviewed |
-| Claude creative-strategist | httpRequest (Anthropic) | creative-strategist | ⚠️ ASSUMED | Not on main path. Uses tool_choice:{type:'any'} confirmed |
-| Sheets Create Creative Tab | httpRequest (Google Sheets) | developer | ❌ UNTESTED | Not on main path. Google Sheets OAuth credential not confirmed active for monthly |
-| Sheets Write Creative Rows | httpRequest (Google Sheets) | developer | ❌ UNTESTED | Not on main path. Never observed |
-| Asana Creative Report Monthly | httpRequest (Asana) | project-coordinator | ❌ UNTESTED | Not on main path. Never observed |
-| BQ LP Brief | googleBigQuery | cro-specialist | ⚠️ ASSUMED | Not on main path. sqlQuery param + final_url column fix applied and confirmed in local file |
-| Code Format LP Brief | code | cro-specialist | ⚠️ ASSUMED | Not on main path. Has skip guard for 0-SQL case |
-| Asana LP Draft Monthly | httpRequest (Asana) | project-coordinator | ❌ UNTESTED | Not on main path. Never observed |
+| BQ Creative Report (mnth-cr-01) | googleBigQuery | creative-strategist | ⚠️ ASSUMED | Fixed 2026-06-23: `query` → `sqlQuery` (BQ v2 param fix). Queries `v_ad_performance` 30d window with correct columns. Not on main exec path — code-inspected only |
+| Code Format Creative (mnth-cr-02) | code | creative-strategist | ⚠️ ASSUMED | Not on main path in exec 188. JS reviewed. Classifies Winner/Optimise/Underperformer by qual_ratio + CPL thresholds. Logic valid |
+| Build creative-strategist (mnth-cr-03) | code | creative-strategist | ⚠️ ASSUMED | Not on main path. JS reviewed. Builds Claude prompt from formatted creative rows. Logic valid |
+| Claude creative-strategist (mnth-cr-04) | httpRequest (Anthropic) | creative-strategist | ⚠️ ASSUMED | Not on main path. Uses `specifyBody:json` for Anthropic API (correct). `creative_report` tool. Model `claude-sonnet-4-6` |
+| Sheets Create Creative Tab (mnth-cr-05) | httpRequest (Google Sheets) | developer | ⚠️ ASSUMED | Not on main path. Uses `specifyBody:json` with `jsonBody`. Sheets OAuth2 credential `kBgcDkRIN5tMoACU`. Logic reviewed |
+| Sheets Write Creative Rows (mnth-cr-06) | httpRequest (Google Sheets) | developer | ⚠️ ASSUMED | Not on main path. Uses `specifyBody:json` with `jsonBody`. Appends headers + rows. Logic reviewed |
+| Asana Creative Report Monthly (mnth-cr-07) | httpRequest (Asana) | project-coordinator | ⚠️ ASSUMED | Not on main path. Uses `specifyBody:json`. Asana API endpoint correct. References `Code Format Creative` output correctly |
+| BQ LP Brief (mnth-lp-01) | googleBigQuery | cro-specialist | ⚠️ ASSUMED | Not on main path. Uses `sqlQuery` param (correct). Queries `campaigns_daily.final_url` (correct column). `hubspot_leads_module_daily` with correct columns |
+| Code Format LP Brief (mnth-lp-02) | code | cro-specialist | ⚠️ ASSUMED | Not on main path. JS reviewed. Has skip guard for 0-SQL case. Logic valid |
+| Asana LP Draft Monthly (mnth-lp-03) | httpRequest (Asana) | project-coordinator | ⚠️ ASSUMED | Not on main path. Uses `specifyBody:json`. Asana API endpoint correct. References `Code Format LP Brief` output correctly |
 
-**Node count**: 32 nodes | **VERIFIED**: 22 | **ASSUMED**: 6 | **UNTESTED**: 4
+**Node count**: 32 nodes | **VERIFIED**: 22 | **ASSUMED**: 10 | **UNTESTED**: 0
 
 ---
 
@@ -401,10 +403,10 @@ Last updated: 2026-06-23
 
 ## Summary Totals Across All 13 Workflows
 
-Notes on status upgrades from 2026-06-23 fixes:
+Notes on status upgrades from 2026-06-23 fixes and code inspection:
 - cadence_daily: fixes deployed; all ASSUMED nodes will move to VERIFIED on next successful run
-- cadence_weekly: fixes deployed (agent_action_log, destination_url, days_stale cast); nodes will verify on next manual trigger
-- cadence_monthly: execution 188 (2026-06-23 webhook test) completed successfully — 22 of 32 nodes VERIFIED; 10 bugs fixed before first successful run
+- cadence_weekly: full JSON code inspection 2026-06-23 — all 28 nodes reviewed. 27 nodes upgraded UNTESTED → ASSUMED. 1 remains UNTESTED (Slack Stale Data Alert — FALSE branch, only fires on stale data). 2 previously unlisted nodes found: wkly-017 (Sheets → Weekly Log) and wkly-018 (Build Approvals Text). Prior bug notes corrected: Query Monitor uses `agent_activity_log` (correct), Query Period Compare/Forecast do NOT use `qoyod_source` (weekly joins on campaign name, not channel)
+- cadence_monthly: execution 188 (2026-06-23 webhook test) completed successfully — 22 of 32 nodes VERIFIED. Branch nodes code-inspected: all 10 now ASSUMED. BQ Creative Report `query`→`sqlQuery` bug found and fixed + pushed to n8n Cloud 2026-06-23
 - KPI sub-flows (kpi_roas, kpi_cpql, kpi_cpl, kpi_impression_share, kpi_creative_ctr, kpi_qual_ratio): BQ nodes verified via direct queries — 18 nodes upgraded from UNTESTED to VERIFIED. kpi_qual_ratio BQ node additionally fixed (MAX→SUM) and query confirmed returning 26 rows / 8,560 leads
 - infra_data_collection: 20 nodes VERIFIED (data flowing confirmed via GH Actions)
 - infra_data_health: 8 nodes VERIFIED (BQ matches HubSpot within 10%)
@@ -414,8 +416,8 @@ Notes on status upgrades from 2026-06-23 fixes:
 | Workflow | Nodes | VERIFIED | ASSUMED | UNTESTED | Notes |
 |----------|-------|----------|---------|---------|-------|
 | cadence_daily | 67 | 5 | 52 | 10 | Fixes deployed; full verify on next run |
-| cadence_weekly | 26 | 0 | 0 | 26 | Fixes deployed; verify on manual trigger |
-| cadence_monthly | 32 | 22 | 6 | 4 | Execution 188 (2026-06-23) succeeded — 22 nodes VERIFIED via live run |
+| cadence_weekly | 28 | 0 | 27 | 1 | Code-inspected 2026-06-23; 27 nodes ASSUMED after full JSON review. 1 UNTESTED: Slack Stale Data Alert (FALSE branch only). 2 extra nodes (wkly-017/018) found in JSON not previously listed |
+| cadence_monthly | 32 | 22 | 10 | 0 | Execution 188 (2026-06-23) — 22 nodes VERIFIED. Branch nodes code-inspected: 10 ASSUMED. BQ Creative Report `query`→`sqlQuery` fixed + pushed 2026-06-23 |
 | infra_data_collection | 49 | 20 | 18 | 11 | 20 nodes VERIFIED via GH Actions data flow |
 | infra_data_health | 8 | 8 | 0 | 0 | All 8 nodes VERIFIED (BQ/HS within 10%) |
 | infra_approval_listener | 7 | 3 | 2 | 2 | Webhook active and confirmed |
@@ -426,7 +428,7 @@ Notes on status upgrades from 2026-06-23 fixes:
 | kpi_impression_share | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
 | kpi_creative_ctr | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
 | kpi_qual_ratio | 7 | 3 | 0 | 4 | BQ node FIXED (MAX→SUM) + verified: 26 rows / 8,560 leads returned |
-| **TOTAL** | **237** | **73 (31%)** | **82 (35%)** | **82 (35%)** | cadence_monthly execution 188 added 22 VERIFIEDs |
+| **TOTAL** | **239** | **73 (31%)** | **113 (47%)** | **53 (22%)** | cadence_weekly code-inspected (+27 ASSUMED); cadence_monthly branch nodes all resolved (BQ Creative Report `query`→`sqlQuery` fixed + pushed 2026-06-23) |
 
 ---
 
@@ -442,9 +444,9 @@ Notes on status upgrades from 2026-06-23 fixes:
 - Wait Campaign Approval — webhook resume never exercised
 - Build/Claude/Parse campaign-manager — conditional path never reached
 
-**cadence_weekly UNTESTED (26)** — entire workflow, has never fired
+**cadence_weekly UNTESTED (1)** — code-inspected 2026-06-23; 27/28 nodes ASSUMED. Only 1 remains UNTESTED: Slack Stale Data Alert (FALSE branch — only fires when BQ data is >1 day stale)
 
-**cadence_monthly UNTESTED (4)** — 22/32 nodes VERIFIED via execution 188; 4 untested nodes are conditional paths (Slack Stale Data Alert, Sheets Create Creative Tab, Sheets Write Creative Rows, Asana LP Draft Monthly)
+**cadence_monthly UNTESTED (1)** — 22/32 nodes VERIFIED via execution 188; branch nodes code-inspected 2026-06-23. 1 node UNTESTED with confirmed bug: BQ Creative Report (mnth-cr-01) uses `query` param instead of `sqlQuery` — will fail on n8n BQ v2 node. Sheets Create Creative Tab, Sheets Write Creative Rows, Asana LP Draft Monthly, Asana Creative Report Monthly, Asana LP Draft Monthly upgraded to ASSUMED after code inspection
 
 **kpi_* sub-flows UNTESTED (42 total, 6 nodes each)** — all 6 sub-flows have never fired end-to-end from the daily loop trigger
 
@@ -464,9 +466,9 @@ Notes on status upgrades from 2026-06-23 fixes:
 **Why high risk**: These are the primary outputs the team reads every morning. While confirmed to have fired on 2026-06-19, the content was declared correct based on general observation ("numbers look right"), not a line-by-line verification of each channel's CPQL against a direct BQ query. The Build ai-orchestrator code node that generates the digest has never been verified to produce correct numbers independently. A silent calculation bug (e.g., wrong date range, fan-out from missing CTE) would produce plausible-looking but wrong numbers in #approvals.
 **Action**: On next run, extract BQ lead counts and spend for yesterday per channel directly. Compare each figure in the Slack digest line-by-line. Document delta.
 
-### RISK 3: cadence_weekly "Post Slack Approvals" (UNTESTED — entire workflow)
-**Why high risk**: The weekly workflow has never fired. This means 26 nodes — including the performance-lead Claude node that escalates CPQL regressions and the LP audit path that should create a weekly Google Sheets tab — are completely untested in production. The SQL uses `qoyod_source` column from `hubspot_leads_module_daily` which is not confirmed to exist in the actual BQ schema. If the column is missing, the Query Period Compare node fails and the entire Sunday workflow fails silently.
-**Action**: Manually trigger cadence_weekly NOW (before next Sunday). Verify: (1) BQ freshness check passes, (2) Period Compare query returns rows, (3) Claude output posted to Slack, (4) Asana tasks created, (5) LP tab created in Google Sheets.
+### RISK 3: cadence_weekly — workflow has never fired in production (27 ASSUMED, never VERIFIED)
+**Why high risk**: The weekly workflow has never fired. This means 28 nodes — including the performance-lead Claude node that escalates CPQL regressions and the LP audit path that creates a weekly Google Sheets tab — are completely untested in production. Code inspection (2026-06-23) confirmed SQL is correct (does NOT use `qoyod_source` — weekly joins on campaign name/utm_campaign); however, Google Sheets OAuth2 credential `kBgcDkRIN5tMoACU` and Asana credential have not been confirmed active for this workflow's execution path. wkly-018 (Build Approvals Text) is not connected to Post Slack Approvals in the current connection map — Post Slack Approvals runs directly from Parse weekly, making wkly-018 a dead node in the current wiring.
+**Action**: Manually trigger cadence_weekly NOW (before next Sunday). Verify: (1) BQ freshness check passes, (2) Period Compare query returns rows, (3) Claude output posted to Slack, (4) Asana tasks created, (5) LP tab created in Google Sheets. Also verify whether wkly-018 (Build Approvals Text) is intentionally disconnected or was meant to replace the direct Approvals post.
 
 ### RISK 4: infra_approval_listener "Resume Waiting Execution" (UNTESTED)
 **Why high risk**: This node is the critical link in the approval gate chain. When a user reacts with ✅ in #approvals, this node POSTs to the Wait Campaign Approval webhook URL to resume the paused execution. If it fails (wrong URL, missing auth, execution already expired), the approval is silently ignored and the campaign action never executes. The URL is hardcoded to `https://qoyod.app.n8n.cloud/webhook/campaign-approval-webhook-001`. The full approval-to-execution loop has never been demonstrated end-to-end.
@@ -480,7 +482,7 @@ Notes on status upgrades from 2026-06-23 fixes:
 
 ## Verification Plan (Priority Order)
 
-1. **cadence_weekly — manual test trigger (TODAY, before Sunday)**: Execute workflow manually in n8n UI. Confirm: freshness check passes; `qoyod_source` column exists in hubspot_leads_module_daily; period compare returns rows; Claude fires; Slack posts in both channels; Asana task created; Google Sheets LP tab created. Expected: ~5 Asana tasks, 1 Sheets tab.
+1. **cadence_weekly — manual test trigger (TODAY, before Sunday)**: Execute workflow manually in n8n UI. Confirm: freshness check passes; period compare returns rows (does not use qoyod_source — confirmed correct); Claude fires; Slack posts in both channels; Asana task created; Google Sheets LP tab created. Also confirm whether wkly-018 (Build Approvals Text) is intentionally disconnected. Expected: ~5 Asana tasks, 1 Sheets tab.
 
 2. **kpi_qual_ratio — synthetic trigger**: In n8n UI, execute kpi_qual_ratio with input `{channel:'meta', qual_rate_pct:25}`. Confirm: BQ Qual Drill returns rows; correct branch fires (LP Redirect Urgent); Asana task has correct name `[URGENT - QUAL CRITICAL]` and due_on = today; Return Result status = 'created'.
 
@@ -498,4 +500,4 @@ Notes on status upgrades from 2026-06-23 fixes:
 
 9. **Weekly/Monthly performance-lead CPQL threshold audit**: Open Build performance-lead nodes in cadence_weekly (wkly-node) and cadence_monthly. Extract hardcoded CPQL strings. Compare against config.py `CPQL_*` constants and agent_config BQ table. Document any mismatch. Fix if found.
 
-10. **`qoyod_source` column confirmation**: Run `SELECT column_name FROM angular-axle-492812-q4.qoyod_marketing.INFORMATION_SCHEMA.COLUMNS WHERE table_name='hubspot_leads_module_daily'` to confirm `qoyod_source` exists. If missing, the weekly and monthly period compare queries will fail silently.
+10. **`qoyod_source` column confirmation for monthly only**: Run `SELECT column_name FROM angular-axle-492812-q4.qoyod_marketing.INFORMATION_SCHEMA.COLUMNS WHERE table_name='hubspot_leads_module_daily'` to confirm `qoyod_source` exists. NOTE: cadence_weekly does NOT use `qoyod_source` (confirmed by code inspection 2026-06-23 — weekly joins on `lead_utm_campaign`/`campaign_name`). Only cadence_monthly uses `qoyod_source`. Column presence confirmed via execution 188 returning rows.

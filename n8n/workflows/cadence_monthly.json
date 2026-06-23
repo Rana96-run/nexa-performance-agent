@@ -402,7 +402,7 @@
             "parameters": {
                 "authentication": "serviceAccount",
                 "projectId": "={{ $vars.BQ_PROJECT }}",
-                "query": "SELECT channel, ad_name, ad_id,\n  SUM(clicks) AS clicks,\n  ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)),4) AS ctr,\n  SUM(leads_total) AS leads,\n  SUM(qualified) AS qualified_leads,\n  ROUND(SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total),0)),4) AS qual_ratio,\n  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total),0)),2) AS cpl,\n  ROUND(SUM(spend),2) AS spend\nFROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`\nWHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)\n  AND leads_total > 0\nGROUP BY channel, ad_name, ad_id\nHAVING SUM(leads_total) >= 3\nORDER BY channel, qual_ratio DESC, cpl ASC",
+                "sqlQuery": "SELECT channel, ad_name, ad_id,\n  SUM(clicks) AS clicks,\n  ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)),4) AS ctr,\n  SUM(leads_total) AS leads,\n  SUM(qualified) AS qualified_leads,\n  ROUND(SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total),0)),4) AS qual_ratio,\n  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total),0)),2) AS cpl,\n  ROUND(SUM(spend),2) AS spend\nFROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`\nWHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)\n  AND leads_total > 0\nGROUP BY channel, ad_name, ad_id\nHAVING SUM(leads_total) >= 3\nORDER BY channel, qual_ratio DESC, cpl ASC",
                 "options": {}
             },
             "credentials": {
@@ -1498,7 +1498,7 @@
                 "parameters": {
                     "authentication": "serviceAccount",
                     "projectId": "={{ $vars.BQ_PROJECT }}",
-                    "query": "SELECT channel, ad_name, ad_id,\n  SUM(clicks) AS clicks,\n  ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)),4) AS ctr,\n  SUM(leads_total) AS leads,\n  SUM(qualified) AS qualified_leads,\n  ROUND(SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total),0)),4) AS qual_ratio,\n  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total),0)),2) AS cpl,\n  ROUND(SUM(spend),2) AS spend\nFROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`\nWHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)\n  AND leads_total > 0\nGROUP BY channel, ad_name, ad_id\nHAVING SUM(leads_total) >= 3\nORDER BY channel, qual_ratio DESC, cpl ASC",
+                    "sqlQuery": "SELECT channel, ad_name, ad_id,\n  SUM(clicks) AS clicks,\n  ROUND(SAFE_DIVIDE(SUM(clicks), NULLIF(SUM(impressions),0)),4) AS ctr,\n  SUM(leads_total) AS leads,\n  SUM(qualified) AS qualified_leads,\n  ROUND(SAFE_DIVIDE(SUM(qualified), NULLIF(SUM(leads_total),0)),4) AS qual_ratio,\n  ROUND(SAFE_DIVIDE(SUM(spend), NULLIF(SUM(leads_total),0)),2) AS cpl,\n  ROUND(SUM(spend),2) AS spend\nFROM `angular-axle-492812-q4.qoyod_marketing.v_ad_performance`\nWHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 30 DAY)\n  AND leads_total > 0\nGROUP BY channel, ad_name, ad_id\nHAVING SUM(leads_total) >= 3\nORDER BY channel, qual_ratio DESC, cpl ASC",
                     "options": {}
                 },
                 "credentials": {
