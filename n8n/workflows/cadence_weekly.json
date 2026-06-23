@@ -140,7 +140,7 @@
                     "mode": "expression",
                     "value": "={{ $vars.BQ_PROJECT }}"
                 },
-                "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE event_date>=DATE_SUB(CURRENT_DATE('Asia/Riyadh'),INTERVAL 30 DAY) ORDER BY event_date DESC LIMIT 20",
+                "sqlQuery": "SELECT action AS action_type,campaign_name AS target_name,channel,DATE(ts,'Asia/Riyadh') AS event_date,status AS outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),DATE(ts,'Asia/Riyadh'),DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE DATE(ts,'Asia/Riyadh')>=DATE_SUB(CURRENT_DATE('Asia/Riyadh'),INTERVAL 30 DAY) ORDER BY ts DESC LIMIT 20",
                 "options": {}
             }
         },
@@ -320,7 +320,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('weekly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
+                "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;const rt=(r.reportType||'weekly').replace(/'/g,\"\\''\");return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (activity_id,ts,session_id,role,action,status,channel,campaign_name,details) VALUES (GENERATE_UUID(),CURRENT_TIMESTAMP(),'n8n-weekly','llm_cadence','weekly_review','success','all','report',TO_JSON_STRING(JSON_OBJECT('reportType','${rt}')))`}}];"
             }
         },
         {
@@ -361,7 +361,7 @@
             "parameters": {
                 "authentication": "serviceAccount",
                 "projectId": "={{ $vars.BQ_PROJECT }}",
-                "query": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks, SUM(c.impressions) AS impressions,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n    AND c.destination_url IS NOT NULL\n  GROUP BY destination_url\n)\nSELECT destination_url, sample_campaign, ROUND(spend,2) AS spend_usd,\n  clicks, impressions, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE spend > 0 ORDER BY leads DESC",
+                "sqlQuery": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT final_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks, SUM(c.impressions) AS impressions,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n    AND c.final_url IS NOT NULL\n  GROUP BY final_url\n)\nSELECT final_url AS destination_url, sample_campaign, ROUND(spend,2) AS spend_usd,\n  clicks, impressions, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE spend > 0 ORDER BY leads DESC",
                 "options": {}
             },
             "credentials": {
@@ -1100,7 +1100,7 @@
                         "mode": "expression",
                         "value": "={{ $vars.BQ_PROJECT }}"
                     },
-                    "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE event_date>=DATE_SUB(CURRENT_DATE('Asia/Riyadh'),INTERVAL 30 DAY) ORDER BY event_date DESC LIMIT 20",
+                    "sqlQuery": "SELECT action AS action_type,campaign_name AS target_name,channel,DATE(ts,'Asia/Riyadh') AS event_date,status AS outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),DATE(ts,'Asia/Riyadh'),DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE DATE(ts,'Asia/Riyadh')>=DATE_SUB(CURRENT_DATE('Asia/Riyadh'),INTERVAL 30 DAY) ORDER BY ts DESC LIMIT 20",
                     "options": {}
                 }
             },
@@ -1280,7 +1280,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('weekly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
+                    "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;const rt=(r.reportType||'weekly').replace(/'/g,\"\\''\");return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (activity_id,ts,session_id,role,action,status,channel,campaign_name,details) VALUES (GENERATE_UUID(),CURRENT_TIMESTAMP(),'n8n-weekly','llm_cadence','weekly_review','success','all','report',TO_JSON_STRING(JSON_OBJECT('reportType','${rt}')))`}}];"
                 }
             },
             {
@@ -1321,7 +1321,7 @@
                 "parameters": {
                     "authentication": "serviceAccount",
                     "projectId": "={{ $vars.BQ_PROJECT }}",
-                    "query": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks, SUM(c.impressions) AS impressions,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n    AND c.destination_url IS NOT NULL\n  GROUP BY destination_url\n)\nSELECT destination_url, sample_campaign, ROUND(spend,2) AS spend_usd,\n  clicks, impressions, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE spend > 0 ORDER BY leads DESC",
+                    "sqlQuery": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT final_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks, SUM(c.impressions) AS impressions,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE c.date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 7 DAY)\n    AND c.final_url IS NOT NULL\n  GROUP BY final_url\n)\nSELECT final_url AS destination_url, sample_campaign, ROUND(spend,2) AS spend_usd,\n  clicks, impressions, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE spend > 0 ORDER BY leads DESC",
                     "options": {}
                 },
                 "credentials": {
