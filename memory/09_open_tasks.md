@@ -47,6 +47,40 @@ Spec: `docs/superpowers/specs/2026-06-11-agent-clarity-cowork-migration-design.m
       one-by-one with n8n workflows. Verify BQ ↔ HubSpot reconciliation stays <2% delta
       after each replacement. Owner: `project-coordinator`. Can run independently of Phases 1-4.
 
+## P1 — n8n workflow node verification (in-progress 2026-06-23)
+
+Goal: reach ≥95% node verification. Current state: **100/239 VERIFIED (42%)**.
+Audit doc: `docs/knowledge/n8n_workflow_node_audit.md`
+
+Progress as of 2026-06-23:
+- cadence_monthly: 22 VERIFIED (exec 188) + 10 ASSUMED. 10 bugs fixed.
+- cadence_weekly: 16 VERIFIED (exec 195) + 10 ASSUMED + 2 UNTESTED. 6 bugs fixed.
+- kpi_roas: 6 VERIFIED (exec 200). kpi_cpql/cpl/IS/CTR/qual: BQ nodes confirmed, rest ASSUMED.
+- infra_data_health, infra_approval_listener: verified via live data
+- TOTAL: 100 VERIFIED / 111 ASSUMED / 28 UNTESTED
+
+Blocking gap: **cadence_daily analysis pipeline has NEVER run** (52 ASSUMED nodes).
+Root cause: infra_data_collection (n8n workflow jOnJxdpdaO3Vbi0B) executes in 2-5 seconds
+(not real API calls — GH Actions is the real data collector). n8n workflow returns 0 items
+to parent cadence_daily → chain stops after Phase 1. All BQ data comes from GH Actions.
+
+- [ ] **Fix cadence_daily analysis pipeline**: understand relationship between GH Actions
+      collectors and n8n infra_data_collection. The n8n workflow may need to be restructured
+      to trigger the analysis AFTER GH Actions completes, rather than after infra_data_collection.
+      Options: (a) remove Phase 1 dependency entirely and have cadence_daily trigger analysis
+      unconditionally at 07:00 (data was collected by GH Actions at 01:00), or (b) add a
+      small "always return 1 item" Set node right after the trigger in infra_data_collection.
+      Owner: `ai-orchestrator`. Filed 2026-06-23.
+
+- [ ] **Verify cadence_daily analysis runs end-to-end**: once the pipeline fix is applied,
+      trigger cadence_daily (add temp webhook, call it), verify all 52 ASSUMED analysis
+      nodes (BQ Baseline → Guard → KPI Evaluator → Slack → Asana) complete. Expected:
+      16 kpi sub-flow nodes + 52 daily analysis = 68 more VERIFIED → total ~168/239 (70%).
+
+- [ ] **Complete remaining nodes**: cadence_weekly LP path (10 ASSUMED — Asana rate-limit
+      prevented), infra_approval_listener approval loop (2 UNTESTED), infra_qa_gate (6),
+      kpi TRUE branches (Build - Sales Escalation). These can be verified in subsequent runs.
+
 **Also included in Phase 1:**
 - [x] **Activity dashboard: 4-panel redesign DONE 2026-06-12.** Marketing Decisions
       (performance_audit/keyword_management/daily_digest/spike_detector), Approval Outcomes,
