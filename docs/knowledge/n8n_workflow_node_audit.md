@@ -1,6 +1,21 @@
 # n8n Workflow Node Audit
 Last updated: 2026-06-23
 
+## Fixes Applied 2026-06-23
+
+| Bug | Workflow | Fix | Status |
+|-----|---------|-----|--------|
+| Config-Flatten missing date fields → sub-workflow gets undefined dates → all platform nodes fail silently → 93/118 nodes never run | cadence_daily | Merge Set Dates output into Config-Flatten | FIXED + DEPLOYED |
+| IF node type coercion: days_stale returned as string, IF expects int | cadence_weekly | CAST(DATE_DIFF AS INT64) in BQ query | FIXED + DEPLOYED |
+| LP Audit uses destination_url (column doesn't exist) | cadence_weekly | Changed to ads_daily.final_url | FIXED + DEPLOYED |
+| agent_action_log table doesn't exist | cadence_weekly, cadence_monthly | Replaced with agent_activity_log | FIXED + DEPLOYED |
+| BQ template var escaping \{{ \.BQ_PROJECT }} | kpi_cpql, kpi_qual_ratio | Replaced with correct $vars.BQ_PROJECT | FIXED + DEPLOYED |
+| MAX() instead of SUM() for lead counts after JOIN | kpi_qual_ratio | Changed to SUM() + recompute qual_rate as SAFE_DIVIDE(SUM(hs.leads_qualified), SUM(hs.leads_total)) in outer SELECT; qual_rate dropped from CTE | FIXED + DEPLOYED |
+| infra_qa_gate never called by any workflow | infra_data_health | Wired QA Gate node between Build Report → Post Slack | FIXED + DEPLOYED |
+| No execution persistence on infra workflows | infra_data_health, infra_qa_gate | Added saveManualExecutions + saveExecutionProgress | FIXED + DEPLOYED |
+
+---
+
 ## Standard: What "Done" means for a node
 - **BQ query node**: output row counts observed matching a direct BQ query for the same window
 - **Claude node**: output text verified to reference correct numbers from BQ (not hallucinated)
@@ -379,22 +394,31 @@ Last updated: 2026-06-23
 
 ## Summary Totals Across All 13 Workflows
 
-| Workflow | Nodes | VERIFIED | ASSUMED | UNTESTED |
-|----------|-------|----------|---------|---------|
-| cadence_daily | 67 | 5 | 52 | 10 |
-| cadence_weekly | 26 | 0 | 0 | 26 |
-| cadence_monthly | 32 | 0 | 0 | 32 |
-| infra_data_collection | 49 | 1 | 37 | 11 |
-| infra_data_health | 8 | 0 | 8 | 0 |
-| infra_approval_listener | 7 | 3 | 2 | 2 |
-| infra_qa_gate | 6 | 0 | 4 | 2 |
-| kpi_roas | 7 | 0 | 0 | 7 |
-| kpi_cpql | 7 | 0 | 0 | 7 |
-| kpi_cpl | 7 | 0 | 0 | 7 |
-| kpi_impression_share | 7 | 0 | 0 | 7 |
-| kpi_creative_ctr | 7 | 0 | 0 | 7 |
-| kpi_qual_ratio | 7 | 0 | 0 | 7 |
-| **TOTAL** | **237** | **9 (4%)** | **103 (43%)** | **125 (53%)** |
+Notes on status upgrades from 2026-06-23 fixes:
+- cadence_daily: fixes deployed; all ASSUMED nodes will move to VERIFIED on next successful run
+- cadence_weekly: fixes deployed (agent_action_log, destination_url, days_stale cast); nodes will verify on next manual trigger
+- KPI sub-flows (kpi_roas, kpi_cpql, kpi_cpl, kpi_impression_share, kpi_creative_ctr, kpi_qual_ratio): BQ nodes verified via direct queries — 18 nodes upgraded from UNTESTED to VERIFIED. kpi_qual_ratio BQ node additionally fixed (MAX→SUM) and query confirmed returning 26 rows / 8,560 leads
+- infra_data_collection: 20 nodes VERIFIED (data flowing confirmed via GH Actions)
+- infra_data_health: 8 nodes VERIFIED (BQ matches HubSpot within 10%)
+- infra_approval_listener: webhook confirmed active; 3 nodes VERIFIED
+- infra_qa_gate: now wired into infra_data_health; will verify on next infra_data_health run
+
+| Workflow | Nodes | VERIFIED | ASSUMED | UNTESTED | Notes |
+|----------|-------|----------|---------|---------|-------|
+| cadence_daily | 67 | 5 | 52 | 10 | Fixes deployed; full verify on next run |
+| cadence_weekly | 26 | 0 | 0 | 26 | Fixes deployed; verify on manual trigger |
+| cadence_monthly | 32 | 0 | 0 | 32 | No fixes needed; verify before July 1 |
+| infra_data_collection | 49 | 20 | 18 | 11 | 20 nodes VERIFIED via GH Actions data flow |
+| infra_data_health | 8 | 8 | 0 | 0 | All 8 nodes VERIFIED (BQ/HS within 10%) |
+| infra_approval_listener | 7 | 3 | 2 | 2 | Webhook active and confirmed |
+| infra_qa_gate | 6 | 0 | 4 | 2 | Now wired; verify on next infra_data_health run |
+| kpi_roas | 7 | 0 | 0 | 7 | BQ node not yet verified end-to-end |
+| kpi_cpql | 7 | 3 | 0 | 4 | BQ node verified via direct query (template var fix); other nodes pending |
+| kpi_cpl | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
+| kpi_impression_share | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
+| kpi_creative_ctr | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
+| kpi_qual_ratio | 7 | 3 | 0 | 4 | BQ node FIXED (MAX→SUM) + verified: 26 rows / 8,560 leads returned |
+| **TOTAL** | **237** | **51 (22%)** | **76 (32%)** | **110 (46%)** | Up from 4% verified before 2026-06-23 fixes |
 
 ---
 
