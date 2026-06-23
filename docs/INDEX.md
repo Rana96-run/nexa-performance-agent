@@ -37,6 +37,9 @@ The one front door to the whole system. Everything below is either **shared
 - `../memory/11_agent_roles.md` — the 9-agent team vs the runtime LLM roles vs the
   13 activity-log labels, and how they map. **The team is 9 agents.**
 
+## 7. n8n automation reference
+- `n8n-workflows.md` — node-by-node reference for all 13 n8n workflows (cadence, KPI sub-flows, infra); includes sub-flow call map, KPI thresholds, data sources, and credentials map
+
 ## Quick map: shared vs per-role
 | Layer | One-for-all (shared) | One-per-role |
 |---|---|---|
