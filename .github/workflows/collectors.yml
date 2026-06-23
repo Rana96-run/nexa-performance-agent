@@ -18,7 +18,7 @@ on:
           Options: google_ads | meta | snapchat | tiktok | linkedin |
                    microsoft_ads | hubspot_leads | hubspot_deals | reconcile |
                    youtube | ga4 | meta_organic | gsc | views | asana_sync |
-                   agent_config
+                   agent_config | x_ads
         required: false
         default: ""
         type: string
@@ -166,6 +166,13 @@ jobs:
         if: ${{ inputs.collector == '' || inputs.collector == 'snapchat' }}
         continue-on-error: true
         run: python collectors/snap_bq.py all
+
+      - name: Collector — X Ads
+        id: x_ads
+        timeout-minutes: 15
+        if: ${{ inputs.collector == '' || inputs.collector == 'x_ads' }}
+        continue-on-error: true
+        run: python collectors/x_ads_bq.py all 30
 
       - name: Collector — TikTok
         id: tiktok

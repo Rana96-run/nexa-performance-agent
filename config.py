@@ -142,6 +142,7 @@ ASANA_CHANNEL_LABELS = {
     "google_ads":    "Google Ads",
     "meta":          "Meta",
     "snapchat":      "Snapchat",
+    "x_ads":         "X Ads",
     "linkedin":      "LinkedIn",
     "microsoft_ads": "Microsoft",
     "tiktok":        "TikTok",
@@ -159,6 +160,7 @@ ASANA_OPTIMIZATION_PROJECTS = {
     "google_ads":    "1213239419217795",   # Google Ads Optimization (Recovery)
     "meta":          "1213280413868927",   # Meta Ads (Recovery)
     "snapchat":      "1214135546324721",   # Snapchat Ads Optimization
+    "x_ads":         os.getenv("ASANA_PROJECT_X_ADS", ""),   # X Ads Optimization
     "tiktok":        "1214135614950965",   # TikTok Ads Optimization
     "linkedin":      "1214135614968862",   # LinkedIn Ads Optimization
     "youtube":       "1214135614991277",   # YouTube Ads Optimization
