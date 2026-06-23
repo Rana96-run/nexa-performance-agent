@@ -1,5 +1,17 @@
 # Pitfalls & Known Traps
 
+## [2026-06-23] cadence_daily broken — Config-Flatten did not pass date fields to sub-workflow
+
+**Symptom:** cadence_daily (T8icImtZFLYeCa7e) ran daily but only 3–5 of 118 nodes executed. All ad platform collectors in the sub-workflow (jOnJxdpdaO3Vbi0B) returned 0 rows. The guard always blocked the BQ load. Appeared as status=success in the n8n API but produced no data.
+
+**Root cause:** The data flow is: `Set Dates` → `BQ Fetch Config` → `Config-Flatten` → `Phase 1 Data Collection` (executeWorkflow) → sub-workflow. `Config-Flatten` read only from `BQ Fetch Config` (agent_config keys: kpi_rules, roles, etc.) and returned that as a flat object. It did NOT include the date fields from `Set Dates` (yesterday, start_7d, etc.). When the executeWorkflow node called the sub-workflow, its Trigger node received this config-only object. Every ad platform HTTP node called `$('Trigger').first().json.yesterday` which resolved to `undefined`. All 10 platform API calls used `undefined` as the date parameter → zero rows returned → Aggregate Campaigns → Build Guard Payload produced empty report → Claude Data Guard set `should_load=false` → IF blocked everything downstream.
+
+**Fix:** Add `const dates = $('Set Dates').first().json;` and spread into the return: `return [{ json: { ...config, ...dates } }];` in the Config-Flatten node. This ensures the sub-workflow Trigger receives both config keys AND yesterday/start_7d/etc.
+
+**File:** `n8n/workflows/cadence_daily.json` — `Config - Flatten` node. Pushed to n8n Cloud 2026-06-23T08:02:40Z. Commit: 93c4218.
+
+**Rule:** Any n8n `executeWorkflow` node that calls a sub-workflow needing date context MUST pass the date fields explicitly. Sub-workflows only see what the calling node passes as input — they cannot reference nodes from the parent workflow.
+
 ## [2026-06-23] n8n IF node v2 — days_stale returns string from BQ, causes type error even with typeValidation=loose
 
 **Symptom:** Cadence Weekly workflow (iNSdpXH7Rc9Lb8h8) errored on 2026-06-21 at the "IF Data Fresh?" node with: `Wrong type: '2' is a string but was expecting a number [condition 0, item 0]`. Workflow halted immediately — zero downstream nodes ran.
