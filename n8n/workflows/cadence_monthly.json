@@ -166,7 +166,7 @@
                     "mode": "expression",
                     "value": "={{ $vars.BQ_PROJECT }}"
                 },
-                "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE event_date>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY event_date DESC LIMIT 30",
+                "sqlQuery": "SELECT action AS action_type,campaign_name AS target_name,channel,DATE(ts,'Asia/Riyadh') AS event_date,status AS outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),DATE(ts,'Asia/Riyadh'),DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE DATE(ts,'Asia/Riyadh')>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY ts DESC LIMIT 30",
                 "options": {}
             }
         },
@@ -242,7 +242,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[],approvalsText=actions.map((a,i)=>(i+1)+'. *'+a.title+'* ['+a.priority+']\n'+a.description+(a.estimated_impact?'\n_Impact: '+a.estimated_impact+'_':'')).join('\n\n');return[{json:{digest:out.digest||'Monthly digest unavailable.',approvalsText:approvalsText||'No actions.',actions,reportType:'monthly',generatedAt:new Date().toISOString()}}];"
+                "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[],approvalsText=actions.map((a,i)=>(i+1)+'. *'+a.title+'* ['+a.priority+']\\n'+a.description+(a.estimated_impact?'\\n_Impact: '+a.estimated_impact+'_':'')).join('\\n\\n');return[{json:{digest:out.digest||'Monthly digest unavailable.',approvalsText:approvalsText||'No actions.',actions,reportType:'monthly',generatedAt:new Date().toISOString()}}];"
             }
         },
         {
@@ -292,8 +292,23 @@
                 "authentication": "predefinedCredentialType",
                 "nodeCredentialType": "httpHeaderAuth",
                 "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Monthly Strategic Actions — ✅ approve / ❌ skip*\n\n'+$json.approvalsText, unfurl_links:false }) }}",
+                "specifyBody": "keypair",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "channel",
+                            "value": "={{ $vars.SLACK_CHANNEL_APPROVALS }}"
+                        },
+                        {
+                            "name": "text",
+                            "value": "=*Monthly Strategic Actions — ✅ approve / ❌ skip*\n\n{{ $json.approvalsText }}"
+                        },
+                        {
+                            "name": "unfurl_links",
+                            "value": "false"
+                        }
+                    ]
+                },
                 "options": {}
             }
         },
@@ -346,7 +361,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('monthly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
+                "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;const rt=(r.reportType||'monthly').replace(/'/g,\"\\''\");return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (activity_id,ts,session_id,role,action,status,channel,campaign_name,details) VALUES (GENERATE_UUID(),CURRENT_TIMESTAMP(),'n8n-monthly','llm_cadence','monthly_review','success','all','report',TO_JSON_STRING(JSON_OBJECT('reportType','${rt}')))`}}];"
             }
         },
         {
@@ -501,7 +516,7 @@
             "parameters": {
                 "authentication": "serviceAccount",
                 "projectId": "={{ $vars.BQ_PROJECT }}",
-                "query": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE DATE_TRUNC(c.date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n    AND c.destination_url IS NOT NULL\n  GROUP BY destination_url\n)\nSELECT destination_url, sample_campaign,\n  ROUND(spend,2) AS spend_usd, clicks, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE sqls > 0\nORDER BY sqls DESC LIMIT 1",
+                "sqlQuery": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT final_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE DATE_TRUNC(c.date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n    AND c.final_url IS NOT NULL\n  GROUP BY final_url\n)\nSELECT final_url AS destination_url, sample_campaign,\n  ROUND(spend,2) AS spend_usd, clicks, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE sqls > 0\nORDER BY sqls DESC LIMIT 1",
                 "options": {}
             },
             "credentials": {
@@ -569,7 +584,7 @@
             "parameters": {
                 "operation": "executeQuery",
                 "projectId": "={{$vars.BQ_PROJECT}}",
-                "sqlQuery": "SELECT FORMAT_DATE('%Y-%m-%d', MAX(date)) as latest_date, DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) as days_stale FROM `{{$vars.BQ_PROJECT}}.{{$vars.BQ_DATASET}}.campaigns_daily`",
+                "sqlQuery": "SELECT FORMAT_DATE('%Y-%m-%d', MAX(date)) as latest_date, CAST(DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS INT64) as days_stale FROM `{{$vars.BQ_PROJECT}}.{{$vars.BQ_DATASET}}.campaigns_daily`",
                 "options": {},
                 "authentication": "serviceAccount"
             }
@@ -641,7 +656,7 @@
                 0
             ],
             "parameters": {
-                "jsCode": "// Build prompt for performance-lead — takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest — performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'any'}\n}}];"
+                "jsCode": "// Build prompt for performance-lead — takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst rawStr = analysis.digest || JSON.stringify(analysis);\nconst clean = rawStr.replace(/[\\uD800-\\uDFFF]/g,'?');\nconst digest = [...clean].slice(0, 2500).join('');\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest — performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'any'}\n}}];"
             }
         },
         {
@@ -1262,7 +1277,7 @@
                         "mode": "expression",
                         "value": "={{ $vars.BQ_PROJECT }}"
                     },
-                    "sqlQuery": "SELECT action_type,target_name,channel,event_date,outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),event_date,DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE event_date>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY event_date DESC LIMIT 30",
+                    "sqlQuery": "SELECT action AS action_type,campaign_name AS target_name,channel,DATE(ts,'Asia/Riyadh') AS event_date,status AS outcome,DATE_DIFF(CURRENT_DATE('Asia/Riyadh'),DATE(ts,'Asia/Riyadh'),DAY) AS days_since,'monitor' AS _query FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE DATE(ts,'Asia/Riyadh')>=DATE_TRUNC(CURRENT_DATE('Asia/Riyadh'),MONTH) ORDER BY ts DESC LIMIT 30",
                     "options": {}
                 }
             },
@@ -1442,7 +1457,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (action_type,target_name,channel,event_date,outcome,created_at) VALUES ('monthly_review','report','all',CURRENT_DATE('Asia/Riyadh'),'${r.reportType}_generated',CURRENT_TIMESTAMP())`}}];"
+                    "jsCode": "const r=$input.first().json,proj=$vars.BQ_PROJECT,ds=$vars.BQ_DATASET;const rt=(r.reportType||'monthly').replace(/'/g,\"\\''\");return[{json:{sql:`INSERT INTO \\`${proj}.${ds}.agent_activity_log\\` (activity_id,ts,session_id,role,action,status,channel,campaign_name,details) VALUES (GENERATE_UUID(),CURRENT_TIMESTAMP(),'n8n-monthly','llm_cadence','monthly_review','success','all','report',TO_JSON_STRING(JSON_OBJECT('reportType','${rt}')))`}}];"
                 }
             },
             {
@@ -1597,7 +1612,7 @@
                 "parameters": {
                     "authentication": "serviceAccount",
                     "projectId": "={{ $vars.BQ_PROJECT }}",
-                    "query": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT destination_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE DATE_TRUNC(c.date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n    AND c.destination_url IS NOT NULL\n  GROUP BY destination_url\n)\nSELECT destination_url, sample_campaign,\n  ROUND(spend,2) AS spend_usd, clicks, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE sqls > 0\nORDER BY sqls DESC LIMIT 1",
+                    "sqlQuery": "WITH hs AS (\n  SELECT lead_utm_campaign, SUM(leads_total) AS leads, SUM(leads_qualified) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.hubspot_leads_module_daily`\n  WHERE DATE_TRUNC(date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n  GROUP BY lead_utm_campaign\n), lp AS (\n  SELECT final_url, MIN(c.campaign_name) AS sample_campaign,\n    SUM(c.spend) AS spend, SUM(c.clicks) AS clicks,\n    SUM(COALESCE(h.leads,0)) AS leads, SUM(COALESCE(h.sqls,0)) AS sqls\n  FROM `angular-axle-492812-q4.qoyod_marketing.campaigns_daily` c\n  LEFT JOIN hs h ON LOWER(c.campaign_name) = LOWER(h.lead_utm_campaign)\n  WHERE DATE_TRUNC(c.date, MONTH) = DATE_TRUNC(DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 1 MONTH), MONTH)\n    AND c.final_url IS NOT NULL\n  GROUP BY final_url\n)\nSELECT final_url AS destination_url, sample_campaign,\n  ROUND(spend,2) AS spend_usd, clicks, leads, sqls,\n  ROUND(SAFE_DIVIDE(leads,NULLIF(clicks,0))*100,2) AS cvr_pct,\n  ROUND(SAFE_DIVIDE(spend,NULLIF(sqls,0)),2) AS cpql_usd\nFROM lp WHERE sqls > 0\nORDER BY sqls DESC LIMIT 1",
                     "options": {}
                 },
                 "credentials": {
@@ -1665,7 +1680,7 @@
                 "parameters": {
                     "operation": "executeQuery",
                     "projectId": "={{$vars.BQ_PROJECT}}",
-                    "sqlQuery": "SELECT FORMAT_DATE('%Y-%m-%d', MAX(date)) as latest_date, DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) as days_stale FROM `{{$vars.BQ_PROJECT}}.{{$vars.BQ_DATASET}}.campaigns_daily`",
+                    "sqlQuery": "SELECT FORMAT_DATE('%Y-%m-%d', MAX(date)) as latest_date, CAST(DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS INT64) as days_stale FROM `{{$vars.BQ_PROJECT}}.{{$vars.BQ_DATASET}}.campaigns_daily`",
                     "options": {},
                     "authentication": "serviceAccount"
                 }
@@ -1737,7 +1752,7 @@
                     0
                 ],
                 "parameters": {
-                    "jsCode": "// Build prompt for performance-lead — takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest — performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'any'}\n}}];"
+                    "jsCode": "// Build prompt for performance-lead — takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst rawStr = analysis.digest || JSON.stringify(analysis);\nconst clean = rawStr.replace(/[\\uD800-\\uDFFF]/g,'?');\nconst digest = [...clean].slice(0, 2500).join('');\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest — performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'any'}\n}}];"
                 }
             },
             {
