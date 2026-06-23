@@ -1,4 +1,4 @@
-{
+﻿{
     "updatedAt": "2026-06-22T09:39:05.075Z",
     "createdAt": "2026-06-15T10:52:17.069Z",
     "id": "iNSdpXH7Rc9Lb8h8",
@@ -216,7 +216,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'🔴','medium':'🟠','low':'🟡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'🟡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] → task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='📊 Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'🔴 '+actions.filter(a=>a.priority==='high').length+' high-priority flags · ':'')+actions.filter(a=>a.priority==='medium').length+' medium · '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
+                "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'ðŸ”´','medium':'ðŸŸ ','low':'ðŸŸ¡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'ðŸŸ¡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] â†’ task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='ðŸ“Š Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'ðŸ”´ '+actions.filter(a=>a.priority==='high').length+' high-priority flags Â· ':'')+actions.filter(a=>a.priority==='medium').length+' medium Â· '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
             }
         },
         {
@@ -267,7 +267,7 @@
                 "nodeCredentialType": "httpHeaderAuth",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions — ✅ approve / ❌ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
+                "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions â€” âœ… approve / âŒ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
                 "options": {}
             }
         },
@@ -552,7 +552,7 @@
                 0
             ],
             "parameters": {
-                "jsCode": "// Build prompt for performance-lead - takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest - performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'required'}\n}}];"
+                "jsCode": "// Build prompt for performance-lead - takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest - performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'any'}\n}}];"
             }
         },
         {
@@ -592,7 +592,7 @@
         },
         {
             "id": "wkly-017",
-            "name": "Sheets → Weekly Log",
+            "name": "Sheets â†’ Weekly Log",
             "type": "n8n-nodes-base.httpRequest",
             "position": [
                 7200,
@@ -612,10 +612,23 @@
                 "nodeCredentialType": "googleSheetsOAuth2Api",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({values:[[$node['Set Dates → Weekly'].first().json.last7start,$node['Set Dates → Weekly'].first().json.last7end,'',$input.first().json.actions.length,'',$input.first().json.actions.filter(a=>a.priority==='high').map(a=>a.title).join(' | ')]]}) }}",
+                "jsonBody": "={{ JSON.stringify({values:[[$node['Set Dates â†’ Weekly'].first().json.last7start,$node['Set Dates â†’ Weekly'].first().json.last7end,'',$input.first().json.actions.length,'',$input.first().json.actions.filter(a=>a.priority==='high').map(a=>a.title).join(' | ')]]}) }}",
                 "options": {
                     "continueOnFail": true
                 }
+            }
+        },
+        {
+            "id": "wkly-018",
+            "name": "Build Approvals Text",
+            "type": "n8n-nodes-base.code",
+            "position": [
+                7200,
+                200
+            ],
+            "typeVersion": 2,
+            "parameters": {
+                "jsCode": "// Collect all created Asana task responses (one per action from Create Asana Task).\n// Each item.json.data = Asana API task object with name, permalink_url, notes.\nconst items = $input.all();\nconst lines = items.map(item => {\n  const task = item.json.data || {};\n  const notesRaw = task.notes || '';\n  const m = notesRaw.match(/Priority:\\s*(\\w+)/i);\n  const priority = m ? m[1].toLowerCase() : 'medium';\n  const url = task.permalink_url || '';\n  const name = task.name || 'Action';\n  const label = priority === 'high' ? 'HIGH' : priority === 'low' ? 'LOW' : 'MED';\n  return url\n    ? `â€¢ [${label}] ${name} \\u2192 <${url}|Asana>`\n    : `â€¢ [${label}] ${name}`;\n});\nconst approvalsText = lines.length > 0 ? lines.join('\\n') : 'No actions this week.';\nreturn [{json: {approvalsText}}];\n"
             }
         }
     ],
@@ -739,11 +752,6 @@
                 [
                     {
                         "node": "Post Slack ? Weekly",
-                        "type": "main",
-                        "index": 0
-                    },
-                    {
-                        "node": "Post Slack ? Approvals",
                         "type": "main",
                         "index": 0
                     },
@@ -886,7 +894,23 @@
             "main": [
                 [
                     {
-                        "node": "Sheets → Weekly Log",
+                        "node": "Sheets â†’ Weekly Log",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Build Approvals Text",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Approvals Text": {
+            "main": [
+                [
+                    {
+                        "node": "Post Slack ? Approvals",
                         "type": "main",
                         "index": 0
                     }
@@ -901,7 +925,7 @@
         "availableInMCP": true
     },
     "staticData": {
-        "node:Schedule � Weekly": {
+        "node:Schedule ï¿½ Weekly": {
             "recurrenceRules": []
         },
         "node:Schedule ? Weekly": {
@@ -1152,7 +1176,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'🔴','medium':'🟠','low':'🟡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'🟡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] → task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='📊 Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'🔴 '+actions.filter(a=>a.priority==='high').length+' high-priority flags · ':'')+actions.filter(a=>a.priority==='medium').length+' medium · '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
+                    "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'ðŸ”´','medium':'ðŸŸ ','low':'ðŸŸ¡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'ðŸŸ¡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] â†’ task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='ðŸ“Š Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'ðŸ”´ '+actions.filter(a=>a.priority==='high').length+' high-priority flags Â· ':'')+actions.filter(a=>a.priority==='medium').length+' medium Â· '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
                 }
             },
             {
@@ -1203,7 +1227,7 @@
                     "nodeCredentialType": "httpHeaderAuth",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions — ✅ approve / ❌ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
+                    "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions â€” âœ… approve / âŒ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
                     "options": {}
                 }
             },
@@ -1488,7 +1512,7 @@
                     0
                 ],
                 "parameters": {
-                    "jsCode": "// Build prompt for performance-lead - takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest - performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'required'}\n}}];"
+                    "jsCode": "// Build prompt for performance-lead - takes growth-analyst output as context\nconst resp = $input.first().json;\nconst block = (resp.content || []).find(b => b.type === 'tool_use');\nconst analysis = block?.input || {};\n\nconst systemPrompt = 'You are the Performance Lead at Qoyod. Review the Growth Analyst weekly report and add strategic context. ' +\n  'Validate findings, escalate CPQL regressions (>$160 = pause; $130-160 = warning), identify cross-channel patterns, ' +\n  'add a 1-paragraph executive summary, and confirm or override analyst actions with reasoning. ' +\n  'CPQL zones: scale <$85 | acceptable $85-$130 | warning $130-$160 | pause >$160. ' +\n  'Min 14-day window for pause/scale. Spend in USD.';\n\nconst digest = analysis.digest || JSON.stringify(analysis).slice(0, 3000);\n\nconst tools = [{\n  name: 'weekly_digest',\n  description: 'Weekly digest - performance-lead final review',\n  input_schema: {\n    type: 'object',\n    required: ['digest', 'actions'],\n    properties: {\n      digest: {type: 'string'},\n      actions: {type: 'array', items: {type: 'object', required: ['title','description','priority'],\n        properties: {title:{type:'string'}, description:{type:'string'}, priority:{type:'string',enum:['high','medium','low']}, channel:{type:'string'}}}}\n    }\n  }\n}];\n\nreturn [{json: {\n  system: systemPrompt,\n  messages: [{role: 'user', content: 'Growth Analyst report:\\n\\n' + digest + '\\n\\nProvide your strategic review.'}],\n  tools,\n  tool_choice: {type: 'any'}\n}}];"
                 }
             },
             {
@@ -1528,7 +1552,7 @@
             },
             {
                 "id": "wkly-017",
-                "name": "Sheets → Weekly Log",
+                "name": "Sheets â†’ Weekly Log",
                 "type": "n8n-nodes-base.httpRequest",
                 "position": [
                     7200,
@@ -1548,7 +1572,7 @@
                     "nodeCredentialType": "googleSheetsOAuth2Api",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({values:[[$node['Set Dates → Weekly'].first().json.last7start,$node['Set Dates → Weekly'].first().json.last7end,'',$input.first().json.actions.length,'',$input.first().json.actions.filter(a=>a.priority==='high').map(a=>a.title).join(' | ')]]}) }}",
+                    "jsonBody": "={{ JSON.stringify({values:[[$node['Set Dates â†’ Weekly'].first().json.last7start,$node['Set Dates â†’ Weekly'].first().json.last7end,'',$input.first().json.actions.length,'',$input.first().json.actions.filter(a=>a.priority==='high').map(a=>a.title).join(' | ')]]}) }}",
                     "options": {
                         "continueOnFail": true
                     }
@@ -1822,7 +1846,7 @@
                 "main": [
                     [
                         {
-                            "node": "Sheets → Weekly Log",
+                            "node": "Sheets â†’ Weekly Log",
                             "type": "main",
                             "index": 0
                         }
