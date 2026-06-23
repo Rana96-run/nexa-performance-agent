@@ -388,20 +388,24 @@
         {
             "id": "wkly-lp-03",
             "name": "Sheets ? Create LP Tab",
-            "type": "n8n-nodes-base.httpRequest",
+            "type": "n8n-nodes-base.googleSheets",
             "typeVersion": 4,
             "position": [
                 2400,
                 1200
             ],
             "parameters": {
-                "method": "POST",
-                "url": "https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg:batchUpdate",
-                "authentication": "predefinedCredentialType",
-                "nodeCredentialType": "googleSheetsOAuth2Api",
-                "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({requests:[{addSheet:{properties:{title:$('Code ? Format LP').first().json.tabName}}}]}) }}",
+                "operation": "create",
+                "documentId": {
+                    "__rl": true,
+                    "value": "120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "={{ $('Code → Format LP').first().json.tabName }}",
+                    "mode": "name"
+                },
                 "options": {}
             },
             "credentials": {
@@ -414,20 +418,122 @@
         {
             "id": "wkly-lp-04",
             "name": "Sheets ? Write LP Rows",
-            "type": "n8n-nodes-base.httpRequest",
+            "type": "n8n-nodes-base.googleSheets",
             "typeVersion": 4,
             "position": [
                 3200,
                 1200
             ],
             "parameters": {
-                "method": "POST",
-                "url": "={{ 'https://sheets.googleapis.com/v4/spreadsheets/120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg/values/'+encodeURIComponent($('Code ? Format LP').first().json.tabName)+':append?valueInputOption=RAW' }}",
-                "authentication": "predefinedCredentialType",
-                "nodeCredentialType": "googleSheetsOAuth2Api",
-                "sendBody": true,
-                "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({values:[$('Code ? Format LP').first().json.headers,...$('Code ? Format LP').first().json.rows]}) }}",
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "120o-BXLdpvT5phvTY2ePiYcKiyQi5kcXedLuq_cDtVg",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "={{ $('Code → Format LP').first().json.tabName }}",
+                    "mode": "name"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "destination_url": "={{ $('Code → Format LP').first().json.rows[0]?.[0] ?? '' }}",
+                        "sample_campaign": "={{ $('Code → Format LP').first().json.rows[0]?.[1] ?? '' }}",
+                        "spend_usd": "={{ $('Code → Format LP').first().json.rows[0]?.[2] ?? 0 }}",
+                        "clicks": "={{ $('Code → Format LP').first().json.rows[0]?.[3] ?? 0 }}",
+                        "impressions": "={{ $('Code → Format LP').first().json.rows[0]?.[4] ?? 0 }}",
+                        "leads": "={{ $('Code → Format LP').first().json.rows[0]?.[5] ?? 0 }}",
+                        "sqls": "={{ $('Code → Format LP').first().json.rows[0]?.[6] ?? 0 }}",
+                        "cvr_pct": "={{ $('Code → Format LP').first().json.rows[0]?.[7] ?? 0 }}",
+                        "cpql_usd": "={{ $('Code → Format LP').first().json.rows[0]?.[8] ?? 0 }}"
+                    },
+                    "matchingColumns": [],
+                    "schema": [
+                        {
+                            "id": "destination_url",
+                            "displayName": "destination_url",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "sample_campaign",
+                            "displayName": "sample_campaign",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "spend_usd",
+                            "displayName": "spend_usd",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "clicks",
+                            "displayName": "clicks",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "impressions",
+                            "displayName": "impressions",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "leads",
+                            "displayName": "leads",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "sqls",
+                            "displayName": "sqls",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "cvr_pct",
+                            "displayName": "cvr_pct",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        },
+                        {
+                            "id": "cpql_usd",
+                            "displayName": "cpql_usd",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "number",
+                            "canBeUsedToMatch": true
+                        }
+                    ]
+                },
                 "options": {}
             },
             "credentials": {
