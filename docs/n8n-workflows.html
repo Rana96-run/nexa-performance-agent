@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>n8n Workflows Reference — Nexa Performance Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cadence:       #1a73e8;
+      --cadence-bg:    rgba(26, 115, 232, 0.10);
+      --cadence-light: rgba(26, 115, 232, 0.06);
+      --kpi:           #f57c00;
+      --kpi-bg:        rgba(245, 124, 0, 0.10);
+      --kpi-light:     rgba(245, 124, 0, 0.06);
+      --infra:         #2e7d32;
+      --infra-bg:      rgba(46, 125, 50, 0.10);
+      --infra-light:   rgba(46, 125, 50, 0.06);
+      --text:          #1c1c1e;
+      --text-muted:    #666;
+      --border:        #e0e0e0;
+      --bg-row:        #fafafa;
+      --bg-thead:      #f5f5f5;
+      --sidebar-w:     252px;
+      --font:          'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      background: #fff;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ─── Sidebar ──────────────────────────────────────────────────── */
+    #sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      overflow-y: auto;
+      background: #fafafa;
+      border-right: 1px solid var(--border);
+      padding: 24px 0 40px;
+      z-index: 100;
+    }
+
+    #sidebar .sidebar-logo {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    #sidebar .sidebar-logo span {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    #sidebar .sidebar-logo p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .sidebar-group {
+      margin-bottom: 6px;
+    }
+
+    .sidebar-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      padding: 10px 20px 4px;
+      display: block;
+    }
+
+    .sidebar-group-label.cadence { color: var(--cadence); }
+    .sidebar-group-label.kpi     { color: var(--kpi); }
+    .sidebar-group-label.infra   { color: var(--infra); }
+
+    .sidebar-group a {
+      display: block;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text);
+      text-decoration: none;
+      padding: 5px 20px 5px 28px;
+      border-radius: 0;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-group.cadence a:hover { color: var(--cadence); background: var(--cadence-light); }
+    .sidebar-group.kpi     a:hover { color: var(--kpi);     background: var(--kpi-light); }
+    .sidebar-group.infra   a:hover { color: var(--infra);   background: var(--infra-light); }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 20px;
+    }
+
+    .sidebar-misc a {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 4px 20px;
+    }
+
+    .sidebar-misc a:hover { color: var(--text); }
+
+    /* ─── Main content ─────────────────────────────────────────────── */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      padding: 48px 56px 80px;
+      max-width: 980px;
+    }
+
+    /* ─── Page header ──────────────────────────────────────────────── */
+    .page-header {
+      margin-bottom: 40px;
+      padding-bottom: 28px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .page-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .page-header .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ─── Section group headers ────────────────────────────────────── */
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 52px 0 24px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid currentColor;
+    }
+
+    .group-header h2 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .group-header .group-count {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+      opacity: 0.85;
+    }
+
+    .group-header.cadence { color: var(--cadence); }
+    .group-header.cadence .group-count { background: var(--cadence-bg); }
+
+    .group-header.kpi     { color: var(--kpi); }
+    .group-header.kpi .group-count { background: var(--kpi-bg); }
+
+    .group-header.infra   { color: var(--infra); }
+    .group-header.infra .group-count { background: var(--infra-bg); }
+
+    .group-intro {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    /* ─── Workflow cards ───────────────────────────────────────────── */
+    .workflow-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 28px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-header h3 {
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'Courier New', Courier, monospace;
+      letter-spacing: -0.2px;
+    }
+
+    .card-header h3.cadence { color: var(--cadence); }
+    .card-header h3.kpi     { color: var(--kpi); }
+    .card-header h3.infra   { color: var(--infra); }
+
+    .trigger-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-left: 16px;
+      margin-top: 2px;
+    }
+
+    .trigger-badge.cadence { background: var(--cadence-bg); color: var(--cadence); }
+    .trigger-badge.kpi     { background: var(--kpi-bg);     color: var(--kpi); }
+    .trigger-badge.infra   { background: var(--infra-bg);   color: var(--infra); }
+
+    .card-body {
+      padding: 18px 22px 20px;
+    }
+
+    /* ─── Definition rows ──────────────────────────────────────────── */
+    .def-grid {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 6px 12px;
+      margin-bottom: 16px;
+    }
+
+    .def-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding-top: 2px;
+    }
+
+    .def-value {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* ─── Mono tags ────────────────────────────────────────────────── */
+    code, .mono-tag {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      background: #f0f0f0;
+      color: #333;
+      padding: 1px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      display: inline-block;
+      margin: 1px 2px 1px 0;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+
+    /* ─── Flow steps ───────────────────────────────────────────────── */
+    .flow-section {
+      margin: 14px 0 0;
+    }
+
+    .flow-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .flow-steps {
+      list-style: none;
+      counter-reset: flow-counter;
+      padding: 0;
+    }
+
+    .flow-steps li {
+      counter-increment: flow-counter;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 7px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .flow-steps li::before {
+      content: counter(flow-counter);
+      min-width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .cadence .flow-steps li::before { background: var(--cadence-bg); color: var(--cadence); }
+    .kpi     .flow-steps li::before { background: var(--kpi-bg);     color: var(--kpi); }
+    .infra   .flow-steps li::before { background: var(--infra-bg);   color: var(--infra); }
+
+    /* ─── Bullet list (KPI logic) ──────────────────────────────────── */
+    .detail-list {
+      list-style: none;
+      padding: 0;
+      margin: 6px 0 0;
+    }
+
+    .detail-list li {
+      padding: 4px 0 4px 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    .detail-list li::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--text-muted);
+    }
+
+    /* ─── Tables ───────────────────────────────────────────────────── */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 20px 0;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead tr {
+      background: var(--bg-thead);
+    }
+
+    thead th {
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--bg-row);
+    }
+
+    tbody td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    td.group-cadence { color: var(--cadence); font-weight: 600; }
+    td.group-kpi     { color: var(--kpi);     font-weight: 600; }
+    td.group-infra   { color: var(--infra);   font-weight: 600; }
+
+    td.scale    { color: #2e7d32; font-weight: 600; }
+    td.warning  { color: #b57300; }
+    td.danger   { color: #c62828; font-weight: 600; }
+    td.muted    { color: var(--text-muted); font-style: italic; }
+
+    /* ─── Call map ─────────────────────────────────────────────────── */
+    .callmap-block {
+      background: #f8f8f8;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px;
+      margin: 20px 0 32px;
+      overflow-x: auto;
+    }
+
+    .callmap-block pre {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--text);
+      white-space: pre;
+    }
+
+    /* ─── Severity badge ───────────────────────────────────────────── */
+    .severity {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .sev-p0 { background: #fde8e8; color: #c62828; }
+    .sev-p1 { background: #fff3e0; color: #b57300; }
+
+    /* ─── Note box ─────────────────────────────────────────────────── */
+    .note-box {
+      background: #fffde7;
+      border: 1px solid #f9a825;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      margin-top: 12px;
+      color: #5f4000;
+    }
+
+    .note-box strong { color: #3e2800; }
+
+    /* ─── Divider ──────────────────────────────────────────────────── */
+    hr.section-rule {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* ─── Overview section ─────────────────────────────────────────── */
+    .overview-section {
+      margin-bottom: 40px;
+    }
+
+    .overview-section h2 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    /* ─── Print styles ─────────────────────────────────────────────── */
+    @media print {
+      #sidebar { display: none !important; }
+
+      #main {
+        margin-left: 0;
+        padding: 24px 32px;
+        max-width: 100%;
+      }
+
+      .workflow-card {
+        box-shadow: none;
+        border: 1px solid #ccc;
+        break-inside: avoid;
+      }
+
+      .group-header {
+        break-before: page;
+      }
+
+      .group-header:first-of-type {
+        break-before: avoid;
+      }
+
+      a[href]::after {
+        content: none;
+      }
+
+      .callmap-block { break-inside: avoid; }
+    }
+
+    /* ─── Responsive ───────────────────────────────────────────────── */
+    @media (max-width: 860px) {
+      #sidebar { display: none; }
+      #main { margin-left: 0; padding: 28px 20px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <span>Nexa Performance Agent</span>
+    <p>n8n Workflow Reference</p>
+  </div>
+
+  <div class="sidebar-group cadence">
+    <span class="sidebar-group-label cadence">Cadence</span>
+    <a href="#cadence_daily">cadence_daily</a>
+    <a href="#cadence_weekly">cadence_weekly</a>
+    <a href="#cadence_monthly">cadence_monthly</a>
+  </div>
+
+  <div class="sidebar-group kpi">
+    <span class="sidebar-group-label kpi">KPI Sub-flows</span>
+    <a href="#kpi_cpql">kpi_cpql</a>
+    <a href="#kpi_cpl">kpi_cpl</a>
+    <a href="#kpi_roas">kpi_roas</a>
+    <a href="#kpi_qual_ratio">kpi_qual_ratio</a>
+    <a href="#kpi_impression_share">kpi_impression_share</a>
+    <a href="#kpi_creative_ctr">kpi_creative_ctr</a>
+  </div>
+
+  <div class="sidebar-group infra">
+    <span class="sidebar-group-label infra">Infrastructure</span>
+    <a href="#infra_data_collection">infra_data_collection</a>
+    <a href="#infra_approval_listener">infra_approval_listener</a>
+    <a href="#infra_qa_gate">infra_qa_gate</a>
+    <a href="#infra_data_health">infra_data_health</a>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="sidebar-misc">
+    <a href="#call-map">Call Map</a>
+    <a href="#kpi-thresholds">KPI Thresholds</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN -->
+<main id="main">
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <h1>n8n Workflows Reference — Nexa Performance Agent</h1>
+    <p class="subtitle">13 workflows &nbsp;·&nbsp; Last updated June 2026</p>
+  </div>
+
+  <!-- OVERVIEW TABLE -->
+  <div class="overview-section">
+    <h2>Overview</h2>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Group</th>
+            <th>Count</th>
+            <th>Workflows</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="group-cadence">Cadence</td>
+            <td>3</td>
+            <td>
+              <code>cadence_daily</code>
+              <code>cadence_weekly</code>
+              <code>cadence_monthly</code>
+            </td>
+            <td>Scheduled analysis &amp; reporting</td>
+          </tr>
+          <tr>
+            <td class="group-kpi">KPI Sub-flows</td>
+            <td>6</td>
+            <td>
+              <code>kpi_cpql</code>
+              <code>kpi_cpl</code>
+              <code>kpi_roas</code>
+              <code>kpi_qual_ratio</code>
+              <code>kpi_impression_share</code>
+              <code>kpi_creative_ctr</code>
+            </td>
+            <td>Called when a KPI flag fires</td>
+          </tr>
+          <tr>
+            <td class="group-infra">Infrastructure</td>
+            <td>4</td>
+            <td>
+              <code>infra_data_collection</code>
+              <code>infra_approval_listener</code>
+              <code>infra_qa_gate</code>
+              <code>infra_data_health</code>
+            </td>
+            <td>Always-on plumbing</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SECTION 1: CADENCE -->
+  <div class="group-header cadence">
+    <h2>Cadence Workflows</h2>
+    <span class="group-count">3 workflows</span>
+  </div>
+
+  <!-- cadence_daily -->
+  <div class="workflow-card cadence" id="cadence_daily">
+    <div class="card-header">
+      <h3 class="cadence">cadence_daily</h3>
+      <span class="trigger-badge cadence">⏰ Daily 07:00 Riyadh</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">Full daily intelligence loop — pulls ad data from all 6 platforms, reconciles with HubSpot, runs 8-step analysis via 3 Claude agents, posts nightly digest.</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Flow</div>
+        <ol class="flow-steps">
+          <li>Calls <code>infra_data_collection</code> → pulls yesterday's metrics from all 6 platforms into BQ</li>
+          <li>BQ ↔ HubSpot reconciliation (must be within 2% delta — aborts if not)</li>
+          <li>Three Claude agents run the 8-step intelligence loop</li>
+          <li>Routes KPI flags to 6 KPI sub-workflows based on threshold breaches</li>
+          <li>Posts nightly digest to <code>#notify</code> and <code>#approvals</code> with Asana tasks per action</li>
+        </ol>
+      </div>
+
+      <div class="def-grid" style="margin-top: 16px;">
+        <span class="def-label">Reads</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>campaigns_daily</code>
+            <code>hubspot_leads_module_daily</code>
+            <code>ads_daily</code>
+          </div>
+        </span>
+
+        <span class="def-label">Writes</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>Slack #notify</code>
+            <code>Slack #approvals</code>
+            <code>Asana tasks (per channel)</code>
+          </div>
+        </span>
+
+        <span class="def-label">Calls</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>infra_data_collection</code>
+            <code>infra_qa_gate</code>
+            <code>kpi_cpql</code>
+            <code>kpi_cpl</code>
+            <code>kpi_roas</code>
+            <code>kpi_qual_ratio</code>
+            <code>kpi_impression_share</code>
+            <code>kpi_creative_ctr</code>
+          </div>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- cadence_weekly -->
+  <div class="workflow-card cadence" id="cadence_weekly">
+    <div class="card-header">
+      <h3 class="cadence">cadence_weekly</h3>
+      <span class="trigger-badge cadence">⏰ Sunday 06:00 UTC</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">Week-over-week review — 7d vs prior 7d comparison, 30d forecast, LP audit, Google Sheets log.</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Flow</div>
+        <ol class="flow-steps">
+          <li>Verifies BQ freshness — aborts with Slack alert if data is stale</li>
+          <li>Runs 4 parallel BQ queries: 7d period compare, 30d forecast, ad-level audit, agent activity log</li>
+          <li>LP conversion audit written to Google Sheets</li>
+          <li>Two Claude agents synthesise results into ranked action list</li>
+          <li>Posts terse digest to <code>#notify</code> + <code>#approvals</code>; Asana tasks per channel</li>
+          <li>Appends WeeklyLog row to master Google Spreadsheet</li>
+        </ol>
+      </div>
+
+      <div class="def-grid" style="margin-top: 16px;">
+        <span class="def-label">Reads</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>campaigns_daily</code>
+            <code>hubspot_leads_module_daily</code>
+            <code>v_ad_performance</code>
+            <code>agent_activity_log</code>
+          </div>
+        </span>
+
+        <span class="def-label">Writes</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>Slack #notify</code>
+            <code>Slack #approvals</code>
+            <code>Asana tasks</code>
+            <code>Google Sheets</code>
+          </div>
+        </span>
+
+        <span class="def-label">Calls</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>infra_qa_gate</code>
+          </div>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- cadence_monthly -->
+  <div class="workflow-card cadence" id="cadence_monthly">
+    <div class="card-header">
+      <h3 class="cadence">cadence_monthly</h3>
+      <span class="trigger-badge cadence">⏰ 1st of month 05:00 UTC</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">Monthly strategic review — MoM comparison, MTD forecast, CRO qual-rate, ROAS, creative performance.</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Flow</div>
+        <ol class="flow-steps">
+          <li>Runs 5 parallel BQ queries: MoM comparison, MTD forecast, qual-rate, ROAS, activity log</li>
+          <li>Pulls creative performance from <code>v_ad_performance</code></li>
+          <li>Two Claude agents produce strategic digest</li>
+          <li>Writes creative performance tab to Google Sheets</li>
+          <li>Creates LP duplicate brief Asana task for prior month's best-converting URL</li>
+          <li>Posts strategic digest to <code>#notify</code> + <code>#approvals</code></li>
+        </ol>
+      </div>
+
+      <div class="def-grid" style="margin-top: 16px;">
+        <span class="def-label">Reads</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>campaigns_daily</code>
+            <code>hubspot_leads_module_daily</code>
+            <code>v_ad_performance</code>
+            <code>channel_roas_daily</code>
+          </div>
+        </span>
+
+        <span class="def-label">Writes</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>Slack #notify</code>
+            <code>Slack #approvals</code>
+            <code>Asana tasks</code>
+            <code>Google Sheets</code>
+          </div>
+        </span>
+
+        <span class="def-label">Calls</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>infra_qa_gate</code>
+          </div>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SECTION 2: KPI SUB-FLOWS -->
+  <div class="group-header kpi">
+    <h2>KPI Sub-flows</h2>
+    <span class="group-count">6 workflows</span>
+  </div>
+
+  <p class="group-intro">
+    Called by <code>cadence_daily</code> when a KPI threshold is breached. Each sub-flow runs its own BQ query, passes results to a dedicated Claude analyst node, and returns a structured Asana task + recommendation JSON to the parent workflow.
+  </p>
+
+  <!-- kpi_cpql -->
+  <div class="workflow-card kpi" id="kpi_cpql">
+    <div class="card-header">
+      <h3 class="kpi">kpi_cpql</h3>
+      <span class="trigger-badge kpi">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Fires when</span>
+        <span class="def-value">Channel CPQL &gt; $60</span>
+
+        <span class="def-label">Action at</span>
+        <span class="def-value">CPQL &gt; $95 per campaign</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Logic</div>
+        <ul class="detail-list">
+          <li>Queries 30-day BQ data using <code>campaigns_daily</code> + <code>hubspot_leads_module_daily</code> CTE join (pre-aggregated to prevent spend fan-out)</li>
+          <li>Passes worst campaigns to Claude CPQL Analyst node</li>
+          <li>Returns root-cause JSON + <code>[CPQL FIX]</code> Asana task with full campaign path, period comparison, and recommended action</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- kpi_cpl -->
+  <div class="workflow-card kpi" id="kpi_cpl">
+    <div class="card-header">
+      <h3 class="kpi">kpi_cpl</h3>
+      <span class="trigger-badge kpi">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Fires when</span>
+        <span class="def-value">Channel CPL &gt; $25</span>
+
+        <span class="def-label">Action at</span>
+        <span class="def-value">CPL &gt; $38 per campaign</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Logic</div>
+        <ul class="detail-list">
+          <li>30-day CTE query on <code>campaigns_daily</code> joined to <code>hubspot_leads_module_daily</code></li>
+          <li>Passes results to Claude CPL Analyst node</li>
+          <li>Flags LP quality issues with a CRO-handoff marker if the issue traces to the landing page</li>
+          <li>Returns <code>[CPL FIX]</code> Asana task with root-cause attribution and full setup recommendation</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- kpi_roas -->
+  <div class="workflow-card kpi" id="kpi_roas">
+    <div class="card-header">
+      <h3 class="kpi">kpi_roas</h3>
+      <span class="trigger-badge kpi">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Fires when</span>
+        <span class="def-value">Channel ROAS &lt; 1.0×</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Logic</div>
+        <ul class="detail-list">
+          <li>3-factor check: qual ≥ 45%, CPQL ≤ $85, volume vs prior period</li>
+          <li>All three factors green → creates <strong>Sales Escalation</strong> task (ROAS issue is downstream of pipeline, not media)</li>
+          <li>Any factor red → creates <strong>Campaign Fix</strong> task for performance-lead with root-cause attribution</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- kpi_qual_ratio -->
+  <div class="workflow-card kpi" id="kpi_qual_ratio">
+    <div class="card-header">
+      <h3 class="kpi">kpi_qual_ratio</h3>
+      <span class="trigger-badge kpi">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Fires when</span>
+        <span class="def-value">Qualification rate &lt; 45%</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Severity Split</div>
+        <ul class="detail-list">
+          <li>
+            <span class="severity sev-p0">P0</span>
+            &nbsp;Qual ≤ 30% → urgent LP-redirect task, due today, escalated to <code>cro-specialist</code> seat
+          </li>
+          <li>
+            <span class="severity sev-p1">P1</span>
+            &nbsp;Qual 30–45% → qual-improvement task with worst campaigns listed + root-cause hypotheses for team review
+          </li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- kpi_impression_share -->
+  <div class="workflow-card kpi" id="kpi_impression_share">
+    <div class="card-header">
+      <h3 class="kpi">kpi_impression_share</h3>
+      <span class="trigger-badge kpi">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Fires when</span>
+        <span class="def-value">Impression share flag fires</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Logic</div>
+        <ul class="detail-list">
+          <li>Queries 14-day avg IS, <code>lost_is_budget</code>, and <code>lost_is_rank</code> from <code>campaigns_daily</code> (paused campaigns excluded)</li>
+          <li>Claude IS Analyst node determines whether root cause is budget-constrained vs rank/quality-constrained</li>
+          <li>Outputs per-campaign bid and budget recommendations with expected IS uplift</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- kpi_creative_ctr -->
+  <div class="workflow-card kpi" id="kpi_creative_ctr">
+    <div class="card-header">
+      <h3 class="kpi">kpi_creative_ctr</h3>
+      <span class="trigger-badge kpi">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Fires when</span>
+        <span class="def-value">Creative CTR decay flag fires</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Logic</div>
+        <ul class="detail-list">
+          <li>Queries <code>ads_daily</code> — 3-day CTR vs 7-day baseline; filters to &gt;20% CTR drop with ≥ 1,000 impressions</li>
+          <li>Claude Creative Analyst node classifies each ad as <strong>TWEAK</strong> (adjust creative) or <strong>KILL</strong> (retire and replace)</li>
+          <li>Zero-conv + CTR decay combination = immediate pause recommendation + new creative brief in Asana</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ SECTION 3: INFRASTRUCTURE -->
+  <div class="group-header infra">
+    <h2>Infrastructure</h2>
+    <span class="group-count">4 workflows</span>
+  </div>
+
+  <!-- infra_data_collection -->
+  <div class="workflow-card infra" id="infra_data_collection">
+    <div class="card-header">
+      <h3 class="infra">infra_data_collection</h3>
+      <span class="trigger-badge infra">Called by cadence_daily</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">Single data-ingestion gateway — hits all 6 ad platform APIs in parallel, normalises spend to USD, merges into <code>campaigns_daily</code>.</span>
+
+        <span class="def-label">Platforms</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>Google Ads (2 accounts)</code>
+            <code>Meta</code>
+            <code>Snapchat</code>
+            <code>TikTok</code>
+            <code>Microsoft</code>
+            <code>LinkedIn</code>
+          </div>
+        </span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Key Rules</div>
+        <ul class="detail-list">
+          <li>Spend normalised to USD — Google Ads <code>cost_micros</code> and Snap <code>spend</code> divided by 1,000,000</li>
+          <li>Each platform node has <code>continue-on-error</code> — one platform failure does not block the others</li>
+          <li>Microsoft connector handles OAuth token self-rotation without manual re-auth</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Writes</span>
+        <span class="def-value"><code>campaigns_daily</code> (BQ MERGE)</span>
+
+        <span class="def-label">Called by</span>
+        <span class="def-value"><code>cadence_daily</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- infra_approval_listener -->
+  <div class="workflow-card infra" id="infra_approval_listener">
+    <div class="card-header">
+      <h3 class="infra">infra_approval_listener</h3>
+      <span class="trigger-badge infra">Slack Events API — always-on</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">Human-in-the-loop gate for all pause/scale actions. Listens for emoji reactions on <code>#approvals</code> messages and resumes or cancels the pending n8n execution.</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">How it works</div>
+        <ul class="detail-list">
+          <li>Handles Slack URL-verification challenge automatically on first connect</li>
+          <li>✅ reaction on an <code>#approvals</code> message → resumes the suspended n8n execution via approval webhook</li>
+          <li>❌ reaction → posts "Action rejected — skipped" in the message thread, then closes the execution cleanly</li>
+        </ul>
+      </div>
+
+      <div class="note-box">
+        <strong>Always-on requirement:</strong> This workflow must be active at all times. Pause/scale approvals fail silently if this workflow is off — the parent execution waits indefinitely for a webhook that never fires.
+      </div>
+    </div>
+  </div>
+
+  <!-- infra_qa_gate -->
+  <div class="workflow-card infra" id="infra_qa_gate">
+    <div class="card-header">
+      <h3 class="infra">infra_qa_gate</h3>
+      <span class="trigger-badge infra">Called by all cadence workflows</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">System-wide compliance gate — validates that every output from a cadence workflow is structurally correct and policy-compliant before it reaches Slack or Asana.</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">Checks</div>
+        <ul class="detail-list">
+          <li>Required fields present: <code>sub_flow</code> and <code>channel</code></li>
+          <li>Valid <code>status</code> value (must be an allowed enum)</li>
+          <li>No SAR-denominated spend in output (USD only — enforcement of currency policy)</li>
+          <li>No auto-execution claims in output text (all actions must be approval-gated)</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Returns</span>
+        <span class="def-value">
+          <code>QA_PASSED</code> — forwards payload downstream &nbsp;|&nbsp;
+          <code>QA_FAILED</code> — returns structured error list, halts execution
+        </span>
+
+        <span class="def-label">Called by</span>
+        <span class="def-value">
+          <div class="tag-list">
+            <code>cadence_daily</code>
+            <code>cadence_weekly</code>
+            <code>cadence_monthly</code>
+          </div>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- infra_data_health -->
+  <div class="workflow-card infra" id="infra_data_health">
+    <div class="card-header">
+      <h3 class="infra">infra_data_health</h3>
+      <span class="trigger-badge infra">⏰ Daily 06:00 UTC (09:00 Riyadh)</span>
+    </div>
+    <div class="card-body">
+      <div class="def-grid">
+        <span class="def-label">Purpose</span>
+        <span class="def-value">BQ ↔ HubSpot sync health monitor — compares BQ row counts against live HubSpot API for deals and leads. Posts ✅ or ❌ per metric to <code>#data-health</code>.</span>
+      </div>
+
+      <div class="flow-section">
+        <div class="flow-label">What it checks</div>
+        <ul class="detail-list">
+          <li><code>hubspot_deals_daily</code> + <code>hubspot_leads_module_daily</code> vs HubSpot API — last 60 days, paid channels, 3 pipelines</li>
+          <li>Coverage ratio threshold: &lt; 85% for either deals or leads triggers ❌ alert</li>
+        </ul>
+      </div>
+
+      <div class="def-grid" style="margin-top: 14px;">
+        <span class="def-label">Writes</span>
+        <span class="def-value"><code>Slack #data-health</code> with ✅/❌ per metric</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ CALL MAP -->
+  <hr class="section-rule" />
+
+  <div id="call-map">
+    <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 14px;">Workflow Call Map</h2>
+    <div class="callmap-block">
+      <pre>cadence_daily
+├── infra_data_collection
+├── infra_qa_gate
+├── kpi_cpql              (fires when CPQL &gt; $60)
+├── kpi_cpl               (fires when CPL &gt; $25)
+├── kpi_roas              (fires when ROAS &lt; 1.0×)
+├── kpi_qual_ratio        (fires when qual &lt; 45%)
+├── kpi_impression_share  (fires when IS flag triggers)
+└── kpi_creative_ctr      (fires when CTR decay flag triggers)
+
+cadence_weekly  ──→  infra_qa_gate
+cadence_monthly ──→  infra_qa_gate
+
+infra_approval_listener   (standalone — always-on webhook)
+infra_data_health         (standalone — daily health check)</pre>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ KPI THRESHOLDS -->
+  <div id="kpi-thresholds">
+    <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 14px;">KPI Thresholds</h2>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>KPI</th>
+            <th>Scale ✅</th>
+            <th>Acceptable</th>
+            <th>Warning</th>
+            <th>Pause / Escalate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CPL — campaign level</strong></td>
+            <td class="scale">&lt; $25</td>
+            <td>$25 – $38</td>
+            <td class="warning">$40 – $49</td>
+            <td class="danger">&gt; $50</td>
+          </tr>
+          <tr>
+            <td><strong>CPQL — campaign level</strong></td>
+            <td class="scale">&lt; $85</td>
+            <td>$80 – $85</td>
+            <td class="warning">$95 – $130</td>
+            <td class="danger">&gt; $160</td>
+          </tr>
+          <tr>
+            <td><strong>CPL — ad level</strong></td>
+            <td class="scale">&lt; $30</td>
+            <td>$30 – $35</td>
+            <td class="warning">$36 – $50</td>
+            <td class="danger">&gt; $50</td>
+          </tr>
+          <tr>
+            <td><strong>CPQL — ad level</strong></td>
+            <td class="scale">&lt; $60</td>
+            <td>$60 – $75</td>
+            <td class="warning">$76 – $85</td>
+            <td class="danger">&gt; $90</td>
+          </tr>
+          <tr>
+            <td><strong>ROAS</strong></td>
+            <td class="scale">&gt; 1.0×</td>
+            <td class="muted">—</td>
+            <td class="muted">—</td>
+            <td class="danger">&lt; 1.0×</td>
+          </tr>
+          <tr>
+            <td><strong>Qualification rate</strong></td>
+            <td class="scale">&gt; 45%</td>
+            <td class="muted">—</td>
+            <td class="warning">30% – 45%</td>
+            <td class="danger">&lt; 30% <span class="severity sev-p0" style="margin-left: 4px;">P0</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+</body>
+</html>
