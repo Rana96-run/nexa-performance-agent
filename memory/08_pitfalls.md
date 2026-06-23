@@ -34,6 +34,8 @@
 
 **n8n expression parser gotcha:** When `specifyBody: "json"` is used on an HTTP Request node with `googleApi` credential type, the expression evaluator fails with `invalid syntax` even for valid `JSON.stringify({...})` expressions. This only affects `googleApi` credential type nodes. With `httpHeaderAuth` (Slack), the same expression works fine.
 
+9. **`v_ad_performance` view must be re-deployed after `bq_writer.py` changes:** Changing column aliases in `V_AD_PERFORMANCE_SQL` in `collectors/bq_writer.py` does NOT automatically update the live BQ view. The view DDL must be re-executed explicitly. The n8n `Query Ad Audit` SQL used `v.utm_campaign` (correct per local code) but the live BQ view still had `campaign_name` from before the fix was committed — causing `Name campaign_name not found inside v` on exec#189/190/191. Fix: `python -c "from collectors.bq_writer import V_AD_PERFORMANCE_SQL, get_client; client=get_client(); client.query(V_AD_PERFORMANCE_SQL).result()"` with `GOOGLE_APPLICATION_CREDENTIALS` set. **Rule:** After any change to `V_AD_PERFORMANCE_SQL` / `V_ADSET_PERFORMANCE_SQL` / `V_KEYWORD_PERFORMANCE_SQL`, re-deploy the view immediately before claiming the fix is done.
+
 **Rule:** After any new n8n cadence workflow is written, always do a manual test run immediately — never assume it works until all nodes complete at least once.
 
 ## [2026-06-23] n8n IF node v2 — days_stale returns string from BQ, causes type error even with typeValidation=loose
