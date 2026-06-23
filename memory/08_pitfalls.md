@@ -63,6 +63,26 @@
 
 **Rule:** Always query `ads_daily.final_url` (not `campaigns_daily.destination_url`) for landing page URL analysis.
 
+## [2026-06-23] n8n — googleSheetsOAuth2Api credential blocked in HTTP Request nodes; use native googleSheets node
+
+**Symptom:** Any HTTP Request node using `predefinedCredentialType: googleSheetsOAuth2Api` fails with: `"This credential is configured to prevent use within an HTTP Request node"`. Execution snapshot shows old `httpRequest` type even after PUT updated the workflow — this is because n8n snapshots the node config at execution start, so a stale execution shows the old type even if cloud was already updated.
+
+**Root cause:** n8n cloud enforces `nodesAccess` restrictions on OAuth2 credential types. `googleSheetsOAuth2Api` is restricted to native `n8n-nodes-base.googleSheets` nodes only.
+
+**Affected nodes in cadence_weekly (iNSdpXH7Rc9Lb8h8):**
+- `wkly-017` Sheets → Weekly Log (FIXED 2026-06-23, commit 71dc0ea)
+- `wkly-lp-03` Sheets → Create LP Tab (FIXED 2026-06-23, commit 2d873fd)
+- `wkly-lp-04` Sheets → Write LP Rows (FIXED 2026-06-23, commit 2d873fd)
+
+**Fix:** Replace `n8n-nodes-base.httpRequest` with `n8n-nodes-base.googleSheets` (typeVersion 4).
+- For `append` (wkly-017, wkly-lp-04): `operation: "append"`, `documentId.__rl.mode: "id"`, `sheetName.__rl.mode: "name"`, `columns.mappingMode: "defineBelow"` with explicit column→expression mapping.
+- For `createSheet` (wkly-lp-03): `operation: "create"`, same `documentId`, `sheetName` with expression.
+- Credential reference `{id: "kBgcDkRIN5tMoACU", name: "Google Sheets OAuth2 API"}` stays identical.
+
+**Limitation:** Native googleSheets append with `defineBelow` writes ONE item per execution. The original lp-04 wrote ALL rows via raw values API in one call. Now only `rows[0]` (top campaign) is written. To restore multi-row write, add a SplitInBatches node before lp-04 or reshape data in Code Format LP to output one item per row.
+
+**Rule:** Never use `googleSheetsOAuth2Api` credential in an HTTP Request node. Always use `n8n-nodes-base.googleSheets` native node.
+
 ## [2026-06-23] GH Actions env block — always cross-check collector os.getenv calls
 
 **Symptom:** Snapchat wrote 0 rows every GH Actions run for weeks. Step showed green (exit 0). Dashboard showed 3-day staleness. Snapchat had been silently broken since the workflow was first written.
