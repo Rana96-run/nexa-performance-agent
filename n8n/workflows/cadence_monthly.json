@@ -322,7 +322,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});return(actions||[]).map(a=>({json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:a.title,notes:a.description+'\\n\\nChannel: '+(a.channel||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nEstimated Impact: '+(a.estimated_impact||'N/A')+'\\nType: monthly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}));"
+                "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});const channelMap={'Meta':'1213280413868927','Google':'1213239419217795','Google Ads':'1213239419217795','Snapchat':'1214135546324721','TikTok':'1214135614950965','Microsoft Ads':'1213294555250809','Microsoft':'1213294555250809','Bing':'1213294555250809','HubSpot':'1214135615075674'};return(actions||[]).map(a=>{const ch=a.channel||'';const projectGid=channelMap[ch]||'1214135581886045';return{json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[projectGid],name:a.title,notes:a.description+'\\n\\nChannel: '+(ch||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nEstimated Impact: '+(a.estimated_impact||'N/A')+'\\nType: monthly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}});"
             }
         },
         {
@@ -494,7 +494,7 @@
                 "nodeCredentialType": "httpHeaderAuth",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:'WINNING CREATIVES — '+$('Code · Format Creative').first().json.monthLabel,notes:$('Code · Format Creative').first().json.notes,due_on:$('Code · Format Creative').first().json.due}}) }}",
+                "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:['1214135581886045'],name:'WINNING CREATIVES — '+$('Code · Format Creative').first().json.monthLabel,notes:$('Code · Format Creative').first().json.notes,due_on:$('Code · Format Creative').first().json.due}}) }}",
                 "options": {}
             },
             "credentials": {
@@ -556,7 +556,7 @@
                 "nodeCredentialType": "httpHeaderAuth",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:$('Code · Format LP Brief').first().json.title||'Monthly LP brief skipped',notes:$('Code · Format LP Brief').first().json.notes,due_on:$('Code · Format LP Brief').first().json.due||undefined}}) }}",
+                "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:['1214135581886045'],name:$('Code · Format LP Brief').first().json.title||'Monthly LP brief skipped',notes:$('Code · Format LP Brief').first().json.notes,due_on:$('Code · Format LP Brief').first().json.due||undefined}}) }}",
                 "options": {}
             },
             "credentials": {
@@ -1418,7 +1418,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});return(actions||[]).map(a=>({json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:a.title,notes:a.description+'\\n\\nChannel: '+(a.channel||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nEstimated Impact: '+(a.estimated_impact||'N/A')+'\\nType: monthly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}));"
+                    "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});const channelMap={'Meta':'1213280413868927','Google':'1213239419217795','Google Ads':'1213239419217795','Snapchat':'1214135546324721','TikTok':'1214135614950965','Microsoft Ads':'1213294555250809','Microsoft':'1213294555250809','Bing':'1213294555250809','HubSpot':'1214135615075674'};return(actions||[]).map(a=>{const ch=a.channel||'';const projectGid=channelMap[ch]||'1214135581886045';return{json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[projectGid],name:a.title,notes:a.description+'\\n\\nChannel: '+(ch||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nEstimated Impact: '+(a.estimated_impact||'N/A')+'\\nType: monthly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}});"
                 }
             },
             {
@@ -1590,7 +1590,7 @@
                     "nodeCredentialType": "httpHeaderAuth",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:'WINNING CREATIVES — '+$('Code · Format Creative').first().json.monthLabel,notes:$('Code · Format Creative').first().json.notes,due_on:$('Code · Format Creative').first().json.due}}) }}",
+                    "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:['1214135581886045'],name:'WINNING CREATIVES — '+$('Code · Format Creative').first().json.monthLabel,notes:$('Code · Format Creative').first().json.notes,due_on:$('Code · Format Creative').first().json.due}}) }}",
                     "options": {}
                 },
                 "credentials": {
@@ -1652,7 +1652,7 @@
                     "nodeCredentialType": "httpHeaderAuth",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:$('Code · Format LP Brief').first().json.title||'Monthly LP brief skipped',notes:$('Code · Format LP Brief').first().json.notes,due_on:$('Code · Format LP Brief').first().json.due||undefined}}) }}",
+                    "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:['1214135581886045'],name:$('Code · Format LP Brief').first().json.title||'Monthly LP brief skipped',notes:$('Code · Format LP Brief').first().json.notes,due_on:$('Code · Format LP Brief').first().json.due||undefined}}) }}",
                     "options": {}
                 },
                 "credentials": {

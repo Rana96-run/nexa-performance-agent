@@ -281,7 +281,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});return(actions||[]).map(a=>({json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:a.title,notes:a.description+'\\n\\nChannel: '+(a.channel||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nType: weekly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}));"
+                "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});const channelMap={'Meta':'1213280413868927','Google':'1213239419217795','Google Ads':'1213239419217795','Snapchat':'1214135546324721','TikTok':'1214135614950965','Microsoft Ads':'1213294555250809','Microsoft':'1213294555250809','Bing':'1213294555250809','HubSpot':'1214135615075674'};return(actions||[]).map(a=>{const ch=a.channel||'';const projectGid=channelMap[ch]||'1214135581886045';return{json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[projectGid],name:a.title,notes:a.description+'\\n\\nChannel: '+(ch||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nType: weekly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}});"
             }
         },
         {
@@ -559,7 +559,7 @@
                 "nodeCredentialType": "httpHeaderAuth",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:'LP Weekly Review - '+$('Code ? Format LP').first().json.today,notes:$('Code ? Format LP').first().json.notes,due_on:$('Code ? Format LP').first().json.due}}) }}",
+                "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:['1214135581886045'],name:'LP Weekly Review - '+$('Code ? Format LP').first().json.today,notes:$('Code ? Format LP').first().json.notes,due_on:$('Code ? Format LP').first().json.due}}) }}",
                 "options": {}
             },
             "credentials": {
@@ -1417,7 +1417,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});return(actions||[]).map(a=>({json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:a.title,notes:a.description+'\\n\\nChannel: '+(a.channel||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nType: weekly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}));"
+                    "jsCode": "const {actions}=$input.first().json,today=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Riyadh'});const channelMap={'Meta':'1213280413868927','Google':'1213239419217795','Google Ads':'1213239419217795','Snapchat':'1214135546324721','TikTok':'1214135614950965','Microsoft Ads':'1213294555250809','Microsoft':'1213294555250809','Bing':'1213294555250809','HubSpot':'1214135615075674'};return(actions||[]).map(a=>{const ch=a.channel||'';const projectGid=channelMap[ch]||'1214135581886045';return{json:{data:{workspace:$vars.ASANA_WORKSPACE,projects:[projectGid],name:a.title,notes:a.description+'\\n\\nChannel: '+(ch||'all')+'\\nPriority: '+(a.priority||'medium')+'\\nType: weekly-review\\nCreated: '+today,assignee:$vars.ASANA_ASSIGNEE_DEFAULT}}}});"
                 }
             },
             {
@@ -1589,7 +1589,7 @@
                     "nodeCredentialType": "httpHeaderAuth",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:[$vars.ASANA_PROJECT_PAID],name:'LP Weekly Review - '+$('Code ? Format LP').first().json.today,notes:$('Code ? Format LP').first().json.notes,due_on:$('Code ? Format LP').first().json.due}}) }}",
+                    "jsonBody": "={{ JSON.stringify({data:{workspace:$vars.ASANA_WORKSPACE,projects:['1214135581886045'],name:'LP Weekly Review - '+$('Code ? Format LP').first().json.today,notes:$('Code ? Format LP').first().json.notes,due_on:$('Code ? Format LP').first().json.due}}) }}",
                     "options": {}
                 },
                 "credentials": {
