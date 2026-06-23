@@ -182,6 +182,8 @@
                      "executionOrder":  "v1",
                      "timezone":  "Asia/Riyadh",
                      "saveManualExecutions":  true,
+                     "saveExecutionProgress":  true,
+                     "executionTimeout":  300,
                      "callerPolicy":  "workflowsFromSameOwner",
                      "availableInMCP":  true
                  },
