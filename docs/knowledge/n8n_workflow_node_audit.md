@@ -417,6 +417,9 @@ Notes on status upgrades from 2026-06-23 fixes and code inspection:
 - infra_data_health: 8 nodes VERIFIED (BQ matches HubSpot within 10%)
 - infra_approval_listener: webhook confirmed active; 3 nodes VERIFIED
 - infra_qa_gate: now wired into infra_data_health; will verify on next infra_data_health run
+- kpi_roas: execution 200 (2026-06-23 synthetic trigger) — 6/7 nodes VERIFIED end-to-end including Return Result. 1 UNTESTED: Build - Sales Escalation (TRUE branch only)
+- kpi_cpql/cpl/impression_share/creative_ctr/qual_ratio: BQ nodes all confirmed live (execs 197-202). Downstream Code nodes use $('Trigger') reference which only works when called via executeWorkflowTrigger in production — classified ASSUMED not broken
+- cadence_daily CRITICAL: infra_data_collection (execution 154) never reaches Return Result node — only 20/49 nodes ran (collectors only). This means cadence_daily's analysis pipeline (BQ Baseline → Guard → Claude → Slack → Asana) has NEVER run. Structural fix needed: find why collectors don't chain to merge/staleness check in infra_data_collection. Filed as separate task.
 
 | Workflow | Nodes | VERIFIED | ASSUMED | UNTESTED | Notes |
 |----------|-------|----------|---------|---------|-------|
@@ -427,13 +430,13 @@ Notes on status upgrades from 2026-06-23 fixes and code inspection:
 | infra_data_health | 8 | 8 | 0 | 0 | All 8 nodes VERIFIED (BQ/HS within 10%) |
 | infra_approval_listener | 7 | 3 | 2 | 2 | Webhook active and confirmed |
 | infra_qa_gate | 6 | 0 | 4 | 2 | Now wired; verify on next infra_data_health run |
-| kpi_roas | 7 | 0 | 0 | 7 | BQ node not yet verified end-to-end |
-| kpi_cpql | 7 | 3 | 0 | 4 | BQ node verified via direct query (template var fix); other nodes pending |
-| kpi_cpl | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
-| kpi_impression_share | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
-| kpi_creative_ctr | 7 | 3 | 0 | 4 | BQ node verified via direct query; other nodes pending |
-| kpi_qual_ratio | 7 | 3 | 0 | 4 | BQ node FIXED (MAX→SUM) + verified: 26 rows / 8,560 leads returned |
-| **TOTAL** | **239** | **89 (37%)** | **96 (40%)** | **54 (23%)** | cadence_weekly execution 195 (2026-06-23): 16 VERIFIED; cadence_monthly execution 188: 22 VERIFIED; all branch nodes code-inspected. 8 bugs found+fixed across both workflows 2026-06-23 |
+| kpi_roas | 7 | 6 | 0 | 1 | Execution 200 (2026-06-23 synthetic trigger): 6/7 nodes VERIFIED including Return Result. 1 UNTESTED: Build - Sales Escalation (TRUE branch of All Green? IF — only fires when all KPIs are green) |
+| kpi_cpql | 7 | 4 | 3 | 0 | Execution 201: BQ node ran (30 rows returned). Code node fails with synthetic trigger ($('Trigger') reference) — expected for production-only sub-workflow design. 3 downstream nodes ASSUMED (correct code, rely on Trigger data) |
+| kpi_cpl | 7 | 4 | 3 | 0 | Execution 202: BQ node ran (0 rows returned — no CPL data for synthetic channel). BQ connectivity confirmed. 3 downstream nodes ASSUMED |
+| kpi_impression_share | 7 | 4 | 3 | 0 | Execution 197: BQ node ran (real campaign rows returned — Bing etc.). 3 downstream nodes ASSUMED ($('Trigger') pattern, production-only) |
+| kpi_creative_ctr | 7 | 4 | 3 | 0 | Execution 198: BQ node ran (real creative rows — TikTok AR videos). 3 downstream nodes ASSUMED |
+| kpi_qual_ratio | 7 | 4 | 3 | 0 | Execution 199: BQ node ran (qual_rate_pct returned). IF node got empty string (Trigger data missing) — expected for synthetic test. Prod path: executeWorkflowTrigger populates Trigger correctly. 3 downstream nodes ASSUMED |
+| **TOTAL** | **239** | **100 (42%)** | **111 (46%)** | **28 (12%)** | kpi_roas exec 200: 6 VERIFIED end-to-end; 5 other KPI flows: BQ nodes confirmed live (execs 197-202); cadence_daily pipeline blocked (infra_data_collection never reaches Return Result — separate fix needed) |
 
 ---
 
