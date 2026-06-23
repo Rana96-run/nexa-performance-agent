@@ -1431,7 +1431,7 @@
                 400
             ],
             "parameters": {
-                "jsCode": "const rows = $('BQ � Fetch Config').all().map(i => i.json);\nconst config = {};\nfor (const r of rows) { config[r.key] = r.value; }\nreturn [{ json: config }];"
+                "jsCode": "const rows = $('BQ � Fetch Config').all().map(i => i.json);\nconst config = {};\nfor (const r of rows) { config[r.key] = r.value; }\n// Merge date fields so sub-workflow trigger receives yesterday, start_7d etc.\nconst dates = $('Set Dates').first().json;\nreturn [{ json: { ...config, ...dates } }];\n"
             }
         }
     ],
