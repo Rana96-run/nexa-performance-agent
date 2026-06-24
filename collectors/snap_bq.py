@@ -35,7 +35,7 @@ def _refresh_access_token():
         "client_id":     os.getenv("SNAPCHAT_CLIENT_ID"),
         "client_secret": os.getenv("SNAPCHAT_CLIENT_SECRET"),
         "grant_type":    "refresh_token",
-    })
+    }, timeout=30)
     r.raise_for_status()
     return r.json()["access_token"]
 
@@ -92,7 +92,7 @@ def _date_chunks(start: date, end: date, max_days: int = 30):
 def _get_account(token, ad_account_id):
     """Fetch one ad account to get currency + timezone."""
     r = requests.get(f"{BASE}/adaccounts/{ad_account_id}",
-                     headers=_headers(token))
+                     headers=_headers(token), timeout=30)
     if r.status_code >= 400:
         return {}
     elts = r.json().get("adaccounts", [])
@@ -101,7 +101,7 @@ def _get_account(token, ad_account_id):
 
 def _list_campaigns(token, ad_account_id):
     r = requests.get(f"{BASE}/adaccounts/{ad_account_id}/campaigns",
-                     headers=_headers(token))
+                     headers=_headers(token), timeout=30)
     r.raise_for_status()
     out = {}
     for c in r.json().get("campaigns", []):
@@ -207,6 +207,7 @@ def collect_and_write(days: int = None, incremental: bool = False):
     days=N            -> last N days
     default           -> YTD
     """
+    print(f"[snap] Starting Snapchat collector (campaigns) — lookback: {days} days")
     token = _refresh_access_token()
 
     # Snap DAY-granularity queries reject end_time in the future.
@@ -454,6 +455,7 @@ def collect_ads_and_write(days: int = None, incremental: bool = False) -> int:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import time as _time
 
+    print(f"[snap] Starting Snapchat collector (ads) — lookback: {days} days")
     token = _refresh_access_token()
 
     end = datetime.now(_RIYADH).date() - timedelta(days=1)
