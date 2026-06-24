@@ -111,12 +111,20 @@ def _list_campaigns(token, ad_account_id):
 
 
 _SNAP_TIMEOUT  = 120   # seconds per request — Snap API can be slow on Railway
-_SNAP_RETRIES  = 5    # attempts before giving up on a single request
-_SNAP_RETRY_WAIT = 15  # seconds between retries (fixed — avoids long exponential waits)
+_SNAP_RETRIES  = 3    # attempts before giving up on a single request
+# 3s wait keeps the 15-min step budget intact when threading 1,000+ ads.
+# Old value of 15s * 5 attempts = 75s worst-case per ad was infeasible at scale.
+# Snap's rate-limit window is short (<5s); 3s is enough to clear it.
+_SNAP_RETRY_WAIT = 3  # seconds between retries
 
 
 def _snap_get(url, headers, params) -> requests.Response:
-    """GET with retry on timeout/connection error/429. Tries up to _SNAP_RETRIES times."""
+    """GET with retry on timeout/connection error/429. Tries up to _SNAP_RETRIES times.
+
+    429 handling: retries up to _SNAP_RETRIES times with _SNAP_RETRY_WAIT between
+    each attempt. If all retries are 429s, returns a synthetic 429 so the caller
+    skips the item and continues — it will be caught on the next 6h run.
+    """
     import time as _time
     last_exc = None
     for attempt in range(_SNAP_RETRIES):
@@ -124,10 +132,13 @@ def _snap_get(url, headers, params) -> requests.Response:
             r = requests.get(url, headers=headers, params=params,
                              timeout=_SNAP_TIMEOUT)
             if r.status_code == 429:
-                wait = _SNAP_RETRY_WAIT * (attempt + 1)   # 15s, 30s, 45s …
+                if attempt >= _SNAP_RETRIES - 1:
+                    # Exhausted retries — give up on this item, caller will skip it
+                    print(f"[snap]   429 after {_SNAP_RETRIES} attempts — skipping item")
+                    break
                 print(f"[snap]   429 rate limit attempt {attempt+1}/{_SNAP_RETRIES}, "
-                      f"waiting {wait}s...")
-                _time.sleep(wait)
+                      f"waiting {_SNAP_RETRY_WAIT}s...")
+                _time.sleep(_SNAP_RETRY_WAIT)
                 continue
             return r
         except (requests.exceptions.Timeout,
