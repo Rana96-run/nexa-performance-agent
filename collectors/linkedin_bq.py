@@ -422,6 +422,7 @@ if __name__ == "__main__":
     import sys
     cmd  = sys.argv[1] if len(sys.argv) > 1 else "all"
     days = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    print(f"[li-bq] Starting LinkedIn collector — lookback: {days} days")
     if cmd in ("all", "campaigns"):
         print(f"campaigns: {collect_and_write(days=days)} rows")
     if cmd in ("all", "adsets"):

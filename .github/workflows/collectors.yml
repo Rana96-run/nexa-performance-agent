@@ -188,6 +188,13 @@ jobs:
         continue-on-error: true
         run: python collectors/tiktok_bq.py all 30
 
+      - name: Refresh LinkedIn access token
+        id: linkedin_refresh
+        timeout-minutes: 5
+        if: ${{ inputs.collector == '' || inputs.collector == 'linkedin_refresh' || inputs.collector == 'linkedin' }}
+        continue-on-error: true
+        run: python scripts/linkedin_refresh.py
+
       - name: Collector — LinkedIn
         id: linkedin
         timeout-minutes: 15
@@ -215,13 +222,6 @@ jobs:
         if: ${{ inputs.collector == '' || inputs.collector == 'hubspot_deals' }}
         continue-on-error: true
         run: python -m collectors.hubspot_deals_bq mirror $(date -d '60 days ago' +%Y-%m-%d)
-
-      - name: Refresh LinkedIn access token
-        id: linkedin_refresh
-        timeout-minutes: 5
-        if: ${{ inputs.collector == '' || inputs.collector == 'linkedin_refresh' }}
-        continue-on-error: true
-        run: python scripts/linkedin_refresh.py
 
       - name: Reconcile HubSpot ↔ BQ
         id: reconcile
