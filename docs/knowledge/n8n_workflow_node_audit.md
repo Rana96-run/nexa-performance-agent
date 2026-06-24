@@ -419,7 +419,7 @@ Notes on status upgrades from 2026-06-23 fixes and code inspection:
 - infra_qa_gate: now wired into infra_data_health; will verify on next infra_data_health run
 - kpi_roas: execution 200 (2026-06-23 synthetic trigger) — 6/7 nodes VERIFIED end-to-end including Return Result. 1 UNTESTED: Build - Sales Escalation (TRUE branch only)
 - kpi_cpql/cpl/impression_share/creative_ctr/qual_ratio: BQ nodes all confirmed live (execs 197-202). Downstream Code nodes use $('Trigger') reference which only works when called via executeWorkflowTrigger in production — classified ASSUMED not broken
-- cadence_daily CRITICAL: infra_data_collection (execution 154) never reaches Return Result node — only 20/49 nodes ran (collectors only). This means cadence_daily's analysis pipeline (BQ Baseline → Guard → Claude → Slack → Asana) has NEVER run. Structural fix needed: find why collectors don't chain to merge/staleness check in infra_data_collection. Filed as separate task.
+- cadence_daily FIXED 2026-06-23: `Phase 1 Data Collection` was wired as prerequisite gate for `BQ Baseline` (index 0). infra_data_collection never reaches Return Result (ad API calls time out in n8n; GH Actions does real collection) → returned 0 items → entire 52-node analysis chain never fired. Fix: disconnected Phase 1 from BQ Baseline in both top-level and activeVersion connections blocks; Config Flatten now feeds BQ Baseline directly. Phase 1 fires fire-and-forget. Pushed to Cloud (HTTP 200, updatedAt 2026-06-23T22:38:01.300Z). cadence_daily re-activated (`active: True`). Analysis chain will be verified on next 07:00 Riyadh run.
 
 | Workflow | Nodes | VERIFIED | ASSUMED | UNTESTED | Notes |
 |----------|-------|----------|---------|---------|-------|
@@ -436,7 +436,7 @@ Notes on status upgrades from 2026-06-23 fixes and code inspection:
 | kpi_impression_share | 7 | 4 | 3 | 0 | Execution 197: BQ node ran (real campaign rows returned — Bing etc.). 3 downstream nodes ASSUMED ($('Trigger') pattern, production-only) |
 | kpi_creative_ctr | 7 | 4 | 3 | 0 | Execution 198: BQ node ran (real creative rows — TikTok AR videos). 3 downstream nodes ASSUMED |
 | kpi_qual_ratio | 7 | 4 | 3 | 0 | Execution 199: BQ node ran (qual_rate_pct returned). IF node got empty string (Trigger data missing) — expected for synthetic test. Prod path: executeWorkflowTrigger populates Trigger correctly. 3 downstream nodes ASSUMED |
-| **TOTAL** | **239** | **100 (42%)** | **111 (46%)** | **28 (12%)** | kpi_roas exec 200: 6 VERIFIED end-to-end; 5 other KPI flows: BQ nodes confirmed live (execs 197-202); cadence_daily pipeline blocked (infra_data_collection never reaches Return Result — separate fix needed) |
+| **TOTAL** | **239** | **100 (42%)** | **111 (46%)** | **28 (12%)** | kpi_roas exec 200: 6 VERIFIED end-to-end; 5 other KPI flows: BQ nodes confirmed live (execs 197-202); cadence_daily pipeline FIXED 2026-06-23 — Phase 1 Data Collection disconnected from BQ Baseline gate; analysis chain now unblocked; verify on next 07:00 Riyadh run |
 
 ---
 

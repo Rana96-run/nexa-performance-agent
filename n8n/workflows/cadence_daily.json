@@ -1,4 +1,4 @@
-{
+﻿{
     "updatedAt": "2026-06-21T13:43:10.142Z",
     "createdAt": "2026-06-12T18:38:56.907Z",
     "id": "T8icImtZFLYeCa7e",
@@ -2101,13 +2101,7 @@
         },
         "Phase 1 � Data Collection": {
             "main": [
-                [
-                    {
-                        "node": "BQ Baseline",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
+                []
             ]
         },
         "Phase 4 � QA Gate": {
@@ -4313,13 +4307,7 @@
             },
             "Phase 1 � Data Collection": {
                 "main": [
-                    [
-                        {
-                            "node": "BQ Baseline",
-                            "type": "main",
-                            "index": 0
-                        }
-                    ]
+                    []
                 ]
             },
             "Phase 4 � QA Gate": {
@@ -4375,7 +4363,7 @@
                 "main": [
                     [
                         {
-                            "node": "Phase 1 � Data Collection",
+                            "node": "BQ Baseline",
                             "type": "main",
                             "index": 0
                         }

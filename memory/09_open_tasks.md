@@ -66,23 +66,29 @@ Progress as of 2026-06-23:
 - infra_data_health, infra_approval_listener: verified via live data
 - TOTAL: 100 VERIFIED / 111 ASSUMED / 28 UNTESTED
 
-Blocking gap: **cadence_daily analysis pipeline has NEVER run** (52 ASSUMED nodes).
-Root cause: infra_data_collection (n8n workflow jOnJxdpdaO3Vbi0B) executes in 2-5 seconds
-(not real API calls — GH Actions is the real data collector). n8n workflow returns 0 items
-to parent cadence_daily → chain stops after Phase 1. All BQ data comes from GH Actions.
+Blocking gap: **RESOLVED 2026-06-23** — cadence_daily pipeline fixed (Phase 1 Data Collection
+disconnected from gating BQ Baseline). Analysis chain now unblocked. Verify on next 07:00 Riyadh run.
 
-- [ ] **Fix cadence_daily analysis pipeline**: understand relationship between GH Actions
-      collectors and n8n infra_data_collection. The n8n workflow may need to be restructured
-      to trigger the analysis AFTER GH Actions completes, rather than after infra_data_collection.
-      Options: (a) remove Phase 1 dependency entirely and have cadence_daily trigger analysis
-      unconditionally at 07:00 (data was collected by GH Actions at 01:00), or (b) add a
-      small "always return 1 item" Set node right after the trigger in infra_data_collection.
-      Owner: `ai-orchestrator`. Filed 2026-06-23.
+- [x] **Fix cadence_daily analysis pipeline — DONE 2026-06-23.** Root cause: `Phase 1 Data
+      Collection` (executeWorkflow → infra_data_collection) was wired as a prerequisite gate
+      for `BQ Baseline` at index 0. Since infra_data_collection never reaches its Return Result
+      node (ad API calls time out in n8n context; real data is collected by GH Actions at 01:00),
+      it returned 0 items → BQ Baseline and the entire 52-node analysis chain never fired.
+      Fix applied to `n8n/workflows/cadence_daily.json` (3 edits, verified via PowerShell):
+      (1) top-level connections: `Phase 1 Data Collection → []` (was `→ BQ Baseline`);
+      (2) activeVersion connections: same disconnect;
+      (3) activeVersion connections: `Config Flatten → BQ Baseline` (was `→ Phase 1 Data Collection`).
+      Pushed to n8n Cloud via `curl.exe PUT /api/v1/workflows/T8icImtZFLYeCa7e` → HTTP 200.
+      `kpi_roas` sub-workflow (MHCdIiAtKzHNve1x) was inactive — activated first. Then
+      cadence_daily re-activated → `active: True`. Verified on Cloud: `updatedAt: 2026-06-23T22:38:01.300Z`,
+      `Config Flatten → BQ Baseline` confirmed live. Phase 1 Data Collection now fires as
+      fire-and-forget (no output connections), no longer blocking analysis chain.
 
-- [ ] **Verify cadence_daily analysis runs end-to-end**: once the pipeline fix is applied,
-      trigger cadence_daily (add temp webhook, call it), verify all 52 ASSUMED analysis
-      nodes (BQ Baseline → Guard → KPI Evaluator → Slack → Asana) complete. Expected:
-      16 kpi sub-flow nodes + 52 daily analysis = 68 more VERIFIED → total ~168/239 (70%).
+- [ ] **Verify cadence_daily analysis runs end-to-end**: on the next scheduled run (07:00 Riyadh),
+      confirm all 52 ASSUMED analysis nodes (BQ Baseline → Guard → KPI Evaluator → Slack → Asana)
+      complete. Check n8n execution history for `T8icImtZFLYeCa7e` and confirm Slack post arrives
+      in #daily-performance. Expected: 52 daily analysis + 16 kpi sub-flow = 68 more VERIFIED →
+      total ~168/239 (70%). Owner: `ai-orchestrator`.
 
 - [ ] **Complete remaining nodes**: cadence_weekly LP path (10 ASSUMED — Asana rate-limit
       prevented), infra_approval_listener approval loop (2 UNTESTED), infra_qa_gate (6),
