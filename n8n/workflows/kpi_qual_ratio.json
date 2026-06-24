@@ -1,4 +1,4 @@
-{
+﻿{
     "updatedAt": "2026-06-17T12:53:54.630Z",
     "createdAt": "2026-06-16T19:46:04.140Z",
     "id": "PxFBmtXDVgcNGzIM",
@@ -122,7 +122,7 @@
                 "genericAuthType": "httpHeaderAuth",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: ['1214135581886045'], assignee: '1211896896006195', due_on: $json.due_on } }) }}",
+                "jsonBody": "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: ['1214135581886045'], assignee: '1211659245827014', due_on: $json.due_on } }) }}",
                 "options": {}
             }
         },
@@ -393,7 +393,7 @@
                     "genericAuthType": "httpHeaderAuth",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: ['1214135581886045'], assignee: '1211896896006195', due_on: $json.due_on } }) }}",
+                    "jsonBody": "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: ['1214135581886045'], assignee: '1211659245827014', due_on: $json.due_on } }) }}",
                     "options": {}
                 }
             },

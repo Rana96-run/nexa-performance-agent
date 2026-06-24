@@ -115,7 +115,7 @@
                                          "genericAuthType":  "httpHeaderAuth",
                                          "sendBody":  true,
                                          "specifyBody":  "json",
-                                         "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                         "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271208007704598388\u0027, due_on: $json.due_on } }) }}",
                                          "options":  {
 
                                                      }
@@ -387,7 +387,7 @@
                                                                "genericAuthType":  "httpHeaderAuth",
                                                                "sendBody":  true,
                                                                "specifyBody":  "json",
-                                                               "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271211896896006195\u0027, due_on: $json.due_on } }) }}",
+                                                               "jsonBody":  "={{ JSON.stringify({ data: { name: $json.task_name, notes: $json.task_notes, projects: [\u00271214135581886045\u0027], assignee: \u00271208007704598388\u0027, due_on: $json.due_on } }) }}",
                                                                "options":  {
 
                                                                            }

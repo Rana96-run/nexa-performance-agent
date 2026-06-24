@@ -59,7 +59,7 @@ ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # legacy fallback
 # Per-person Asana GIDs — sourced from Railway env vars
 # Add new team members here + in Railway; no code change needed
 ASANA_ASSIGNEE_GOOGLE_ADS_GID = os.getenv("ASANA_ASSIGNEE_GOOGLE_ADS_GID", "1208007704598388")  # Rana Khalid
-ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1211896896006183")  # Donia Mohamed
+ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1208007704598388")  # Rana Khalid (default — errors/fixes/health route here)
 ASANA_ASSIGNEE_DONIA_GID      = os.getenv("ASANA_ASSIGNEE_DONIA",          "1211896896006183")  # Donia Mohamed (confirmed 2026-06-09)
 ASANA_ASSIGNEE_RANA_GID       = os.getenv("ASANA_ASSIGNEE_RANA",           "1208007704598388")  # Rana Khalid (confirmed 2026-06-09)
 ASANA_ASSIGNEE_THELMY_GID     = os.getenv("ASANA_ASSIGNEE_THELMY",         "1211659245827014")  # Tony Helmy / thelmy@qoyod.com (confirmed 2026-06-09)
@@ -85,19 +85,19 @@ AGENT_IDENTITY: dict[str, dict] = {
     "performance_audit":       {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_RANA_GID)},
     "paid_media_strategist":   {"display_name": "Performance Lead",    "slack_name": "Nexa · Performance Lead",  "slack_emoji": ":bar_chart:",        "asana_gid": os.getenv("ASANA_ASSIGNEE_PERFORMANCE_LEAD", ASANA_ASSIGNEE_RANA_GID)},
     # ── Campaign Manager ──────────────────────────────────────────────────────
-    "campaign_creator":        {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_DONIA_GID)},
-    "keyword_management":      {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_DONIA_GID)},
+    "campaign_creator":        {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_RANA_GID)},
+    "keyword_management":      {"display_name": "Campaign Manager",    "slack_name": "Nexa · Campaign Manager", "slack_emoji": ":mega:",             "asana_gid": os.getenv("ASANA_ASSIGNEE_CAMPAIGN_MANAGER", ASANA_ASSIGNEE_RANA_GID)},
     # ── Project Coordinator ───────────────────────────────────────────────────
-    "health_monitor":          {"display_name": "Project Coordinator",  "slack_name": "Nexa · Project Coordinator", "slack_emoji": ":wrench:",       "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
-    "collector":               {"display_name": "Project Coordinator",  "slack_name": "Nexa · Project Coordinator", "slack_emoji": ":wrench:",       "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_DEFAULT_GID)},
+    "health_monitor":          {"display_name": "Project Coordinator",  "slack_name": "Nexa · Project Coordinator", "slack_emoji": ":wrench:",       "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_RANA_GID)},
+    "collector":               {"display_name": "Project Coordinator",  "slack_name": "Nexa · Project Coordinator", "slack_emoji": ":wrench:",       "asana_gid": os.getenv("ASANA_ASSIGNEE_MARKETING_OPS",    ASANA_ASSIGNEE_RANA_GID)},
     # ── Growth Analyst ────────────────────────────────────────────────────────
     "bq_refresh":              {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     "spike_detector":          {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     "llm_cadence":             {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     # ── Creative Strategist ───────────────────────────────────────────────────
-    "creative_strategy":       {"display_name": "Creative Strategist", "slack_name": "Nexa · Creative",         "slack_emoji": ":art:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_CREATIVE",         ASANA_ASSIGNEE_DONIA_GID)},
+    "creative_strategy":       {"display_name": "Creative Strategist", "slack_name": "Nexa · Creative",         "slack_emoji": ":art:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_CREATIVE",         ASANA_ASSIGNEE_RANA_GID)},
     # ── CRO / Landing Page chain ──────────────────────────────────────────────
-    "cro_specialist":          {"display_name": "CRO Specialist",      "slack_name": "Nexa · CRO",              "slack_emoji": ":chart_with_upwards_trend:", "asana_gid": os.getenv("ASANA_ASSIGNEE_CRO",          ASANA_ASSIGNEE_RANA_GID)},
+    "cro_specialist":          {"display_name": "CRO Specialist",      "slack_name": "Nexa · CRO",              "slack_emoji": ":chart_with_upwards_trend:", "asana_gid": os.getenv("ASANA_ASSIGNEE_CRO",          ASANA_ASSIGNEE_THELMY_GID)},
     "ui_ux_design":            {"display_name": "UI/UX Designer",      "slack_name": "Nexa · UI/UX",            "slack_emoji": ":pencil:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_UIUX",             ASANA_ASSIGNEE_RANA_GID)},
     "lp_developer":            {"display_name": "Developer",           "slack_name": "Nexa · Developer",        "slack_emoji": ":computer:",         "asana_gid": os.getenv("ASANA_ASSIGNEE_DEVELOPER",        ASANA_ASSIGNEE_THELMY_GID),
                                 # co_assignee is added as a follower on every lp_developer task
