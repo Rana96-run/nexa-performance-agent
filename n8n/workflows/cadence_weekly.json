@@ -216,7 +216,7 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'🔴','medium':'🟠','low':'🟡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'🟡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] â†’ task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='📊 Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'🔴 '+actions.filter(a=>a.priority==='high').length+' high-priority flags · ':'')+actions.filter(a=>a.priority==='medium').length+' medium · '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
+                "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'ðŸ”´','medium':'ðŸŸ ','low':'ðŸŸ¡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'ðŸŸ¡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] â†’ task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='ðŸ“Š Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'ðŸ”´ '+actions.filter(a=>a.priority==='high').length+' high-priority flags Â· ':'')+actions.filter(a=>a.priority==='medium').length+' medium Â· '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
             }
         },
         {
@@ -267,7 +267,7 @@
                 "nodeCredentialType": "httpHeaderAuth",
                 "sendBody": true,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions — ✅ approve / âŒ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
+                "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions â€” âœ… approve / âŒ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
                 "options": {}
             }
         },
@@ -293,6 +293,7 @@
                 600
             ],
             "typeVersion": 4,
+            "onError": "continueRegularOutput",
             "credentials": {
                 "httpHeaderAuth": {
                     "id": "iUYNax4N4UkcLiQB",
@@ -804,7 +805,64 @@
             ],
             "typeVersion": 2,
             "parameters": {
-                "jsCode": "// Collect all created Asana task responses (one per action from Create Asana Task).\n// Each item.json.data = Asana API task object with name, permalink_url, notes.\nconst items = $input.all();\nconst lines = items.map(item => {\n  const task = item.json.data || {};\n  const notesRaw = task.notes || '';\n  const m = notesRaw.match(/Priority:\\s*(\\w+)/i);\n  const priority = m ? m[1].toLowerCase() : 'medium';\n  const url = task.permalink_url || '';\n  const name = task.name || 'Action';\n  const label = priority === 'high' ? 'HIGH' : priority === 'low' ? 'LOW' : 'MED';\n  return url\n    ? `• [${label}] ${name} \\u2192 <${url}|Asana>`\n    : `• [${label}] ${name}`;\n});\nconst approvalsText = lines.length > 0 ? lines.join('\\n') : 'No actions this week.';\nreturn [{json: {approvalsText}}];\n"
+                "jsCode": "// Collect all created Asana task responses (one per action from Create Asana Task).\n// Each item.json.data = Asana API task object with name, permalink_url, notes.\nconst items = $input.all();\nconst lines = items.map(item => {\n  const task = item.json.data || {};\n  const notesRaw = task.notes || '';\n  const m = notesRaw.match(/Priority:\\s*(\\w+)/i);\n  const priority = m ? m[1].toLowerCase() : 'medium';\n  const url = task.permalink_url || '';\n  const name = task.name || 'Action';\n  const label = priority === 'high' ? 'HIGH' : priority === 'low' ? 'LOW' : 'MED';\n  return url\n    ? `â€¢ [${label}] ${name} \\u2192 <${url}|Asana>`\n    : `â€¢ [${label}] ${name}`;\n});\nconst approvalsText = lines.length > 0 ? lines.join('\\n') : 'No actions this week.';\nreturn [{json: {approvalsText}}];\n"
+            }
+        },
+        {
+            "id": "wkly-dedup-001",
+            "name": "BQ ? Dedup Check",
+            "type": "n8n-nodes-base.googleBigQuery",
+            "typeVersion": 2,
+            "position": [
+                700,
+                0
+            ],
+            "credentials": {
+                "googleApi": {
+                    "id": "kE5RxM61mQkpV21N",
+                    "name": "BigQuery (Qoyod)"
+                }
+            },
+            "parameters": {
+                "authentication": "serviceAccount",
+                "projectId": {
+                    "__rl": true,
+                    "mode": "expression",
+                    "value": "={{ $vars.BQ_PROJECT }}"
+                },
+                "sqlQuery": "SELECT COUNT(*) AS run_count FROM `{{ $vars.BQ_PROJECT }}.{{ $vars.BQ_DATASET }}.agent_activity_log` WHERE action = 'weekly_review' AND status = 'success' AND DATE(ts, 'Asia/Riyadh') = CURRENT_DATE('Asia/Riyadh')",
+                "options": {}
+            }
+        },
+        {
+            "id": "wkly-dedup-002",
+            "name": "IF ? Already Run Today?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                750,
+                0
+            ],
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "loose"
+                    },
+                    "conditions": [
+                        {
+                            "id": "dedup-cond",
+                            "leftValue": "={{ $json.run_count }}",
+                            "rightValue": 0,
+                            "operator": {
+                                "type": "number",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
             }
         }
     ],
@@ -1025,12 +1083,7 @@
             "main": [
                 [
                     {
-                        "node": "Set Dates ? Weekly",
-                        "type": "main",
-                        "index": 0
-                    },
-                    {
-                        "node": "BQ ? LP Audit",
+                        "node": "BQ ? Dedup Check",
                         "type": "main",
                         "index": 0
                     }
@@ -1042,6 +1095,34 @@
                         "index": 0
                     }
                 ]
+            ]
+        },
+        "BQ ? Dedup Check": {
+            "main": [
+                [
+                    {
+                        "node": "IF ? Already Run Today?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF ? Already Run Today?": {
+            "main": [
+                [
+                    {
+                        "node": "Set Dates ? Weekly",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "BQ ? LP Audit",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                []
             ]
         },
         "Build ? performance-lead": {
@@ -1352,7 +1433,7 @@
                 ],
                 "typeVersion": 2,
                 "parameters": {
-                    "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'🔴','medium':'🟠','low':'🟡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'🟡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] â†’ task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='📊 Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'🔴 '+actions.filter(a=>a.priority==='high').length+' high-priority flags · ':'')+actions.filter(a=>a.priority==='medium').length+' medium · '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
+                    "jsCode": "const resp=$input.first().json,block=(resp.content||[]).find(b=>b.type==='tool_use'),out=block?.input||{},actions=out.actions||[];\nconst emoji={'high':'ðŸ”´','medium':'ðŸŸ ','low':'ðŸŸ¡'};\nconst actionType=t=>{const tl=t.toLowerCase();if(tl.includes('escalate'))return'ESCALATE';if(tl.includes('pause')||tl.includes('scale')||tl.includes('enable'))return'ACTION';if(tl.includes('invest')||tl.includes('disq')||tl.includes('audit')||tl.includes('review'))return'INVESTIGATE';return'ACTION';};\nconst approvalsText=actions.map(a=>(emoji[a.priority]||'ðŸŸ¡')+' '+actionType(a.title)+': '+a.title+' ['+a.priority+'] â†’ task pending').join('\\n');\nconst totalSpend=0,channelCount=0;\nconst dataHealthText='ðŸ“Š Weekly Review | '+actions.length+' actions created\\n'+(actions.filter(a=>a.priority==='high').length>0?'ðŸ”´ '+actions.filter(a=>a.priority==='high').length+' high-priority flags Â· ':'')+actions.filter(a=>a.priority==='medium').length+' medium Â· '+actions.filter(a=>a.priority==='low').length+' low\\nAll detail in Asana tasks.';\nreturn[{json:{digest:out.digest||'Weekly digest unavailable.',approvalsText:approvalsText||'No actions.',dataHealthText,actions,reportType:'weekly',generatedAt:new Date().toISOString()}}];"
                 }
             },
             {
@@ -1403,7 +1484,7 @@
                     "nodeCredentialType": "httpHeaderAuth",
                     "sendBody": true,
                     "specifyBody": "json",
-                    "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions — ✅ approve / âŒ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
+                    "jsonBody": "={{ JSON.stringify({ channel:$vars.SLACK_CHANNEL_APPROVALS, text:'*Weekly Actions â€” âœ… approve / âŒ skip*\\n\\n'+$json.approvalsText, unfurl_links:false }) }}",
                     "options": {}
                 }
             },

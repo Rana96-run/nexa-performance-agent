@@ -172,7 +172,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'snapchat' }}
         continue-on-error: true
-        run: python collectors/snap_bq.py all
+        run: python collectors/snap_bq.py all 30
 
       - name: Collector — X Ads
         id: x_ads
@@ -193,7 +193,7 @@ jobs:
         timeout-minutes: 15
         if: ${{ inputs.collector == '' || inputs.collector == 'linkedin' }}
         continue-on-error: true
-        run: python collectors/linkedin_bq.py all
+        run: python collectors/linkedin_bq.py all 30
 
       - name: Collector — Microsoft Ads
         id: microsoft_ads
