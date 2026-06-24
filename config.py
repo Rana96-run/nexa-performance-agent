@@ -63,6 +63,10 @@ ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1208
 ASANA_ASSIGNEE_DONIA_GID      = os.getenv("ASANA_ASSIGNEE_DONIA",          "1211896896006183")  # Donia Mohamed (confirmed 2026-06-09)
 ASANA_ASSIGNEE_RANA_GID       = os.getenv("ASANA_ASSIGNEE_RANA",           "1208007704598388")  # Rana Khalid (confirmed 2026-06-09)
 ASANA_ASSIGNEE_THELMY_GID     = os.getenv("ASANA_ASSIGNEE_THELMY",         "1211659245827014")  # Tony Helmy / thelmy@qoyod.com (confirmed 2026-06-09)
+# Social channel assignees → Donia (2026-06-24)
+ASANA_ASSIGNEE_META_GID       = os.getenv("ASANA_ASSIGNEE_META",           "1211896896006183")  # Donia — Meta campaign tasks
+ASANA_ASSIGNEE_TIKTOK_GID     = os.getenv("ASANA_ASSIGNEE_TIKTOK",         "1211896896006183")  # Donia — TikTok campaign tasks
+ASANA_ASSIGNEE_SNAPCHAT_GID   = os.getenv("ASANA_ASSIGNEE_SNAPCHAT",       "1211896896006183")  # Donia — Snapchat campaign tasks
 
 # ── Agent identity map ─────────────────────────────────────────────────────────
 # Single source of truth for every agent's display name, Slack persona, and
@@ -95,7 +99,7 @@ AGENT_IDENTITY: dict[str, dict] = {
     "spike_detector":          {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     "llm_cadence":             {"display_name": "Growth Analyst",      "slack_name": "Nexa · Growth Analyst",   "slack_emoji": ":mag:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_GROWTH_ANALYST",   ASANA_ASSIGNEE_RANA_GID)},
     # ── Creative Strategist ───────────────────────────────────────────────────
-    "creative_strategy":       {"display_name": "Creative Strategist", "slack_name": "Nexa · Creative",         "slack_emoji": ":art:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_CREATIVE",         ASANA_ASSIGNEE_RANA_GID)},
+    "creative_strategy":       {"display_name": "Creative Strategist", "slack_name": "Nexa · Creative",         "slack_emoji": ":art:",              "asana_gid": os.getenv("ASANA_ASSIGNEE_CREATIVE",         ASANA_ASSIGNEE_DONIA_GID)},
     # ── CRO / Landing Page chain ──────────────────────────────────────────────
     "cro_specialist":          {"display_name": "CRO Specialist",      "slack_name": "Nexa · CRO",              "slack_emoji": ":chart_with_upwards_trend:", "asana_gid": os.getenv("ASANA_ASSIGNEE_CRO",          ASANA_ASSIGNEE_THELMY_GID)},
     "ui_ux_design":            {"display_name": "UI/UX Designer",      "slack_name": "Nexa · UI/UX",            "slack_emoji": ":pencil:",           "asana_gid": os.getenv("ASANA_ASSIGNEE_UIUX",             ASANA_ASSIGNEE_RANA_GID)},
