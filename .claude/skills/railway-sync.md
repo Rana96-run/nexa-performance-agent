@@ -94,7 +94,7 @@ python -c "from collectors import tiktok_bq; print(tiktok_bq.collect_and_write(d
 
 ## Automatic 6-hour sync (scheduled)
 
-A Railway cron job (`railway up` service or `reporting_scheduler.py`) runs
+A Railway cron job (`railway up` service) runs
 `railway variables --json` and patches `.env` on the Railway container itself
 every 6 hours — so production is always in sync.
 

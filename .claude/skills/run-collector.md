@@ -6,10 +6,10 @@ Use when Amar says "re-pull X" / "backfill Y" / "run the scheduler".
 
 | Situation | Command |
 |---|---|
-| Regular refresh (scheduled) | `python reporting_scheduler.py once` |
-| Re-pull last N days for one source | `python collectors/<name>_bq.py <N>` |
-| Full YTD backfill (one source) | `python collectors/<name>_bq.py` |
-| Full YTD rebuild (everything) | `python reporting_scheduler.py backfill` |
+| Regular refresh (scheduled) | GitHub Actions collectors.yml (automatic, runs every 6h) |
+| Re-pull last N days for one source | `railway run python collectors/<name>_bq.py <N>` |
+| Full YTD backfill (one source) | `railway run python collectors/<name>_bq.py` |
+| Full YTD rebuild (everything) | Trigger collectors.yml manually in GitHub Actions UI |
 
 ## Collector names
 

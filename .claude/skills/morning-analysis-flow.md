@@ -21,7 +21,7 @@ description: |
 
 ### Stage 1 — DATA REFRESH (prerequisite gate)
 ```
-1a. Run reporting_scheduler.py once  (pulls yesterday's data from all platforms)
+1a. Verify GitHub Actions collectors.yml ran successfully (pulls yesterday's data from all platforms)
 1b. Run connector_tracker.py         (5-check health for all 9 connectors)
 1c. GATE: If any connector is ❌ BROKEN → fix before proceeding to analysis
            If connector is ⚠️ WARNING  → proceed but note in output

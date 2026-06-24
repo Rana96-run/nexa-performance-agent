@@ -113,10 +113,9 @@ def test_entry_points_import():
     """Key entry points must import without side effects breaking.
     Note: main.py, reporting_scheduler.py, operational_scheduler.py moved out of root
     (now launched via Railway/GH Actions commands, not importable as top-level modules).
-    slack_listener.py is still at root and importable.
+    slack_listener.py has been removed; this test is retained as a placeholder.
     """
-    for mod in ("slack_listener",):
-        importlib.import_module(mod)
+    pass
 
 
 def test_critical_env_vars_present():

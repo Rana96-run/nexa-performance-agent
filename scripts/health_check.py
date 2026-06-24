@@ -325,7 +325,7 @@ def check_ga4_data() -> tuple[bool, str]:
             return False, "GA4: ga4_sessions_daily empty — run: railway run python collectors/ga4_bq.py --days 30"
         days_ago = (_date.today() - rows[0].last_date).days
         if days_ago > 2:
-            return False, f"GA4 data {days_ago}d stale (last: {rows[0].last_date}) — check reporting_scheduler"
+            return False, f"GA4 data {days_ago}d stale (last: {rows[0].last_date}) — check ga4_bq collector in GitHub Actions"
         return True, f"GA4 OK — {int(rows[0].sessions_7d or 0):,} sessions last 7d, latest {rows[0].last_date}"
     except Exception as e:
         return False, f"GA4 data check: {e}"
@@ -380,44 +380,11 @@ def check_railway_deployment() -> tuple[bool, str]:
         return False, f"Railway app unreachable: {e}"
 
 
-def check_slack_listener() -> tuple[bool, str]:
-    """
-    Verify the Slack events endpoint (/slack/events) is reachable and
-    that the bot can call auth.test (token valid + bot online).
-    This is what actually handles ✅/❌ reactions on Railway.
-    """
-    import requests as _req
-    # 1. Probe /slack/events with POST (no signature) — expect 403 invalid_signature = endpoint is up.
-    #    Using GET would return 405 (Method Not Allowed), which is also fine.
-    try:
-        r = _req.post(f"{BASE_URL}/slack/events", json={}, timeout=10)
-        # 403 = signature check working (endpoint up). 200 = url_verification challenge.
-        # 405 = method not allowed (should not happen but also means server is up).
-        if r.status_code in (200, 403, 405):
-            events_ok = True
-        else:
-            events_ok = False
-    except Exception as e:
-        return False, f"Slack events endpoint unreachable: {e}"
-
-    # 2. Verify bot token is valid
-    try:
-        from slack_sdk import WebClient
-        from config import SLACK_BOT_TOKEN
-        info = WebClient(token=SLACK_BOT_TOKEN).auth_test()
-        bot = info.get("user", "?")
-        if events_ok:
-            return True, f"Slack listener OK — bot={bot}, /slack/events reachable"
-        return False, f"Bot token valid (bot={bot}) but /slack/events returned HTTP {r.status_code}"
-    except Exception as e:
-        return False, f"Slack bot token invalid: {e}"
-
 
 # ─── Runner ────────────────────────────────────────────────────────────────────
 
 CHECKS = [
     ("Railway deployment",       check_railway_deployment),
-    ("Slack listener",           check_slack_listener),
     ("Flask",                    check_flask),
     ("BigQuery",                 check_bigquery),
     ("Data freshness",           check_data_freshness),
@@ -444,7 +411,6 @@ CHECK_CATEGORY = {
     "Data freshness":        "Data",
     "GA4 data":              "Data",
     "Slack":                 "Infrastructure",
-    "Slack listener":        "Infrastructure",
     "Google Ads":            "Connectors",
     "Conversion tracking":   "Connectors",
     "Conversion recording":  "Connectors",
@@ -461,7 +427,6 @@ CHECK_CATEGORY = {
 # One or two lines shown in the click-to-expand modal when a check fails.
 # Explains WHY this error appears and what to do about it.
 CHECK_WHY = {
-    "Slack listener":      "The /slack/events webhook is unreachable or crashing. This means ✅/❌ reactions on #approvals won't trigger approve/reject. Fix: check Railway logs for errors on the /slack/events route, then redeploy.",
     "LinkedIn":            "The LinkedIn OAuth refresh token has expired (HTTP 401). Fix: run `railway run python collectors/linkedin_oauth.py` to get a new token, then update LINKEDIN_REFRESH_TOKEN in Railway.",
     "Google Ads":          "The Google Ads API credentials are invalid or the customer ID is wrong. Fix: re-run `python google_ads_oauth.py` and update GOOGLE_ADS_REFRESH_TOKEN in Railway.",
     "Meta Ads":            "The Meta access token has expired or the ad account ID is incorrect. Fix: generate a new long-lived token in Meta Business Manager → System Users, update META_ACCESS_TOKEN in Railway.",

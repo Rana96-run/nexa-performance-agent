@@ -92,7 +92,6 @@ Grep all os.getenv(...) calls across:
   - scripts/
   - analysers/
   - main.py
-  - reporting_scheduler.py
   - config.py
 Also grep all env var references in .github/workflows/*.yml
 ```
