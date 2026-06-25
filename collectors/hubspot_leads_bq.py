@@ -925,42 +925,60 @@ def sync_full_mirror() -> int:
 
 def sync_rolling_window(days: int = 30) -> int:
     """
-    Re-pull only the last `days` of leads. Kept for CLI testing / quick fixes.
-    Normal operation uses sync_full_mirror() which pulls everything.
+    Re-pull only the last `days` of leads using 7-day createdate chunks.
+
+    HubSpot's /search API caps at 10,000 results per query (50 pages × 200).
+    A flat 60-day window can easily exceed this. Breaking into 7-day sub-windows
+    keeps each chunk well under the cap even at peak lead volumes.
 
     CLI: python -m collectors.hubspot_leads_bq rolling [days]
     """
     since_date = (datetime.now(_RIYADH) - timedelta(days=days)).date()
-    since_ms   = int(datetime(since_date.year, since_date.month, since_date.day,
-                              tzinfo=_RIYADH).timestamp() * 1000)
+    end_date   = date.today() + timedelta(days=1)  # exclusive upper bound
 
     _load_pipelines()
     _ensure_individual_table_exists()
     client   = get_client()
     table_id = f"{os.getenv('BQ_PROJECT_ID')}.{os.getenv('BQ_DATASET')}.{_INDIVIDUAL_TABLE}"
 
-    print(f"[rolling] re-pulling last {days} days from HubSpot (since {since_date}) ...")
+    print(f"[rolling] re-pulling last {days} days from HubSpot "
+          f"(since {since_date}) in 7-day chunks ...")
 
-    rows, after, pages = [], None, 0
-    while True:
-        try:
-            data = _search_leads(since_ms, after=after)
-        except Exception as e:
-            print(f"[rolling] HubSpot fetch error: {e}")
-            break
-        for lead in data.get("results", []):
-            row = _row_from_lead(lead)
-            if row:
-                rows.append(row)
-        pages += 1
-        after = (data.get("paging") or {}).get("next", {}).get("after")
-        if not after:
-            break
-        if pages >= 100:
-            print(f"[rolling] WARNING: hit 10k result cap")
-            break
+    # ── Fetch all leads in 7-day createdate windows (bypasses 10k cap) ────────
+    rows      = []
+    window    = timedelta(days=7)
+    win_start = since_date
 
-    print(f"[rolling] fetched {len(rows)} leads ({pages} pages)")
+    while win_start < end_date:
+        win_end  = min(win_start + window, end_date)
+        w_since  = int(datetime(win_start.year, win_start.month, win_start.day,
+                                tzinfo=_RIYADH).timestamp() * 1000)
+        w_until  = int(datetime(win_end.year,   win_end.month,   win_end.day,
+                                tzinfo=_RIYADH).timestamp() * 1000)
+        after    = None
+        pages    = 0
+        win_count = 0
+
+        while True:
+            try:
+                data = _search_leads(w_since, until_ms=w_until, after=after)
+            except Exception as e:
+                print(f"[rolling] HubSpot fetch error at {win_start}: {e}")
+                break
+            for lead in data.get("results", []):
+                row = _row_from_lead(lead)
+                if row:
+                    rows.append(row)
+                    win_count += 1
+            pages += 1
+            after = (data.get("paging") or {}).get("next", {}).get("after")
+            if not after or pages >= 100:   # 100 × 200 = 20k safety ceiling
+                break
+
+        print(f"[rolling]   {win_start} .. {win_end}: {win_count} leads")
+        win_start = win_end
+
+    print(f"[rolling] fetched {len(rows)} leads total")
     if not rows:
         return 0
 

@@ -136,12 +136,23 @@ def _get_connector_health() -> dict[str, dict[str, Any]]:
         WHERE date >= DATE_SUB(CURRENT_DATE('Asia/Riyadh'), INTERVAL 14 DAY)
         GROUP BY channel
     """)
-    # campaigns_daily channel values are expected to match display names exactly
-    # (e.g. "Meta", "Google Ads", "Snapchat", "TikTok", "LinkedIn", "Microsoft Ads")
+    # campaigns_daily.channel stores lowercase slugs (e.g. 'meta', 'google_ads').
+    # Map them to the display names used in CONNECTORS so the health cards populate.
+    _SLUG_TO_DISPLAY = {
+        "meta":          "Meta",
+        "google_ads":    "Google Ads",
+        "snapchat":      "Snapchat",
+        "tiktok":        "TikTok",
+        "linkedin":      "LinkedIn",
+        "microsoft_ads": "Microsoft Ads",
+        "hubspot_leads": "HubSpot Leads",
+        "youtube":       "YouTube",
+    }
     for r in ad_rows:
         ch = r.get("channel")
         if ch:
-            result[ch] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
+            display_key = _SLUG_TO_DISPLAY.get(ch, ch)
+            result[display_key] = {"last_date": r.get("last_date"), "days_stale": r.get("days_stale")}
 
     # ── 2. Organic / analytics tables ─────────────────────────────────────────
     organic_rows = _bq_query(f"""
