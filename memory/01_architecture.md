@@ -79,7 +79,7 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 `operational_scheduler.py`, `reporting_scheduler.py`, `main.py` — **deleted** (2026-06-16 cleanup). n8n and GitHub Actions own all cadences.
 
-### n8n workflow inventory (12 workflows — canonical)
+### n8n workflow inventory (13 workflows — canonical)
 
 | Workflow | n8n ID | Schedule | Nodes | Status |
 |---|---|---|---|---|
@@ -89,6 +89,7 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 | Nexa · Data Collection | `jOnJxdpdaO3Vbi0B` | Called by Master (sub-flow) | 52 | ACTIVE |
 | Nexa · Approval Listener | `5Acqsbxsk0XQ5k9e` | Webhook (Slack reactions) | 7 | ACTIVE |
 | Nexa · QA Gate | `ug3niLKrjPfO9Iz7` | Called by Master (sub-flow) | — | ACTIVE |
+| Nexa · Data Health Monitor | `sgC6o3e7J9sk8VVr` | Daily + webhook | — | ACTIVE |
 | Nexa · Sub-Flow A (ROAS & Channel Health) | `MHCdIiAtKzHNve1x` | Called by Master Switch | — | ACTIVE |
 | Nexa · Sub-Flow B (CPL Fix) | `Qd5SoGxZbgT1ohYP` | Called by Master Switch | — | ACTIVE |
 | Nexa · Sub-Flow C (CPQL Fix) | `jfE5KKnPJQBf7MCj` | Called by Master Switch | — | ACTIVE |

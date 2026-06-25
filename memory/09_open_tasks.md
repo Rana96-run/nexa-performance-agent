@@ -1,5 +1,22 @@
 # Open Tasks — Prioritized Work Queue
 
+## Done this session (2026-06-25) — collector hardening + full verification
+
+- [x] **Snapchat silent hang fixed.** Added `timeout=30` to all bare `requests` calls in `collectors/snap_bq.py` (`_refresh_access_token`, `_get_account`, `_list_campaigns`). Reduced `_SNAP_RETRIES` 5→3 and `_SNAP_RETRY_WAIT` 15s→3s (removed escalating multiplier). Commits: `8a181e5`, `b1f3d19`.
+- [x] **HubSpot leads pagination cap fixed.** Replaced flat offset pagination with 7-day `createdate`-chunked windows — each chunk stays under HubSpot's 10,000-record Search API cap. Result: 11,311 rows written vs previous 239. Commit: `872772f`.
+- [x] **Zero-row Slack alert channel casing fixed.** `collectors.yml` zero-row guard was using display names (`'Meta'`, `'Google Ads'`) instead of BQ slugs (`'meta'`, `'google_ads'`). Fixed: each check now uses the BQ slug for the WHERE clause and a separate display label for the Slack message. Commit: `0b59bee`.
+- [x] **Google Ads deprecated field removed.** `asset_group_asset.performance_label` removed from GAQL SELECT, row dict build, and BQ schema in `collectors/google_ads_bq.py`. Commit: `9527419`.
+- [x] **LinkedIn token refresh order fixed.** Token refresh step moved BEFORE LinkedIn collector step in `collectors.yml` so the collector always uses a fresh token.
+- [x] **All 8 collectors verified via live GH Actions runs.** TikTok: 182 campaign rows + 674 ad rows (first verified run ever). All other platforms confirmed healthy.
+- [x] **n8n CPQL SQL bug fixed.** cadence_weekly HubSpot CTE was grouping by `qoyod_source` instead of `lead_utm_campaign` → spend fan-out producing $1–3 impossible CPQL values. Fixed: CTEs now group by `LOWER(lead_utm_campaign)`. Workflow `iNSdpXH7Rc9Lb8h8` updated on n8n Cloud.
+- [x] **n8n `tool_choice: required` fixed across all workflows.** Changed to `any` in all affected Claude HTTP Request nodes across cadence_daily, weekly, monthly, and all 6 KPI sub-flows.
+- [x] **Verbose Slack posts disabled.** Disabled `#notify` verbose post nodes (`wkly-011`, `mnth-012`) in cadence_weekly and cadence_monthly. Slack now posts only terse approval-gate messages.
+- [x] **Asana assignee routing fixed.** Meta/TikTok/Snapchat campaign tasks → Donia; errors/fixes → Rana; CRO web form → Tony. Updated in `config.py` and all 6 KPI sub-flow JSONs.
+- [x] **Webhook triggers added.** Added webhook trigger nodes to cadence_daily, cadence_weekly, cadence_monthly, and infra_data_health for manual firing.
+- [x] **infra_data_health activated.** Workflow `sgC6o3e7J9sk8VVr` now ACTIVE on n8n Cloud with webhook trigger.
+- [x] **n8n workflows Google Sheet created.** All 13 workflows documented in structured sheet with tabs: Overview, Cadence Workflows, KPI Sub-flows, Infrastructure, KPI Thresholds. URL: https://docs.google.com/spreadsheets/d/1m_8yqOv7qB9gBYNJlwO2D2MYsNDiSNnUTL4jONgVcGY/edit
+- [x] **Dedup guard added to cadence_weekly.** Nodes `wkly-dedup-001` and `wkly-dedup-002` prevent retry storm from Asana rate-limit errors. Asana node `wkly-014` set to `onError: continueRegularOutput`.
+
 Ordered by dependency + user priority. Check off as done; append new items at
 the bottom of the relevant section.
 

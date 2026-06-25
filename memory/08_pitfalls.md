@@ -1,5 +1,35 @@
 # Pitfalls & Known Traps
 
+## [2026-06-25] Snapchat requests silent hang — always set timeout=30 on bare requests calls
+
+**Symptom:** Snapchat GH Actions step showed green (exit 0) but took 15 minutes and produced 0 ads rows. No error logged. The step timed out at the GH Actions wall-clock limit and was skipped silently.
+
+**Root cause:** `snap_bq.py` used bare `requests.post()`/`requests.get()` calls with no `timeout` parameter. A single slow Snapchat API call could hang indefinitely, blocking the entire step.
+
+**Fix:** Add `timeout=30` to every bare `requests` call: `_refresh_access_token()`, `_get_account()`, `_list_campaigns()`. Also reduced `_SNAP_RETRIES` 5→3, `_SNAP_RETRY_WAIT` 15s→3s (removed escalating multiplier). Commits: `8a181e5`, `b1f3d19`.
+
+**Rule:** Every `requests.get()` / `requests.post()` call in any collector MUST have `timeout=30` (or appropriate value). No exceptions. The GH Actions step `timeout-minutes: 15` is a hard cap on the whole step — per-request timeout ensures fast failure with a clear error instead of a silent 15-minute hang.
+
+## [2026-06-25] HubSpot Search API 10,000-record cap — use date-chunked windows
+
+**Symptom:** `hubspot_leads_bq.py` wrote only 239 rows despite HubSpot having 11,311 leads. No error — the collector silently hit the cap and stopped.
+
+**Root cause:** HubSpot CRM Search API hard-caps at `after=10000` (returns HTTP 400 beyond that). Flat offset pagination truncates at exactly 10,000 records.
+
+**Fix:** Replace flat offset pagination with 7-day `createdate`-chunked windows. Each window iterates with `after` reset to 0, then the next 7-day window starts. No window exceeds 10,000 records. Result: 11,311 rows written correctly.
+
+**Rule:** Any HubSpot Search API collector that iterates by `after` offset MUST chunk by date window (7 days or smaller). This applies to leads, deals, and any other object with >10,000 records.
+
+## [2026-06-25] Zero-row Slack alerts — grep the exact string first, fix the right file
+
+**Symptom:** Zero-row Slack alert kept firing "last=never" for Meta and Google Ads even after fix was applied to `reports/app.py`.
+
+**Root cause:** The fix was applied to the WRONG file. `reports/app.py` generates the activity dashboard (Railway web) — it does NOT post Slack zero-row alerts. The actual Slack poster is the zero-row guard step in `.github/workflows/collectors.yml`. That step used display names (`'Meta'`, `'Google Ads'`) in BQ WHERE clauses instead of the actual stored slugs (`'meta'`, `'google_ads'`).
+
+**Fix:** In `collectors.yml` zero-row guard, each channel check uses `bq_val` (slug: `'meta'`, `'google_ads'`) for the BQ WHERE clause, and a separate `label` (display name) for the Slack message. Commit: `0b59bee`.
+
+**Rule (extends feedback_verify_before_use.md):** Before fixing any Slack alert, grep the exact message string across the ENTIRE repo to find the file that actually sends it. Do NOT fix a file that "seems related." Confirm the sending file, then fix it.
+
 ## [2026-06-23] cadence_daily broken — Config-Flatten did not pass date fields to sub-workflow
 
 **Symptom:** cadence_daily (T8icImtZFLYeCa7e) ran daily but only 3–5 of 118 nodes executed. All ad platform collectors in the sub-workflow (jOnJxdpdaO3Vbi0B) returned 0 rows. The guard always blocked the BQ load. Appeared as status=success in the n8n API but produced no data.
