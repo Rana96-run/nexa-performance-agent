@@ -300,12 +300,12 @@ jobs:
 
           # Tuple: (table, col, bq_value, display_label)
           # bq_value must match campaigns_daily.channel exactly (lowercase/snake_case)
+          # LinkedIn omitted: campaigns paused since March 2026, 0 rows is expected (not broken)
           checks = [
               ("campaigns_daily", "channel", "meta",          "Meta"),
               ("campaigns_daily", "channel", "google_ads",    "Google Ads"),
               ("campaigns_daily", "channel", "snapchat",      "Snapchat"),
               ("campaigns_daily", "channel", "tiktok",        "TikTok"),
-              ("campaigns_daily", "channel", "linkedin",      "LinkedIn"),
               ("campaigns_daily", "channel", "microsoft_ads", "Microsoft Ads"),
               ("hubspot_leads_module_daily", None, None, "HubSpot Leads"),
               ("hubspot_deals_daily",        None, None, "HubSpot Deals"),
