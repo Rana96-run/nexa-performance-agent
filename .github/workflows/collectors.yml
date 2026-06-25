@@ -298,20 +298,22 @@ jobs:
           today = date.today().isoformat()
           yesterday = (date.today() - timedelta(days=1)).isoformat()
 
+          # Tuple: (table, col, bq_value, display_label)
+          # bq_value must match campaigns_daily.channel exactly (lowercase/snake_case)
           checks = [
-              ("campaigns_daily", "channel", "Meta"),
-              ("campaigns_daily", "channel", "Google Ads"),
-              ("campaigns_daily", "channel", "Snapchat"),
-              ("campaigns_daily", "channel", "TikTok"),
-              ("campaigns_daily", "channel", "LinkedIn"),
-              ("campaigns_daily", "channel", "Microsoft Ads"),
-              ("hubspot_leads_module_daily", None, "HubSpot Leads"),
-              ("hubspot_deals_daily",        None, "HubSpot Deals"),
+              ("campaigns_daily", "channel", "meta",          "Meta"),
+              ("campaigns_daily", "channel", "google_ads",    "Google Ads"),
+              ("campaigns_daily", "channel", "snapchat",      "Snapchat"),
+              ("campaigns_daily", "channel", "tiktok",        "TikTok"),
+              ("campaigns_daily", "channel", "linkedin",      "LinkedIn"),
+              ("campaigns_daily", "channel", "microsoft_ads", "Microsoft Ads"),
+              ("hubspot_leads_module_daily", None, None, "HubSpot Leads"),
+              ("hubspot_deals_daily",        None, None, "HubSpot Deals"),
           ]
 
           stale = []
-          for table, col, label in checks:
-              where = f"AND {col} = '{label}'" if col else ""
+          for table, col, bq_val, label in checks:
+              where = f"AND {col} = '{bq_val}'" if col else ""
               q = f"""
                 SELECT MAX(date) AS last_date
                 FROM `{P}.{D}.{table}`
