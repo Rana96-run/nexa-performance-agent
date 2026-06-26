@@ -20,6 +20,16 @@
 
 **Rule:** Any HubSpot Search API collector that iterates by `after` offset MUST chunk by date window (7 days or smaller). This applies to leads, deals, and any other object with >10,000 records.
 
+## [2026-06-26] HubSpot reconciliation — two traps that produce fake large gaps
+
+**Trap 1 — Wrong leads endpoint:** Querying `/crm/v3/objects/contacts` returns all Contact objects — a superset that includes everyone ever in HubSpot (not just leads). The collector and BQ use HubSpot's **Lead Object** (`/crm/v3/objects/0-136`). Comparing contacts vs BQ leads produces a massive fake gap (e.g. 342 HS vs 219 BQ when the real delta was 0).
+
+**Rule:** Always use the Lead Object endpoint (`0-136`) when reconciling against `hubspot_leads_module_daily`.
+
+**Trap 2 — Wrong timezone window for deals:** BQ stores `date` converted to Riyadh time (UTC+3). If you query HubSpot with UTC midnight boundaries (2026-06-25T00:00:00Z → 2026-06-25T23:59:59Z) you're comparing a misaligned window. The correct UTC range for Riyadh's June 25 is `2026-06-24T21:00:00Z → 2026-06-25T20:59:59Z`. Misalignment produced a fake 144 vs 293 deals gap.
+
+**Rule:** When reconciling `hubspot_deals_daily` for a Riyadh date, always subtract 3h from the UTC window boundaries.
+
 ## [2026-06-25] Zero-row Slack alerts — grep the exact string first, fix the right file
 
 **Symptom:** Zero-row Slack alert kept firing "last=never" for Meta and Google Ads even after fix was applied to `reports/app.py`.
