@@ -60,13 +60,13 @@ ASANA_ASSIGNEE_GID = os.getenv("ASANA_ASSIGNEE_GID", "")   # legacy fallback
 # Add new team members here + in Railway; no code change needed
 ASANA_ASSIGNEE_GOOGLE_ADS_GID = os.getenv("ASANA_ASSIGNEE_GOOGLE_ADS_GID", "1208007704598388")  # Rana Khalid
 ASANA_ASSIGNEE_DEFAULT_GID    = os.getenv("ASANA_ASSIGNEE_DEFAULT_GID",    "1208007704598388")  # Rana Khalid (default — errors/fixes/health route here)
-ASANA_ASSIGNEE_DONIA_GID      = os.getenv("ASANA_ASSIGNEE_DONIA",          "1211896896006183")  # Donia Mohamed (confirmed 2026-06-09)
+ASANA_ASSIGNEE_DONIA_GID      = os.getenv("ASANA_ASSIGNEE_DONIA",          "1211896896006195")  # Donia Mohamed (corrected 2026-06-29)
 ASANA_ASSIGNEE_RANA_GID       = os.getenv("ASANA_ASSIGNEE_RANA",           "1208007704598388")  # Rana Khalid (confirmed 2026-06-09)
 ASANA_ASSIGNEE_THELMY_GID     = os.getenv("ASANA_ASSIGNEE_THELMY",         "1211659245827014")  # Tony Helmy / thelmy@qoyod.com (confirmed 2026-06-09)
 # Social channel assignees → Donia (2026-06-24)
-ASANA_ASSIGNEE_META_GID       = os.getenv("ASANA_ASSIGNEE_META",           "1211896896006183")  # Donia — Meta campaign tasks
-ASANA_ASSIGNEE_TIKTOK_GID     = os.getenv("ASANA_ASSIGNEE_TIKTOK",         "1211896896006183")  # Donia — TikTok campaign tasks
-ASANA_ASSIGNEE_SNAPCHAT_GID   = os.getenv("ASANA_ASSIGNEE_SNAPCHAT",       "1211896896006183")  # Donia — Snapchat campaign tasks
+ASANA_ASSIGNEE_META_GID       = os.getenv("ASANA_ASSIGNEE_META",           "1211896896006195")  # Donia — Meta campaign tasks
+ASANA_ASSIGNEE_TIKTOK_GID     = os.getenv("ASANA_ASSIGNEE_TIKTOK",         "1211896896006195")  # Donia — TikTok campaign tasks
+ASANA_ASSIGNEE_SNAPCHAT_GID   = os.getenv("ASANA_ASSIGNEE_SNAPCHAT",       "1211896896006195")  # Donia — Snapchat campaign tasks
 
 # ── Agent identity map ─────────────────────────────────────────────────────────
 # Single source of truth for every agent's display name, Slack persona, and
