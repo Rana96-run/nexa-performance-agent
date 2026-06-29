@@ -120,7 +120,7 @@ def _get_connector_health() -> dict[str, dict[str, Any]]:
 
     Sources:
     - campaigns_daily (GROUP BY channel) → Meta, Google Ads, Snapchat, TikTok, LinkedIn, Microsoft Ads
-    - youtube_daily, ga4_daily, gsc_daily → YouTube, GA4, GSC
+    - ga4_daily, gsc_daily → GA4, GSC
     - hubspot_leads_module_daily → HubSpot Leads
     - hubspot_deals_daily → HubSpot Deals
     - agent_activity_log (GTM audit entries) → GTM Audit

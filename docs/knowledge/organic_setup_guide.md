@@ -1,7 +1,6 @@
 # Organic Channels Setup Guide
 
-Everything you need to do on each platform to unblock the Meta-organic, YouTube,
-and LinkedIn collectors. Collectors are already built and wired into the 6h
+Everything you need to do on each platform to unblock the Meta-organic and LinkedIn collectors. Collectors are already built and wired into the 6h
 scheduler — they no-op silently until these creds land in `.env`.
 
 ---

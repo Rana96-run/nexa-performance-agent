@@ -20,7 +20,7 @@ Use when Amar says "re-pull X" / "backfill Y" / "run the scheduler".
 
 1. Check `.env` has the creds (see `memory/02_credentials.md` for the
    per-source env keys).
-2. If collector is organic/LinkedIn/YouTube, confirm OAuth has been run —
+2. If collector is organic/LinkedIn, confirm OAuth has been run —
    refresh tokens don't expire but access tokens do.
 3. For HubSpot: tokens never expire (Private App), just run it.
 
