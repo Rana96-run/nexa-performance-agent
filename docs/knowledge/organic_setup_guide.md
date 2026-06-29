@@ -72,74 +72,7 @@ python -c "from collectors import meta_organic_bq; meta_organic_bq.collect_and_w
 
 ---
 
-## 2. YouTube Organic (Data API v3 + Analytics API)
-
-**Goal:** drop 4 values into `.env`
-```
-YT_CLIENT_ID=<oauth client id>.apps.googleusercontent.com
-YT_CLIENT_SECRET=<oauth client secret>
-YT_REFRESH_TOKEN=<refresh token>
-YT_CHANNEL_ID=UC...
-```
-
-### Steps
-
-1. **Google Cloud Console** → https://console.cloud.google.com/apis/library
-   - You said YouTube Data API v3 is already enabled. Also enable:
-     - **YouTube Analytics API**
-     - **YouTube Reporting API** (optional, for historical bulk)
-
-2. **Create OAuth Client ID** (if not already).
-   - APIs & Services → Credentials → Create Credentials → OAuth client ID
-   - Application type: **Desktop app**
-   - Download JSON → copy `client_id` and `client_secret`.
-
-3. **Grant consent + get refresh token.** Easiest way:
-   ```bash
-   pip install google-auth-oauthlib
-   ```
-   Then in a python shell:
-   ```python
-   from google_auth_oauthlib.flow import InstalledAppFlow
-   flow = InstalledAppFlow.from_client_config(
-     {"installed": {
-        "client_id": "YOUR_ID",
-        "client_secret": "YOUR_SECRET",
-        "redirect_uris": ["http://localhost"],
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-     }},
-     scopes=[
-       "https://www.googleapis.com/auth/yt-analytics.readonly",
-       "https://www.googleapis.com/auth/youtube.readonly",
-     ])
-   creds = flow.run_local_server(port=0)
-   print("refresh_token:", creds.refresh_token)
-   ```
-   A browser opens → sign in with the Google account that owns the Qoyod YouTube
-   channel → approve → copy the printed refresh token.
-
-4. **Find your Channel ID.**
-   Go to https://studio.youtube.com → Settings → Channel → Advanced → "Channel ID"
-   (starts with `UC...`). Or run:
-   ```python
-   import requests
-   r = requests.get("https://www.googleapis.com/youtube/v3/channels",
-     params={"part":"id","mine":"true"},
-     headers={"Authorization": f"Bearer {creds.token}"})
-   print(r.json())
-   ```
-
-5. Paste all four into `.env`.
-
-**Test:**
-```bash
-python -c "from collectors import youtube_bq; youtube_bq.collect_and_write(days=7)"
-```
-
----
-
-## 3. LinkedIn (Page organic + Ads)
+## 2. LinkedIn (Page organic + Ads)
 
 Hardest of the three — LinkedIn requires app verification for Marketing APIs.
 
@@ -215,9 +148,8 @@ python -c "from collectors import linkedin_bq; linkedin_bq.collect_and_write(day
 | Platform | Blocker | ETA |
 |---|---|---|
 | Meta Organic | You generate token (5 min in Graph Explorer) | Today |
-| YouTube | You run the OAuth snippet once | Today |
 | LinkedIn Organic | Page admin + Community Management API (auto) | Today–tomorrow |
 | LinkedIn Ads | Marketing Developer Platform approval | 3–7 days |
 
-All three collectors **skip silently** if their creds aren't set, so the 6h
+All collectors **skip silently** if their creds aren't set, so the 6h
 scheduler can safely run even while you're collecting tokens.

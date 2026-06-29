@@ -102,11 +102,8 @@ while win_start < end_dt:
 ```
 
 ### Graceful skip when creds missing
-```python
-if not os.getenv("YT_REFRESH_TOKEN"):
-    print("[yt] missing creds — skipping")
-    return 0
-```
+
+Collectors check for required env vars at startup and skip with a console message if they are missing. This pattern keeps the 6h scheduler running without crashing when an optional collector lacks credentials.
 
 ## Adding a new collector — 5-step recipe
 

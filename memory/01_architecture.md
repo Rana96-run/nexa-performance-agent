@@ -5,7 +5,7 @@
 ```
   Ad platforms            HubSpot             Organic APIs
   ┌───────────┐         ┌───────────┐        ┌───────────┐
-  │ Google Ads│         │  Leads    │        │ FB/IG/YT/ │
+  │ Google Ads│         │  Leads    │        │  FB/IG/   │
   │   Meta    │         │  Deals    │        │ LinkedIn  │
   │ Snapchat  │         │ Pipelines │        │           │
   │  TikTok   │         └─────┬─────┘        └─────┬─────┘
@@ -113,7 +113,7 @@ See `.claude/skills/funnel-io.md` for the audit / reconciliation recipes.
 
 ### GitHub Actions collector schedule
 
-`.github/workflows/collectors.yml` — runs all 13 Python BQ collectors at 00:00/06:00/12:00/18:00 UTC. `google_ads_bq.py` is called with `all 35` (35-day rolling window to avoid full-history timeout in CI).
+`.github/workflows/collectors.yml` — runs all Python BQ collectors at 00:00/06:00/12:00/18:00 UTC. `google_ads_bq.py` is called with `all 35` (35-day rolling window to avoid full-history timeout in CI).
 `.github/workflows/linkedin_token_refresh.yml` — refreshes LinkedIn token daily at 02:00 UTC.
 
 Collectors are the **only** Python runtime still in active use. All other Python entrypoints (`main.py`, `operational_scheduler.py`, `reporting_scheduler.py`, `app_server.py`) were deleted 2026-06-16.
@@ -164,7 +164,7 @@ Nexa Performance Agent/
 | `hubspot_leads_individual` | hubspot_leads_bq.py | hs_object_id |
 | `hubspot_deals_daily` | hubspot_deals_bq.py (VIEW — compat wrapper over `hubspot_deals_individual`; collector writes via `mirror` subcommand) | date, pipeline, qoyod_source |
 | `hubspot_deals_individual` | hubspot_deals_bq.py (`mirror` subcommand) | hs_object_id |
-| `organic_page_daily` | meta_organic_bq, youtube_bq | date, channel |
+| `organic_page_daily` | meta_organic_bq, linkedin_bq (organic) | date, channel |
 | `ga4_sessions_daily` | ga4_bq.py | date, landing_page (last seen 2026-06-17, 37 rows) |
 | `gsc_organic_daily` | planned — collector not yet built (no gsc_*.py in collectors/) | date, page, query |
 | `gsc_organic_staging` | planned — collector not yet built | date, page, query |
