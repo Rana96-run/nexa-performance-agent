@@ -82,7 +82,6 @@ CAMPAIGN_NAME_PATTERNS: list[tuple[str, list[str]]] = [
     ("tiktok",          ["tiktok"]),
     ("snapchat",        ["snapchat", "snap"]),
     ("linkedin",        ["linkedin"]),
-    ("youtube",         ["youtube"]),
 
     # Google Ads — broadest match goes last
     ("google_ads",      ["google", "search", "impressionshare",

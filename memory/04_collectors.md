@@ -56,11 +56,6 @@ Returns number of rows written.
   period-aggregates attributed to the end_date row
 - Writes `organic_page_daily` with `channel='meta_organic'`
 
-### `youtube_bq.py`
-- Uses YouTube Analytics API for daily series + Data API v3 for subscriber snapshot
-- Needs `YT_REFRESH_TOKEN` + `YT_CHANNEL_ID`
-- Writes `organic_page_daily` with `channel='youtube'`
-
 ### `linkedin_bq.py`
 - Organic page share statistics via `organizationalEntityShareStatistics`
 - Follower count via `networkSizes/{urn}`

@@ -496,7 +496,6 @@ SELECT
     WHEN 'tiktok'        THEN 'TikTok Ads'
     WHEN 'linkedin'      THEN 'LinkedIn Ads'
     WHEN 'microsoft_ads' THEN 'Microsoft Ads'
-    WHEN 'youtube'       THEN 'YouTube Ads'
     ELSE INITCAP(REPLACE(a.channel, '_', ' '))
   END                                                               AS channel_name,
   a.account_id,

@@ -467,7 +467,7 @@ WITH
 -- SOURCE FILTER (added 2026-06-09): only keep qoyod_source values that map to a
 -- known channel in channel_name_map (item 5). Leads from NON-mapped sources
 -- (Offline / Direct Traffic / Organic Social / Email Marketing / Other /
--- Direct In-app Purchase / Referrals / Twitter Ads / 'youtube') carry a paid UTM
+-- Direct In-app Purchase / Referrals / Twitter Ads) carry a paid UTM
 -- on the contact (last-touch HubSpot attribution kept a stale UTM) but their
 -- qoyod_source is non-paid, so COALESCE(cnm_exact, cnm_slug) returned NULL channel.
 -- Those rows never satisfied `p.channel = h.channel` in v_adset_performance and
@@ -496,11 +496,11 @@ hs_full AS (
     AND (
       LOWER(TRIM(qoyod_source)) IN (
         'google ads','meta ads','snapchat ads','tiktok ads',
-        'linkedin ads','microsoft ads','youtube ads','organic search'
+        'linkedin ads','microsoft ads','organic search'
       )
       OR REGEXP_REPLACE(REGEXP_REPLACE(LOWER(TRIM(qoyod_source)), r'[^a-z0-9]+', '_'), r'^_+|_+$', '') IN (
         'google_ads','meta_ads','snapchat_ads','tiktok_ads',
-        'linkedin_ads','microsoft_ads','youtube_ads','organic_search'
+        'linkedin_ads','microsoft_ads','organic_search'
       )
     )
   GROUP BY 1, 2, 3, 4, 5, 6, 7
@@ -569,7 +569,6 @@ channel_name_map AS (
     -- emitted the SAME leads under both channel='microsoft' and 'microsoft_ads'
     -- (per-channel recon double-counted Microsoft). One row = one slug.
     STRUCT('microsoft_ads' AS channel_slug, 'Microsoft Ads'  AS qoyod_source_name),
-    STRUCT('youtube'       AS channel_slug, 'YouTube Ads'    AS qoyod_source_name),
     STRUCT('organic_search'AS channel_slug, 'Organic Search' AS qoyod_source_name)
   ])
 ),
@@ -739,7 +738,6 @@ SELECT
     WHEN 'linkedin'       THEN 'LinkedIn Ads'
     WHEN 'microsoft_ads'  THEN 'Microsoft Ads'
     WHEN 'microsoft'      THEN 'Microsoft Ads'
-    WHEN 'youtube'        THEN 'YouTube Ads'
     WHEN 'organic_search' THEN 'Organic Search'
     ELSE INITCAP(REPLACE(COALESCE(channel, qoyod_source, 'unknown'), '_', ' '))
   END AS channel_name,

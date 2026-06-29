@@ -154,12 +154,8 @@ def _get_connector_health() -> dict[str, dict[str, Any]]:
 
     # ── 2. Organic / analytics tables ─────────────────────────────────────────
     organic_rows = _bq_query(f"""
-        SELECT 'YouTube' AS channel, MAX(date) AS last_date,
+        SELECT 'GA4' AS channel, MAX(date) AS last_date,
                DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY) AS days_stale
-        FROM `{BQ_PROJECT}.{BQ_DATASET}.youtube_daily`
-        UNION ALL
-        SELECT 'GA4', MAX(date),
-               DATE_DIFF(CURRENT_DATE('Asia/Riyadh'), MAX(date), DAY)
         FROM `{BQ_PROJECT}.{BQ_DATASET}.ga4_daily`
         UNION ALL
         SELECT 'GSC', MAX(date),

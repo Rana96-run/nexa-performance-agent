@@ -15,7 +15,6 @@ keys here BEFORE coding so we never chase "is it connected?" again.
 | Microsoft Ads | ✅ connected (2 accts, always-on) | n/a | refresh token (perpetual) | **Both accounts run on every collector cycle, same as Google/Meta/Snap/TikTok.** Primary: account `188176729` (G1206XJR), Customer `254476670`, confidential client via `MS_REFRESH_TOKEN` (auth on `/common/` endpoint). Secondary: account `MS_ACCOUNT_ID_2=187231519`, Customer `MS_CUSTOMER_ID_2`, public client (device_code) via `MS_REFRESH_TOKEN_2` (`public_client=True`). Collector iterates BOTH via `_accounts()` in `collectors/microsoft_ads_bq.py` and pools rows into a single upsert per grain (campaigns/adsets/keywords/ads) — never per-account (see `08_pitfalls.md` multi-account upsert trap). REST Reporting API at `https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport/Submit`. |
 | LinkedIn organic | ✅ connected | — | **60 days** | OAuth completed 2026-06-20; tokens rotated to .env, Railway, GitHub Secrets. Next expiry ~2026-08-19. Run `scripts/linkedin_refresh.py` before then. |
 | LinkedIn Ads | ✅ connected | n/a | 60 days | Same token as organic. Analytics confirmed working (Jan-Feb 2026 data visible). No spend Jun 14-20 — 7-day backfill returned 0 rows correctly. `adCreatives` endpoint returns 426 NONEXISTENT_VERSION for all tested versions — ads-level data blocked until LinkedIn fixes API versioning. |
-| YouTube | n/a | ⏳ app scaffold, OAuth pending | refresh token (perpetual) | Env slots empty — run `scripts/youtube_oauth.py` to fill |
 | GA4 | linked to BQ | linked to BQ | n/a | `analytics_517912363.events_*` tables; `GA4_PROPERTY_ID=517912363` |
 | SEMrush | n/a | ✅ API key | perpetual | `SEMRUSH_API_KEY` set |
 | Canva | n/a (creative) | ✅ connected | access 4h / refresh 120d | Used by Creative external agent; not called from repo |
@@ -70,12 +69,6 @@ LI_ACCESS_TOKEN=<set; 60-day expiry>
 LI_ORGANIZATION_URN=<set>       # collector reads this exact key
 LI_AD_ACCOUNT_URN=<set>         # enables paid LinkedIn insights
 
-# YouTube (OAuth scaffolding present; run scripts/youtube_oauth.py to fill)
-YT_CLIENT_ID=
-YT_CLIENT_SECRET=
-YT_REFRESH_TOKEN=
-YT_CHANNEL_ID=
-
 # Microsoft Ads (app registered; still needs OAuth for refresh token)
 MS_DEVELOPER_TOKEN=<set>
 MS_CLIENT_ID / MS_CLIENT_SECRET / MS_TENANT_ID / MS_OBJECT_ID=<set>
@@ -108,7 +101,7 @@ FUNNEL_LOOKER_REPORT_ID=    # pending — canonical Looker board URL
 
 ## Token lifetime rules of thumb
 
-- **Google (Ads + YT)**: refresh tokens perpetual unless user revokes
+- **Google Ads**: refresh tokens perpetual unless user revokes
 - **Meta user tokens**: 60 days. Meta **page** tokens derived from long-lived
   user tokens are **permanent**. Always use page tokens for org-level APIs.
 - **Snapchat**: refresh token perpetual
@@ -122,7 +115,6 @@ FUNNEL_LOOKER_REPORT_ID=    # pending — canonical Looker board URL
 |---|---|
 | Snapchat | `https://app.qoyod.com/snapchat/callback` (prod) |
 | LinkedIn | `http://localhost:8080/callback` (add to app Auth tab) |
-| YouTube | `http://localhost` (auto-chosen by `run_local_server`) |
 
 ## Helper scripts
 
@@ -130,7 +122,6 @@ FUNNEL_LOOKER_REPORT_ID=    # pending — canonical Looker board URL
 |---|---|
 | `scripts/meta_organic_setup.py` | Short-lived user token → permanent page token |
 | `scripts/linkedin_oauth.py` | LinkedIn OAuth; `orgs` subcommand lists org URNs |
-| `scripts/youtube_oauth.py` | YouTube OAuth; prints refresh_token + channel_id |
 | `scripts/snap_oauth.py` | Already-used Snap OAuth flow |
 | `scripts/linkedin_refresh.py` | Refresh LI access token via refresh_token grant; `--write-env` persists back |
 | `scripts/microsoft_oauth.py` | Mint MS Ads refresh token (uses `/consumers/` endpoint — personal MS account only) |
