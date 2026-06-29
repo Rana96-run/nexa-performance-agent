@@ -150,7 +150,6 @@ ASANA_CHANNEL_LABELS = {
     "linkedin":      "LinkedIn",
     "microsoft_ads": "Microsoft",
     "tiktok":        "TikTok",
-    "youtube":       "YouTube",
     "hubspot":       "HubSpot / CRM",
     "general":       "General",
 }
@@ -167,7 +166,6 @@ ASANA_OPTIMIZATION_PROJECTS = {
     "x_ads":         os.getenv("ASANA_PROJECT_X_ADS", ""),   # X Ads Optimization
     "tiktok":        "1214135614950965",   # TikTok Ads Optimization
     "linkedin":      "1214135614968862",   # LinkedIn Ads Optimization
-    "youtube":       "1214135614991277",   # YouTube Ads Optimization
     "microsoft_ads": "1213294555250809",   # Bing Ads Scaling
 }
 

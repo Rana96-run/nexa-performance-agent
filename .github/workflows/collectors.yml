@@ -17,7 +17,7 @@ on:
           Collector to run (leave blank to run all).
           Options: google_ads | meta | snapchat | tiktok | linkedin |
                    microsoft_ads | hubspot_leads | hubspot_deals | reconcile |
-                   youtube | ga4 | meta_organic | gsc | views | asana_sync |
+                   ga4 | meta_organic | gsc | views | asana_sync |
                    agent_config | x_ads
         required: false
         default: ""
@@ -95,12 +95,6 @@ jobs:
 
       # ── HubSpot ───────────────────────────────────────────────────────────────
       HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
-
-      # ── YouTube ───────────────────────────────────────────────────────────────
-      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-      YT_CHANNEL_ID: ${{ secrets.YT_CHANNEL_ID }}
 
       # ── GA4 ───────────────────────────────────────────────────────────────────
       GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
@@ -395,11 +389,6 @@ jobs:
 # MS_REFRESH_TOKEN_2       (optional)
 #
 # HUBSPOT_ACCESS_TOKEN
-#
-# YT_CLIENT_ID
-# YT_CLIENT_SECRET
-# YT_REFRESH_TOKEN
-# YT_CHANNEL_ID
 #
 # GA4_PROPERTY_ID
 #

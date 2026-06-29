@@ -53,7 +53,6 @@ CONNECTORS = [
     ("TikTok",          "TikTok"),
     ("LinkedIn",        "LinkedIn"),
     ("Microsoft Ads",   "Microsoft Ads"),
-    ("YouTube",         "YouTube"),
     ("GA4",             "GA4"),
     ("GSC",             "GSC"),
     ("HubSpot Leads",   "HubSpot Leads"),
@@ -146,7 +145,6 @@ def _get_connector_health() -> dict[str, dict[str, Any]]:
         "linkedin":      "LinkedIn",
         "microsoft_ads": "Microsoft Ads",
         "hubspot_leads": "HubSpot Leads",
-        "youtube":       "YouTube",
     }
     for r in ad_rows:
         ch = r.get("channel")
