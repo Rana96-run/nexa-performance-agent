@@ -1,5 +1,10 @@
 # Open Tasks — Prioritized Work Queue
 
+## Done this session (2026-06-29) — Miro integration revived
+
+- [x] **Miro scripts restored.** `scripts/miro_agent_workflow.py` (275 lines) and `scripts/miro_use_cases_v2.py` (210 lines) were deleted in commit `1f246a6` (Phase 0 cleanup). Restored from parent commit `1f246a6^`. Both read `MIRO_ACCESS_TOKEN` / `MIRO_BOARD_ID` from env; both hit `https://api.miro.com/v2/...`. Token connectivity verified via GET board (HTTP 200, board "BI Tool Comparison Databox vs Hex vs Funnel"). No doc stated "Miro dropped" — deletion was silent. No stale "dropped" notes found in memory or docs. Run manually after architecture changes (no scheduler hook). Creds in `.env` + Railway; keys in `.env.example`. Commit: this session.
+- [x] **`.env.example` key count reconciled.** Two prior agents reported 126 vs 120 key count. True answer: BOTH before-restyle (`6af49c9^`) and after-restyle (`6af49c9`) have exactly 126 keys. Zero keys were lost or added by the restyle. The 120 count was a counting-method artifact (likely counted non-empty non-comment lines instead of `^[A-Z0-9_]+=` pattern).
+
 ## Done this session (2026-06-25) — collector hardening + full verification
 
 - [x] **Snapchat silent hang fixed.** Added `timeout=30` to all bare `requests` calls in `collectors/snap_bq.py` (`_refresh_access_token`, `_get_account`, `_list_campaigns`). Reduced `_SNAP_RETRIES` 5→3 and `_SNAP_RETRY_WAIT` 15s→3s (removed escalating multiplier). Commits: `8a181e5`, `b1f3d19`.
