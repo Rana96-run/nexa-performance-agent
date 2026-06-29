@@ -18,3 +18,24 @@ Impact: OAuth flow failed until the correct domain was used. Script docstring cl
 Fix / How to handle: Marketing API apps (19-digit numeric app_id format) must always use `business-api.tiktok.com/portal/auth`. There is no token refresh for Marketing API — if a token is revoked, full browser re-auth is required. Add health check calling `/oauth2/advertiser/get/` daily to detect revocation early.
 
 [[action_tiktok-connected-perpetual-token]]
+
+---
+
+## 2026-06-29 — No refresh token; TIKTOK_REFRESH_TOKEN is not a missing-secret gap
+
+**What was confirmed:**
+
+Running `scripts/tiktok_oauth.py` under the current TikTok Developer app config returns a long-lived `access_token` but **no `refresh_token`** — the API response contains no `refresh_token` field and no expiry timestamp. This is consistent with the Marketing API perpetual-token design above.
+
+**Collector and executor behaviour:**
+
+- `collectors/tiktok_bq.py` operates on `TIKTOK_ACCESS_TOKEN` only. It does not read or require `TIKTOK_REFRESH_TOKEN`.
+- `executors/tiktok.py` `_refresh_token()` checks for `TIKTOK_REFRESH_TOKEN` and, when the env var is absent, logs and falls back to the access token — no crash, no silent failure.
+
+**Conclusion — do not flag as missing secret:**
+
+`TIKTOK_REFRESH_TOKEN` is intentionally absent from `.env`, GitHub Secrets, and Railway. Do **not** flag it as a missing-secret gap in hygiene scans or env-var audits. The collector is fully functional without it.
+
+If refresh-token resilience is ever needed, the TikTok app must be reconfigured for Standard Access with refresh-token issuance, then the OAuth flow re-run.
+
+**2026-06-29 re-auth:** `TIKTOK_ACCESS_TOKEN` was re-authed fresh and propagated to `.env`, GitHub Secrets, and Railway.
