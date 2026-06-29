@@ -517,7 +517,7 @@ def create_task(
 def ensure_channel_sections():
     """
     For each per-channel Optimization project (Google Ads, Meta, Snap, TikTok,
-    LinkedIn, YouTube, Microsoft), make sure the asset-level sections exist:
+    LinkedIn, Microsoft), make sure the asset-level sections exist:
         Campaign / Ad Set / Group / Ad / Audience / Tracking / Keyword
     Sections are added IN ADDITION to whatever sections already exist
     (we never delete or rename existing sections).
