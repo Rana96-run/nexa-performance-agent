@@ -13,7 +13,7 @@ Use when Amar says "re-pull X" / "backfill Y" / "run the scheduler".
 
 ## Collector names
 
-`google_ads_bq`, `meta_bq`, `snap_bq`, `meta_organic_bq`, `youtube_bq`,
+`google_ads_bq`, `meta_bq`, `snap_bq`, `meta_organic_bq`,
 `linkedin_bq`, `hubspot_leads_bq`, `hubspot_deals_bq`
 
 ## Before running

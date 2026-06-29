@@ -88,7 +88,6 @@ def test_all_collectors_import():
         "collectors.hubspot_leads_bq",
         "collectors.hubspot_deals_bq",
         "collectors.meta_organic_bq",
-        "collectors.youtube_bq",
         # Live API modules (only kept for grain BQ doesn't have, plus executors/OAuth)
         "collectors.google_ads",     # keyword grain + pause executors
         "collectors.meta",           # ad grain + pause executors

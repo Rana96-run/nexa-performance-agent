@@ -13,7 +13,7 @@ filter fields. All writes go through `collectors/bq_writer.upsert_rows()`.
 | `ads_daily` | (date, channel, ad_id) | channel, campaign_id, ad_id | (schema exists, collectors TBD) |
 | `hubspot_leads_module_daily` | (date, qoyod_source, pipeline, stage, utm_campaign) | qoyod_source, pipeline | hubspot_leads_bq |
 | `hubspot_deals_daily` | (date, qoyod_source, pipeline, stage_status, utm_campaign) | qoyod_source, pipeline, stage_status | hubspot_deals_bq |
-| `organic_page_daily` | (date, channel) | channel | meta_organic_bq, youtube_bq, linkedin_bq (organic) |
+| `organic_page_daily` | (date, channel) | channel | meta_organic_bq, linkedin_bq (organic) |
 
 ## Databox view mapping (which view powers which Databox dataset)
 

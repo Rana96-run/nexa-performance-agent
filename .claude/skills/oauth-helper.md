@@ -9,7 +9,6 @@ integration is being hooked up for the first time.
 |---|---|---|
 | LinkedIn | `scripts/linkedin_oauth.py` | `LI_ACCESS_TOKEN` (60-day) |
 | LinkedIn orgs | `python scripts/linkedin_oauth.py orgs` | `LI_ORGANIZATION_URN` (+ optional `LI_AD_ACCOUNT_URN`) |
-| YouTube | `scripts/youtube_oauth.py` | `YT_REFRESH_TOKEN`, `YT_CHANNEL_ID` |
 | Meta organic | `scripts/meta_organic_setup.py` | Permanent `META_PAGE_ACCESS_TOKEN`, `META_FB_PAGE_ID`, `META_IG_BUSINESS_ID` |
 | Snapchat | (built into `snap_bq.py`) | Auto-refresh per run |
 | Google Ads | Requires one-time manual refresh-token via Google OAuth Playground; then stored in `.env` |
@@ -17,7 +16,6 @@ integration is being hooked up for the first time.
 ## Redirect URIs to register in each provider
 
 - LinkedIn app: `http://localhost:8080`
-- YouTube / Google: `http://localhost:8080`
 - Meta: the short-lived token is generated in Graph API Explorer, no redirect
   needed for the exchange script
 

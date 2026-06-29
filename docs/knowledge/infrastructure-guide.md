@@ -86,7 +86,7 @@ Hex (cloud BI tool) queries BigQuery on demand:
 | `connector_health_log` | `connector_tracker.py` | Every 6h | Append-only | n/a |
 | `asana_task_status` | `asana_sync.py` | Nightly | UPSERT | `asana_task_id` |
 | `ga4_sessions_daily` | `ga4_bq.py` | Every 6h | UPSERT | `date + page_path + session_source` |
-| `organic_page_daily` | `meta_organic_bq.py`, `youtube_bq.py` | Every 6h | UPSERT | `date + channel + page_url` |
+| `organic_page_daily` | `meta_organic_bq.py`, `linkedin_bq.py` (organic) | Every 6h | UPSERT | `date + channel + page_url` |
 
 ### Why UPSERT and not INSERT
 Each collector pulls the last 30 days on every run (not just yesterday). This means if Meta retroactively adjusts yesterday's spend (which they do — typically within 48h), the corrected number overwrites the stale one in BQ. INSERT would accumulate duplicates. UPSERT by stable key means re-running is always safe.
@@ -100,7 +100,7 @@ Each collector pulls the last 30 days on every run (not just yesterday). This me
 
 | Responsibility | Why Python is required |
 |---|---|
-| OAuth token refresh (LinkedIn, TikTok, YouTube) | Multi-step handshake — request refresh token → store new token in BQ → use in next call. Stateful, needs BQ write mid-flow |
+| OAuth token refresh (LinkedIn, TikTok) | Multi-step handshake — request refresh token → store new token in BQ → use in next call. Stateful, needs BQ write mid-flow |
 | BQ NDJSON upserts | n8n has no MERGE node. Streaming inserts cause duplicates that can't be corrected |
 | Google Ads API pagination | 10,000-row page limit, cursor-based. Google Ads Python SDK handles this; n8n HTTP node doesn't |
 | Keyword policy enforcement | `keyword_policy.py` — 200+ bilingual Arabic+English rules, pattern matching, brand/competitor/junk buckets |
